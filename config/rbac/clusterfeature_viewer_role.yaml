@@ -1,0 +1,20 @@
+# permissions for end users to view clusterfeatures.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterfeature-viewer-role
+rules:
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterfeatures
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterfeatures/status
+  verbs:
+  - get

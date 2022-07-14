@@ -1,0 +1,24 @@
+# permissions for end users to edit workloadroles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workloadrole-editor-role
+rules:
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - workloadroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - workloadroles/status
+  verbs:
+  - get

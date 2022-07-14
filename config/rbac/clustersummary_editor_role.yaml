@@ -1,0 +1,24 @@
+# permissions for end users to edit clustersummaries.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clustersummary-editor-role
+rules:
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries/status
+  verbs:
+  - get

@@ -239,6 +239,11 @@ spec:
                       - Kyverno
                       - Role
                       type: string
+                    hash:
+                      description: Hash represents of a unique value for a feature
+                        at a fixed point in time
+                      format: byte
+                      type: string
                     status:
                       description: Status represents the state of the feature in the
                         workload cluster
@@ -251,6 +256,7 @@ spec:
                       type: string
                   required:
                   - featureID
+                  - hash
                   - status
                   type: object
                 type: array

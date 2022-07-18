@@ -17,12 +17,14 @@ limitations under the License.
 package scope_test
 
 import (
+	"context"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,15 +37,19 @@ import (
 const clusterFeatureNamePrefix = "scope-"
 
 var _ = Describe("ClusterFeatureScope", func() {
-	scheme := setupScheme()
-	initObjects := []client.Object{}
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+	var clusterFeature *configv1alpha1.ClusterFeature
+	var c client.Client
 
-	clusterFeature := &configv1alpha1.ClusterFeature{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterFeatureNamePrefix + util.RandomString(5),
-		},
-	}
+	BeforeEach(func() {
+		clusterFeature = &configv1alpha1.ClusterFeature{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterFeatureNamePrefix + util.RandomString(5),
+			},
+		}
+		scheme := setupScheme()
+		initObjects := []client.Object{clusterFeature}
+		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+	})
 
 	It("Return nil,error if ClusterFeature is not specified", func() {
 		params := scope.ClusterFeatureScopeParams{
@@ -145,5 +151,28 @@ var _ = Describe("ClusterFeatureScope", func() {
 		}
 		scope.SetMatchingClusters(matchingClusters)
 		Expect(reflect.DeepEqual(clusterFeature.Status.MatchingClusters, matchingClusters)).To(BeTrue())
+	})
+
+	It("Close updates ClusterFeature", func() {
+		params := scope.ClusterFeatureScopeParams{
+			Client:         c,
+			ClusterFeature: clusterFeature,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterFeatureScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		clusterFeature.Labels = map[string]string{"clusters": "hr"}
+		Expect(scope.Close(context.TODO())).To(Succeed())
+
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		Expect(currentClusterFeature.Labels).ToNot(BeNil())
+		Expect(len(currentClusterFeature.Labels)).To(Equal(1))
+		v, ok := currentClusterFeature.Labels["clusters"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal("hr"))
 	})
 })

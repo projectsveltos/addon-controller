@@ -67,6 +67,10 @@ type FeatureSummary struct {
 	// FeatureID is an indentifier of the feature whose status is reported
 	FeatureID FeatureID `json:"featureID"`
 
+	// Hash represents of a unique value for a feature at a fixed point in
+	// time
+	Hash []byte `json:"hash"`
+
 	// Status represents the state of the feature in the workload cluster
 	Status FeatureStatus `json:"status"`
 

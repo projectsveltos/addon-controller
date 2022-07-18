@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/klog/v2/klogr"
@@ -33,13 +34,17 @@ import (
 
 var messages chan string
 
-func writeToChannelHandler(ctx context.Context, c client.Client, namespace, name, featureID string) error {
+func writeToChannelHandler(ctx context.Context, c client.Client,
+	namespace, name, applicant, featureID string,
+	logger logr.Logger) error {
 	By("writeToChannelHandler: writing to channel")
 	messages <- "done deploying"
 	return nil
 }
 
-func doNothingHandler(ctx context.Context, c client.Client, namespace, name, featureID string) error {
+func doNothingHandler(ctx context.Context, c client.Client,
+	namespace, name, applicant, featureID string,
+	logger logr.Logger) error {
 	return nil
 }
 
@@ -47,12 +52,28 @@ var _ = Describe("Worker", func() {
 	It("getKey and getFromKey return correct values", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
-		outNs, outName, outFeatureID := deployer.GetFromKey(key)
+		outNs, outName, outApplicant, outFeatureID := deployer.GetFromKey(key)
 		Expect(outNs).To(Equal(ns))
 		Expect(outName).To(Equal(name))
+		Expect(outApplicant).To(Equal(applicant))
+		Expect(outFeatureID).To(Equal(featureID))
+	})
+
+	It("getKey and getFromKey return correct values (applicant is empty)", func() {
+		ns := namespacePrefix + util.RandomString(5)
+		name := namespacePrefix + util.RandomString(5)
+		applicant := ""
+		featureID := util.RandomString(5)
+		key := deployer.GetKey(ns, name, applicant, featureID)
+
+		outNs, outName, outApplicant, outFeatureID := deployer.GetFromKey(key)
+		Expect(outNs).To(Equal(ns))
+		Expect(outName).To(Equal(name))
+		Expect(outApplicant).To(Equal(applicant))
 		Expect(outFeatureID).To(Equal(featureID))
 	})
 
@@ -77,8 +98,9 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
@@ -93,8 +115,9 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
@@ -114,14 +137,15 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		r := map[string]error{key: nil}
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
 		Expect(err).To(BeNil())
 		Expect(resp).ToNot(BeNil())
 		Expect(deployer.IsResponseDeployed(resp)).To(BeTrue())
@@ -134,14 +158,15 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		r := map[string]error{key: fmt.Errorf("failed to deploy")}
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
 		Expect(err).To(BeNil())
 		Expect(resp).ToNot(BeNil())
 		Expect(deployer.IsResponseFailed(resp)).To(BeTrue())
@@ -154,13 +179,14 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
 		Expect(err).To(BeNil())
 		Expect(resp).To(BeNil())
 	})
@@ -172,13 +198,14 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		d.SetJobQueue(key, nil)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
 		Expect(err).To(BeNil())
 		Expect(resp).To(BeNil())
 	})
@@ -191,8 +218,9 @@ var _ = Describe("Worker", func() {
 
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 		d.SetJobQueue(key, writeToChannelHandler)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
@@ -215,7 +243,7 @@ var _ = Describe("Worker", func() {
 			return gotResult
 		}, 20*time.Second, time.Second).Should(BeTrue())
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
 		Expect(err).To(BeNil())
 		Expect(deployer.IsResponseDeployed(resp)).To(BeTrue())
 	})

@@ -37,13 +37,15 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 	cluster := o.(*clusterv1.Cluster)
 	logger := r.Log.WithValues(
 		"objectMapper",
-		"RequeueClusterFeatureForCluster",
+		"requeueClusterFeatureForCluster",
 		"namespace",
 		cluster.Namespace,
 		"cluster",
 		cluster.Name,
 	)
 
+	// TODO: remove I/O inside a MapFunc.
+	// If the list operation failed I would be unable to retry or re-enqueue the change.
 	clusterFeatureList := &configv1alpha1.ClusterFeatureList{}
 	if err := r.List(context.TODO(), clusterFeatureList); err != nil {
 		logger.Error(err, "failed to list all ClusterFeatures")

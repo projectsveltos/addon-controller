@@ -25,6 +25,11 @@ import (
 //+kubebuilder:validation:Enum:=Namespaced;Cluster
 type RoleType string
 
+const (
+	RoleTypeNamespaced RoleType = "Namespaced"
+	RoleTypeCluster    RoleType = "Cluster"
+)
+
 // WorkloadRoleSpec defines the desired state of WorkloadRole
 type WorkloadRoleSpec struct {
 	// Type specifies whether rules are cluster or namespaced wide

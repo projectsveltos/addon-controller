@@ -24,6 +24,7 @@ resources:
 - api:
     crdVersion: v1
     namespaced: true
+  controller: true
   domain: projectsveltos.io
   group: config
   kind: ClusterSummary

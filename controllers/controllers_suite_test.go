@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,8 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2/klogr"
 
+	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 	"github.com/projectsveltos/cluster-api-feature-manager/internal/test/helpers"
+	fakedeployer "github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer/fake"
 )
 
 var (
@@ -39,6 +42,7 @@ var (
 	scheme  *runtime.Scheme
 
 	clusterFeatureReconciler *controllers.ClusterFeatureReconciler
+	clusterSummaryReconciler *controllers.ClusterSummaryReconciler
 )
 
 func TestControllers(t *testing.T) {
@@ -69,7 +73,20 @@ var _ = BeforeSuite(func() {
 		Scheme: scheme,
 	}
 
+	dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+	Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureRole))).To(Succeed())
+	clusterSummaryReconciler = &controllers.ClusterSummaryReconciler{
+		Client:            testEnv.Client,
+		Log:               klogr.New(),
+		Scheme:            scheme,
+		WorkloadRoleMap:   make(map[string]*controllers.Set),
+		ClusterSummaryMap: make(map[string]*controllers.Set),
+		Mux:               sync.Mutex{},
+		Deployer:          dep,
+	}
+
 	Expect(clusterFeatureReconciler.SetupWithManager(testEnv.Manager)).To(Succeed())
+	Expect(clusterSummaryReconciler.SetupWithManager(testEnv.Manager)).To(Succeed())
 
 	go func() {
 		By("Starting the manager")

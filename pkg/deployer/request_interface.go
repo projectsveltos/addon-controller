@@ -18,6 +18,9 @@ package deployer
 
 import (
 	"context"
+
+	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ResultStatus int64
@@ -48,6 +51,10 @@ type Result struct {
 	Err error
 }
 
+type RequestHandler func(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, featureID string,
+	logger logr.Logger) error
+
 type DeployerInterface interface {
 	// RegisterFeatureID allows registering a feature ID.
 	// If a featureID is already registered, it returns an error.
@@ -56,19 +63,22 @@ type DeployerInterface interface {
 	) error
 
 	// Deploy creates a request to deploy a feature in a given
-	// CAPI cluster.
-	// When worker is available to fulfill such request, requestHandler
+	// CAPI cluster (identified by clusterNamespace, clusterName).
+	// When worker is available to fulfill such request, RequestHandler
 	// will be invoked in the worker context.
 	// If featureID is not registered, an error will be returned.
+	// Applicant is an identifier of whatever is making this request.
+	// It can be left empty (in case there is no need to differentiate between
+	// different applicants).
 	Deploy(
 		ctx context.Context,
-		clusterNamespace, clusterName, featureID string,
-		f requestHandler,
+		clusterNamespace, clusterName, applicant, featureID string,
+		f RequestHandler,
 	) error
 
 	// GetResult returns result for a given request.
 	GetResult(
 		ctx context.Context,
-		clusterNamespace, clusterName, featureID string,
+		clusterNamespace, clusterName, applicant, featureID string,
 	) Result
 }

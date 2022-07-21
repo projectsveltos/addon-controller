@@ -48,8 +48,9 @@ var _ = Describe("Client", func() {
 	It("GetResult returns result when available", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -61,7 +62,7 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Deployed))
 	})
@@ -69,8 +70,9 @@ var _ = Describe("Client", func() {
 	It("GetResult returns result when available with error", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -82,7 +84,7 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID)
 		Expect(result.Err).ToNot(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Failed))
 	})
@@ -90,8 +92,9 @@ var _ = Describe("Client", func() {
 	It("GetResult returns InProgress when request is still queued (currently in progress)", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -102,7 +105,7 @@ var _ = Describe("Client", func() {
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.InProgress))
 	})
@@ -110,8 +113,9 @@ var _ = Describe("Client", func() {
 	It("GetResult returns InProgress when request is still queued (currently queued)", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -122,7 +126,7 @@ var _ = Describe("Client", func() {
 		d.SetJobQueue(key, nil)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.InProgress))
 	})
@@ -130,6 +134,7 @@ var _ = Describe("Client", func() {
 	It("GetResult returns Unavailable when request is not queued/in progress and result not available", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
@@ -138,7 +143,7 @@ var _ = Describe("Client", func() {
 		d := deployer.GetClient(ctx, klogr.New(), c)
 		defer d.ClearInternalStruct()
 
-		result := d.GetResult(ctx, ns, name, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Unavailable))
 	})
@@ -146,6 +151,7 @@ var _ = Describe("Client", func() {
 	It("Deploy returns an error when featureID is not registered", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
@@ -153,15 +159,16 @@ var _ = Describe("Client", func() {
 		defer cancel()
 		d := deployer.GetClient(ctx, klogr.New(), c)
 
-		err := d.Deploy(ctx, ns, name, featureID, nil)
+		err := d.Deploy(ctx, ns, name, applicant, featureID, nil)
 		Expect(err).ToNot(BeNil())
 	})
 
 	It("Deploy does nothing if already in the dirty set", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -175,7 +182,7 @@ var _ = Describe("Client", func() {
 		d.SetDirty([]string{key})
 		Expect(len(d.GetDirty())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))
@@ -185,6 +192,7 @@ var _ = Describe("Client", func() {
 	It("Deploy adds to inProgress", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
@@ -196,7 +204,7 @@ var _ = Describe("Client", func() {
 		err := d.RegisterFeatureID(featureID)
 		Expect(err).To(BeNil())
 
-		err = d.Deploy(ctx, ns, name, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))
@@ -206,8 +214,9 @@ var _ = Describe("Client", func() {
 	It("Deploy if already in progress, does not add to jobQueue", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -221,7 +230,7 @@ var _ = Describe("Client", func() {
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(1))
@@ -231,8 +240,9 @@ var _ = Describe("Client", func() {
 	It("Deploy removes existing result", func() {
 		ns := namespacePrefix + util.RandomString(5)
 		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, featureID)
+		key := deployer.GetKey(ns, name, applicant, featureID)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -247,7 +257,7 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))

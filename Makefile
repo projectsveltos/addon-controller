@@ -49,7 +49,7 @@ generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, 
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	$(GOIMPORTS) -local projectsveltos.io -w .
+	$(GOIMPORTS) -local github.com/projectsveltos -w .
 	go fmt ./...
 
 .PHONY: vet
@@ -66,9 +66,29 @@ else
 KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
 endif
 
+##@ TESTING
+
+# K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
+# this default value is used
+ifndef K8S_VERSION
+K8S_VERSION := v1.24.2
+endif
+
+KIND_CONFIG ?= kind-cluster.yaml
+
 .PHONY: test
 test: manifests generate fmt vet $(ENVTEST) ## Run tests.
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test ./... $(TEST_ARGS) -coverprofile cover.out
+
+.PHONY: kind-cluster
+kind-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) ## Create a new kind cluster designed for development
+	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
+	$(KIND) create cluster --name=sveltos-management --config test/$(KIND_CONFIG).tmp
+	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --infrastructure docker
+	SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster capi-quickstart --flavor development \
+		--kubernetes-version v1.24.2 \
+		--control-plane-machine-count=1 \
+  		--worker-machine-count=1 | $(KUBECTL) apply -f
 
 ##@ Build
 
@@ -129,6 +149,9 @@ GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
 KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
 SETUP_ENVTEST := $(TOOLS_BIN_DIR)/setup_envs
+CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
+KIND := $(TOOLS_BIN_DIR)/kind
+KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -151,6 +174,18 @@ $(GOIMPORTS):
 $(GINKGO): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst hack/tools/,,$@) github.com/onsi/ginkgo/v2/ginkgo
 
+$(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary.
+	cd $(TOOLS_DIR); $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(subst hack/tools/,,$@) sigs.k8s.io/cluster-api/cmd/clusterctl
+	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present	
+
+$(KIND): $(TOOLS_DIR)/go.mod
+	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst hack/tools/,,$@) sigs.k8s.io/kind
+
+$(KUBECTL):
+	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
+	chmod +x $@
+
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) $(GINKGO) $(SETUP_ENVTEST) ## build all tools
+tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) $(GINKGO) $(SETUP_ENVTEST) \
+	$(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
 

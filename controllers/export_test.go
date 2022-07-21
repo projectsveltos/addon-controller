@@ -16,6 +16,11 @@ limitations under the License.
 
 package controllers
 
+import (
+	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+)
+
 var (
 	GetMatchingClusters          = (*ClusterFeatureReconciler).getMatchingClusters
 	UpdateClusterSummaries       = (*ClusterFeatureReconciler).updateClusterSummaries
@@ -30,5 +35,43 @@ var (
 )
 
 var (
-	GetClusterSummaryName = getClusterSummaryName
+	GetSecretData       = getSecretData
+	GetKubernetesClient = getKubernetesClient
+	GetRoleName         = getRoleName
+
+	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
+	DeployClusterWorkloadRole    = deployClusterWorkloadRole
+
+	WorkloadRoleHash = workloadRoleHash
 )
+
+var (
+	IsFeatureDeployed   = (*ClusterSummaryReconciler).isFeatureDeployed
+	GetHash             = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature       = (*ClusterSummaryReconciler).deployFeature
+
+	RequeueClusterSummaryForWorkloadRole = (*ClusterSummaryReconciler).requeueClusterSummaryForWorkloadRole
+)
+
+var (
+	GetClusterSummaryName  = getClusterSummaryName
+	GetClusterFeatureOwner = getClusterFeatureOwner
+)
+
+var (
+	Insert = (*Set).insert
+	Erase  = (*Set).erase
+	Len    = (*Set).len
+	Items  = (*Set).items
+	Has    = (*Set).has
+)
+
+func GetFeature(featureID configv1alpha1.FeatureID, getHash getCurrentHash,
+	deploy deployer.RequestHandler) *feature {
+	return &feature{
+		id:          featureID,
+		currentHash: getHash,
+		deploy:      deploy,
+	}
+}

@@ -205,8 +205,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 					SyncMode: configv1alpha1.SyncModeOneTime,
 					WorkloadRoles: []corev1.ObjectReference{
 						{
-							Namespace: "t-" + util.RandomString(5),
-							Name:      "c-" + util.RandomString(5),
+							Name: "c-" + util.RandomString(5),
 						},
 					},
 				},
@@ -216,12 +215,10 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
 		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
 			{
-				Namespace: "a-" + util.RandomString(5),
-				Name:      "b-" + util.RandomString(5),
+				Name: "b-" + util.RandomString(5),
 			},
 			{
-				Namespace: "c-" + util.RandomString(5),
-				Name:      "d-" + util.RandomString(5),
+				Name: "d-" + util.RandomString(5),
 			},
 		}
 
@@ -347,8 +344,9 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				Name: clusterSummaryName,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						Kind: clusterFeature.Kind,
-						Name: clusterFeature.Name,
+						APIVersion: clusterFeature.APIVersion,
+						Kind:       clusterFeature.Kind,
+						Name:       clusterFeature.Name,
 					},
 				},
 			},
@@ -509,8 +507,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 					SyncMode: configv1alpha1.SyncModeContinuos,
 					WorkloadRoles: []corev1.ObjectReference{
 						{
-							Namespace: "t-" + util.RandomString(5),
-							Name:      "c-" + util.RandomString(5),
+							Name: "c-" + util.RandomString(5),
 						},
 					},
 				},
@@ -764,10 +761,10 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatueList := controllers.RequeueClusterFeatureForCluster(clusterFeatureReconciler, cluster)
+			clusterFeatureList := controllers.RequeueClusterFeatureForCluster(clusterFeatureReconciler, cluster)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
-			for i := range clusterFeatueList {
-				if clusterFeatueList[i] == result {
+			for i := range clusterFeatureList {
+				if clusterFeatureList[i] == result {
 					return true
 				}
 			}
@@ -801,10 +798,10 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatueList := controllers.RequeueClusterFeatureForMachine(clusterFeatureReconciler, cpMachine)
+			clusterFeatureList := controllers.RequeueClusterFeatureForMachine(clusterFeatureReconciler, cpMachine)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
-			for i := range clusterFeatueList {
-				if clusterFeatueList[i] == result {
+			for i := range clusterFeatureList {
+				if clusterFeatureList[i] == result {
 					return true
 				}
 			}

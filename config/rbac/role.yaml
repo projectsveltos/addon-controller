@@ -69,4 +69,20 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries/status
+  verbs:
+  - get
+  - patch
   - update

@@ -17,8 +17,10 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
+	"sync"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -33,6 +35,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -89,11 +92,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := context.Background()
+	deployer := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient())
+	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureRole)); err != nil {
+		setupLog.Error(err, "failed to register feature")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controllers").WithName("ClusterFeature"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterFeature")
+		os.Exit(1)
+	}
+	if err = (&controllers.ClusterSummaryReconciler{
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controllers").WithName("ClusterSummary"),
+		Deployer:          deployer,
+		WorkloadRoleMap:   make(map[string]*controllers.Set),
+		ClusterSummaryMap: make(map[string]*controllers.Set),
+		Mux:               sync.Mutex{},
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterSummary")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

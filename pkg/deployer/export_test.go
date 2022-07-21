@@ -17,7 +17,6 @@ limitations under the License.
 package deployer
 
 var (
-	GetKey          = getKey
 	GetFromKey      = getFromKey
 	RemoveFromSlice = removeFromSlice
 
@@ -42,7 +41,7 @@ func (d *deployer) GetDirty() []string {
 	return d.dirty
 }
 
-func (d *deployer) SetJobQueue(key string, handler requestHandler) {
+func (d *deployer) SetJobQueue(key string, handler RequestHandler) {
 	reqParam := requestParams{
 		key:     key,
 		handler: handler,

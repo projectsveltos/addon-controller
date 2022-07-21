@@ -100,12 +100,12 @@ func (r *ClusterFeatureReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}()
 
-	// Handle deleted clusters
+	// Handle deleted clusterFeature
 	if !clusterFeature.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, clusterFeatureScope)
 	}
 
-	// Handle non-deleted clusters
+	// Handle non-deleted clusterFeature
 	return r.reconcileNormal(ctx, clusterFeatureScope)
 }
 
@@ -157,9 +157,6 @@ func (r *ClusterFeatureReconciler) reconcileNormal(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterFeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterFeature{}).
 		WithOptions(controller.Options{
@@ -181,16 +178,10 @@ func (r *ClusterFeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// When cluster-api machine changes, according to ClusterPredicates,
 	// one or more ClusterFeatures need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
+	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterFeatureForMachine),
 		MachinePredicates(r.Log),
-	); err != nil {
-		return err
-	}
-
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&configv1alpha1.ClusterFeature{}).
-		Complete(r)
+	)
 }
 
 func (r *ClusterFeatureReconciler) addFinalizer(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
@@ -313,9 +304,10 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 			Name: clusterSummaryName,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					Kind: clusterFeatureScope.ClusterFeature.Kind,
-					Name: clusterFeatureScope.ClusterFeature.Name,
-					UID:  clusterFeatureScope.ClusterFeature.UID,
+					APIVersion: clusterFeatureScope.ClusterFeature.APIVersion,
+					Kind:       clusterFeatureScope.ClusterFeature.Kind,
+					Name:       clusterFeatureScope.ClusterFeature.Name,
+					UID:        clusterFeatureScope.ClusterFeature.UID,
 				},
 			},
 		},

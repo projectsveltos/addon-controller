@@ -93,10 +93,10 @@ func (d *deployer) RegisterFeatureID(
 
 func (d *deployer) Deploy(
 	ctx context.Context,
-	clusterNamespace, clusterName, featureID string,
-	f requestHandler,
+	clusterNamespace, clusterName, applicant, featureID string,
+	f RequestHandler,
 ) error {
-	key := getKey(clusterNamespace, clusterName, featureID)
+	key := GetKey(clusterNamespace, clusterName, applicant, featureID)
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -137,9 +137,9 @@ func (d *deployer) Deploy(
 
 func (d *deployer) GetResult(
 	ctx context.Context,
-	clusterNamespace, clusterName, featureID string,
+	clusterNamespace, clusterName, applicant, featureID string,
 ) Result {
-	responseParam, err := getRequestStatus(d, clusterNamespace, clusterName, featureID)
+	responseParam, err := getRequestStatus(d, clusterNamespace, clusterName, applicant, featureID)
 	if err != nil {
 		return Result{
 			ResultStatus: Unavailable,

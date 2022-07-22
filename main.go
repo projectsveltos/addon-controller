@@ -100,9 +100,13 @@ func main() {
 	}
 
 	if err = (&controllers.ClusterFeatureReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ClusterFeature"),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controllers").WithName("ClusterFeature"),
+		ClusterMap:        make(map[string]*controllers.Set),
+		ClusterFeatureMap: make(map[string]*controllers.Set),
+		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+		Mux:               sync.Mutex{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterFeature")
 		os.Exit(1)

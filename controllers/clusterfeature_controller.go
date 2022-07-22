@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -46,8 +47,36 @@ import (
 // ClusterFeatureReconciler reconciles a ClusterFeature object
 type ClusterFeatureReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	Log    logr.Logger
+	Scheme            *runtime.Scheme
+	Log               logr.Logger
+	Mux               sync.Mutex                         // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	ClusterMap        map[string]*Set                    // key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
+	ClusterFeatureMap map[string]*Set                    // key: ClusterFeature name; value: set of CAPI Clusters matched
+	ClusterFeatures   map[string]configv1alpha1.Selector // key: ClusterFeature name; value ClusterFeature Selector
+
+	// Reason for the two maps:
+	// ClusterFeature, via ClusterSelector, matches CAPI Clusters based on Cluster labels.
+	// When a CAPI Cluster labels change, one or more ClusterFeature needs to be reconciled.
+	// In order to achieve so, ClusterFeature reconciler watches for CAPI Clusters. When a CAPI Cluster label changes,
+	// find all the ClusterFeatures currently referencing it and reconcile those.
+	// Problem is no I/O should be present inside a MapFunc (given a CAPI Cluster, return all the ClusterFeatures matching it).
+	// In the MapFunc, if the list ClusterFeatures operation failed, we would be unable to retry or re-enqueue the rigth set of
+	// ClusterFeatures.
+	// Instead the approach taken is following:
+	// - when a ClusterFeature is reconciled, update the ClusterFeatures amd the ClusterMap;
+	// - in the MapFunc, given the CAPI Cluster that changed:
+	//		* use ClusterFeatures to find all ClusterFeature matching the Cluster and reconcile those;
+	// - in order to reconcile ClusterFeatures previously matching the Cluster and not anymore, use ClusterMap.
+	//
+	// The ClusterFeatureMap is used to update ClusterMap. Consider following scenarios to understand the need:
+	// 1. ClusterFeature A references Clusters 1 and 2. When reconciled, ClusterMap will have 1 => A and 2 => A;
+	// and ClusterFeatureMap A => 1,2
+	// 2. Cluster 2 label changes and now ClusterFeature matches Cluster 1 only. We ned to remove the entry 2 => A in ClusterMap. But
+	// when we reconcile ClusterFeature we have its current version we don't have its previous version. So we know ClusterFeature A
+	// now matches CAPI Cluster 1, but we don't know it used to match CAPI Cluster 2.
+	// So we use ClusterFeatureMap (at this point value stored here corresponds to reconciliation #1. We know currently
+	// ClusterFeature matches CAPI Cluster 1 only and looking at ClusterFeatureMap we know it used to reference CAPI Cluster 1 and 2.
+	// So we can remove 2 => A from ClusterMap. Only after this update, we update ClusterFeatureMap (so new value will be A => 1)
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures,verbs=get;list;watch;update
@@ -141,6 +170,8 @@ func (r *ClusterFeatureReconciler) reconcileNormal(
 	}
 
 	clusterFeatureScope.SetMatchingClusters(matchingCluster)
+
+	r.updatesMaps(clusterFeatureScope)
 
 	// For each matching CAPI Cluster, create/update corresponding ClusterSummary
 	if err := r.updateClusterSummaries(ctx, clusterFeatureScope); err != nil {
@@ -391,4 +422,48 @@ func (r *ClusterFeatureReconciler) getMachinesForCluster(
 	clusterFeatureScope.V(5).Info(fmt.Sprintf("Found %d machine", len(machineList.Items)))
 
 	return &machineList, nil
+}
+
+func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.ClusterFeatureScope) {
+	currentClusters := Set{}
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
+		clusterName := cluster.Namespace + "/" + cluster.Name
+		currentClusters.insert(clusterName)
+	}
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	// Get list of Clusters not matched anymore by ClusterFeature
+	var toBeRemoved []string
+	if v, ok := r.ClusterFeatureMap[clusterFeatureScope.Name()]; ok {
+		toBeRemoved = v.difference(currentClusters)
+	}
+
+	// For each currently matching Cluster, add ClusterFeature as consumer
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
+		clusterName := cluster.Namespace + "/" + cluster.Name
+		r.getClusterMapForEntry(clusterName).insert(clusterFeatureScope.Name())
+	}
+
+	// For each Cluster not matched anymore, remove ClusterFeature as consumer
+	for i := range toBeRemoved {
+		clusterName := toBeRemoved[i]
+		r.getClusterMapForEntry(clusterName).erase(clusterFeatureScope.Name())
+	}
+
+	// Update list of WorklaodRoles currently referenced by ClusterSummary
+	r.ClusterFeatureMap[clusterFeatureScope.Name()] = &currentClusters
+	r.ClusterFeatures[clusterFeatureScope.Name()] = clusterFeatureScope.ClusterFeature.Spec.ClusterSelector
+}
+
+func (r *ClusterFeatureReconciler) getClusterMapForEntry(entry string) *Set {
+	s := r.ClusterMap[entry]
+	if s == nil {
+		s = &Set{}
+		r.ClusterMap[entry] = s
+	}
+	return s
 }

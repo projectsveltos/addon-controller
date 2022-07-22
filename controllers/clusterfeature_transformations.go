@@ -17,17 +17,11 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
-	"fmt"
-
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 )
 
 func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
@@ -44,24 +38,34 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 		cluster.Name,
 	)
 
-	// TODO: remove I/O inside a MapFunc.
-	// If the list operation failed I would be unable to retry or re-enqueue the change.
-	clusterFeatureList := &configv1alpha1.ClusterFeatureList{}
-	if err := r.List(context.TODO(), clusterFeatureList); err != nil {
-		logger.Error(err, "failed to list all ClusterFeatures")
-		return nil
+	logger.V(5).Info("reacting to CAPI Cluster change")
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	clusterName := cluster.Namespace + "/" + cluster.Name
+
+	// Get all ClusterFeature previously matching this cluster and reconcile those
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterName).len())
+	consumers := r.getClusterMapForEntry(clusterName).items()
+
+	for i := range consumers {
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: consumers[i],
+			},
+		}
 	}
 
-	requests := make([]ctrl.Request, 0)
-
-	for i := range clusterFeatureList.Items {
-		clusterFeature := &clusterFeatureList.Items[i]
-		parsedSelector, _ := labels.Parse(string(clusterFeature.Spec.ClusterSelector))
+	// Iterate over all current ClusterFeature and reconcile the ClusterFeature now
+	// matching the Cluster
+	for k := range r.ClusterFeatures {
+		clusterFeatureSelector := r.ClusterFeatures[k]
+		parsedSelector, _ := labels.Parse(string(clusterFeatureSelector))
 		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
-					Namespace: clusterFeature.Namespace,
-					Name:      clusterFeature.Name,
+					Name: k,
 				},
 			})
 		}
@@ -83,36 +87,26 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 		machine.Name,
 	)
 
-	clusterName, ok := machine.Labels[clusterv1.ClusterLabelName]
+	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
 	if !ok {
 		logger.V(10).Info("Machine has not ClusterLabelName")
 		return nil
 	}
 
-	cluster := &clusterv1.Cluster{}
-	if err := r.Client.Get(context.TODO(),
-		types.NamespacedName{Namespace: machine.Namespace, Name: clusterName}, cluster); err != nil {
-		logger.Error(err, fmt.Sprintf("failed to get CAPI Cluster %s/%s", machine.Namespace, clusterName))
-		return nil
-	}
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
 
-	clusterFeatureList := &configv1alpha1.ClusterFeatureList{}
-	if err := r.List(context.TODO(), clusterFeatureList); err != nil {
-		logger.Error(err, "failed to list all ClusterFeatures")
-		return nil
-	}
-	requests := make([]ctrl.Request, 0)
+	clusterName := machine.Namespace + "/" + clusterLabelName
 
-	for i := range clusterFeatureList.Items {
-		clusterFeature := &clusterFeatureList.Items[i]
-		parsedSelector, _ := labels.Parse(string(clusterFeature.Spec.ClusterSelector))
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
-			requests = append(requests, ctrl.Request{
-				NamespacedName: client.ObjectKey{
-					Namespace: clusterFeature.Namespace,
-					Name:      clusterFeature.Name,
-				},
-			})
+	// Get all ClusterFeature previously matching this cluster and reconcile those
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterName).len())
+	consumers := r.getClusterMapForEntry(clusterName).items()
+
+	for i := range consumers {
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: consumers[i],
+			},
 		}
 	}
 

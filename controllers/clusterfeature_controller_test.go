@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"reflect"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -99,9 +100,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureName := client.ObjectKey{
@@ -133,9 +138,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -171,9 +180,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.CreateClusterSummary(reconciler, context.TODO(),
@@ -239,9 +252,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
@@ -307,9 +324,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
@@ -366,9 +387,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		err := controllers.DeleteClusterSummary(reconciler, context.TODO(), clusterSummary)
@@ -395,9 +420,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -445,9 +474,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -525,9 +558,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -578,9 +615,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -627,9 +668,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
@@ -677,9 +722,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
 		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{

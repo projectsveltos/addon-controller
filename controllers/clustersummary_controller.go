@@ -47,7 +47,7 @@ type ClusterSummaryReconciler struct {
 	WorkloadRoleMap   map[string]*Set // key: WorkloadRole name; value: set of all ClusterSummaries referencing the WorkloadRole
 	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of WorkloadRoles referenced
 
-	// Reason the two maps:
+	// Reason for the two maps:
 	// ClusterSummary references WorkloadRoles. When a WorkloadRole changes, all the ClusterSummaries referencing it need to be
 	// reconciled. In order to achieve so, ClusterSummary reconciler could watch for WorkloadRoles. When a WorkloadRole spec changes,
 	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
@@ -233,14 +233,14 @@ func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.Cluste
 		currentWorkloadRoles.insert(workloadRoleName)
 	}
 
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
 	// Get list of WorkloadRoles not referenced anymore by ClusterSummary
 	var toBeRemoved []string
 	if v, ok := r.ClusterSummaryMap[clusterSummaryScope.Name()]; ok {
 		toBeRemoved = v.difference(currentWorkloadRoles)
 	}
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
 
 	// For each currently referenced WorkloadRole, add ClusterSummary as consumer
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
@@ -251,7 +251,7 @@ func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.Cluste
 	// For each WorkloadRole not reference anymore, remove ClusterSummary as consumer
 	for i := range toBeRemoved {
 		workloadRoleName := toBeRemoved[i]
-		r.getClusterSummaryMapForEntry(workloadRoleName).erase(clusterSummaryScope.Name())
+		r.getWorkloadRoleMapForEntry(workloadRoleName).erase(clusterSummaryScope.Name())
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
@@ -263,15 +263,6 @@ func (r *ClusterSummaryReconciler) getWorkloadRoleMapForEntry(entry string) *Set
 	if s == nil {
 		s = &Set{}
 		r.WorkloadRoleMap[entry] = s
-	}
-	return s
-}
-
-func (r *ClusterSummaryReconciler) getClusterSummaryMapForEntry(entry string) *Set {
-	s := r.ClusterSummaryMap[entry]
-	if s == nil {
-		s = &Set{}
-		r.ClusterSummaryMap[entry] = s
 	}
 	return s
 }

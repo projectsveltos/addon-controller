@@ -18,17 +18,20 @@ package controllers_test
 
 import (
 	"context"
+	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
@@ -84,24 +87,70 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterFeatureReconciler{
-			Client: c,
-			Log:    klogr.New(),
-			Scheme: scheme,
+			Client:            c,
+			Log:               klogr.New(),
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
 		}
 
-		requests := controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
-		Expect(requests).To(HaveLen(1))
-		Expect(requests[0].Name).To(Equal(matchingClusterFeature.Name))
+		By("Setting ClusterFeatureReconciler internal structures")
+		reconciler.ClusterFeatures[matchingClusterFeature.Name] = matchingClusterFeature.Spec.ClusterSelector
+		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
 
+		// ClusterMap contains, per ClusterName, list of ClusterFeatures matching it.
+		clusterFeatureSet := &controllers.Set{}
+		controllers.Insert(clusterFeatureSet, matchingClusterFeature.Name)
+		clusterName := cluster.Namespace + "/" + cluster.Name
+		reconciler.ClusterMap[clusterName] = clusterFeatureSet
+
+		// ClusterFeatureMap contains, per ClusterFeature, list of matched Clusters.
+		clusterSet1 := &controllers.Set{}
+		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = clusterSet1
+
+		clusterSet2 := &controllers.Set{}
+		controllers.Insert(clusterSet2, clusterName)
+		reconciler.ClusterFeatureMap[matchingClusterFeature.Name] = clusterSet2
+
+		By("Expect only matchingClusterFeature to be requeued")
+		requests := controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
+		expected := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
+		Expect(requests).To(ContainElement(expected))
+
+		By("Changing clusterFeature ClusterSelector again to have two ClusterFeatures match")
 		nonMatchingClusterFeature.Spec.ClusterSelector = matchingClusterFeature.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
-		requests = controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
-		Expect(requests).To(HaveLen(2))
 
+		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
+
+		controllers.Insert(clusterSet1, clusterName)
+		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = clusterSet1
+
+		controllers.Insert(clusterFeatureSet, nonMatchingClusterFeature.Name)
+		reconciler.ClusterMap[clusterName] = clusterFeatureSet
+
+		requests = controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
+		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
+		Expect(requests).To(ContainElement(expected))
+		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: nonMatchingClusterFeature.Name}}
+		Expect(requests).To(ContainElement(expected))
+
+		By("Changing clusterFeature ClusterSelector again to have no ClusterFeature match")
 		matchingClusterFeature.Spec.ClusterSelector = configv1alpha1.Selector("env=qa")
 		Expect(c.Update(context.TODO(), matchingClusterFeature)).To(Succeed())
 		nonMatchingClusterFeature.Spec.ClusterSelector = matchingClusterFeature.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+
+		emptySet := &controllers.Set{}
+		reconciler.ClusterFeatureMap[matchingClusterFeature.Name] = emptySet
+		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = emptySet
+		reconciler.ClusterMap[clusterName] = emptySet
+
+		reconciler.ClusterFeatures[matchingClusterFeature.Name] = matchingClusterFeature.Spec.ClusterSelector
+		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
+
 		requests = controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
 		Expect(requests).To(HaveLen(0))
 	})

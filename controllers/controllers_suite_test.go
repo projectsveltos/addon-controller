@@ -68,9 +68,13 @@ var _ = BeforeSuite(func() {
 	}
 
 	clusterFeatureReconciler = &controllers.ClusterFeatureReconciler{
-		Client: testEnv.Client,
-		Log:    klogr.New(),
-		Scheme: scheme,
+		Client:            testEnv.Client,
+		Log:               klogr.New(),
+		Scheme:            scheme,
+		ClusterMap:        make(map[string]*controllers.Set),
+		ClusterFeatureMap: make(map[string]*controllers.Set),
+		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+		Mux:               sync.Mutex{},
 	}
 
 	dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)

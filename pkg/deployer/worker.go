@@ -75,6 +75,7 @@ func (d *deployer) startWorkloadWorkers(ctx context.Context, numOfWorker int, lo
 	d.jobQueue = make([]requestParams, 0)
 	d.results = make(map[string]error)
 	d.features = make(map[string]bool)
+	controlClusterClient = d.Client
 
 	for i := 0; i < numOfWorker; i++ {
 		go processRequests(d, i, logger.WithValues("worker", fmt.Sprintf("%d", i)))

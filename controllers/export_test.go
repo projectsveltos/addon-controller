@@ -55,7 +55,6 @@ var (
 )
 
 var (
-	GetClusterSummaryName  = getClusterSummaryName
 	GetClusterFeatureOwner = getClusterFeatureOwner
 )
 

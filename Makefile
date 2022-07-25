@@ -10,12 +10,31 @@ GOBIN=$(shell go env GOPATH)/bin
 else
 GOBIN=$(shell go env GOBIN)
 endif
+GO_INSTALL := ./scripts/go_install.sh
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
+
+# Define Docker related variables.
+REGISTRY ?= projectsveltos
+IMAGE_NAME ?= sveltos-manager
+ARCH ?= amd64
+OS ?= $(shell uname -s | tr A-Z a-z)
+K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
+TAG ?= dev
+
+# Get cluster-api version and build ldflags
+clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
+clusterapi_version := $(lastword  ., ,$(clusterapi))
+clusterapi_version_tuple := $(subst ., ,$(clusterapi_version:v%=%))
+clusterapi_major := $(word 1,$(clusterapi_version_tuple))
+clusterapi_minor := $(word 2,$(clusterapi_version_tuple))
+clusterapi_patch := $(word 3,$(clusterapi_version_tuple))
+CLUSTERAPI_LDFLAGS := "-X 'sigs.k8s.io/cluster-api/version.gitMajor=$(clusterapi_major)' -X 'sigs.k8s.io/cluster-api/version.gitMinor=$(clusterapi_minor)' -X 'sigs.k8s.io/cluster-api/version.gitVersion=$(clusterapi_version)'"
 
 .PHONY: all
 all: build
@@ -75,20 +94,85 @@ K8S_VERSION := v1.24.2
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
+CONTROL_CLUSTER_NAME ?= sveltos-management
+WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
+TIMEOUT ?= 5m
+KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
+# kind-test variable.
+NUM_NODES ?= 3
 
 .PHONY: test
-test: manifests generate fmt vet $(ENVTEST) ## Run tests.
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test ./... $(TEST_ARGS) -coverprofile cover.out
+test: manifests generate fmt vet $(ENVTEST) ## Run uts.
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v pkg/deployer/fake |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
 
-.PHONY: kind-cluster
-kind-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) ## Create a new kind cluster designed for development
-	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
-	$(KIND) create cluster --name=sveltos-management --config test/$(KIND_CONFIG).tmp
-	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --infrastructure docker
-	SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster capi-quickstart --flavor development \
-		--kubernetes-version v1.24.2 \
+.PHONY: kind-test
+kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv
+
+.PHONY: fv
+fv: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	cd test/fv; ../../$(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: create-cluster
+create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
+	$(MAKE) create-control-cluster
+
+	@echo wait for capd-system pod
+	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
+
+	@echo "Create a workload cluster"
+	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
+
+	@echo "get kubeconfig to access workload cluster"
+	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
+
+	@echo "Start projectsveltos"
+	$(MAKE) deploy-projectsveltos
+
+
+.PHONY: delete-cluster
+delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
+	$(KUBECTL) delete cluster $(WORKLOAD_CLUSTER_NAME) --wait=true --ignore-not-found=true 
+	$(KIND) delete cluster --name $(CONTROL_CLUSTER_NAME)
+
+### fv helpers
+
+# In order to avoid this error
+# Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached. 
+# Please wait one hour or get a personal API token and assign it to the GITHUB_TOKEN environment variable
+#
+# add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
+# It requires control cluster to exist
+create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
+	KUBERNETES_VERSION=v1.24.2 SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-  		--worker-machine-count=1 | $(KUBECTL) apply -f
+  		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
+
+create-control-cluster:
+	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
+	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
+	@echo "Create control cluster with docker as infrastructure provider"
+	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --infrastructure docker
+
+deploy-projectsveltos:
+	# Load projectsveltos image into cluster
+	@echo 'Load projectsveltos image into cluster'
+	$(MAKE) load-image
+	
+	# Install projectsveltos controller-manager components
+	@echo 'Install projectsveltos controller-manager components'
+	cd config/manager && kustomize edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
+
+	@echo "Waiting for projectsveltos controller-manager to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/fm-controller-manager -n projectsveltos --timeout=$(TIMEOUT)
+
+set-manifest-image:
+	$(info Updating kustomize image patch file for manager resource)
+	sed -i'' -e 's@image: .*@image: '"${MANIFEST_IMG}:$(MANIFEST_TAG)"'@' ./config/default/manager_image_patch.yaml
+
+set-manifest-pull-policy:
+	$(info Updating kustomize pull policy file for manager resource)
+	sed -i'' -e 's@imagePullPolicy: .*@imagePullPolicy: '"$(PULL_POLICY)"'@' ./config/default/manager_pull_policy.yaml
 
 ##@ Build
 
@@ -102,11 +186,17 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	docker build -t $(CONTROLLER_IMG)-$(ARCH):$(TAG) .
+	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
+	$(MAKE) set-manifest-pull-policy
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+
+.PHONY: load-image
+load-image: docker-build $(KIND)
+	$(KIND) load docker-image $(CONTROLLER_IMG)-$(ARCH):$(TAG) --name $(CONTROL_CLUSTER_NAME)
 
 ##@ Deployment
 
@@ -153,6 +243,7 @@ CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
+
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
 
@@ -174,8 +265,8 @@ $(GOIMPORTS):
 $(GINKGO): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst hack/tools/,,$@) github.com/onsi/ginkgo/v2/ginkgo
 
-$(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary.
-	cd $(TOOLS_DIR); $(GOBUILD) -ldflags "$(LDFLAGS)" -o $(subst hack/tools/,,$@) sigs.k8s.io/cluster-api/cmd/clusterctl
+$(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
+	cd $(TOOLS_DIR); $(GOBUILD) -ldflags $(CLUSTERAPI_LDFLAGS) -o $(subst hack/tools/,,$@) sigs.k8s.io/cluster-api/cmd/clusterctl
 	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present	
 
 $(KIND): $(TOOLS_DIR)/go.mod
@@ -183,9 +274,8 @@ $(KIND): $(TOOLS_DIR)/go.mod
 
 $(KUBECTL):
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
-	chmod +x $@
+	chmod +x $@	
 
 .PHONY: tools
 tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) $(GINKGO) $(SETUP_ENVTEST) \
 	$(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
-

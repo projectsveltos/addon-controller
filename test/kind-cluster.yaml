@@ -20,8 +20,3 @@ nodes:
   extraMounts:
     - hostPath: /var/run/docker.sock
       containerPath: /var/run/docker.sock
-- role: worker
-  image: kindest/node:K8S_VERSION
-  extraMounts:
-    - hostPath: /var/run/docker.sock
-      containerPath: /var/run/docker.sock 

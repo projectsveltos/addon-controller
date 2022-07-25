@@ -31,9 +31,9 @@ import (
 
 const separator = "--"
 
-// getClusterSummaryName returns the ClusterSummary name given a ClusterFeature name and
+// GetClusterSummaryName returns the ClusterSummary name given a ClusterFeature name and
 // CAPI cluster Namespace/Name
-func getClusterSummaryName(clusterFeatureName, clusterNamespace, clusterName string) string {
+func GetClusterSummaryName(clusterFeatureName, clusterNamespace, clusterName string) string {
 	return fmt.Sprintf("%s%s%s%s%s", clusterFeatureName, separator, clusterNamespace, separator, clusterName)
 }
 

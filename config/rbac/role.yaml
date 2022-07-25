@@ -6,6 +6,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
@@ -44,6 +52,7 @@ rules:
   verbs:
   - get
   - list
+  - patch
   - update
   - watch
 - apiGroups:
@@ -51,6 +60,7 @@ rules:
   resources:
   - clusterfeatures/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - config.projectsveltos.io
@@ -77,6 +87,7 @@ rules:
   resources:
   - clustersummaries/finalizers
   verbs:
+  - patch
   - update
 - apiGroups:
   - config.projectsveltos.io
@@ -86,3 +97,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - workloadroles
+  verbs:
+  - get
+  - list
+  - watch

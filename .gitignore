@@ -5,11 +5,21 @@
 *.so
 *.dylib
 
+# tmp files
+*.tmp
+
 # Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+out.json
 
 # Needed tools
 hack/tools/bin/
+
+# Needed by fv
+test/fv/workload_kubeconfig
+
+manager_image_patch.yaml-e
+manager_pull_policy.yaml-e

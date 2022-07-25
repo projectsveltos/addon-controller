@@ -79,9 +79,9 @@ type ClusterFeatureReconciler struct {
 	// So we can remove 2 => A from ClusterMap. Only after this update, we update ClusterFeatureMap (so new value will be A => 1)
 }
 
-//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures,verbs=get;list;watch;update
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/finalizers,verbs=update
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;update;create;delete
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
@@ -273,7 +273,7 @@ func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, c
 		}
 
 		clusterSummary := &configv1alpha1.ClusterSummary{}
-		clusterSummaryName := getClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+		clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 		if err := r.Get(ctx, types.NamespacedName{Name: clusterSummaryName}, clusterSummary); err != nil {
 			if apierrors.IsNotFound(err) {
 				if err := r.createClusterSummary(ctx, clusterFeatureScope, cluster); err != nil {
@@ -304,7 +304,7 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 
 	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
 		reference := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
-		clusterSummaryName := getClusterSummaryName(clusterFeatureScope.Name(), reference.Namespace, reference.Name)
+		clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), reference.Namespace, reference.Name)
 		matching[clusterSummaryName] = true
 	}
 
@@ -328,7 +328,7 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 // createClusterSummary creates ClusterSummary given a ClusterFeature and a matching CAPI Cluster
 func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster corev1.ObjectReference) error {
-	clusterSummaryName := getClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 
 	clusterSummary := &configv1alpha1.ClusterSummary{
 		ObjectMeta: metav1.ObjectMeta{
@@ -360,7 +360,7 @@ func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clu
 		return nil
 	}
 
-	clusterSummaryName := getClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 	clusterSummary := &configv1alpha1.ClusterSummary{}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: clusterSummaryName}, clusterSummary); err != nil {
@@ -411,7 +411,7 @@ func (r *ClusterFeatureReconciler) getMachinesForCluster(
 ) (*clusterv1.MachineList, error) {
 	listOptions := []client.ListOption{
 		client.InNamespace(cluster.Namespace),
-		client.MatchingFields{clusterv1.ClusterLabelName: cluster.Name},
+		client.MatchingLabels{clusterv1.ClusterLabelName: cluster.Name},
 	}
 	var machineList clusterv1.MachineList
 	if err := r.Client.List(ctx, &machineList, listOptions...); err != nil {

@@ -18,12 +18,15 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -146,6 +149,17 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	logger := clusterSummaryScope.Logger
 	logger.Info("Reconciling ClusterSummary delete")
+
+	if err := r.undeploy(ctx, clusterSummaryScope); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Cluster is deleted so remove the finalizer.
+	logger.Info("Removing finalizer")
+	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
+		controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+	}
+
 	logger.Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
@@ -226,6 +240,37 @@ func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSumma
 	}
 
 	return r.deployFeature(ctx, clusterSummaryScope, f)
+}
+
+func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	// If CAPI Cluster is not found, there is nothing to clean up.
+	cluster := &clusterv1.Cluster{}
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.V(1).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+			return nil
+		}
+		return err
+	}
+
+	if err := r.undeployRoles(ctx, clusterSummaryScope); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClusterSummaryReconciler) undeployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
+	f := feature{
+		id:          configv1alpha1.FeatureRole,
+		currentHash: workloadRoleHash,
+		deploy:      UnDeployWorkloadRoles,
+	}
+
+	return r.undeployFeature(ctx, clusterSummaryScope, f)
 }
 
 func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {

@@ -94,9 +94,10 @@ func (d *deployer) RegisterFeatureID(
 func (d *deployer) Deploy(
 	ctx context.Context,
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 	f RequestHandler,
 ) error {
-	key := GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -138,8 +139,9 @@ func (d *deployer) Deploy(
 func (d *deployer) GetResult(
 	ctx context.Context,
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 ) Result {
-	responseParam, err := getRequestStatus(d, clusterNamespace, clusterName, applicant, featureID)
+	responseParam, err := getRequestStatus(d, clusterNamespace, clusterName, applicant, featureID, cleanup)
 	if err != nil {
 		return Result{
 			ResultStatus: Unavailable,
@@ -164,4 +166,50 @@ func (d *deployer) GetResult(
 	return Result{
 		ResultStatus: Deployed,
 	}
+}
+
+func (d *deployer) IsInProgress(
+	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
+) bool {
+	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for i := range d.inProgress {
+		if d.inProgress[i] == key {
+			d.log.V(10).Info("request is already in inProgress")
+			return true
+		}
+	}
+
+	return false
+}
+
+func (d *deployer) CleanupEntries(
+	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool) {
+	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
+
+	// Remove any entry we might have for this cluster/feature
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	for i := range d.dirty {
+		if d.dirty[i] != key {
+			continue
+		}
+		d.dirty = append(d.dirty[:i], d.dirty[i+1:]...)
+	}
+
+	for i := range d.jobQueue {
+		if d.jobQueue[i].key != key {
+			continue
+		}
+		d.jobQueue = append(d.jobQueue[:i], d.jobQueue[i+1:]...)
+	}
+
+	delete(d.results, key)
 }

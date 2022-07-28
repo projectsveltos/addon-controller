@@ -97,7 +97,7 @@ func main() {
 	ctx := context.Background()
 	deployer := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient())
 	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureRole)); err != nil {
-		setupLog.Error(err, "failed to register feature")
+		setupLog.Error(err, "failed to register feature FeatureRole")
 		os.Exit(1)
 	}
 

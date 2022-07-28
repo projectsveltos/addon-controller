@@ -69,7 +69,6 @@ var _ = BeforeSuite(func() {
 
 	clusterFeatureReconciler = &controllers.ClusterFeatureReconciler{
 		Client:            testEnv.Client,
-		Log:               klogr.New(),
 		Scheme:            scheme,
 		ClusterMap:        make(map[string]*controllers.Set),
 		ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -81,7 +80,6 @@ var _ = BeforeSuite(func() {
 	Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureRole))).To(Succeed())
 	clusterSummaryReconciler = &controllers.ClusterSummaryReconciler{
 		Client:            testEnv.Client,
-		Log:               klogr.New(),
 		Scheme:            scheme,
 		WorkloadRoleMap:   make(map[string]*controllers.Set),
 		ClusterSummaryMap: make(map[string]*controllers.Set),

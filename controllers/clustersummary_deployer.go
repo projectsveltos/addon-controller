@@ -39,19 +39,25 @@ type feature struct {
 }
 
 func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
-	f feature) error {
+	f feature, logger logr.Logger) error {
 	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
+		"cluastername", clusterSummary.Spec.ClusterNamespace,
+		"applicant", clusterSummary.Name)
+	logger.V(5).Info("request to deploy")
 
 	// If undeploying feature is in progress, wait for it to complete.
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(configv1alpha1.FeatureRole), true) {
+		logger.V(5).Info("cleanup is in progress")
 		return fmt.Errorf(fmt.Sprintf("cleanup of %s still in progress. Wait before redeploying", string(f.id)))
 	}
 
 	// Get hash of current configuration (at this very precise moment)
-	currentHash, err := f.currentHash(ctx, r.Client, clusterSummaryScope, r.Log)
+	currentHash, err := f.currentHash(ctx, r.Client, clusterSummaryScope, logger)
 	if err != nil {
 		return err
 	}
@@ -61,16 +67,19 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	if deployed && reflect.DeepEqual(hash, currentHash) {
 		// feature is deployed and nothing has changed. Nothing to do.
+		logger.V(5).Info("feature is deployed and hash has not changed")
 		return nil
 	}
 
 	// Feature is not deployed yet
 	if reflect.DeepEqual(hash, currentHash) {
+		logger.V(5).Info("hash has not changed")
 		// Configuration has not changed. Check if a result is available.
 		result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummaryScope.Name(), string(f.id), false)
 		status := r.convertResultStatus(result)
 		if status == nil {
+			logger.V(5).Info("no result available")
 			// No result is available, Request to deploy will be queued. So mark it as Provisioning
 			s := configv1alpha1.FeatureStatusProvisioning
 			status = &s
@@ -83,7 +92,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
-
+	logger.V(5).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), false, f.deploy); err != nil {
 		return err
@@ -93,18 +102,25 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 }
 
 func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
-	f feature) error {
+	f feature, logger logr.Logger) error {
 	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
+		"cluastername", clusterSummary.Spec.ClusterNamespace,
+		"applicant", clusterSummary.Name)
+	logger.V(5).Info("request to un-deploy")
 
 	// If deploying feature is in progress, wait for it to complete.
 	// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
 	// parallel some resources might be left over.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(configv1alpha1.FeatureRole), false) {
+		logger.V(5).Info("provisioning is in progress")
 		return fmt.Errorf(fmt.Sprintf("deploying %s still in progress. Wait before cleanup", string(f.id)))
 	}
 
 	if r.isFeatureRemoved(clusterSummaryScope, f.id) {
+		logger.V(5).Info("feature is removed")
 		// feature is removed. Nothing to do.
 		return nil
 	}
@@ -123,6 +139,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		return nil
 	}
 
+	logger.V(5).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), true, f.deploy); err != nil {
 		return err

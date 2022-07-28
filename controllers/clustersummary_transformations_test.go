@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -95,7 +94,6 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),

@@ -85,7 +85,6 @@ var _ = Describe("ClustersummaryController", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          deployer,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),

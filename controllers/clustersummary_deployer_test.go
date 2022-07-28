@@ -83,7 +83,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -120,7 +119,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -159,7 +157,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -199,7 +196,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -230,7 +226,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -316,7 +311,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -332,7 +326,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// DeployeFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run DeployFeature then validate key is not added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -396,7 +390,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -411,7 +404,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// does not match anymore the hash of all referenced WorkloadRole Specs). In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -458,7 +451,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -472,7 +464,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -524,7 +516,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -539,7 +530,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run UndeployFeature then validate key is not added to InProgress
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -582,7 +573,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -596,7 +586,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run UndeployFeature then validate key is added to InProgress
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -644,7 +634,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -655,7 +644,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
 
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup of Role still in progress. Wait before redeploying"))
 	})
@@ -700,7 +689,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          dep,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),
@@ -711,7 +699,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
 
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f)
+		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Role still in progress. Wait before cleanup"))
 	})
@@ -721,7 +709,6 @@ var _ = Describe("Convert result", func() {
 	It("convertResultStatus correctly converts deployer.ResultStatus to FeatureStatus", func() {
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            nil,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			Deployer:          nil,
 			WorkloadRoleMap:   make(map[string]*controllers.Set),

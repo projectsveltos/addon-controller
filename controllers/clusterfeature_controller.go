@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,7 +48,6 @@ import (
 type ClusterFeatureReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
-	Log               logr.Logger
 	Mux               sync.Mutex                         // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	ClusterMap        map[string]*Set                    // key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
 	ClusterFeatureMap map[string]*Set                    // key: ClusterFeature name; value: set of CAPI Clusters matched
@@ -89,7 +88,7 @@ type ClusterFeatureReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
 
 func (r *ClusterFeatureReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
-	logger := r.Log.WithValues("clusterfeature", req.NamespacedName)
+	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling")
 
 	// Fecth the ClusterFeature instance
@@ -202,7 +201,7 @@ func (r *ClusterFeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one or more ClusterFeatures need to be reconciled.
 	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterFeatureForCluster),
-		ClusterPredicates(r.Log),
+		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return err
 	}
@@ -211,7 +210,7 @@ func (r *ClusterFeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one or more ClusterFeatures need to be reconciled.
 	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterFeatureForMachine),
-		MachinePredicates(r.Log),
+		MachinePredicates(klogr.New().WithValues("predicate", "machinepredicate")),
 	)
 }
 

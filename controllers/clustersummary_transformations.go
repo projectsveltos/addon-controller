@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -29,7 +30,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForWorkloadRole(
 ) []reconcile.Request {
 
 	workloadRole := o.(*configv1alpha1.WorkloadRole)
-	logger := r.Log.WithValues(
+	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForWorkloadRole",
 		"workloadRole",

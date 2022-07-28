@@ -382,6 +382,8 @@ var _ = Describe("ClustersummaryDeployerHandlers", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
+		Expect(testEnv.GetCache().WaitForCacheSync(context.TODO())).To(BeTrue())
+
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		Expect(controllers.DeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
@@ -463,6 +465,8 @@ var _ = Describe("ClustersummaryDeployerHandlers", func() {
 
 		Expect(controllers.UnDeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureRole), logger)).To(Succeed())
+
+		Expect(testEnv.GetCache().WaitForCacheSync(context.TODO())).To(BeTrue())
 
 		// UnDeployWorkloadRoles finds all roles/clusterRoles deployed because of a clusterSummary and deletes those.
 		// Expect role0 and clusterRole0 (ClusterSummaryLabelName is set on those) to be deleted.

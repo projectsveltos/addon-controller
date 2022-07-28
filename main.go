@@ -104,7 +104,6 @@ func main() {
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controllers").WithName("ClusterFeature"),
 		ClusterMap:        make(map[string]*controllers.Set),
 		ClusterFeatureMap: make(map[string]*controllers.Set),
 		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
@@ -116,7 +115,6 @@ func main() {
 	if err = (&controllers.ClusterSummaryReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controllers").WithName("ClusterSummary"),
 		Deployer:          deployer,
 		WorkloadRoleMap:   make(map[string]*controllers.Set),
 		ClusterSummaryMap: make(map[string]*controllers.Set),

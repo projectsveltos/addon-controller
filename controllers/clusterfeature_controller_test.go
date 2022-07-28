@@ -101,7 +101,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -139,7 +138,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -181,7 +179,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -253,7 +250,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -325,7 +321,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -388,7 +383,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -421,7 +415,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -475,7 +468,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -559,7 +551,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -616,7 +607,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -669,7 +659,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),
@@ -723,7 +712,6 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
-			Log:               klogr.New(),
 			Scheme:            scheme,
 			ClusterMap:        make(map[string]*controllers.Set),
 			ClusterFeatureMap: make(map[string]*controllers.Set),

@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +45,6 @@ import (
 type ClusterSummaryReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
-	Log               logr.Logger
 	Deployer          deployer.DeployerInterface
 	Mux               sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	WorkloadRoleMap   map[string]*Set // key: WorkloadRole name; value: set of all ClusterSummaries referencing the WorkloadRole
@@ -81,7 +81,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
-	logger := r.Log.WithValues("clustersummary", req.NamespacedName)
+	logger := ctrl.LoggerFrom(ctx)
 	logger.Info("Reconciling")
 
 	// Fecth the clusterSummary instance
@@ -135,22 +135,21 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Handle deleted clusterSummary
 	if !clusterSummary.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, clusterFeatureScope)
+		return r.reconcileDelete(ctx, clusterFeatureScope, logger)
 	}
 
 	// Handle non-deleted clusterSummary
-	return r.reconcileNormal(ctx, clusterFeatureScope)
+	return r.reconcileNormal(ctx, clusterFeatureScope, logger)
 }
 
 func (r *ClusterSummaryReconciler) reconcileDelete(
 	ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger,
 ) (reconcile.Result, error) {
-
-	logger := clusterSummaryScope.Logger
 	logger.Info("Reconciling ClusterSummary delete")
 
-	if err := r.undeploy(ctx, clusterSummaryScope); err != nil {
+	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -168,9 +167,8 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 func (r *ClusterSummaryReconciler) reconcileNormal(
 	ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger,
 ) (reconcile.Result, error) {
-
-	logger := clusterSummaryScope.Logger
 	logger.Info("Reconciling ClusterSummary")
 
 	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
@@ -181,7 +179,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	r.updatesMaps(clusterSummaryScope)
 
-	if err := r.deploy(ctx, clusterSummaryScope); err != nil {
+	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -205,7 +203,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// one or more ClusterSummaries need to be reconciled.
 	return c.Watch(&source.Kind{Type: &configv1alpha1.WorkloadRole{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForWorkloadRole),
-		WorkloadRolePredicates(r.Log),
+		WorkloadRolePredicates(klogr.New().WithValues("predicate", "workloadrolepredicate")),
 	)
 }
 
@@ -224,25 +222,25 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
-	if err := r.deployRoles(ctx, clusterSummaryScope); err != nil {
+func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if err := r.deployRoles(ctx, clusterSummaryScope, logger); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
+func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := feature{
 		id:          configv1alpha1.FeatureRole,
 		currentHash: workloadRoleHash,
 		deploy:      DeployWorkloadRoles,
 	}
 
-	return r.deployFeature(ctx, clusterSummaryScope, f)
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
+func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	// If CAPI Cluster is not found, there is nothing to clean up.
@@ -250,27 +248,27 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			r.Log.V(1).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+			logger.V(1).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
 			return nil
 		}
 		return err
 	}
 
-	if err := r.undeployRoles(ctx, clusterSummaryScope); err != nil {
+	if err := r.undeployRoles(ctx, clusterSummaryScope, logger); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) undeployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
+func (r *ClusterSummaryReconciler) undeployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := feature{
 		id:          configv1alpha1.FeatureRole,
 		currentHash: workloadRoleHash,
 		deploy:      UnDeployWorkloadRoles,
 	}
 
-	return r.undeployFeature(ctx, clusterSummaryScope, f)
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {

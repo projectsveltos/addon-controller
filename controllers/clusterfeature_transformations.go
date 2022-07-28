@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,7 +30,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 ) []reconcile.Request {
 
 	cluster := o.(*clusterv1.Cluster)
-	logger := r.Log.WithValues(
+	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClusterFeatureForCluster",
 		"namespace",
@@ -78,7 +79,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 	o client.Object,
 ) []reconcile.Request {
 	machine := o.(*clusterv1.Machine)
-	logger := r.Log.WithValues(
+	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClusterFeatureForMachine",
 		"namespace",

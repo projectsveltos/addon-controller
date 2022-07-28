@@ -50,7 +50,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -62,7 +63,7 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, applicant, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Deployed))
 	})
@@ -72,7 +73,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -84,7 +86,7 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, applicant, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
 		Expect(result.Err).ToNot(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Failed))
 	})
@@ -94,7 +96,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := true
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -105,7 +108,7 @@ var _ = Describe("Client", func() {
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, applicant, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.InProgress))
 	})
@@ -115,7 +118,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -126,7 +130,7 @@ var _ = Describe("Client", func() {
 		d.SetJobQueue(key, nil)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
-		result := d.GetResult(ctx, ns, name, applicant, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.InProgress))
 	})
@@ -136,6 +140,7 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
+		cleanup := true
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -143,7 +148,7 @@ var _ = Describe("Client", func() {
 		d := deployer.GetClient(ctx, klogr.New(), c)
 		defer d.ClearInternalStruct()
 
-		result := d.GetResult(ctx, ns, name, applicant, featureID)
+		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
 		Expect(result.Err).To(BeNil())
 		Expect(result.ResultStatus).To(Equal(deployer.Unavailable))
 	})
@@ -153,13 +158,14 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
+		cleanup := true
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
 		d := deployer.GetClient(ctx, klogr.New(), c)
 
-		err := d.Deploy(ctx, ns, name, applicant, featureID, nil)
+		err := d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).ToNot(BeNil())
 	})
 
@@ -168,7 +174,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -182,7 +189,7 @@ var _ = Describe("Client", func() {
 		d.SetDirty([]string{key})
 		Expect(len(d.GetDirty())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))
@@ -194,6 +201,7 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
+		cleanup := false
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -204,7 +212,7 @@ var _ = Describe("Client", func() {
 		err := d.RegisterFeatureID(featureID)
 		Expect(err).To(BeNil())
 
-		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))
@@ -216,7 +224,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -230,7 +239,7 @@ var _ = Describe("Client", func() {
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(1))
@@ -242,7 +251,8 @@ var _ = Describe("Client", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
@@ -257,11 +267,48 @@ var _ = Describe("Client", func() {
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		err = d.Deploy(ctx, ns, name, applicant, featureID, nil)
+		err = d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).To(BeNil())
 		Expect(len(d.GetDirty())).To(Equal(1))
 		Expect(len(d.GetInProgress())).To(Equal(0))
 		Expect(len(d.GetJobQueue())).To(Equal(1))
+		Expect(len(d.GetResults())).To(Equal(0))
+	})
+
+	It("CleanupEntries removes features from internal data structure but inProgress", func() {
+		ns := namespacePrefix + util.RandomString(5)
+		name := namespacePrefix + util.RandomString(5)
+		applicant := util.RandomString(5)
+		featureID := util.RandomString(5)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
+
+		c := fake.NewClientBuilder().WithObjects(nil...).Build()
+		ctx, cancel := context.WithCancel(context.TODO())
+		defer cancel()
+		d := deployer.GetClient(ctx, klogr.New(), c)
+		defer d.ClearInternalStruct()
+
+		err := d.RegisterFeatureID(featureID)
+		Expect(err).To(BeNil())
+
+		r := map[string]error{key: nil}
+		d.SetResults(r)
+		Expect(len(d.GetResults())).To(Equal(1))
+
+		d.SetInProgress([]string{key})
+		Expect(len(d.GetInProgress())).To(Equal(1))
+
+		d.SetDirty([]string{key})
+		Expect(len(d.GetDirty())).To(Equal(1))
+
+		d.SetJobQueue(key, nil)
+		Expect(len(d.GetJobQueue())).To(Equal(1))
+
+		d.CleanupEntries(ns, name, applicant, featureID, cleanup)
+		Expect(len(d.GetDirty())).To(Equal(0))
+		Expect(len(d.GetInProgress())).To(Equal(1))
+		Expect(len(d.GetJobQueue())).To(Equal(0))
 		Expect(len(d.GetResults())).To(Equal(0))
 	})
 })

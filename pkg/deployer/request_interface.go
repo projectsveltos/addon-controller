@@ -29,6 +29,7 @@ const (
 	Deployed ResultStatus = iota
 	InProgress
 	Failed
+	Removed
 	Unavailable
 )
 
@@ -40,6 +41,8 @@ func (r ResultStatus) String() string {
 		return "in-progress"
 	case Failed:
 		return "failed"
+	case Removed:
+		return "removed"
 	case Unavailable:
 		return "unavailable"
 	}
@@ -62,8 +65,10 @@ type DeployerInterface interface {
 		featureID string,
 	) error
 
-	// Deploy creates a request to deploy a feature in a given
+	// Deploy creates a request to deploy/cleanup a feature in a given
 	// CAPI cluster (identified by clusterNamespace, clusterName).
+	// cleanup indicates whether request is for feature to be provisioned
+	// or removed.
 	// When worker is available to fulfill such request, RequestHandler
 	// will be invoked in the worker context.
 	// If featureID is not registered, an error will be returned.
@@ -73,12 +78,28 @@ type DeployerInterface interface {
 	Deploy(
 		ctx context.Context,
 		clusterNamespace, clusterName, applicant, featureID string,
+		cleanup bool,
 		f RequestHandler,
 	) error
+
+	// IsInProgress returns true, if featureID for clusterNamespace/clusterName
+	// requested by applicant is currently in progress.
+	// cleanup indicates whether request for feature to be provisioned or
+	// removed is currently in progress.
+	IsInProgress(
+		clusterNamespace, clusterName, applicant, featureID string,
+		cleanup bool,
+	) bool
 
 	// GetResult returns result for a given request.
 	GetResult(
 		ctx context.Context,
 		clusterNamespace, clusterName, applicant, featureID string,
+		cleanup bool,
 	) Result
+
+	// CleanupEntries removes any entry (from any internal data structure) for
+	// given feature
+	CleanupEntries(clusterNamespace, clusterName, applicant, featureID string,
+		cleanup bool)
 }

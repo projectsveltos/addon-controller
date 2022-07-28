@@ -62,9 +62,10 @@ func (d *fakeDeployer) RegisterFeatureID(
 func (d *fakeDeployer) Deploy(
 	ctx context.Context,
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 	f deployer.RequestHandler,
 ) error {
-	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.inProgress = append(d.inProgress, key)
 	return nil
 }
@@ -77,13 +78,14 @@ func (d *fakeDeployer) Deploy(
 func (d *fakeDeployer) GetResult(
 	ctx context.Context,
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 ) deployer.Result {
-	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	v, ok := d.results[key]
 	result := deployer.Result{}
 	if !ok {
 		result.ResultStatus = deployer.Unavailable
-		if d.IsInProgress(key) {
+		if d.IsKeyInProgress(key) {
 			result.ResultStatus = deployer.InProgress
 		}
 	} else if v != nil {
@@ -95,25 +97,49 @@ func (d *fakeDeployer) GetResult(
 	return result
 }
 
+func (d *fakeDeployer) IsInProgress(
+	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
+) bool {
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
+	for i := range d.inProgress {
+		if d.inProgress[i] == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *fakeDeployer) CleanupEntries(
+	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool) {
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
+
+	// Remove any entry we might have for this cluster/feature
+	delete(d.results, key)
+}
+
 // StoreResult store request result
 func (d *fakeDeployer) StoreResult(
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 	err error,
 ) {
-	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.results[key] = err
 }
 
 // StoreInProgress marks request as in progress
 func (d *fakeDeployer) StoreInProgress(
 	clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool,
 ) {
-	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.inProgress = append(d.inProgress, key)
 }
 
 // IsInProgress returns true if key is currently InProgress
-func (d *fakeDeployer) IsInProgress(key string) bool {
+func (d *fakeDeployer) IsKeyInProgress(key string) bool {
 	for i := range d.inProgress {
 		if d.inProgress[i] == key {
 			return true

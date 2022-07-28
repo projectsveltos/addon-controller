@@ -35,14 +35,16 @@ var (
 )
 
 var (
-	GetSecretData       = getSecretData
-	GetKubernetesClient = getKubernetesClient
-	GetRoleName         = getRoleName
+	GetSecretData          = getSecretData
+	GetKubernetesClient    = getKubernetesClient
+	GetRoleName            = getRoleName
+	AddClusterSummaryLabel = addClusterSummaryLabel
 
 	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
 	DeployClusterWorkloadRole    = deployClusterWorkloadRole
 
-	WorkloadRoleHash = workloadRoleHash
+	UndeployStaleResources = undeployStaleResources
+	WorkloadRoleHash       = workloadRoleHash
 )
 
 var (
@@ -50,12 +52,21 @@ var (
 	GetHash             = (*ClusterSummaryReconciler).getHash
 	UpdateFeatureStatus = (*ClusterSummaryReconciler).updateFeatureStatus
 	DeployFeature       = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature     = (*ClusterSummaryReconciler).undeployFeature
+
+	DeployRoles         = (*ClusterSummaryReconciler).deployRoles
+	UndeployRoles       = (*ClusterSummaryReconciler).undeployRoles
+	ConvertResultStatus = (*ClusterSummaryReconciler).convertResultStatus
 
 	RequeueClusterSummaryForWorkloadRole = (*ClusterSummaryReconciler).requeueClusterSummaryForWorkloadRole
 )
 
 var (
 	GetClusterFeatureOwner = getClusterFeatureOwner
+)
+
+const (
+	ClusterSummaryLabelName = clusterSummaryLabelName
 )
 
 var (

@@ -19,6 +19,7 @@ package deployer
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -86,20 +87,26 @@ func (d *deployer) startWorkloadWorkers(ctx context.Context, numOfWorker int, lo
 // - clusterNamespace and clusterName which are the namespace/name of the CAPI
 // cluster where feature needs to be deployed;
 // - featureID is a unique identifier for the feature that needs to be deployed.
-func GetKey(clusterNamespace, clusterName, applicant, featureID string) string {
-	return clusterNamespace + separator + clusterName + separator + applicant + separator + featureID
+func GetKey(clusterNamespace, clusterName, applicant, featureID string, cleanup bool) string {
+	return clusterNamespace + separator + clusterName + separator + applicant + separator + featureID + separator + strconv.FormatBool(cleanup)
 }
 
 // getFromKey given a unique request key, returns:
 // - clusterNamespace and clusterName which are the namespace/name of the CAPI
 // cluster where feature needs to be deployed;
-// - featureID is a unique identifier for the feature that needs to be deployed.
-func getFromKey(key string) (namespace, name, applicant, featureID string) {
+// - featureID is a unique identifier for the feature that needs to be deployed;
+// - cleanup indicates whether this key is for a feature to be deployed or removed
+func getFromKey(key string) (namespace, name, applicant, featureID string, cleanup bool, err error) {
 	info := strings.Split(key, separator)
+	if len(info) != 5 {
+		err = fmt.Errorf(fmt.Sprintf("Key: %s is malformed", key))
+		return
+	}
 	namespace = info[0]
 	name = info[1]
 	applicant = info[2]
 	featureID = info[3]
+	cleanup, err = strconv.ParseBool(info[4])
 	return
 }
 
@@ -112,12 +119,16 @@ func processRequests(d *deployer, i int, logger logr.Logger) {
 	for {
 		if params != nil {
 			l := logger.WithValues("key", params.key)
-			ns, name, applicant, featureID := getFromKey(params.key)
-			l.Info(fmt.Sprintf("worker: %d processing request", id))
-			err := params.handler(d.ctx, controlClusterClient,
-				ns, name, applicant, featureID,
-				l)
-			storeResult(d, params.key, err, params.handler, logger)
+			ns, name, applicant, featureID, cleanup, err := getFromKey(params.key)
+			l.Info(fmt.Sprintf("worker: %d processing request. cleanup: %t", id, cleanup))
+			if err != nil {
+				storeResult(d, params.key, err, params.handler, logger)
+			} else {
+				err = params.handler(d.ctx, controlClusterClient,
+					ns, name, applicant, featureID,
+					l)
+				storeResult(d, params.key, err, params.handler, logger)
+			}
 		}
 		params = nil
 		select {
@@ -194,9 +205,10 @@ func storeResult(d *deployer, key string, err error, handler RequestHandler, log
 // If result is available it returns the result.
 // If request is still queued, responseParams is nil and an error is nil.
 // If result is not available and request is neither queued nor already processed, it returns an error to indicate that.
-func getRequestStatus(d *deployer, clusterNamespace, clusterName, applicant, featureID string) (*responseParams, error) {
+func getRequestStatus(d *deployer, clusterNamespace, clusterName, applicant, featureID string,
+	cleanup bool) (*responseParams, error) {
 
-	key := GetKey(clusterNamespace, clusterName, applicant, featureID)
+	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	logger := d.log.WithValues("key", key)
 

@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -141,6 +142,28 @@ var _ = Describe("Workload", func() {
 			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
 			return err == nil &&
 				reflect.DeepEqual(role.Rules, currentWorkloadRole.Spec.Rules)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("changing clusterfeature to not reference workloadrole anymore")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		currentClusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{}
+		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+
+		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
+		Eventually(func() bool {
+			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			return err == nil &&
+				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles) == 0
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying proper role is removed in the workload cluster")
+		Eventually(func() bool {
+			role := &rbacv1.Role{}
+			roleName := clusterSummary.Name + "-" + workloadRole.Name
+			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
+			return err != nil &&
+				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })

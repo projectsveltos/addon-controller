@@ -18,25 +18,25 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
 
+	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/clientcmd"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
 const (
-	kubeconfigSecretNamePostfix = "-kubeconfig"
+	clusterSummaryLabelName = "projectsveltos.io/cluster-summary-name"
 )
 
 func DeployWorkloadRoles(ctx context.Context, c client.Client,
@@ -47,6 +47,11 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 	clusterSummary := &configv1alpha1.ClusterSummary{}
 	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
 		return err
+	}
+
+	if !clusterSummary.DeletionTimestamp.IsZero() {
+		// if clusterSummary is marked for deletion, there is nothing to deploy
+		return fmt.Errorf("clustersummary is marked for deletion")
 	}
 
 	// Get CAPI Cluster
@@ -60,6 +65,7 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 		return err
 	}
 
+	currentRoles := make(map[string]bool, 0)
 	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
 		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i]
 		workloadRole := &configv1alpha1.WorkloadRole{}
@@ -75,97 +81,102 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 		if err := deployWorkloadRole(ctx, clusterClient, workloadRole, clusterSummary, logger); err != nil {
 			return err
 		}
+
+		roleName := getRoleName(workloadRole, clusterSummary.Name)
+		currentRoles[roleName] = true
+	}
+
+	// Remove all roles/clusterRoles previously deployed by this ClusterSummary and not referenced anymores
+	if err = undeployStaleResources(ctx, clusterClient, clusterSummary, currentRoles); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-// getKubernetesClient returns a client to access CAPI Cluster
-func getKubernetesClient(ctx context.Context, logger logr.Logger, c client.Client,
-	clusterNamespace, clusterName string) (client.Client, error) {
-	kubeconfigContent, err := getSecretData(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return nil, err
+func UnDeployWorkloadRoles(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, _ string,
+	logger logr.Logger) error {
+
+	// Get ClusterSummary that requested this
+	clusterSummary := &configv1alpha1.ClusterSummary{}
+	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
+		return err
 	}
 
-	kubeconfig, err := createKubeconfig(logger, kubeconfigContent)
-	if err != nil {
-		return nil, err
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		logger.Error(err, "BuildConfigFromFlags")
-		return nil, errors.Wrap(err, "BuildConfigFromFlags")
-	}
-	logger.V(10).Info("return new client")
-	return client.New(config, client.Options{})
-}
-
-// getSecretData verifies Cluster exists and returns the content of secret containing
-// the kubeconfig for CAPI cluster
-func getSecretData(ctx context.Context, logger logr.Logger, c client.Client,
-	clusterNamespace, clusterName string) ([]byte, error) {
-
-	logger.WithValues("namespace", clusterNamespace, "cluster", clusterName)
-	logger.V(10).Info("Get secret")
-	key := client.ObjectKey{
-		Namespace: clusterNamespace,
-		Name:      clusterName,
-	}
-
-	cluster := clusterv1.Cluster{}
-	if err := c.Get(ctx, key, &cluster); err != nil {
+	// Get CAPI Cluster
+	cluster := &clusterv1.Cluster{}
+	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info("Cluster does not exist")
-			return nil, errors.Wrap(err,
-				fmt.Sprintf("Cluster %s/%s does not exist",
-					clusterNamespace,
-					clusterName,
-				))
+			logger.Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
+			return nil
 		}
-		return nil, err
+		return err
 	}
 
-	secretName := cluster.Name + kubeconfigSecretNamePostfix
-	logger = logger.WithValues("secret", secretName)
-
-	secret := &corev1.Secret{}
-	key = client.ObjectKey{
-		Namespace: clusterNamespace,
-		Name:      secretName,
+	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
 	}
 
-	if err := c.Get(ctx, key, secret); err != nil {
-		logger.Error(err, "failed to get secret")
-		return nil, errors.Wrap(err,
-			fmt.Sprintf("Failed to get secret %s/%s",
-				clusterNamespace, secretName))
+	listOptions := []client.ListOption{
+		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
 	}
 
-	for k, contents := range secret.Data {
-		logger.V(10).Info("Reading secret", "key", k)
-		return contents, nil
+	roles := &rbacv1.RoleList{}
+	err = clusterClient.List(ctx, roles, listOptions...)
+	if err != nil {
+		return err
 	}
 
-	return nil, nil
+	for i := range roles.Items {
+		role := &roles.Items[i]
+		if err = clusterClient.Delete(ctx, role); err != nil {
+			return err
+		}
+	}
+
+	clusterRoles := &rbacv1.ClusterRoleList{}
+	err = clusterClient.List(ctx, clusterRoles, listOptions...)
+	if err != nil {
+		return err
+	}
+
+	for i := range clusterRoles.Items {
+		clusterRole := &clusterRoles.Items[i]
+		if err = clusterClient.Delete(ctx, clusterRole); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-// createKubeconfig creates a temporary file with the Kubeconfig to access CAPI cluster
-func createKubeconfig(logger logr.Logger, kubeconfigContent []byte) (string, error) {
-	tmpfile, err := ioutil.TempFile("", "kubeconfig")
-	if err != nil {
-		logger.Error(err, "failed to create temporary file")
-		return "", errors.Wrap(err, "ioutil.TempFile")
-	}
-	defer tmpfile.Close()
+// workloadRoleHash returns the hash of all the ClusterSummary referenced WorkloadRole Specs.
+func workloadRoleHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) ([]byte, error) {
+	h := sha256.New()
+	var config string
 
-	if _, err := tmpfile.Write(kubeconfigContent); err != nil {
-		logger.Error(err, "failed to write to temporary file")
-		return "", errors.Wrap(err, "failed to write to temporary file")
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
+		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i]
+		workloadRole := &configv1alpha1.WorkloadRole{}
+		err := c.Get(ctx, types.NamespacedName{Name: reference.Name}, workloadRole)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.Info(fmt.Sprintf("workloadRole %s does not exist yet", reference.Name))
+				continue
+			}
+			logger.Error(err, fmt.Sprintf("failed to get workloadRole %s", reference.Name))
+			return nil, err
+		}
+
+		config += render.AsCode(workloadRole.Spec)
 	}
 
-	return tmpfile.Name(), nil
+	h.Write([]byte(config))
+	return h.Sum(nil), nil
 }
 
 // deployWorkloadRole deploys a workload role in a CAPI cluster.
@@ -200,6 +211,8 @@ func deployClusterWorkloadRole(ctx context.Context, clusterClient client.Client,
 		Rules:           workloadRole.Spec.Rules,
 		AggregationRule: workloadRole.Spec.AggregationRule,
 	}
+
+	addClusterSummaryLabel(clusterRole, clusterSummary.Name)
 
 	currentClusterRole := &rbacv1.ClusterRole{}
 	if err := clusterClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, currentClusterRole); err != nil {
@@ -237,6 +250,8 @@ func deployNamespacedWorkloadRole(ctx context.Context, clusterClient client.Clie
 		Rules: workloadRole.Spec.Rules,
 	}
 
+	addClusterSummaryLabel(role, clusterSummary.Name)
+
 	if err := createNamespace(ctx, clusterClient, role.Namespace); err != nil {
 		return err
 	}
@@ -271,5 +286,53 @@ func createNamespace(ctx context.Context, clusterClient client.Client, namespace
 		}
 		return err
 	}
+	return nil
+}
+
+// addClusterSummaryLabel adds ClusterSummaryLabelName label
+func addClusterSummaryLabel(obj metav1.Object, clusterSummaryName string) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[clusterSummaryLabelName] = clusterSummaryName
+	obj.SetLabels(labels)
+}
+
+func undeployStaleResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary, currentRoles map[string]bool) error {
+	listOptions := []client.ListOption{
+		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
+	}
+
+	roles := &rbacv1.RoleList{}
+	err := c.List(ctx, roles, listOptions...)
+	if err != nil {
+		return err
+	}
+
+	for i := range roles.Items {
+		role := &roles.Items[i]
+		if _, ok := currentRoles[role.Name]; !ok {
+			if err = c.Delete(ctx, role); err != nil {
+				return err
+			}
+		}
+	}
+
+	clusterRoles := &rbacv1.ClusterRoleList{}
+	err = c.List(ctx, clusterRoles, listOptions...)
+	if err != nil {
+		return err
+	}
+
+	for i := range clusterRoles.Items {
+		clusterRole := &clusterRoles.Items[i]
+		if _, ok := currentRoles[clusterRole.Name]; !ok {
+			if err = c.Delete(ctx, clusterRole); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }

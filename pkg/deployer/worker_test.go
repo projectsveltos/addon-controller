@@ -54,13 +54,16 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := true
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
-		outNs, outName, outApplicant, outFeatureID := deployer.GetFromKey(key)
+		outNs, outName, outApplicant, outFeatureID, outCleanup, err := deployer.GetFromKey(key)
+		Expect(err).To(BeNil())
 		Expect(outNs).To(Equal(ns))
 		Expect(outName).To(Equal(name))
 		Expect(outApplicant).To(Equal(applicant))
 		Expect(outFeatureID).To(Equal(featureID))
+		Expect(outCleanup).To(Equal(cleanup))
 	})
 
 	It("getKey and getFromKey return correct values (applicant is empty)", func() {
@@ -68,13 +71,16 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := ""
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, false)
 
-		outNs, outName, outApplicant, outFeatureID := deployer.GetFromKey(key)
+		outNs, outName, outApplicant, outFeatureID, outCleanup, err := deployer.GetFromKey(key)
+		Expect(err).To(BeNil())
 		Expect(outNs).To(Equal(ns))
 		Expect(outName).To(Equal(name))
 		Expect(outApplicant).To(Equal(applicant))
 		Expect(outFeatureID).To(Equal(featureID))
+		Expect(outCleanup).To(Equal(cleanup))
 	})
 
 	It("removeFromSlice should remove element from slice", func() {
@@ -100,7 +106,8 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
@@ -117,7 +124,8 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
@@ -139,13 +147,14 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := true
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		r := map[string]error{key: nil}
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID, cleanup)
 		Expect(err).To(BeNil())
 		Expect(resp).ToNot(BeNil())
 		Expect(deployer.IsResponseDeployed(resp)).To(BeTrue())
@@ -160,13 +169,14 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := true
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		r := map[string]error{key: fmt.Errorf("failed to deploy")}
 		d.SetResults(r)
 		Expect(len(d.GetResults())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID, cleanup)
 		Expect(err).To(BeNil())
 		Expect(resp).ToNot(BeNil())
 		Expect(deployer.IsResponseFailed(resp)).To(BeTrue())
@@ -181,12 +191,13 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		d.SetInProgress([]string{key})
 		Expect(len(d.GetInProgress())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID, cleanup)
 		Expect(err).To(BeNil())
 		Expect(resp).To(BeNil())
 	})
@@ -200,12 +211,13 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := false
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		d.SetJobQueue(key, nil)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID, cleanup)
 		Expect(err).To(BeNil())
 		Expect(resp).To(BeNil())
 	})
@@ -220,7 +232,8 @@ var _ = Describe("Worker", func() {
 		name := namespacePrefix + util.RandomString(5)
 		applicant := util.RandomString(5)
 		featureID := util.RandomString(5)
-		key := deployer.GetKey(ns, name, applicant, featureID)
+		cleanup := true
+		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetJobQueue(key, writeToChannelHandler)
 		Expect(len(d.GetJobQueue())).To(Equal(1))
 
@@ -243,7 +256,7 @@ var _ = Describe("Worker", func() {
 			return gotResult
 		}, 20*time.Second, time.Second).Should(BeTrue())
 
-		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID)
+		resp, err := deployer.GetRequestStatus(d, ns, name, applicant, featureID, cleanup)
 		Expect(err).To(BeNil())
 		Expect(deployer.IsResponseDeployed(resp)).To(BeTrue())
 	})

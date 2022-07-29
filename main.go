@@ -24,18 +24,16 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
-
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-
-	"github.com/spf13/pflag"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
@@ -48,6 +46,14 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+var (
+	metricsAddr          string
+	enableLeaderElection bool
+	probeAddr            string
+	workers              int
+	concurrentReconciles int
+)
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
@@ -57,18 +63,13 @@ func init() {
 
 func main() {
 	klog.InitFlags(nil)
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+
+	initFlags(pflag.CommandLine)
+	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(klog.Background())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -95,30 +96,32 @@ func main() {
 	}
 
 	ctx := context.Background()
-	deployer := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient())
+	deployer := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
 	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureRole)); err != nil {
 		setupLog.Error(err, "failed to register feature FeatureRole")
 		os.Exit(1)
 	}
 
 	if err = (&controllers.ClusterFeatureReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		ClusterMap:        make(map[string]*controllers.Set),
-		ClusterFeatureMap: make(map[string]*controllers.Set),
-		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
-		Mux:               sync.Mutex{},
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ClusterMap:           make(map[string]*controllers.Set),
+		ClusterFeatureMap:    make(map[string]*controllers.Set),
+		ClusterFeatures:      make(map[string]configv1alpha1.Selector),
+		Mux:                  sync.Mutex{},
+		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterFeature")
 		os.Exit(1)
 	}
 	if err = (&controllers.ClusterSummaryReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Deployer:          deployer,
-		WorkloadRoleMap:   make(map[string]*controllers.Set),
-		ClusterSummaryMap: make(map[string]*controllers.Set),
-		Mux:               sync.Mutex{},
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		Deployer:             deployer,
+		WorkloadRoleMap:      make(map[string]*controllers.Set),
+		ClusterSummaryMap:    make(map[string]*controllers.Set),
+		Mux:                  sync.Mutex{},
+		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterSummary")
 		os.Exit(1)
@@ -139,4 +142,32 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func initFlags(fs *pflag.FlagSet) {
+	flag.StringVar(&metricsAddr,
+		"metrics-bind-address",
+		":8080",
+		"The address the metric endpoint binds to.")
+
+	flag.StringVar(&probeAddr,
+		"health-probe-bind-address",
+		":8081",
+		"The address the probe endpoint binds to.")
+
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+
+	flag.IntVar(
+		&workers,
+		"worker-number",
+		10,
+		"Number of worker. Workers are used to deploy features in CAPI clusters")
+
+	flag.IntVar(
+		&concurrentReconciles,
+		"concurrent-reconciles",
+		10,
+		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
 }

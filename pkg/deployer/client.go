@@ -27,10 +27,6 @@ import (
 
 var getClientLock = &sync.Mutex{}
 
-const (
-	numOfWorker = 10
-)
-
 // deployer represents a client implementing the DeployerInterface
 type deployer struct {
 	log logr.Logger
@@ -62,15 +58,13 @@ type deployer struct {
 var deployerInstance *deployer
 
 // GetClient return a deployer client, implementing the DeployerInterface
-func GetClient(ctx context.Context, l logr.Logger, c client.Client) *deployer {
+func GetClient(ctx context.Context, l logr.Logger, c client.Client, numOfWorker int) *deployer {
 	if deployerInstance == nil {
 		getClientLock.Lock()
 		defer getClientLock.Unlock()
 		if deployerInstance == nil {
-			l.V(1).Info("Creating single instance now.")
+			l.V(1).Info(fmt.Sprintf("Creating instance now. Number of workers: %d", numOfWorker))
 			deployerInstance = &deployer{log: l, Client: c, ctx: ctx}
-			// numOfWorker is set to 10 by default. This can be overridden
-			// using an env variable
 			deployerInstance.startWorkloadWorkers(ctx, numOfWorker, l)
 		}
 	}

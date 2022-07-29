@@ -45,7 +45,7 @@ var _ = BeforeSuite(func() {
 	c := fake.NewClientBuilder().WithObjects(nil...).Build()
 	var ctx context.Context
 	ctx, cancel = context.WithCancel(context.TODO())
-	deployer.GetClient(ctx, klogr.New(), c)
+	deployer.GetClient(ctx, klogr.New(), c, 10)
 })
 
 var _ = AfterSuite(func() {

@@ -47,11 +47,12 @@ import (
 // ClusterFeatureReconciler reconciles a ClusterFeature object
 type ClusterFeatureReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	Mux               sync.Mutex                         // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	ClusterMap        map[string]*Set                    // key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
-	ClusterFeatureMap map[string]*Set                    // key: ClusterFeature name; value: set of CAPI Clusters matched
-	ClusterFeatures   map[string]configv1alpha1.Selector // key: ClusterFeature name; value ClusterFeature Selector
+	Scheme               *runtime.Scheme
+	ConcurrentReconciles int
+	Mux                  sync.Mutex                         // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	ClusterMap           map[string]*Set                    // key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
+	ClusterFeatureMap    map[string]*Set                    // key: ClusterFeature name; value: set of CAPI Clusters matched
+	ClusterFeatures      map[string]configv1alpha1.Selector // key: ClusterFeature name; value ClusterFeature Selector
 
 	// Reason for the two maps:
 	// ClusterFeature, via ClusterSelector, matches CAPI Clusters based on Cluster labels.
@@ -190,7 +191,7 @@ func (r *ClusterFeatureReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterFeature{}).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 10,
+			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
 		Build(r)
 	if err != nil {

@@ -382,12 +382,13 @@ var _ = Describe("ClustersummaryDeployerHandlers", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
-		Expect(testEnv.GetCache().WaitForCacheSync(context.TODO())).To(BeTrue())
-
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		Expect(controllers.DeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureRole), logger)).To(Succeed())
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			return controllers.DeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+				string(configv1alpha1.FeatureRole), logger)
+		}, timeout, pollingInterval).Should(BeNil())
 
 		name := controllers.GetRoleName(clusterWorkloadRole, clusterSummary.Name)
 		currentClusterRole := &rbacv1.ClusterRole{}
@@ -463,10 +464,11 @@ var _ = Describe("ClustersummaryDeployerHandlers", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
-		Expect(controllers.UnDeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureRole), logger)).To(Succeed())
-
-		Expect(testEnv.GetCache().WaitForCacheSync(context.TODO())).To(BeTrue())
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			return controllers.UnDeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+				string(configv1alpha1.FeatureRole), logger)
+		}, timeout, pollingInterval).Should(BeNil())
 
 		// UnDeployWorkloadRoles finds all roles/clusterRoles deployed because of a clusterSummary and deletes those.
 		// Expect role0 and clusterRole0 (ClusterSummaryLabelName is set on those) to be deleted.

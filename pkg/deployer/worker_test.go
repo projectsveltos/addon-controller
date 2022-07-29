@@ -99,7 +99,7 @@ var _ = Describe("Worker", func() {
 
 	It("storeResult saves results and removes key from inProgress", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -117,7 +117,7 @@ var _ = Describe("Worker", func() {
 
 	It("storeResult saves results and removes key from dirty and adds to jobQueue", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -140,7 +140,7 @@ var _ = Describe("Worker", func() {
 
 	It("getRequestStatus returns result when available", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -162,7 +162,7 @@ var _ = Describe("Worker", func() {
 
 	It("getRequestStatus returns result when available and reports error", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -184,7 +184,7 @@ var _ = Describe("Worker", func() {
 
 	It("getRequestStatus returns nil response when request is still queued (currently in progress)", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -204,7 +204,7 @@ var _ = Describe("Worker", func() {
 
 	It("getRequestStatus returns nil response when request is still queued (currently queued)", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		d := deployer.GetClient(context.TODO(), klogr.New(), c)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)
@@ -225,7 +225,7 @@ var _ = Describe("Worker", func() {
 	It("processRequests proces request and stores results", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		ns := namespacePrefix + util.RandomString(5)

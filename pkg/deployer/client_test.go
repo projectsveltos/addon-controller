@@ -35,7 +35,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -56,7 +56,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		r := map[string]error{key: nil}
@@ -79,7 +79,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		r := map[string]error{key: fmt.Errorf("failed to deploy")}
@@ -102,7 +102,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		d.SetInProgress([]string{key})
@@ -124,7 +124,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		d.SetJobQueue(key, nil)
@@ -145,7 +145,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
@@ -163,7 +163,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 
 		err := d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).ToNot(BeNil())
@@ -180,7 +180,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -206,7 +206,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -230,7 +230,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -257,7 +257,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -286,7 +286,7 @@ var _ = Describe("Client", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c)
+		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)

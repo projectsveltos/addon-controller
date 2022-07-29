@@ -44,11 +44,12 @@ import (
 // ClusterSummaryReconciler reconciles a ClusterSummary object
 type ClusterSummaryReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	Deployer          deployer.DeployerInterface
-	Mux               sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	WorkloadRoleMap   map[string]*Set // key: WorkloadRole name; value: set of all ClusterSummaries referencing the WorkloadRole
-	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of WorkloadRoles referenced
+	Scheme               *runtime.Scheme
+	Deployer             deployer.DeployerInterface
+	ConcurrentReconciles int
+	Mux                  sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	WorkloadRoleMap      map[string]*Set // key: WorkloadRole name; value: set of all ClusterSummaries referencing the WorkloadRole
+	ClusterSummaryMap    map[string]*Set // key: ClusterSummary name; value: set of WorkloadRoles referenced
 
 	// Reason for the two maps:
 	// ClusterSummary references WorkloadRoles. When a WorkloadRole changes, all the ClusterSummaries referencing it need to be
@@ -192,7 +193,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterSummary{}).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 10,
+			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
 		Build(r)
 	if err != nil {

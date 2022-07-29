@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
+  namespace: projectsveltos
 spec:
   template:
     spec:
@@ -10,6 +10,7 @@ spec:
       - name: manager
         args:
         - "--config=controller_manager_config.yaml"
+        - "--v=5"
         volumeMounts:
         - name: manager-config
           mountPath: /controller_manager_config.yaml

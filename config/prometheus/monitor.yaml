@@ -6,7 +6,7 @@ metadata:
   labels:
     control-plane: controller-manager
   name: controller-manager-metrics-monitor
-  namespace: system
+  namespace: projectsveltos
 spec:
   endpoints:
     - path: /metrics

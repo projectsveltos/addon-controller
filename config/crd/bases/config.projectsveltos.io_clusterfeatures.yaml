@@ -44,8 +44,8 @@ spec:
                   If not nil, Kyverno will be deployed in the workload cluster along
                   with, if any, specified Kyverno policies.
                 properties:
-                  policies:
-                    description: Policies references ConfigMaps containing the Kyverno
+                  policyRef:
+                    description: PolicyRef references ConfigMaps containing the Kyverno
                       policies that need to be deployed in the workload cluster.
                     items:
                       description: 'ObjectReference contains enough information to
@@ -110,6 +110,10 @@ spec:
                           type: string
                       type: object
                     type: array
+                  replicas:
+                    default: 1
+                    description: Replicas is the number of kyverno replicas required
+                    type: integer
                 type: object
               syncMode:
                 default: OneTime
@@ -125,9 +129,9 @@ spec:
                 - OneTime
                 - Continuous
                 type: string
-              workloadRoles:
-                description: WorkloadRoles references all the WorkloadRoles that will
-                  be used to create ClusterRole/Role in the workload cluster.
+              workloadRoleRefs:
+                description: WorkloadRoleRefs references all the WorkloadRoles that
+                  will be used to create ClusterRole/Role in the workload cluster.
                 items:
                   description: 'ObjectReference contains enough information to let
                     you inspect or modify the referred object. --- New uses of this

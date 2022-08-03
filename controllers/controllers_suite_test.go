@@ -81,7 +81,7 @@ var _ = BeforeSuite(func() {
 	clusterSummaryReconciler = &controllers.ClusterSummaryReconciler{
 		Client:            testEnv.Client,
 		Scheme:            scheme,
-		WorkloadRoleMap:   make(map[string]*controllers.Set),
+		ReferenceMap:      make(map[string]*controllers.Set),
 		ClusterSummaryMap: make(map[string]*controllers.Set),
 		Mux:               sync.Mutex{},
 		Deployer:          dep,

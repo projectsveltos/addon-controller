@@ -62,7 +62,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + util.RandomString(5),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: workloadRole.Name},
 					},
 				},
@@ -77,7 +77,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + util.RandomString(5),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: util.RandomString(5)},
 					},
 				},
@@ -95,21 +95,22 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
 
 		set := controllers.Set{}
 		controllers.Insert(&set, clusterSummary0.Name)
-		reconciler.WorkloadRoleMap[workloadRole.Name] = &set
+		key := controllers.GetEntryKey(controllers.WorkloadRole, "", workloadRole.Name)
+		reconciler.ReferenceMap[key] = &set
 
 		requests := controllers.RequeueClusterSummaryForWorkloadRole(reconciler, workloadRole)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
 		controllers.Insert(&set, clusterSummary1.Name)
-		reconciler.WorkloadRoleMap[workloadRole.Name] = &set
+		reconciler.ReferenceMap[key] = &set
 
 		requests = controllers.RequeueClusterSummaryForWorkloadRole(reconciler, workloadRole)
 		Expect(requests).To(HaveLen(2))

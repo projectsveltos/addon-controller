@@ -91,7 +91,7 @@ var _ = Describe("Workload", func() {
 		Byf("Update ClusterFeature %s to reference WorkloadRole %s", clusterFeature.Name, workloadRole.Name)
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		currentClusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Kind: workloadRole.Kind, Name: workloadRole.Name},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
@@ -101,8 +101,8 @@ var _ = Describe("Workload", func() {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
 			return err == nil &&
-				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles) == 1 &&
-				currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[0].Name == workloadRole.Name
+				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 1 &&
+				currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[0].Name == workloadRole.Name
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("getting client to access the workload cluster")
@@ -126,6 +126,9 @@ var _ = Describe("Workload", func() {
 				reflect.DeepEqual(role.Rules, workloadRole.Spec.Rules)
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for roles", clusterSummaryName)
+		verifyFeatureStatus(clusterSummaryName, configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioned)
+
 		By("Updating WorkloadRole")
 		currentWorkloadRole := &configv1alpha1.WorkloadRole{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: workloadRole.Name}, currentWorkloadRole)).To(Succeed())
@@ -146,7 +149,7 @@ var _ = Describe("Workload", func() {
 
 		Byf("changing clusterfeature to not reference workloadrole anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
@@ -154,7 +157,7 @@ var _ = Describe("Workload", func() {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
 			return err == nil &&
-				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles) == 0
+				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 0
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying proper role is removed in the workload cluster")
@@ -165,5 +168,7 @@ var _ = Describe("Workload", func() {
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		deleteClusterFeature(clusterFeature)
 	})
 })

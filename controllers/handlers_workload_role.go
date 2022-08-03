@@ -23,7 +23,6 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,11 +34,7 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
-const (
-	clusterSummaryLabelName = "projectsveltos.io/cluster-summary-name"
-)
-
-func DeployWorkloadRoles(ctx context.Context, c client.Client,
+func deployWorkloadRoles(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
@@ -50,6 +45,7 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 	}
 
 	if !clusterSummary.DeletionTimestamp.IsZero() {
+		logger.V(1).Info("ClusterSummary is marked for deletion. Nothing to do.")
 		// if clusterSummary is marked for deletion, there is nothing to deploy
 		return fmt.Errorf("clustersummary is marked for deletion")
 	}
@@ -66,8 +62,8 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 	}
 
 	currentRoles := make(map[string]bool, 0)
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
-		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i]
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs {
+		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[i]
 		workloadRole := &configv1alpha1.WorkloadRole{}
 		err := c.Get(ctx, types.NamespacedName{Name: reference.Name}, workloadRole)
 		if err != nil {
@@ -87,14 +83,14 @@ func DeployWorkloadRoles(ctx context.Context, c client.Client,
 	}
 
 	// Remove all roles/clusterRoles previously deployed by this ClusterSummary and not referenced anymores
-	if err = undeployStaleResources(ctx, clusterClient, clusterSummary, currentRoles); err != nil {
+	if err = undeployStaleRoleResources(ctx, clusterClient, clusterSummary, currentRoles); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func UnDeployWorkloadRoles(ctx context.Context, c client.Client,
+func unDeployWorkloadRoles(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
@@ -159,8 +155,8 @@ func workloadRoleHash(ctx context.Context, c client.Client, clusterSummaryScope 
 	var config string
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
-		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i]
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs {
+		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[i]
 		workloadRole := &configv1alpha1.WorkloadRole{}
 		err := c.Get(ctx, types.NamespacedName{Name: reference.Name}, workloadRole)
 		if err != nil {
@@ -273,33 +269,7 @@ func getRoleName(workloadRole *configv1alpha1.WorkloadRole, clusterSummaryName s
 	return clusterSummaryName + "-" + workloadRole.Name
 }
 
-func createNamespace(ctx context.Context, clusterClient client.Client, namespaceName string) error {
-	currentNs := &corev1.Namespace{}
-	if err := clusterClient.Get(ctx, client.ObjectKey{Name: namespaceName}, currentNs); err != nil {
-		if apierrors.IsNotFound(err) {
-			ns := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: namespaceName,
-				},
-			}
-			return clusterClient.Create(ctx, ns)
-		}
-		return err
-	}
-	return nil
-}
-
-// addClusterSummaryLabel adds ClusterSummaryLabelName label
-func addClusterSummaryLabel(obj metav1.Object, clusterSummaryName string) {
-	labels := obj.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	labels[clusterSummaryLabelName] = clusterSummaryName
-	obj.SetLabels(labels)
-}
-
-func undeployStaleResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary, currentRoles map[string]bool) error {
+func undeployStaleRoleResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary, currentRoles map[string]bool) error {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
 	}

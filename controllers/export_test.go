@@ -37,14 +37,26 @@ var (
 var (
 	GetSecretData          = getSecretData
 	GetKubernetesClient    = getKubernetesClient
-	GetRoleName            = getRoleName
 	AddClusterSummaryLabel = addClusterSummaryLabel
+	CreateNamespace        = createNamespace
+	GetEntryKey            = getEntryKey
 
 	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
 	DeployClusterWorkloadRole    = deployClusterWorkloadRole
+	UndeployStaleRoleResources   = undeployStaleRoleResources
+	WorkloadRoleHash             = workloadRoleHash
+	DeployWorkloadRoles          = deployWorkloadRoles
+	UnDeployWorkloadRoles        = unDeployWorkloadRoles
+	GetRoleName                  = getRoleName
 
-	UndeployStaleResources = undeployStaleResources
-	WorkloadRoleHash       = workloadRoleHash
+	DeployKyvernoPolicy            = deployKyvernoPolicy
+	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
+	IsKyvernoReady                 = isKyvernoReady
+	KyvernoHash                    = kyvernoHash
+	UndeployStaleKyvernoResources  = undeployStaleKyvernoResources
+	GetKyvernoPolicyName           = getKyvernoPolicyName
+	UnDeployKyverno                = unDeployKyverno
+	DeployKyverno                  = deployKyverno
 )
 
 var (
@@ -63,6 +75,7 @@ var (
 
 var (
 	GetClusterFeatureOwner = getClusterFeatureOwner
+	GetUnstructured        = getUnstructured
 )
 
 const (

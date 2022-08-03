@@ -44,9 +44,13 @@ const (
 // MGIANLUC: Kyverno generate ClusterRoleBinding https://kyverno.io/docs/writing-policies/generate/
 
 type KyvernoConfiguration struct {
-	// Policies references ConfigMaps containing the Kyverno policies
+	// +kubebuilder:default:=1
+	// Replicas is the number of kyverno replicas required
+	Replicas uint `json:"replicas,omitempty"`
+
+	// PolicyRef references ConfigMaps containing the Kyverno policies
 	// that need to be deployed in the workload cluster.
-	Policies []corev1.ObjectReference `json:"policies,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
 }
 
 // ClusterFeatureSpec defines the desired state of ClusterFeature
@@ -65,10 +69,10 @@ type ClusterFeatureSpec struct {
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
-	// WorkloadRoles references all the WorkloadRoles that will be used
+	// WorkloadRoleRefs references all the WorkloadRoles that will be used
 	// to create ClusterRole/Role in the workload cluster.
 	// +optional
-	WorkloadRoles []corev1.ObjectReference `json:"workloadRoles,omitempty"`
+	WorkloadRoleRefs []corev1.ObjectReference `json:"workloadRoleRefs,omitempty"`
 
 	// KyvernoConfiguration contains the Kyverno configuration.
 	// If not nil, Kyverno will be deployed in the workload cluster along with, if any,

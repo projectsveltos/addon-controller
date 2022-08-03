@@ -64,7 +64,7 @@ func (s *Set) items() []string {
 }
 
 // difference returns all elements which are in s but not in b
-func (s *Set) difference(b Set) []string {
+func (s *Set) difference(b *Set) []string {
 	results := make([]string, 0)
 	for entry := range s.data {
 		if !b.has(entry) {

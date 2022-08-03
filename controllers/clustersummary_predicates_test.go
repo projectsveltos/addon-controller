@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/klogr"
@@ -111,6 +112,82 @@ var _ = Describe("Clustersummary Predicates: WorkloadRolePredicates", func() {
 		}
 
 		result := workloadRolePredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+})
+
+var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
+	var logger logr.Logger
+	var configMap *corev1.ConfigMap
+
+	BeforeEach(func() {
+		logger = klogr.New()
+		configMap = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: util.RandomString(5),
+			},
+		}
+	})
+
+	It("Create returns true", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		e := event.CreateEvent{
+			Object: configMap,
+		}
+
+		result := configMapPredicate.Create(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Delete returns true", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+
+		e := event.DeleteEvent{
+			Object: configMap,
+		}
+
+		result := configMapPredicate.Delete(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns true when data has changed", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+		configMap.Data = map[string]string{"change": "now"}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMap.Name,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns false when Data has not changed", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+		configMap := createConfigMapWithKyvernoPolicy("default", configMap.Name, addLabelPolicyStr)
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   configMap.Name,
+				Labels: map[string]string{"env": "testing"},
+			},
+			Data: configMap.Data,
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
 })

@@ -202,6 +202,30 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(found).To(Equal(true))
 	})
 
+	It("SetFeatureStatus overriddes ClusterSummary Status FeatureSummary when not nil", func() {
+		params := scope.ClusterSummaryScopeParams{
+			Client:         c,
+			ClusterFeature: clusterFeature,
+			ClusterSummary: clusterSummary,
+			Logger:         klogr.New(),
+		}
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+		}
+
+		scope, err := scope.NewClusterSummaryScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		hash := []byte(util.RandomString(10))
+		scope.SetFeatureStatus(configv1alpha1.FeatureKyverno, configv1alpha1.FeatureStatusProvisioning, hash)
+		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
+		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioning))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
+	})
+
 	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,

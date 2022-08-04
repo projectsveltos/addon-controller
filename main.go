@@ -24,14 +24,11 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
@@ -42,7 +39,6 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
 
@@ -54,14 +50,12 @@ var (
 	concurrentReconciles int
 )
 
-func init() {
-	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(clusterv1.AddToScheme(scheme))
-	utilruntime.Must(configv1alpha1.AddToScheme(scheme))
-	//+kubebuilder:scaffold:scheme
-}
-
 func main() {
+	scheme, err := controllers.InitScheme()
+	if err != nil {
+		os.Exit(1)
+	}
+
 	klog.InitFlags(nil)
 
 	initFlags(pflag.CommandLine)
@@ -101,6 +95,10 @@ func main() {
 		setupLog.Error(err, "failed to register feature FeatureRole")
 		os.Exit(1)
 	}
+	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureKyverno)); err != nil {
+		setupLog.Error(err, "failed to register feature FeatureKyerno")
+		os.Exit(1)
+	}
 
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:               mgr.GetClient(),
@@ -118,7 +116,7 @@ func main() {
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		Deployer:             deployer,
-		WorkloadRoleMap:      make(map[string]*controllers.Set),
+		ReferenceMap:         make(map[string]*controllers.Set),
 		ClusterSummaryMap:    make(map[string]*controllers.Set),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,

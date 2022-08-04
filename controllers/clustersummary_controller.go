@@ -20,14 +20,17 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -41,6 +44,16 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
+const (
+	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has
+	// children during deletion.
+	deleteRequeueAfter = 20 * time.Second
+
+	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
+	// to ready after or workload features (for instance ingress or reporter) have failed
+	normalRequeueAfter = 20 * time.Second
+)
+
 // ClusterSummaryReconciler reconciles a ClusterSummary object
 type ClusterSummaryReconciler struct {
 	client.Client
@@ -48,8 +61,9 @@ type ClusterSummaryReconciler struct {
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	Mux                  sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	WorkloadRoleMap      map[string]*Set // key: WorkloadRole name; value: set of all ClusterSummaries referencing the WorkloadRole
-	ClusterSummaryMap    map[string]*Set // key: ClusterSummary name; value: set of WorkloadRoles referenced
+	ReferenceMap         map[string]*Set // key: Referenced object  name; value: set of all ClusterSummaries referencing the resource
+	// Refenced object name is: <kind>-<namespace>-<name> or <kind>-<name>
+	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of referenced resources
 
 	// Reason for the two maps:
 	// ClusterSummary references WorkloadRoles. When a WorkloadRole changes, all the ClusterSummaries referencing it need to be
@@ -59,20 +73,22 @@ type ClusterSummaryReconciler struct {
 	// In the MapFunc, if the list ClusterSummaries operation failed, we would be unable to retry or re-enqueue the ClusterSummaries
 	// referencing the WorkloadRole that changed.
 	// Instead the approach taken is following:
-	// - when a ClusterSummary is reconciled, update the WorkloadRoleMap;
+	// - when a ClusterSummary is reconciled, update the ReferenceMap;
 	// - in the MapFunc, given the WorkloadRole that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
-	// using the WorkloadRoleMap);
-	// - if a ClusterSummary is referencing a WorkloadRole but its reconciliation is still queued, when WorkloadRole changes, WorkloadRoleMap
+	// using the ReferenceMap);
+	// - if a ClusterSummary is referencing a WorkloadRole but its reconciliation is still queued, when WorkloadRole changes, ReferenceMap
 	// won't have such ClusterSummary. This is not a problem as ClusterSummary reconciliation is already queued and will happen.
 	//
-	// The ClusterSummaryMap is used to update WorkloadRoleMap. Consider following scenarios to understand the need:
-	// 1. ClusterSummary A references WorkloadRoles 1 and 2. When reconciled, WorkloadRoleMap will have 1 => A and 2 => A;
+	// The ClusterSummaryMap is used to update ReferenceMap. Consider following scenarios to understand the need:
+	// 1. ClusterSummary A references WorkloadRoles 1 and 2. When reconciled, ReferenceMap will have 1 => A and 2 => A;
 	// and ClusterSummaryMap A => 1,2
-	// 2. ClusterSummary A changes and now references WorkloadRole 1 only. We ned to remove the entry 2 => A in WorkloadRoleMap. But
+	// 2. ClusterSummary A changes and now references WorkloadRole 1 only. We ned to remove the entry 2 => A in ReferenceMap. But
 	// when we reconcile ClusterSummary we have its current version we don't have its previous version. So we use ClusterSummaryMap (at this
 	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references WorkloadRole 1 only and looking
-	// at ClusterSummaryMap we know it used to reference WorkloadRole 1 and 2. So we can remove 2 => A from WorkloadRoleMap. Only after this
+	// at ClusterSummaryMap we know it used to reference WorkloadRole 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
 	// update, we update ClusterSummaryMap (so new value will be A => 1)
+	//
+	// Same logic applies to Kyverno (kyverno configuration references configmaps containing kyverno policies)
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
@@ -80,6 +96,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=workloadroles,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -110,7 +127,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	clusterFeatureScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 		Client:         r.Client,
 		Logger:         logger,
 		ClusterSummary: clusterSummary,
@@ -126,21 +143,21 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	// Always close the scope when exiting this function so we can persist any ClusterFeature
+	// Always close the scope when exiting this function so we can persist any ClusterSummary
 	// changes.
 	defer func() {
-		if err := clusterFeatureScope.Close(ctx); err != nil {
+		if err := clusterSummaryScope.Close(ctx); err != nil {
 			reterr = err
 		}
 	}()
 
 	// Handle deleted clusterSummary
 	if !clusterSummary.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, clusterFeatureScope, logger)
+		return r.reconcileDelete(ctx, clusterSummaryScope, logger)
 	}
 
 	// Handle non-deleted clusterSummary
-	return r.reconcileNormal(ctx, clusterFeatureScope, logger)
+	return r.reconcileNormal(ctx, clusterSummaryScope, logger)
 }
 
 func (r *ClusterSummaryReconciler) reconcileDelete(
@@ -151,7 +168,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	logger.Info("Reconciling ClusterSummary delete")
 
 	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// Cluster is deleted so remove the finalizer.
@@ -178,10 +195,12 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
+	r.generateKyvernoPolicyNamePrefix(clusterSummaryScope)
+
 	r.updatesMaps(clusterSummaryScope)
 
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	logger.Info("Reconciling ClusterSummary success")
@@ -198,6 +217,15 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
+	}
+
+	// When ConfigMap changes, according to ConfigMapPredicates,
+	// one or more ClusterSummaries need to be reconciled.
+	if err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForConfigMap),
+		ConfigMapPredicates(klogr.New().WithValues("predicate", "configmappredicate")),
+	); err != nil {
+		return err
 	}
 
 	// When WorkloadRole changes, according to WorkloadRolePredicates,
@@ -224,8 +252,16 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 }
 
 func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if err := r.deployRoles(ctx, clusterSummaryScope, logger); err != nil {
-		return err
+	workloadErr := r.deployRoles(ctx, clusterSummaryScope, logger)
+
+	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
+
+	if workloadErr != nil {
+		return workloadErr
+	}
+
+	if kyvernoErr != nil {
+		return kyvernoErr
 	}
 
 	return nil
@@ -235,7 +271,22 @@ func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSumma
 	f := feature{
 		id:          configv1alpha1.FeatureRole,
 		currentHash: workloadRoleHash,
-		deploy:      DeployWorkloadRoles,
+		deploy:      deployWorkloadRoles,
+	}
+
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration == nil {
+		logger.V(5).Info("no kyverno configuration")
+		return nil
+	}
+
+	f := feature{
+		id:          configv1alpha1.FeatureKyverno,
+		currentHash: kyvernoHash,
+		deploy:      deployKyverno,
 	}
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
@@ -255,8 +306,16 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 		return err
 	}
 
-	if err := r.undeployRoles(ctx, clusterSummaryScope, logger); err != nil {
-		return err
+	workloadErr := r.undeployRoles(ctx, clusterSummaryScope, logger)
+
+	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
+
+	if workloadErr != nil {
+		return workloadErr
+	}
+
+	if kyvernoErr != nil {
+		return kyvernoErr
 	}
 
 	return nil
@@ -266,49 +325,77 @@ func (r *ClusterSummaryReconciler) undeployRoles(ctx context.Context, clusterSum
 	f := feature{
 		id:          configv1alpha1.FeatureRole,
 		currentHash: workloadRoleHash,
-		deploy:      UnDeployWorkloadRoles,
+		deploy:      unDeployWorkloadRoles,
 	}
 
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {
-	currentWorkloadRoles := Set{}
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
-		workloadRoleName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i].Name
-		currentWorkloadRoles.insert(workloadRoleName)
+func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := feature{
+		id:          configv1alpha1.FeatureKyverno,
+		currentHash: kyvernoHash,
+		deploy:      unDeployKyverno,
 	}
+
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) generateKyvernoPolicyNamePrefix(clusterSummaryScope *scope.ClusterSummaryScope) {
+	if clusterSummaryScope.ClusterSummary.Status.KyvernoPolicyPrefix == "" {
+		// TODO: make sure no two ClusterSummary get same prefix
+		clusterSummaryScope.ClusterSummary.Status.KyvernoPolicyPrefix = "cs" + util.RandomString(10)
+	}
+}
+
+func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {
+	currentReferences := r.getCurrentReferences(clusterSummaryScope)
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	// Get list of WorkloadRoles not referenced anymore by ClusterSummary
+	// Get list of References not referenced anymore by ClusterSummary
 	var toBeRemoved []string
 	if v, ok := r.ClusterSummaryMap[clusterSummaryScope.Name()]; ok {
-		toBeRemoved = v.difference(currentWorkloadRoles)
+		toBeRemoved = v.difference(currentReferences)
 	}
 
-	// For each currently referenced WorkloadRole, add ClusterSummary as consumer
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles {
-		workloadRoleName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles[i].Name
-		r.getWorkloadRoleMapForEntry(workloadRoleName).insert(clusterSummaryScope.Name())
+	// For each currently referenced instance, add ClusterSummary as consumer
+	for referencedResource := range currentReferences.data {
+		r.getReferenceMapForEntry(referencedResource).insert(clusterSummaryScope.Name())
 	}
 
-	// For each WorkloadRole not reference anymore, remove ClusterSummary as consumer
+	// For each resource not reference anymore, remove ClusterSummary as consumer
 	for i := range toBeRemoved {
-		workloadRoleName := toBeRemoved[i]
-		r.getWorkloadRoleMapForEntry(workloadRoleName).erase(clusterSummaryScope.Name())
+		referencedResource := toBeRemoved[i]
+		r.getReferenceMapForEntry(referencedResource).erase(clusterSummaryScope.Name())
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
-	r.ClusterSummaryMap[clusterSummaryScope.Name()] = &currentWorkloadRoles
+	r.ClusterSummaryMap[clusterSummaryScope.Name()] = currentReferences
 }
 
-func (r *ClusterSummaryReconciler) getWorkloadRoleMapForEntry(entry string) *Set {
-	s := r.WorkloadRoleMap[entry]
+func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
+	currentReferences := &Set{}
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs {
+		workloadRoleName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[i].Name
+		currentReferences.insert(getEntryKey(WorkloadRole, "", workloadRoleName))
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
+		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {
+			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Namespace
+			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Name
+			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
+		}
+	}
+	return currentReferences
+}
+
+func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry string) *Set {
+	s := r.ReferenceMap[entry]
 	if s == nil {
 		s = &Set{}
-		r.WorkloadRoleMap[entry] = s
+		r.ReferenceMap[entry] = s
 	}
 	return s
 }

@@ -36,7 +36,7 @@ func generateTestMachineAPICRD(kind, pluralKind string) *apiextensionsv1.CustomR
 			Name: pluralKind + "." + clusterAPIGroup,
 		},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: "cluster.x-k8s.io",
+			Group: clusterAPIGroup,
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
 				Kind:   strings.Title(kind),

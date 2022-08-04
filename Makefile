@@ -96,9 +96,8 @@ endif
 KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
-TIMEOUT ?= 5m
+TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
-# kind-test variable.
 NUM_NODES ?= 3
 
 .PHONY: test
@@ -128,6 +127,11 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "get kubeconfig to access workload cluster"
 	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
 
+	@echo "install calico on workload cluster"
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://docs.projectcalico.org/v3.21/manifests/calico.yaml
+
+	@echo wait for calico pod
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
 
 .PHONY: delete-cluster
 delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
@@ -279,3 +283,20 @@ $(KUBECTL):
 .PHONY: tools
 tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) $(GINKGO) $(SETUP_ENVTEST) \
 	$(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
+
+##@ Generators
+
+.PHONY: clean-generated-files
+clean-generated-files: clean-kyverno ## Removes generated files
+
+# Kyverno
+
+KYVERNO_VERSION :=1.7
+KYVERNO_YAML_FILE := internal/kyverno/kyverno.yaml
+
+clean-kyverno: ## Remove kyverno downloaded and generated file
+	rm -f $(KYVERNO_YAML_FILE)
+
+kyverno: ## Download kyverno install.yaml and generate kyverno files.
+	curl -L https://raw.githubusercontent.com/kyverno/kyverno/release-$(KYVERNO_VERSION)/config/release/install.yaml -o $(KYVERNO_YAML_FILE)
+	cd internal/kyverno; go generate	

@@ -425,7 +425,7 @@ func (r *ClusterFeatureReconciler) getMachinesForCluster(
 }
 
 func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.ClusterFeatureScope) {
-	currentClusters := Set{}
+	currentClusters := &Set{}
 	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
 		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
 		clusterName := cluster.Namespace + "/" + cluster.Name
@@ -455,7 +455,7 @@ func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.Cluste
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
-	r.ClusterFeatureMap[clusterFeatureScope.Name()] = &currentClusters
+	r.ClusterFeatureMap[clusterFeatureScope.Name()] = currentClusters
 	r.ClusterFeatures[clusterFeatureScope.Name()] = clusterFeatureScope.ClusterFeature.Spec.ClusterSelector
 }
 

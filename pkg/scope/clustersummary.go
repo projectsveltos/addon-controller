@@ -100,6 +100,7 @@ func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1alpha1.FeatureI
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].Status = status
+			s.ClusterSummary.Status.FeatureSummaries[i].Hash = hash
 			return
 		}
 	}

@@ -85,7 +85,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -121,7 +121,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -159,7 +159,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -198,7 +198,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -228,7 +228,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -245,7 +245,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		hash := []byte(util.RandomString(13))
 		status := configv1alpha1.FeatureStatusFailed
 		statusErr := fmt.Errorf("failed to deploy")
-		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole, &status, hash, statusErr)
+		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole, &status,
+			hash, statusErr, klogr.New())
 
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
@@ -254,7 +255,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(Equal(statusErr.Error()))
 
 		status = configv1alpha1.FeatureStatusProvisioned
-		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole, &status, hash, nil)
+		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole, &status,
+			hash, nil, klogr.New())
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioned))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(BeNil())
@@ -274,8 +276,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
+		}
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
+			Replicas: 1,
 		}
 
 		initObjects := []client.Object{
@@ -295,12 +300,19 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		})
 		Expect(err).To(BeNil())
 
-		hash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
+		workloadHash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		kyvernoHash, err := controllers.KyvernoHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureRole,
-				Hash:      hash,
+				Hash:      workloadHash,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureKyverno,
+				Hash:      kyvernoHash,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
 			},
 		}
@@ -313,7 +325,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -332,6 +344,21 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureRole), false)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
+
+		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
+			controllers.KyvernoHash, controllers.DeployKyverno)
+
+		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
+		// changed (no change in Kyverno configuration).
+		// DeployeFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
+		// adds key to InProgress).
+		// So run DeployFeature then validate key is not added to InProgress
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		Expect(err).To(BeNil())
+
+		key = deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Name, string(configv1alpha1.FeatureKyverno), false)
+		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
@@ -348,12 +375,22 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		configMapNs := util.RandomString(6)
+		configMap := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), addLabelPolicyStr)
+
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
+		}
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
+			Replicas: 1,
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: configMapNs, Name: configMap.Name},
+			},
 		}
 
 		initObjects := []client.Object{
 			workload,
+			configMap,
 			clusterSummary,
 			clusterFeature,
 		}
@@ -369,12 +406,19 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		})
 		Expect(err).To(BeNil())
 
-		hash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
+		workloadHash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		kyvernoHash, err := controllers.KyvernoHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureRole,
-				Hash:      hash,
+				Hash:      workloadHash,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureKyverno,
+				Hash:      kyvernoHash,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
 			},
 		}
@@ -385,6 +429,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		workload.Spec.Rules = append(workload.Spec.Rules,
 			rbacv1.PolicyRule{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}})
 		Expect(c.Update(context.TODO(), workload)).To(Succeed())
+		configMap = createConfigMapWithKyvernoPolicy(configMapNs, configMap.Name, checkSa)
+		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
@@ -392,7 +438,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -405,10 +451,26 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
 		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureRole), false)
+		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
+
+		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
+			controllers.KyvernoHash, controllers.DeployKyverno)
+
+		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
+		// does not match anymore the hash of all referenced WorkloadRole Specs). In such situation, DeployFeature calls dep.Deploy.
+		// fake deployer Deploy simply adds key to InProgress.
+		// So run DeployFeature then validate key is added to InProgress
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("request is queued"))
+
+		key = deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Name, string(configv1alpha1.FeatureKyverno), false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -426,7 +488,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
 
@@ -453,7 +515,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -465,7 +527,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
 		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureRole), false)
@@ -482,7 +545,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
 
@@ -518,7 +581,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -548,7 +611,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
 
@@ -575,7 +638,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -587,7 +650,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run UndeployFeature then validate key is added to InProgress
 		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
-		Expect(err).To(BeNil())
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureRole), true)
@@ -604,7 +668,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
 
@@ -636,7 +700,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -659,7 +723,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoles = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
 
@@ -691,7 +755,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          dep,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -711,7 +775,7 @@ var _ = Describe("Convert result", func() {
 			Client:            nil,
 			Scheme:            scheme,
 			Deployer:          nil,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}

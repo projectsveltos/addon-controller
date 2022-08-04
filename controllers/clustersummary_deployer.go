@@ -43,15 +43,16 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
-		"cluastername", clusterSummary.Spec.ClusterNamespace,
-		"applicant", clusterSummary.Name)
+		"clustername", clusterSummary.Spec.ClusterNamespace,
+		"applicant", clusterSummary.Name,
+		"feature", string(f.id))
 	logger.V(5).Info("request to deploy")
 
 	// If undeploying feature is in progress, wait for it to complete.
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(configv1alpha1.FeatureRole), true) {
+		string(f.id), true) {
 		logger.V(5).Info("cleanup is in progress")
 		return fmt.Errorf(fmt.Sprintf("cleanup of %s still in progress. Wait before redeploying", string(f.id)))
 	}
@@ -61,33 +62,46 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if err != nil {
 		return err
 	}
+	hash := r.getHash(clusterSummaryScope, f.id)
+	isConfigSame := reflect.DeepEqual(hash, currentHash)
+	if !isConfigSame {
+		logger.V(5).Info(fmt.Sprintf("configuration has changed. Current hash %q. Previous hash %q",
+			currentHash, hash))
+	}
 
 	deployed := r.isFeatureDeployed(clusterSummaryScope, f.id)
-	hash := r.getHash(clusterSummaryScope, f.id)
-
-	if deployed && reflect.DeepEqual(hash, currentHash) {
+	if deployed && isConfigSame {
 		// feature is deployed and nothing has changed. Nothing to do.
 		logger.V(5).Info("feature is deployed and hash has not changed")
 		return nil
 	}
 
+	var status *configv1alpha1.FeatureStatus
+	var resultError error
+
 	// Feature is not deployed yet
-	if reflect.DeepEqual(hash, currentHash) {
+	if isConfigSame {
 		logger.V(5).Info("hash has not changed")
-		// Configuration has not changed. Check if a result is available.
 		result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummaryScope.Name(), string(f.id), false)
-		status := r.convertResultStatus(result)
-		if status == nil {
-			logger.V(5).Info("no result available")
-			// No result is available, Request to deploy will be queued. So mark it as Provisioning
-			s := configv1alpha1.FeatureStatusProvisioning
-			status = &s
-		}
-		r.updateFeatureStatus(clusterSummaryScope, configv1alpha1.FeatureRole, status, hash, result.Err)
-		if result.ResultStatus == deployer.Deployed || result.ResultStatus == deployer.InProgress {
+			clusterSummary.Name, string(f.id), false)
+		status = r.convertResultStatus(result)
+		resultError = result.Err
+	}
+
+	if status != nil {
+		logger.V(5).Info("result is available. updating status.")
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
+		if *status == configv1alpha1.FeatureStatusProvisioned {
 			return nil
 		}
+		if *status == configv1alpha1.FeatureStatusProvisioning {
+			return fmt.Errorf("feature is still being provisioned")
+		}
+	} else {
+		logger.V(5).Info("no result is available. mark status as provisioning")
+		s := configv1alpha1.FeatureStatusProvisioning
+		status = &s
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
 	}
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
@@ -98,7 +112,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		return err
 	}
 
-	return nil
+	return fmt.Errorf("request is queued")
 }
 
 func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -106,7 +120,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
-		"cluastername", clusterSummary.Spec.ClusterNamespace,
+		"clustername", clusterSummary.Spec.ClusterNamespace,
 		"applicant", clusterSummary.Name)
 	logger.V(5).Info("request to un-deploy")
 
@@ -114,7 +128,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
 	// parallel some resources might be left over.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(configv1alpha1.FeatureRole), false) {
+		string(f.id), false) {
 		logger.V(5).Info("provisioning is in progress")
 		return fmt.Errorf(fmt.Sprintf("deploying %s still in progress. Wait before cleanup", string(f.id)))
 	}
@@ -128,15 +142,23 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummaryScope.Name(), string(f.id), true)
 	status := r.convertResultStatus(result)
-	if status == nil || result.ResultStatus == deployer.InProgress {
-		// No result is available or removing this feature is in progress. Since this is a cleanup,
-		// mark it as removing
+
+	if status != nil {
+		if *status == configv1alpha1.FeatureStatusProvisioning {
+			s := configv1alpha1.FeatureStatusRemoving
+			status = &s
+			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
+			return fmt.Errorf("feature is still being removed")
+		}
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
+		if *status == configv1alpha1.FeatureStatusRemoved {
+			return nil
+		}
+	} else {
+		logger.V(5).Info("no result is available. mark status as removing")
 		s := configv1alpha1.FeatureStatusRemoving
 		status = &s
-	}
-	r.updateFeatureStatus(clusterSummaryScope, configv1alpha1.FeatureRole, status, nil, result.Err)
-	if result.ResultStatus == deployer.Removed || result.ResultStatus == deployer.InProgress {
-		return nil
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
 	}
 
 	logger.V(5).Info("queueing request to un-deploy")
@@ -145,7 +167,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		return err
 	}
 
-	return nil
+	return fmt.Errorf("cleanup request is queued")
 }
 
 // isFeatureDeployed returns true if feature is marked as deployed (present in FeatureSummaries and status
@@ -198,11 +220,13 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 }
 
 func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1alpha1.FeatureID, status *configv1alpha1.FeatureStatus, hash []byte, statusError error) {
+	featureID configv1alpha1.FeatureID, status *configv1alpha1.FeatureStatus, hash []byte, statusError error,
+	logger logr.Logger) {
 	if status == nil {
 		return
 	}
-
+	logger = logger.WithValues("hash", hash, "status", *status)
+	logger.V(5).Info("updating clustersummary status")
 	switch *status {
 	case configv1alpha1.FeatureStatusProvisioned:
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioned, hash)

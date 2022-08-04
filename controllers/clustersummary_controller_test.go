@@ -87,7 +87,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			WorkloadRoleMap:   make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[string]*controllers.Set),
 			ClusterSummaryMap: make(map[string]*controllers.Set),
 			Mux:               sync.Mutex{},
 		}
@@ -137,7 +137,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: workloadRole.Name},
 					},
 				},
@@ -150,7 +150,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: workloadRole.Name + util.RandomString(5)},
 					},
 				},

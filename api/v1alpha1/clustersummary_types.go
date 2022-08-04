@@ -69,7 +69,8 @@ type FeatureSummary struct {
 
 	// Hash represents of a unique value for a feature at a fixed point in
 	// time
-	Hash []byte `json:"hash"`
+	// +optional
+	Hash []byte `json:"hash,omitempty"`
 
 	// Status represents the state of the feature in the workload cluster
 	Status FeatureStatus `json:"status"`
@@ -104,6 +105,10 @@ type ClusterSummaryStatus struct {
 	// +listType=atomic
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"clusterSummaries,omitempty"`
+
+	// KyvernoPolicyPrefix is the prefix added to kyverno policies deployed
+	// by ClusterSummary instance
+	KyvernoPolicyPrefix string `json:"kyvernoPolicyPrefix,omitempty"`
 }
 
 //+kubebuilder:object:root=true

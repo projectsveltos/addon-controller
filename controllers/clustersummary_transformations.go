@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,9 +43,43 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForWorkloadRole(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	requests := make([]ctrl.Request, r.getWorkloadRoleMapForEntry(workloadRole.Name).len())
+	key := getEntryKey(WorkloadRole, "", workloadRole.Name)
+	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())
 
-	consumers := r.getWorkloadRoleMapForEntry(workloadRole.Name).items()
+	consumers := r.getReferenceMapForEntry(key).items()
+
+	for i := range consumers {
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Name: consumers[i],
+			},
+		}
+	}
+
+	return requests
+}
+
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForConfigMap(
+	o client.Object,
+) []reconcile.Request {
+
+	configMap := o.(*corev1.ConfigMap)
+	logger := klogr.New().WithValues(
+		"objectMapper",
+		"requeueClusterSummaryForConfigMap",
+		"configMap",
+		configMap.Name,
+	)
+
+	logger.V(5).Info("reacting to configMap change")
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	key := getEntryKey(ConfigMap, configMap.Namespace, configMap.Name)
+	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())
+
+	consumers := r.getReferenceMapForEntry(key).items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{

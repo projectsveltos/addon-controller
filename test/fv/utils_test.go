@@ -5,8 +5,11 @@ import (
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 )
 
 // Byf is a simple wrapper around By.
@@ -73,4 +77,50 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 		return nil, err
 	}
 	return client.New(restConfig, client.Options{Scheme: scheme})
+}
+
+func verifyFeatureStatus(clusterSummaryName string, featureID configv1alpha1.FeatureID, status configv1alpha1.FeatureStatus) {
+	Eventually(func() bool {
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+		if err != nil {
+			return false
+		}
+		for i := range currentClusterSummary.Status.FeatureSummaries {
+			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID &&
+				currentClusterSummary.Status.FeatureSummaries[i].Status == status {
+				return true
+			}
+		}
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
+
+}
+
+// deleteClusterFeature deletes ClusterFeature and verifies all ClusterSummaries created by this ClusterFeature
+// instances are also gone
+func deleteClusterFeature(clusterFeature *configv1alpha1.ClusterFeature) {
+	clusters := []corev1.ObjectReference{}
+	for i := range clusterFeature.Status.MatchingClusters {
+		cluster := clusterFeature.Status.MatchingClusters[i]
+		clusters = append(clusters, cluster)
+	}
+
+	Byf("Deleting the ClusterFeature")
+	currentClusterFeature := &configv1alpha1.ClusterFeature{}
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(BeNil())
+	Expect(k8sClient.Delete(context.TODO(), currentClusterFeature)).To(Succeed())
+
+	Byf("Verifying ClusterSummaries %v are gone", clusters)
+	Eventually(func() bool {
+		for i := range clusters {
+			clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, clusters[i].Namespace, clusters[i].Name)
+			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			if err == nil || apierrors.IsNotFound(err) {
+				return false
+			}
+		}
+		return true
+	}, timeout, pollingInterval).Should(BeTrue())
 }

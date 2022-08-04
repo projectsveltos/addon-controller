@@ -213,7 +213,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterName:      matchingCluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					SyncMode: configv1alpha1.SyncModeOneTime,
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{
 							Name: "c-" + util.RandomString(5),
 						},
@@ -223,7 +223,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
-		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
 				Name: "b-" + util.RandomString(5),
 			},
@@ -271,7 +271,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 	It("UpdateClusterSummary does not update ClusterSummary when ClusterFeature syncmode set to one time", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
 				Namespace: "a-" + util.RandomString(5),
 				Name:      "b-" + util.RandomString(5),
@@ -302,7 +302,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
 				Namespace: "a-" + util.RandomString(5),
 				Name:      "b-" + util.RandomString(5),
@@ -338,12 +338,12 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
 		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec, clusterFeature.Spec)).ToNot(BeTrue())
-		Expect(len(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec.WorkloadRoles)).To(Equal(2))
+		Expect(len(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec.WorkloadRoleRefs)).To(Equal(2))
 	})
 
 	It("DeleteClusterSummary removes ClusterSummary for non-matching cluster", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
 				Namespace: "a-" + util.RandomString(5),
 				Name:      "b-" + util.RandomString(5),
@@ -512,7 +512,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				Name:      matchingCluster.Name,
 			},
 		}
-		clusterFeature.Spec.WorkloadRoles = []corev1.ObjectReference{
+		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
 				Namespace: "x-" + util.RandomString(5),
 				Name:      "y-" + util.RandomString(5),
@@ -530,7 +530,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterName:      matchingCluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					SyncMode: configv1alpha1.SyncModeContinuos,
-					WorkloadRoles: []corev1.ObjectReference{
+					WorkloadRoleRefs: []corev1.ObjectReference{
 						{
 							Name: "c-" + util.RandomString(5),
 						},

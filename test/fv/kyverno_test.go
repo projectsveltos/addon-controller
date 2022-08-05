@@ -16,10 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 	"github.com/projectsveltos/cluster-api-feature-manager/internal/kyverno"
 )
 
@@ -97,7 +95,7 @@ var _ = Describe("Kyverno", func() {
 		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "default",
-				Name:      namePrefix + util.RandomString(7),
+				Name:      namePrefix + randomString(),
 			},
 			Data: map[string]string{
 				"addlabel": labelsEncoded,
@@ -124,7 +122,7 @@ var _ = Describe("Kyverno", func() {
 
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterFeature.Spec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			Replicas: 1,
 			PolicyRefs: []corev1.ObjectReference{
@@ -137,17 +135,17 @@ var _ = Describe("Kyverno", func() {
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterFeature.Name)
 		Eventually(func() bool {
 			currentClusterFeature := &configv1alpha1.ClusterFeature{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
 			return err == nil &&
-				len(currentClusterFeature.Status.MatchingClusters) == 1 &&
-				currentClusterFeature.Status.MatchingClusters[0].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterFeature.Status.MatchingClusters[0].Name == kindWorkloadCluster.Name
+				len(currentClusterFeature.Status.MatchingClusterRefs) == 1 &&
+				currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
+				currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary is created")
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, clusterSummary)).To(Succeed())
+		clusterSummary, err := getClusterSummary(context.TODO(), clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Expect(err).To(BeNil())
+		Expect(clusterSummary).ToNot(BeNil())
 
 		ref, err := getClusterSummaryOwnerReference(clusterSummary)
 		Expect(err).To(BeNil())
@@ -162,21 +160,21 @@ var _ = Describe("Kyverno", func() {
 		Byf("Verifying Kyverno deployment %s/%s is present", kyverno.Namespace, kyverno.Deployment)
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
-			err := workloadClient.Get(context.TODO(),
+			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: kyverno.Namespace, Name: kyverno.Deployment}, depl)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		policyName := clusterSummary.Status.KyvernoPolicyPrefix + "-" + "add-labels"
+		policyName := clusterSummary.Status.PolicyPrefix + "-" + "add-labels"
 		Byf("Verifying Kyverno policy %s is present", policyName)
 		Eventually(func() error {
 			policy := &kyvernoapi.ClusterPolicy{}
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Verifying ClusterSummary %s status is set to Deployed for kyverno", clusterSummaryName)
-		verifyFeatureStatus(clusterSummaryName, configv1alpha1.FeatureKyverno, configv1alpha1.FeatureStatusProvisioned)
+		Byf("Verifying ClusterSummary %s status is set to Deployed for kyverno", clusterSummary.Name)
+		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureKyverno, configv1alpha1.FeatureStatusProvisioned)
 
 		Byf("Modifying configMap")
 		currentConfigMap := &corev1.ConfigMap{}
@@ -186,11 +184,11 @@ var _ = Describe("Kyverno", func() {
 		currentConfigMap.Data["ingress"] = ingressEncoded
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
-		policyName = clusterSummary.Status.KyvernoPolicyPrefix + "-" + "disallow-empty-ingress-host"
+		policyName = clusterSummary.Status.PolicyPrefix + "-" + "disallow-empty-ingress-host"
 		Byf("Verifying Kyverno policy %s is present", policyName)
 		Eventually(func() error {
 			policy := &kyvernoapi.ClusterPolicy{}
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
 
@@ -203,7 +201,7 @@ var _ = Describe("Kyverno", func() {
 		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
 		Eventually(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
 			return err == nil &&
 				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 0
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -211,8 +209,8 @@ var _ = Describe("Kyverno", func() {
 		Byf("Verifying proper role is removed in the workload cluster")
 		Eventually(func() bool {
 			policy := &kyvernoapi.ClusterPolicy{}
-			err := workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: fmt.Sprintf("%s-add-labels", clusterSummaryName)}, policy)
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Name: fmt.Sprintf("%s-add-labels", clusterSummary.Name)}, policy)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

@@ -14,10 +14,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 )
 
 var _ = Describe("Workload", func() {
@@ -47,24 +45,24 @@ var _ = Describe("Workload", func() {
 
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
 
 		Byf("Verifying Cluster %s/%s is a match for ClusterFeature %s",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterFeature.Name)
 		Eventually(func() bool {
 			currentClusterFeature := &configv1alpha1.ClusterFeature{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
 			return err == nil &&
-				len(currentClusterFeature.Status.MatchingClusters) == 1 &&
-				currentClusterFeature.Status.MatchingClusters[0].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterFeature.Status.MatchingClusters[0].Name == kindWorkloadCluster.Name
+				len(currentClusterFeature.Status.MatchingClusterRefs) == 1 &&
+				currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
+				currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary is created")
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, clusterSummary)).To(Succeed())
+		clusterSummary, err := getClusterSummary(context.TODO(), clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Expect(err).To(BeNil())
+		Expect(clusterSummary).ToNot(BeNil())
 
 		ref, err := getClusterSummaryOwnerReference(clusterSummary)
 		Expect(err).To(BeNil())
@@ -72,10 +70,10 @@ var _ = Describe("Workload", func() {
 		Expect(ref.Name).To(Equal(clusterFeature.Name))
 
 		Byf("Create a workload role")
-		roleNs := util.RandomString(7)
+		roleNs := randomString()
 		workloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type:      configv1alpha1.RoleTypeNamespaced,
@@ -99,7 +97,7 @@ var _ = Describe("Workload", func() {
 		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
 		Eventually(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
 			return err == nil &&
 				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 1 &&
 				currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[0].Name == workloadRole.Name
@@ -113,21 +111,21 @@ var _ = Describe("Workload", func() {
 		Byf("Verifying ns is created in the workload cluster")
 		Eventually(func() bool {
 			ns := &corev1.Namespace{}
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: *workloadRole.Spec.Namespace}, ns)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: *workloadRole.Spec.Namespace}, ns)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying proper role is created in the workload cluster")
 		Eventually(func() bool {
 			role := &rbacv1.Role{}
-			roleName := clusterSummary.Name + "-" + workloadRole.Name
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
+			roleName := clusterSummary.Status.PolicyPrefix + "-" + workloadRole.Name
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
 			return err == nil &&
 				reflect.DeepEqual(role.Rules, workloadRole.Spec.Rules)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Byf("Verifying ClusterSummary %s status is set to Deployed for roles", clusterSummaryName)
-		verifyFeatureStatus(clusterSummaryName, configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioned)
+		Byf("Verifying ClusterSummary %s status is set to Deployed for roles", clusterSummary.Name)
+		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioned)
 
 		By("Updating WorkloadRole")
 		currentWorkloadRole := &configv1alpha1.WorkloadRole{}
@@ -141,8 +139,8 @@ var _ = Describe("Workload", func() {
 		Byf("Verifying proper role is updated in the workload cluster")
 		Eventually(func() bool {
 			role := &rbacv1.Role{}
-			roleName := clusterSummary.Name + "-" + workloadRole.Name
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
+			roleName := clusterSummary.Status.PolicyPrefix + "-" + workloadRole.Name
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
 			return err == nil &&
 				reflect.DeepEqual(role.Rules, currentWorkloadRole.Spec.Rules)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -155,7 +153,7 @@ var _ = Describe("Workload", func() {
 		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
 		Eventually(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
 			return err == nil &&
 				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 0
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -164,7 +162,7 @@ var _ = Describe("Workload", func() {
 		Eventually(func() bool {
 			role := &rbacv1.Role{}
 			roleName := clusterSummary.Name + "-" + workloadRole.Name
-			err := workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: roleName, Namespace: *workloadRole.Spec.Namespace}, role)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

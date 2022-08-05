@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
@@ -38,8 +37,8 @@ var _ = Describe("ClusterFeature Predicates: ClusterPredicates", func() {
 		logger = klogr.New()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
-				Namespace: "predicates" + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Namespace: "predicates" + randomString(),
 			},
 		}
 	})
@@ -173,8 +172,8 @@ var _ = Describe("ClusterFeature Predicates: MachinePredicates", func() {
 		logger = klogr.New()
 		machine = &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamMachineNamePrefix + util.RandomString(5),
-				Namespace: "predicates" + util.RandomString(5),
+				Name:      upstreamMachineNamePrefix + randomString(),
+				Namespace: "predicates" + randomString(),
 			},
 		}
 	})
@@ -182,7 +181,7 @@ var _ = Describe("ClusterFeature Predicates: MachinePredicates", func() {
 	It("Create reprocesses when v1Machine is Running", func() {
 		machinePredicate := controllers.MachinePredicates(logger)
 
-		machine.Status.Phase = "Running"
+		machine.Status.Phase = string(clusterv1.MachinePhaseRunning)
 
 		e := event.CreateEvent{
 			Object: machine,
@@ -214,7 +213,7 @@ var _ = Describe("ClusterFeature Predicates: MachinePredicates", func() {
 	It("Update reprocesses when v1Machine Phase changed from not running to running", func() {
 		machinePredicate := controllers.MachinePredicates(logger)
 
-		machine.Status.Phase = "Running"
+		machine.Status.Phase = string(clusterv1.MachinePhaseRunning)
 
 		oldMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
@@ -253,7 +252,7 @@ var _ = Describe("ClusterFeature Predicates: MachinePredicates", func() {
 	})
 	It("Update does not reprocess when v1Machine Phases does not change", func() {
 		machinePredicate := controllers.MachinePredicates(logger)
-		machine.Status.Phase = "Running"
+		machine.Status.Phase = string(clusterv1.MachinePhaseRunning)
 
 		oldMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{

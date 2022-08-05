@@ -265,9 +265,9 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-              kyvernoPolicyPrefix:
-                description: KyvernoPolicyPrefix is the prefix added to kyverno policies
-                  deployed by ClusterSummary instance
+              policyPrefix:
+                description: PolicyPrefix is the prefix added to policies deployed
+                  by ClusterSummary instance in a CAPI Cluster
                 type: string
             type: object
         type: object

@@ -37,8 +37,8 @@ const (
 	// SyncModeOneTime indicates feature sync should happen only once
 	SyncModeOneTime = SyncMode("OneTime")
 
-	// SyncModeContinuos indicates feature sync should continuously happen
-	SyncModeContinuos = SyncMode("Continuous")
+	// SyncModeContinuous indicates feature sync should continuously happen
+	SyncModeContinuous = SyncMode("Continuous")
 )
 
 // MGIANLUC: Kyverno generate ClusterRoleBinding https://kyverno.io/docs/writing-policies/generate/
@@ -83,9 +83,9 @@ type ClusterFeatureSpec struct {
 
 // ClusterFeatureStatus defines the observed state of ClusterFeature
 type ClusterFeatureStatus struct {
-	// MatchingCluster reference all the cluster-api Cluster currently matching
+	// MatchingClusterRefs reference all the cluster-api Cluster currently matching
 	// ClusterFeature ClusterSelector
-	MatchingClusters []corev1.ObjectReference `json:"matchinClusters,omitempty"`
+	MatchingClusterRefs []corev1.ObjectReference `json:"matchinClusters,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -110,6 +110,7 @@ type ClusterFeatureList struct {
 	Items           []ClusterFeature `json:"items"`
 }
 
+// nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterFeature{}, &ClusterFeatureList{})
 }

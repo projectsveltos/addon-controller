@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
@@ -31,11 +30,11 @@ import (
 
 var _ = Describe("Client", func() {
 	It("RegisterFeatureID returns error only if featureID is already registered", func() {
-		featureID := util.RandomString(5)
+		featureID := randomString()
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		ctx, cancel := context.WithCancel(context.TODO())
+		_, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -46,17 +45,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("GetResult returns result when available", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		r := map[string]error{key: nil}
@@ -69,17 +68,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("GetResult returns result when available with error", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		r := map[string]error{key: fmt.Errorf("failed to deploy")}
@@ -92,17 +91,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("GetResult returns InProgress when request is still queued (currently in progress)", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		d.SetInProgress([]string{key})
@@ -114,17 +113,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("GetResult returns InProgress when request is still queued (currently queued)", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		d.SetJobQueue(key, nil)
@@ -136,16 +135,16 @@ var _ = Describe("Client", func() {
 	})
 
 	It("GetResult returns Unavailable when request is not queued/in progress and result not available", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		result := d.GetResult(ctx, ns, name, applicant, featureID, cleanup)
@@ -154,33 +153,33 @@ var _ = Describe("Client", func() {
 	})
 
 	It("Deploy returns an error when featureID is not registered", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 
 		err := d.Deploy(ctx, ns, name, applicant, featureID, cleanup, nil)
 		Expect(err).ToNot(BeNil())
 	})
 
 	It("Deploy does nothing if already in the dirty set", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -197,16 +196,16 @@ var _ = Describe("Client", func() {
 	})
 
 	It("Deploy adds to inProgress", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -220,17 +219,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("Deploy if already in progress, does not add to jobQueue", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -247,17 +246,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("Deploy removes existing result", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)
@@ -276,17 +275,17 @@ var _ = Describe("Client", func() {
 	})
 
 	It("CleanupEntries removes features from internal data structure but inProgress", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
-		ctx, cancel := context.WithCancel(context.TODO())
+		_, cancel := context.WithCancel(context.TODO())
 		defer cancel()
-		d := deployer.GetClient(ctx, klogr.New(), c, 10)
+		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
 		err := d.RegisterFeatureID(featureID)

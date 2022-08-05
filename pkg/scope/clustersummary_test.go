@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -32,7 +31,11 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
-const clusterSummaryNamePrefix = "scope-"
+const (
+	clusterSummaryNamePrefix = "scope-"
+	failedToDeploy           = "failed to deploy"
+	apiserverNotReachable    = "apiserver not reachable"
+)
 
 var _ = Describe("ClusterSummaryScope", func() {
 	var clusterFeature *configv1alpha1.ClusterFeature
@@ -42,13 +45,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 	BeforeEach(func() {
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 		}
 
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryNamePrefix + util.RandomString(5),
+				Name: clusterSummaryNamePrefix + randomString(),
 			},
 		}
 
@@ -109,7 +112,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		hash := []byte(util.RandomString(10))
+		hash := []byte(randomString())
 		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioned, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
@@ -127,7 +130,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -135,7 +138,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		found := false
-		failureMessage := "failed to deploy"
+		failureMessage := failedToDeploy
 		scope.SetFailureMessage(configv1alpha1.FeatureRole, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
@@ -162,7 +165,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		failureMessage := "failed to deploy"
+		failureMessage := failedToDeploy
 		scope.SetFailureMessage(configv1alpha1.FeatureRole, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
@@ -180,7 +183,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -188,7 +191,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		found := false
-		hash := []byte(util.RandomString(10))
+		hash := []byte(randomString())
 		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioning, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
@@ -211,14 +214,14 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		hash := []byte(util.RandomString(10))
+		hash := []byte(randomString())
 		scope.SetFeatureStatus(configv1alpha1.FeatureKyverno, configv1alpha1.FeatureStatusProvisioning, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
@@ -238,7 +241,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		hash := []byte(util.RandomString(10))
+		hash := []byte(randomString())
 		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioning, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
@@ -255,7 +258,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -263,7 +266,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		found := false
-		failureReason := "apiserver not reachable"
+		failureReason := apiserverNotReachable
 		scope.SetFailureReason(configv1alpha1.FeatureRole, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
@@ -290,7 +293,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		failureReason := "apiserver not reachable"
+		failureReason := apiserverNotReachable
 		scope.SetFailureReason(configv1alpha1.FeatureRole, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
@@ -312,7 +315,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(util.RandomString(10))},
+			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 		Expect(scope.Close(context.TODO())).To(Succeed())
 

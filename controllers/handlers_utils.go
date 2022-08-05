@@ -25,20 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	clusterSummaryLabelName = "projectsveltos.io/cluster-summary-name"
-)
-
-// addClusterSummaryLabel adds ClusterSummaryLabelName label
-func addClusterSummaryLabel(obj metav1.Object, clusterSummaryName string) {
-	labels := obj.GetLabels()
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	labels[clusterSummaryLabelName] = clusterSummaryName
-	obj.SetLabels(labels)
-}
-
 func createNamespace(ctx context.Context, clusterClient client.Client, namespaceName string) error {
 	if namespaceName == "" {
 		return nil

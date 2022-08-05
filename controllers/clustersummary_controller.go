@@ -41,6 +41,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -165,6 +166,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger,
 ) (reconcile.Result, error) {
+
 	logger.Info("Reconciling ClusterSummary delete")
 
 	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
@@ -174,7 +176,10 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	// Cluster is deleted so remove the finalizer.
 	logger.Info("Removing finalizer")
 	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
-		controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
+			configv1alpha1.ClusterSummaryFinalizer); !finalizersUpdated {
+			return reconcile.Result{}, fmt.Errorf("failed to remove finalizer")
+		}
 	}
 
 	logger.Info("Reconcile delete success")
@@ -187,6 +192,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger,
 ) (reconcile.Result, error) {
+
 	logger.Info("Reconciling ClusterSummary")
 
 	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
@@ -195,7 +201,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
-	r.generateKyvernoPolicyNamePrefix(clusterSummaryScope)
+	r.generatePolicyNamePrefix(clusterSummaryScope)
 
 	r.updatesMaps(clusterSummaryScope)
 
@@ -221,7 +227,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	if err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForConfigMap),
 		ConfigMapPredicates(klogr.New().WithValues("predicate", "configmappredicate")),
 	); err != nil {
@@ -279,7 +285,7 @@ func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSumma
 
 func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration == nil {
-		logger.V(5).Info("no kyverno configuration")
+		logger.V(logs.LogDebug).Info("no kyverno configuration")
 		return nil
 	}
 
@@ -300,7 +306,7 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 	err := r.Client.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(1).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
 			return nil
 		}
 		return err
@@ -341,10 +347,11 @@ func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterS
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) generateKyvernoPolicyNamePrefix(clusterSummaryScope *scope.ClusterSummaryScope) {
-	if clusterSummaryScope.ClusterSummary.Status.KyvernoPolicyPrefix == "" {
+func (r *ClusterSummaryReconciler) generatePolicyNamePrefix(clusterSummaryScope *scope.ClusterSummaryScope) {
+	if clusterSummaryScope.ClusterSummary.Status.PolicyPrefix == "" {
 		// TODO: make sure no two ClusterSummary get same prefix
-		clusterSummaryScope.ClusterSummary.Status.KyvernoPolicyPrefix = "cs" + util.RandomString(10)
+		const length = 10
+		clusterSummaryScope.ClusterSummary.Status.PolicyPrefix = "cs" + util.RandomString(length)
 	}
 }
 

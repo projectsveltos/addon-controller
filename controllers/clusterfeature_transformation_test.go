@@ -24,10 +24,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -38,20 +36,15 @@ import (
 
 var _ = Describe("ClusterFeatureReconciler map functions", func() {
 	var namespace string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
-		namespace = "map-function" + util.RandomString(5)
+		namespace = "map-function" + randomString()
 	})
 
 	It("requeueClusterFeatureForCluster returns matching ClusterFeatures", func() {
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"env": "production",
@@ -61,7 +54,7 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 
 		matchingClusterFeature := &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: configv1alpha1.Selector("env=production"),
@@ -70,7 +63,7 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 
 		nonMatchingClusterFeature := &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: configv1alpha1.Selector("env=qa"),

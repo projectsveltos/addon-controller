@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -43,7 +42,7 @@ var _ = Describe("ClusterFeatureScope", func() {
 	BeforeEach(func() {
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 		}
 		scheme := setupScheme()
@@ -85,11 +84,11 @@ var _ = Describe("ClusterFeatureScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		Expect(scope.IsContinuosSync()).To(BeFalse())
+		Expect(scope.IsContinuousSync()).To(BeFalse())
 	})
 
-	It("IsContinuosSync returns true when SyncMode is Continuos", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
+	It("IsContinuosSync returns true when SyncMode is Continuous", func() {
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		params := scope.ClusterFeatureScopeParams{
 			Client:         c,
 			ClusterFeature: clusterFeature,
@@ -100,7 +99,7 @@ var _ = Describe("ClusterFeatureScope", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		Expect(scope.IsContinuosSync()).To(BeTrue())
+		Expect(scope.IsContinuousSync()).To(BeTrue())
 	})
 
 	It("Name returns ClusterFeature Name", func() {
@@ -145,12 +144,12 @@ var _ = Describe("ClusterFeatureScope", func() {
 
 		matchingClusters := []corev1.ObjectReference{
 			{
-				Namespace: "t-" + util.RandomString(5),
-				Name:      "c-" + util.RandomString(5),
+				Namespace: "t-" + randomString(),
+				Name:      "c-" + randomString(),
 			},
 		}
-		scope.SetMatchingClusters(matchingClusters)
-		Expect(reflect.DeepEqual(clusterFeature.Status.MatchingClusters, matchingClusters)).To(BeTrue())
+		scope.SetMatchingClusterRefs(matchingClusters)
+		Expect(reflect.DeepEqual(clusterFeature.Status.MatchingClusterRefs, matchingClusters)).To(BeTrue())
 	})
 
 	It("Close updates ClusterFeature", func() {

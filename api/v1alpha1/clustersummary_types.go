@@ -106,9 +106,9 @@ type ClusterSummaryStatus struct {
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"clusterSummaries,omitempty"`
 
-	// KyvernoPolicyPrefix is the prefix added to kyverno policies deployed
-	// by ClusterSummary instance
-	KyvernoPolicyPrefix string `json:"kyvernoPolicyPrefix,omitempty"`
+	// PolicyPrefix is the prefix added to policies deployed by ClusterSummary
+	// instance in a CAPI Cluster
+	PolicyPrefix string `json:"policyPrefix,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -133,6 +133,7 @@ type ClusterSummaryList struct {
 	Items           []ClusterSummary `json:"items"`
 }
 
+// nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterSummary{}, &ClusterSummaryList{})
 }

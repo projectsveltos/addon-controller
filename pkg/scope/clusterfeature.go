@@ -97,12 +97,12 @@ func (s *ClusterFeatureScope) GetSelector() string {
 	return string(s.ClusterFeature.Spec.ClusterSelector)
 }
 
-// SetMatchingClusters sets the feature status.
-func (s *ClusterFeatureScope) SetMatchingClusters(matchingClusters []corev1.ObjectReference) {
-	s.ClusterFeature.Status.MatchingClusters = matchingClusters
+// SetMatchingClusterRefs sets the feature status.
+func (s *ClusterFeatureScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
+	s.ClusterFeature.Status.MatchingClusterRefs = matchingClusters
 }
 
-// IsContinuosSync returns true if ClusterFeature is set to keep updating workload cluster
-func (s *ClusterFeatureScope) IsContinuosSync() bool {
-	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeContinuos
+// IsContinuousSync returns true if ClusterFeature is set to keep updating workload cluster
+func (s *ClusterFeatureScope) IsContinuousSync() bool {
+	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeContinuous
 }

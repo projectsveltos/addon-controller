@@ -25,9 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -38,16 +36,12 @@ import (
 var _ = Describe("HandlersUtils", func() {
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var namespace string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
-		namespace = "reconcile" + util.RandomString(5)
-		clusterName := upstreamClusterNamePrefix + util.RandomString(5)
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeatureNamePrefix+util.RandomString(5), namespace, clusterName)
+		namespace = "reconcile" + randomString()
+		clusterName := upstreamClusterNamePrefix + randomString()
+		clusterFeatureName := clusterFeatureNamePrefix + randomString()
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeatureName, namespace, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummaryName,
@@ -57,17 +51,18 @@ var _ = Describe("HandlersUtils", func() {
 				ClusterName:      clusterName,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeatureName, namespace, clusterName)
 	})
 
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
-				Name:      util.RandomString(5),
+				Name:      randomString(),
 			},
 		}
 
-		controllers.AddClusterSummaryLabel(role, clusterSummary.Name)
+		controllers.AddLabel(role, controllers.ClusterSummaryLabelName, clusterSummary.Name)
 		Expect(role.Labels).ToNot(BeNil())
 		Expect(len(role.Labels)).To(Equal(1))
 		for k := range role.Labels {
@@ -75,7 +70,7 @@ var _ = Describe("HandlersUtils", func() {
 		}
 
 		role.Labels = map[string]string{"reader": "ok"}
-		controllers.AddClusterSummaryLabel(role, clusterSummary.Name)
+		controllers.AddLabel(role, controllers.ClusterSummaryLabelName, clusterSummary.Name)
 		Expect(role.Labels).ToNot(BeNil())
 		Expect(len(role.Labels)).To(Equal(2))
 		found := false

@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io/ioutil"
 
@@ -42,13 +43,15 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubectl/pkg/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
 const (
-	separator                   = "--"
+	// nolint: gosec // CAPI secret postfix
 	kubeconfigSecretNamePostfix = "-kubeconfig"
 )
 
@@ -87,15 +90,52 @@ func InitScheme() (*runtime.Scheme, error) {
 }
 
 // GetClusterSummaryName returns the ClusterSummary name given a ClusterFeature name and
-// CAPI cluster Namespace/Name
+// CAPI cluster Namespace/Name.
+// This method does not guarantee that name is not already in use. Caller of this method needs
+// to handle that scenario
 func GetClusterSummaryName(clusterFeatureName, clusterNamespace, clusterName string) string {
-	return fmt.Sprintf("%s%s%s%s%s", clusterFeatureName, separator, clusterNamespace, separator, clusterName)
+	// generate random name.
+	const length = 5
+	sha := sha256.Sum256([]byte(clusterNamespace + clusterName + util.RandomString(length)))
+	return fmt.Sprintf("%s-%x", clusterFeatureName, sha[:10])
+}
+
+// GetClusterSummary returns the ClusterSummary instance created by a specific ClusterFeature for a specific
+// CAPI Cluster
+func GetClusterSummary(ctx context.Context, c client.Client,
+	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			ClusterFeatureLabelName: clusterFeatureName,
+			ClusterLabelNamespace:   clusterNamespace,
+			ClusterLabelName:        clusterName,
+		},
+	}
+
+	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	if err := c.List(ctx, clusterSummaryList, listOptions...); err != nil {
+		return nil, err
+	}
+
+	if len(clusterSummaryList.Items) == 0 {
+		return nil, apierrors.NewNotFound(
+			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: "ClusterSummary"}, "")
+	}
+
+	if len(clusterSummaryList.Items) != 1 {
+		return nil, fmt.Errorf("more than one clustersummary found for cluster %s/%s created by %s",
+			clusterNamespace, clusterName, clusterFeatureName)
+	}
+
+	return &clusterSummaryList.Items[0], nil
 }
 
 // getClusterFeatureOwner returns the ClusterFeature owning this clusterSummary.
 // Returns nil if ClusterFeature does not exist anymore.
 func getClusterFeatureOwner(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterFeature, error) {
+
 	for _, ref := range clusterSummary.OwnerReferences {
 		if ref.Kind != "ClusterFeature" {
 			continue
@@ -121,6 +161,7 @@ func getClusterFeatureOwner(ctx context.Context, c client.Client,
 
 func getKubernetesRestConfig(ctx context.Context, logger logr.Logger, c client.Client,
 	clusterNamespace, clusterName string) (*rest.Config, error) {
+
 	kubeconfigContent, err := getSecretData(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return nil, err
@@ -143,11 +184,12 @@ func getKubernetesRestConfig(ctx context.Context, logger logr.Logger, c client.C
 // getKubernetesClient returns a client to access CAPI Cluster
 func getKubernetesClient(ctx context.Context, logger logr.Logger, c client.Client,
 	clusterNamespace, clusterName string) (client.Client, error) {
+
 	config, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return nil, err
 	}
-	logger.V(10).Info("return new client")
+	logger.V(logs.LogVerbose).Info("return new client")
 	s, err := InitScheme()
 	if err != nil {
 		return nil, err
@@ -161,7 +203,7 @@ func getSecretData(ctx context.Context, logger logr.Logger, c client.Client,
 	clusterNamespace, clusterName string) ([]byte, error) {
 
 	logger.WithValues("namespace", clusterNamespace, "cluster", clusterName)
-	logger.V(10).Info("Get secret")
+	logger.V(logs.LogVerbose).Info("Get secret")
 	key := client.ObjectKey{
 		Namespace: clusterNamespace,
 		Name:      clusterName,
@@ -197,7 +239,7 @@ func getSecretData(ctx context.Context, logger logr.Logger, c client.Client,
 	}
 
 	for k, contents := range secret.Data {
-		logger.V(10).Info("Reading secret", "key", k)
+		logger.V(logs.LogVerbose).Info("Reading secret", "key", k)
 		return contents, nil
 	}
 

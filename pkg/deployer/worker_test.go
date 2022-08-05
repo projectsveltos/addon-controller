@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -37,6 +36,7 @@ var messages chan string
 func writeToChannelHandler(ctx context.Context, c client.Client,
 	namespace, name, applicant, featureID string,
 	logger logr.Logger) error {
+
 	By("writeToChannelHandler: writing to channel")
 	messages <- "done deploying"
 	return nil
@@ -45,15 +45,16 @@ func writeToChannelHandler(ctx context.Context, c client.Client,
 func doNothingHandler(ctx context.Context, c client.Client,
 	namespace, name, applicant, featureID string,
 	logger logr.Logger) error {
+
 	return nil
 }
 
 var _ = Describe("Worker", func() {
 	It("getKey and getFromKey return correct values", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
@@ -67,10 +68,10 @@ var _ = Describe("Worker", func() {
 	})
 
 	It("getKey and getFromKey return correct values (applicant is empty)", func() {
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
 		applicant := ""
-		featureID := util.RandomString(5)
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, false)
 
@@ -102,10 +103,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetInProgress([]string{key})
@@ -120,10 +121,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetInProgress([]string{key})
@@ -143,10 +144,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
@@ -165,10 +166,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
@@ -187,10 +188,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
@@ -207,10 +208,10 @@ var _ = Describe("Worker", func() {
 		d := deployer.GetClient(context.TODO(), klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
@@ -222,16 +223,16 @@ var _ = Describe("Worker", func() {
 		Expect(resp).To(BeNil())
 	})
 
-	It("processRequests proces request and stores results", func() {
+	It("processRequests process request and stores results", func() {
 		c := fake.NewClientBuilder().WithObjects(nil...).Build()
 		ctx, cancel := context.WithCancel(context.TODO())
 		d := deployer.GetClient(ctx, klogr.New(), c, 10)
 		defer d.ClearInternalStruct()
 
-		ns := namespacePrefix + util.RandomString(5)
-		name := namespacePrefix + util.RandomString(5)
-		applicant := util.RandomString(5)
-		featureID := util.RandomString(5)
+		ns := namespacePrefix + randomString()
+		name := namespacePrefix + randomString()
+		applicant := randomString()
+		featureID := randomString()
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 		d.SetJobQueue(key, writeToChannelHandler)
@@ -239,7 +240,7 @@ var _ = Describe("Worker", func() {
 
 		messages = make(chan string)
 
-		go deployer.ProcessRequests(d, 1, klogr.New())
+		go deployer.ProcessRequests(ctx, d, 1, klogr.New())
 
 		gotResult := false
 		go func() {

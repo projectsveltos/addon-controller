@@ -25,7 +25,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -40,7 +39,7 @@ var _ = Describe("Clustersummary Predicates: WorkloadRolePredicates", func() {
 		logger = klogr.New()
 		workloadRole = &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 		}
 	})
@@ -124,7 +123,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		logger = klogr.New()
 		configMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 		}
 	})
@@ -172,7 +171,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 
 	It("Update returns false when Data has not changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
-		configMap := createConfigMapWithKyvernoPolicy("default", configMap.Name, addLabelPolicyStr)
+		configMap = createConfigMapWithKyvernoPolicy("default", configMap.Name, addLabelPolicyStr)
 
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{

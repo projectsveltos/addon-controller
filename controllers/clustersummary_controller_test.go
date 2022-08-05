@@ -25,10 +25,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -45,22 +43,17 @@ var _ = Describe("ClustersummaryController", func() {
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var namespace string
 	var clusterName string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 		}
 
-		clusterName = util.RandomString(7)
+		clusterName = randomString()
 		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -71,6 +64,7 @@ var _ = Describe("ClustersummaryController", func() {
 				ClusterName:      clusterName,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, namespace, clusterName)
 	})
 
 	It("Adds finalizer", func() {
@@ -124,7 +118,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		workloadRole = &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type: configv1alpha1.RoleTypeNamespaced,
@@ -133,7 +127,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		referencingClusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
@@ -146,12 +140,12 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		nonReferencingClusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: workloadRole.Name + util.RandomString(5)},
+						{Name: workloadRole.Name + randomString()},
 					},
 				},
 			},

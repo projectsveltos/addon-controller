@@ -23,6 +23,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
 func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
@@ -39,7 +41,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 		cluster.Name,
 	)
 
-	logger.V(5).Info("reacting to CAPI Cluster change")
+	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
@@ -78,6 +80,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 	o client.Object,
 ) []reconcile.Request {
+
 	machine := o.(*clusterv1.Machine)
 	logger := klogr.New().WithValues(
 		"objectMapper",
@@ -90,7 +93,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 
 	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
 	if !ok {
-		logger.V(10).Info("Machine has not ClusterLabelName")
+		logger.V(logs.LogVerbose).Info("Machine has not ClusterLabelName")
 		return nil
 	}
 

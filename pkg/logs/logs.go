@@ -14,31 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package scope_test
+package logs
 
-import (
-	"testing"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/cluster-api/util"
-
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+// Following are log severity levels to be used by projectsveltos
+const (
+	// LogInfo is the info level
+	LogInfo = 0
+	// LogDebug is the debug level
+	LogDebug = 5
+	// LogVerbose is an extra level more verbose than Debug
+	LogVerbose = 10
 )
-
-func setupScheme() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
-	return scheme
-}
-
-func TestScope(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Scope Suite")
-}
-
-func randomString() string {
-	const length = 10
-	return util.RandomString(length)
-}

@@ -23,6 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	unavailable = "unavailable"
+)
+
 type ResultStatus int64
 
 const (
@@ -44,9 +48,9 @@ func (r ResultStatus) String() string {
 	case Removed:
 		return "removed"
 	case Unavailable:
-		return "unavailable"
+		return unavailable
 	}
-	return "unavailable"
+	return unavailable
 }
 
 type Result struct {

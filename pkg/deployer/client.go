@@ -23,23 +23,26 @@ import (
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
-var getClientLock = &sync.Mutex{}
+var (
+	getClientLock    = &sync.Mutex{}
+	deployerInstance *deployer
+)
 
 // deployer represents a client implementing the DeployerInterface
 type deployer struct {
 	log logr.Logger
 	client.Client
 
-	ctx context.Context
-
 	mu *sync.Mutex
 
 	// A request represents a request to deploy a feature in a CAPI cluster.
 
 	// dirty contains all requests that have requested to configure a feature
-	// and are currenlty waiting to be served.
+	// and are currently waiting to be served.
 	dirty []string
 
 	// inProgress contains all request that are currently being served.
@@ -55,16 +58,14 @@ type deployer struct {
 	features map[string]bool
 }
 
-var deployerInstance *deployer
-
 // GetClient return a deployer client, implementing the DeployerInterface
 func GetClient(ctx context.Context, l logr.Logger, c client.Client, numOfWorker int) *deployer {
 	if deployerInstance == nil {
 		getClientLock.Lock()
 		defer getClientLock.Unlock()
 		if deployerInstance == nil {
-			l.V(1).Info(fmt.Sprintf("Creating instance now. Number of workers: %d", numOfWorker))
-			deployerInstance = &deployer{log: l, Client: c, ctx: ctx}
+			l.V(logs.LogInfo).Info(fmt.Sprintf("Creating instance now. Number of workers: %d", numOfWorker))
+			deployerInstance = &deployer{log: l, Client: c}
 			deployerInstance.startWorkloadWorkers(ctx, numOfWorker, l)
 		}
 	}
@@ -75,6 +76,7 @@ func GetClient(ctx context.Context, l logr.Logger, c client.Client, numOfWorker 
 func (d *deployer) RegisterFeatureID(
 	featureID string,
 ) error {
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, ok := d.features[featureID]; ok {
@@ -91,6 +93,7 @@ func (d *deployer) Deploy(
 	cleanup bool,
 	f RequestHandler,
 ) error {
+
 	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	d.mu.Lock()
@@ -103,27 +106,27 @@ func (d *deployer) Deploy(
 	// Search if request is in dirty. Drop it if already there
 	for i := range d.dirty {
 		if d.dirty[i] == key {
-			d.log.V(10).Info("request is already present in dirty")
+			d.log.V(logs.LogVerbose).Info("request is already present in dirty")
 			return nil
 		}
 	}
 
 	// Since we got a new request, if a result was saved, clear it.
-	d.log.V(10).Info("removing result from previous request if any")
+	d.log.V(logs.LogVerbose).Info("removing result from previous request if any")
 	delete(d.results, key)
 
-	d.log.V(10).Info("request added to dirty")
+	d.log.V(logs.LogVerbose).Info("request added to dirty")
 	d.dirty = append(d.dirty, key)
 
 	// Push to queue if not already in progress
 	for i := range d.inProgress {
 		if d.inProgress[i] == key {
-			d.log.V(10).Info("request is already in inProgress")
+			d.log.V(logs.LogVerbose).Info("request is already in inProgress")
 			return nil
 		}
 	}
 
-	d.log.V(10).Info("request added to jobQueue")
+	d.log.V(logs.LogVerbose).Info("request added to jobQueue")
 	req := requestParams{key: key, handler: f}
 	d.jobQueue = append(d.jobQueue, req)
 
@@ -135,6 +138,7 @@ func (d *deployer) GetResult(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool,
 ) Result {
+
 	responseParam, err := getRequestStatus(d, clusterNamespace, clusterName, applicant, featureID, cleanup)
 	if err != nil {
 		return Result{
@@ -157,6 +161,12 @@ func (d *deployer) GetResult(
 		}
 	}
 
+	if cleanup {
+		return Result{
+			ResultStatus: Removed,
+		}
+	}
+
 	return Result{
 		ResultStatus: Deployed,
 	}
@@ -166,6 +176,7 @@ func (d *deployer) IsInProgress(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool,
 ) bool {
+
 	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	d.mu.Lock()
@@ -173,7 +184,7 @@ func (d *deployer) IsInProgress(
 
 	for i := range d.inProgress {
 		if d.inProgress[i] == key {
-			d.log.V(10).Info("request is already in inProgress")
+			d.log.V(logs.LogVerbose).Info("request is already in inProgress")
 			return true
 		}
 	}
@@ -184,6 +195,7 @@ func (d *deployer) IsInProgress(
 func (d *deployer) CleanupEntries(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool) {
+
 	key := GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	// Remove any entry we might have for this cluster/feature

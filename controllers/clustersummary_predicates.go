@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -25,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
 // WorkloadRolePredicates predicates for WorkloadRole. ClusterSummaryReconciler watches WorkloadRole events
@@ -39,47 +41,30 @@ func WorkloadRolePredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if oldWorkloadRole == nil {
-				log.V(10).Info("Old WorkloadRole is nil. Reconcile ClusterSummaries.")
+				log.V(logs.LogVerbose).Info("Old WorkloadRole is nil. Reconcile ClusterSummaries.")
 				return true
 			}
 
 			if !reflect.DeepEqual(oldWorkloadRole.Spec, newWorkloadRole.Spec) {
-				log.V(10).Info(
+				log.V(logs.LogVerbose).Info(
 					"WorkloadRole Spec changed. Will attempt to reconcile associated ClusterSummaries.",
 				)
 				return true
 			}
 
 			// otherwise, return false
-			log.V(10).Info(
+			log.V(logs.LogVerbose).Info(
 				"WorkloadRole did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			workloadRole := e.Object.(*configv1alpha1.WorkloadRole)
-			log := logger.WithValues("predicate", "createEvent",
-				"workloadrole", workloadRole.Name,
-			)
-
-			log.V(10).Info(
-				"WorkloadRole did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.")
-			return true
+			return CreateFuncTrue(e, logger)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			log := logger.WithValues("predicate", "deleteEvent",
-				"workloadrole", e.Object.GetName(),
-			)
-			log.V(10).Info(
-				"WorkloadRole did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.")
-			return true
+			return DeleteFuncTrue(e, logger)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			log := logger.WithValues("predicate", "genericEvent",
-				"workloadrole", e.Object.GetName(),
-			)
-			log.V(10).Info(
-				"WorkloadRole did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
-			return false
+			return GenericFuncFalse(e, logger)
 		},
 	}
 }
@@ -96,47 +81,63 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if oldConfigMap == nil {
-				log.V(10).Info("Old ConfigMap is nil. Reconcile ClusterSummaries.")
+				log.V(logs.LogVerbose).Info("Old ConfigMap is nil. Reconcile ClusterSummaries.")
 				return true
 			}
 
 			if !reflect.DeepEqual(oldConfigMap.Data, newConfigMap.Data) {
-				log.V(10).Info(
+				log.V(logs.LogVerbose).Info(
 					"ConfigMap Data changed. Will attempt to reconcile associated ClusterSummaries.",
 				)
 				return true
 			}
 
 			// otherwise, return false
-			log.V(10).Info(
+			log.V(logs.LogVerbose).Info(
 				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			configMap := e.Object.(*corev1.ConfigMap)
-			log := logger.WithValues("predicate", "createEvent",
-				"configmap", configMap.Name,
-			)
-
-			log.V(10).Info(
-				"ConfigMap did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.")
-			return true
+			return CreateFuncTrue(e, logger)
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			log := logger.WithValues("predicate", "deleteEvent",
-				"configmap", e.Object.GetName(),
-			)
-			log.V(10).Info(
-				"ConfigMap did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.")
-			return true
+			return DeleteFuncTrue(e, logger)
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
-			log := logger.WithValues("predicate", "genericEvent",
-				"configmap", e.Object.GetName(),
-			)
-			log.V(10).Info(
-				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
-			return false
+			return GenericFuncFalse(e, logger)
 		},
 	}
 }
+
+var (
+	CreateFuncTrue = func(e event.CreateEvent, logger logr.Logger) bool {
+		log := logger.WithValues("predicate", "createEvent",
+			e.Object.GetObjectKind(), e.Object.GetName(),
+		)
+
+		log.V(logs.LogVerbose).Info(fmt.Sprintf(
+			"%s did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.",
+			e.Object.GetObjectKind()))
+		return true
+	}
+
+	DeleteFuncTrue = func(e event.DeleteEvent, logger logr.Logger) bool {
+		log := logger.WithValues("predicate", "deleteEvent",
+			e.Object.GetObjectKind(), e.Object.GetName(),
+		)
+		log.V(logs.LogVerbose).Info(fmt.Sprintf(
+			"%s did match expected conditions.  Will attempt to reconcile associated ClusterSummaries.",
+			e.Object.GetObjectKind()))
+		return true
+	}
+
+	GenericFuncFalse = func(e event.GenericEvent, logger logr.Logger) bool {
+		log := logger.WithValues("predicate", "genericEvent",
+			e.Object.GetObjectKind(), e.Object.GetName(),
+		)
+		log.V(logs.LogVerbose).Info(fmt.Sprintf(
+			"%s did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.",
+			e.Object.GetObjectKind()))
+		return false
+	}
+)

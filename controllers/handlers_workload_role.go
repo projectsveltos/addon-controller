@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -45,7 +46,7 @@ func deployWorkloadRoles(ctx context.Context, c client.Client,
 	}
 
 	if !clusterSummary.DeletionTimestamp.IsZero() {
-		logger.V(1).Info("ClusterSummary is marked for deletion. Nothing to do.")
+		logger.V(logs.LogInfo).Info("ClusterSummary is marked for deletion. Nothing to do.")
 		// if clusterSummary is marked for deletion, there is nothing to deploy
 		return fmt.Errorf("clustersummary is marked for deletion")
 	}
@@ -65,7 +66,7 @@ func deployWorkloadRoles(ctx context.Context, c client.Client,
 	for i := range clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs {
 		reference := &clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[i]
 		workloadRole := &configv1alpha1.WorkloadRole{}
-		err := c.Get(ctx, types.NamespacedName{Name: reference.Name}, workloadRole)
+		err = c.Get(ctx, types.NamespacedName{Name: reference.Name}, workloadRole)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.Info(fmt.Sprintf("workloadRole %s does not exist yet", reference.Name))
@@ -73,17 +74,18 @@ func deployWorkloadRoles(ctx context.Context, c client.Client,
 			}
 			return err
 		}
-
-		if err := deployWorkloadRole(ctx, clusterClient, workloadRole, clusterSummary, logger); err != nil {
+		err = deployWorkloadRole(ctx, clusterClient, workloadRole, clusterSummary, logger)
+		if err != nil {
 			return err
 		}
 
-		roleName := getRoleName(workloadRole, clusterSummary.Name)
+		roleName := getRoleName(workloadRole, clusterSummary)
 		currentRoles[roleName] = true
 	}
 
 	// Remove all roles/clusterRoles previously deployed by this ClusterSummary and not referenced anymores
-	if err = undeployStaleRoleResources(ctx, clusterClient, clusterSummary, currentRoles); err != nil {
+	err = undeployStaleRoleResources(ctx, clusterClient, clusterSummary, currentRoles)
+	if err != nil {
 		return err
 	}
 
@@ -116,7 +118,7 @@ func unDeployWorkloadRoles(ctx context.Context, c client.Client,
 	}
 
 	listOptions := []client.ListOption{
-		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
+		client.MatchingLabels{ClusterSummaryLabelName: clusterSummary.Name},
 	}
 
 	roles := &rbacv1.RoleList{}
@@ -127,7 +129,8 @@ func unDeployWorkloadRoles(ctx context.Context, c client.Client,
 
 	for i := range roles.Items {
 		role := &roles.Items[i]
-		if err = clusterClient.Delete(ctx, role); err != nil {
+		err = clusterClient.Delete(ctx, role)
+		if err != nil {
 			return err
 		}
 	}
@@ -140,7 +143,8 @@ func unDeployWorkloadRoles(ctx context.Context, c client.Client,
 
 	for i := range clusterRoles.Items {
 		clusterRole := &clusterRoles.Items[i]
-		if err = clusterClient.Delete(ctx, clusterRole); err != nil {
+		err = clusterClient.Delete(ctx, clusterRole)
+		if err != nil {
 			return err
 		}
 	}
@@ -151,6 +155,7 @@ func unDeployWorkloadRoles(ctx context.Context, c client.Client,
 // workloadRoleHash returns the hash of all the ClusterSummary referenced WorkloadRole Specs.
 func workloadRoleHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error) {
+
 	h := sha256.New()
 	var config string
 
@@ -190,7 +195,7 @@ func deployWorkloadRole(ctx context.Context, clusterClient client.Client,
 func deployClusterWorkloadRole(ctx context.Context, clusterClient client.Client,
 	workloadRole *configv1alpha1.WorkloadRole, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
 
-	clusterRoleName := getRoleName(workloadRole, clusterSummary.Name)
+	clusterRoleName := getRoleName(workloadRole, clusterSummary)
 
 	clusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -208,7 +213,7 @@ func deployClusterWorkloadRole(ctx context.Context, clusterClient client.Client,
 		AggregationRule: workloadRole.Spec.AggregationRule,
 	}
 
-	addClusterSummaryLabel(clusterRole, clusterSummary.Name)
+	addLabel(clusterRole, ClusterSummaryLabelName, clusterSummary.Name)
 
 	currentClusterRole := &rbacv1.ClusterRole{}
 	if err := clusterClient.Get(ctx, client.ObjectKey{Name: clusterRoleName}, currentClusterRole); err != nil {
@@ -228,7 +233,7 @@ func deployClusterWorkloadRole(ctx context.Context, clusterClient client.Client,
 func deployNamespacedWorkloadRole(ctx context.Context, clusterClient client.Client,
 	workloadRole *configv1alpha1.WorkloadRole, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
 
-	roleName := getRoleName(workloadRole, clusterSummary.Name)
+	roleName := getRoleName(workloadRole, clusterSummary)
 
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -246,7 +251,7 @@ func deployNamespacedWorkloadRole(ctx context.Context, clusterClient client.Clie
 		Rules: workloadRole.Spec.Rules,
 	}
 
-	addClusterSummaryLabel(role, clusterSummary.Name)
+	addLabel(role, ClusterSummaryLabelName, clusterSummary.Name)
 
 	if err := createNamespace(ctx, clusterClient, role.Namespace); err != nil {
 		return err
@@ -265,13 +270,13 @@ func deployNamespacedWorkloadRole(ctx context.Context, clusterClient client.Clie
 	return clusterClient.Update(ctx, currentRole)
 }
 
-func getRoleName(workloadRole *configv1alpha1.WorkloadRole, clusterSummaryName string) string {
-	return clusterSummaryName + "-" + workloadRole.Name
+func getRoleName(workloadRole *configv1alpha1.WorkloadRole, clusterSummary *configv1alpha1.ClusterSummary) string {
+	return clusterSummary.Status.PolicyPrefix + "-" + workloadRole.Name
 }
 
 func undeployStaleRoleResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary, currentRoles map[string]bool) error {
 	listOptions := []client.ListOption{
-		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
+		client.MatchingLabels{ClusterSummaryLabelName: clusterSummary.Name},
 	}
 
 	roles := &rbacv1.RoleList{}
@@ -283,7 +288,8 @@ func undeployStaleRoleResources(ctx context.Context, c client.Client, clusterSum
 	for i := range roles.Items {
 		role := &roles.Items[i]
 		if _, ok := currentRoles[role.Name]; !ok {
-			if err = c.Delete(ctx, role); err != nil {
+			err = c.Delete(ctx, role)
+			if err != nil {
 				return err
 			}
 		}
@@ -298,7 +304,8 @@ func undeployStaleRoleResources(ctx context.Context, c client.Client, clusterSum
 	for i := range clusterRoles.Items {
 		clusterRole := &clusterRoles.Items[i]
 		if _, ok := currentRoles[clusterRole.Name]; !ok {
-			if err = c.Delete(ctx, clusterRole); err != nil {
+			err = c.Delete(ctx, clusterRole)
+			if err != nil {
 				return err
 			}
 		}

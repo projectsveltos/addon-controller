@@ -12,9 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2/klogr"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -29,31 +27,27 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	var logger logr.Logger
 	var clusterFeature *configv1alpha1.ClusterFeature
 	var clusterSummary *configv1alpha1.ClusterSummary
+	var workload *configv1alpha1.WorkloadRole
 	var namespace string
 	var clusterName string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
 		logger = klogr.New()
 
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterName = util.RandomString(7)
+		clusterName = randomString()
 		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -62,6 +56,16 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      clusterName,
+			},
+		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, namespace, clusterName)
+
+		workload = &configv1alpha1.WorkloadRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.WorkloadRoleSpec{
+				Type: configv1alpha1.RoleTypeCluster,
 			},
 		}
 	})
@@ -81,23 +85,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureKyverno)).To(BeFalse())
 	})
@@ -117,29 +107,15 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole)).To(BeTrue())
 	})
 
 	It("getHash returns nil when hash is not stored", func() {
-		hash := []byte(util.RandomString(13))
+		hash := []byte(randomString())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureRole,
@@ -155,30 +131,16 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1alpha1.FeatureKyverno)
 		Expect(currentHash).To(BeNil())
 	})
 
 	It("getHash returns stored hash", func() {
-		hash := []byte(util.RandomString(13))
+		hash := []byte(randomString())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureRole,
@@ -194,23 +156,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole)
 		Expect(reflect.DeepEqual(currentHash, hash)).To(BeTrue())
@@ -224,25 +172,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
-		hash := []byte(util.RandomString(13))
+		hash := []byte(randomString())
 		status := configv1alpha1.FeatureStatusFailed
 		statusErr := fmt.Errorf("failed to deploy")
 		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureRole, &status,
@@ -263,16 +197,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature when feature is deployed and hash has not changed, does nothing", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-				Rules: []rbacv1.PolicyRule{
-					{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-					{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
-				},
+		workload.Spec = configv1alpha1.WorkloadRoleSpec{
+			Type: configv1alpha1.RoleTypeCluster,
+			Rules: []rbacv1.PolicyRule{
+				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
+				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
 			},
 		}
 
@@ -291,14 +220,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		workloadHash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
@@ -321,14 +243,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
@@ -362,21 +277,16 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-				Rules: []rbacv1.PolicyRule{
-					{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-					{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
-				},
+		workload.Spec = configv1alpha1.WorkloadRoleSpec{
+			Type: configv1alpha1.RoleTypeCluster,
+			Rules: []rbacv1.PolicyRule{
+				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
+				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
 			},
 		}
 
-		configMapNs := util.RandomString(6)
-		configMap := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), addLabelPolicyStr)
+		configMapNs := randomString()
+		configMap := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
 
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
@@ -397,14 +307,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		workloadHash, err := controllers.WorkloadRoleHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
@@ -434,14 +337,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
@@ -475,16 +371,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature when feature is not deployed, calls Deploy", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-				Rules: []rbacv1.PolicyRule{
-					{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-					{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
-				},
+		workload.Spec = configv1alpha1.WorkloadRoleSpec{
+			Type: configv1alpha1.RoleTypeCluster,
+			Rules: []rbacv1.PolicyRule{
+				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
+				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
 			},
 		}
 
@@ -500,25 +391,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
@@ -526,7 +403,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -536,15 +413,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is removed, does nothing", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-			},
-		}
-
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
@@ -557,14 +425,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
@@ -577,14 +438,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
@@ -593,7 +447,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run UndeployFeature then validate key is not added to InProgress
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -602,15 +456,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-			},
-		}
-
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
@@ -623,25 +468,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
@@ -649,7 +480,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run UndeployFeature then validate key is added to InProgress
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
@@ -658,16 +489,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
-	It("deployFeature returns an error if cleaning up roles is in progress", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-			},
-		}
-
+	It("deployFeature return an error if cleaning up roles is in progress", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
@@ -680,14 +502,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -696,33 +511,17 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{FeatureID: configv1alpha1.FeatureRole, Status: configv1alpha1.FeatureStatusRemoving},
 		}
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
 
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup of Role still in progress. Wait before redeploying"))
 	})
 
 	It("undeployFeatures returns an error if deploying roles is in progress", func() {
-		workload := &configv1alpha1.WorkloadRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeCluster,
-			},
-		}
-
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
 		}
@@ -735,14 +534,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
-		})
-		Expect(err).To(BeNil())
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -751,19 +543,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{FeatureID: configv1alpha1.FeatureRole, Status: configv1alpha1.FeatureStatusProvisioning},
 		}
 
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          dep,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
 			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
 
-		err = controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Role still in progress. Wait before cleanup"))
 	})
@@ -771,14 +556,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 var _ = Describe("Convert result", func() {
 	It("convertResultStatus correctly converts deployer.ResultStatus to FeatureStatus", func() {
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            nil,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
-			Mux:               sync.Mutex{},
-		}
+		reconciler := getClusterSummaryReconciler(nil, nil)
 
 		result := deployer.Result{
 			ResultStatus: deployer.InProgress,
@@ -807,3 +585,29 @@ var _ = Describe("Convert result", func() {
 		Expect(featureStatus).To(BeNil())
 	})
 })
+
+func getClusterSummaryScope(c client.Client, logger logr.Logger,
+	clusterFeature *configv1alpha1.ClusterFeature, clusterSummary *configv1alpha1.ClusterSummary,
+) *scope.ClusterSummaryScope {
+
+	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		Client:         c,
+		Logger:         logger,
+		ClusterFeature: clusterFeature,
+		ClusterSummary: clusterSummary,
+		ControllerName: "clustersummary",
+	})
+	Expect(err).To(BeNil())
+	return clusterSummaryScope
+}
+
+func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
+	return &controllers.ClusterSummaryReconciler{
+		Client:            c,
+		Scheme:            scheme,
+		Deployer:          dep,
+		ReferenceMap:      make(map[string]*controllers.Set),
+		ClusterSummaryMap: make(map[string]*controllers.Set),
+		Mux:               sync.Mutex{},
+	}
+}

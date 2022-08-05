@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -55,12 +54,12 @@ var _ = Describe("HandlersKyverno", func() {
 	BeforeEach(func() {
 		logger = klogr.New()
 
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
@@ -70,7 +69,7 @@ var _ = Describe("HandlersKyverno", func() {
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
@@ -87,33 +86,11 @@ var _ = Describe("HandlersKyverno", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
 	})
 
 	AfterEach(func() {
-		ns := &corev1.Namespace{}
-		err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-			return
-		}
-		err = testEnv.Client.Delete(context.TODO(), ns)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-		err = testEnv.Client.Delete(context.TODO(), clusterFeature)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-		err = testEnv.Client.Delete(context.TODO(), clusterSummary)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-
-		workloadRules := &configv1alpha1.WorkloadRoleList{}
-		Expect(testEnv.Client.List(context.TODO(), workloadRules)).To(Succeed())
-		for i := range workloadRules.Items {
-			Expect(testEnv.Client.Delete(context.TODO(), &workloadRules.Items[i])).To(Succeed())
-		}
+		deleteResources(namespace, clusterFeature, clusterSummary)
 	})
 
 	It("isKyvernoReady returns true when Kyverno deployment is ready", func() {
@@ -164,9 +141,9 @@ var _ = Describe("HandlersKyverno", func() {
 	})
 
 	It("deployKyvernoPolicy creates and updates kyverno policies", func() {
-		configMapNs := util.RandomString(6)
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), checkSa)
+		configMapNs := randomString()
+		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), checkSa)
 
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			PolicyRefs: []corev1.ObjectReference{
@@ -184,12 +161,11 @@ var _ = Describe("HandlersKyverno", func() {
 		}
 		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
-		// Set ClusterSummary.Status.KyvernoPolicyPrefix. That is needed to generate kyverno policy name
-		setClusterSummaryKyvernoPolicyPrefix(ctx, testEnv.Client, clusterSummary)
-
 		Expect(testEnv.Create(context.TODO(), configMap1)).To(Succeed())
 		Expect(testEnv.Create(context.TODO(), configMap2)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, configMap2)).To(Succeed())
+
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		// Get current clustersummary as we need Status.KyvernoPolicyPrefix to be set
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
@@ -246,9 +222,9 @@ var _ = Describe("HandlersKyverno", func() {
 
 	It(`undeployStaleKyvernoResources removes all Policy/ClusterPolicy created by
 		a ClusterSummary due to ConfigMaps not referenced anymore`, func() {
-		configMapNs := util.RandomString(6)
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), checkSa)
+		configMapNs := randomString()
+		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), checkSa)
 
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			PolicyRefs: []corev1.ObjectReference{
@@ -257,7 +233,7 @@ var _ = Describe("HandlersKyverno", func() {
 			},
 		}
 
-		clusterSummary.Status.KyvernoPolicyPrefix = "cs-" + util.RandomString(5)
+		clusterSummary.Status.PolicyPrefix = "cs-" + randomString()
 
 		// add-labels is the name of addLabelPolicyStr
 		kyvernoName1 := controllers.GetKyvernoPolicyName("add-labels", clusterSummary)
@@ -331,20 +307,20 @@ var _ = Describe("HandlersKyverno", func() {
 	It("unDeployKyverno removes all Kyverno policies created by a ClusterSummary", func() {
 		kyverno0 := &kyvernoapi.ClusterPolicy{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 		}
 
 		kyverno1 := &kyvernoapi.ClusterPolicy{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   util.RandomString(5),
+				Name:   randomString(),
 				Labels: map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
 			},
 		}
 
 		kyverno2 := &kyvernoapi.Policy{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      util.RandomString(5),
+				Name:      randomString(),
 				Namespace: namespace,
 				Labels:    map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
 			},
@@ -371,11 +347,11 @@ var _ = Describe("HandlersKyverno", func() {
 		Expect(testEnv.Client.Create(context.TODO(), kyverno1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), kyverno2)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		// Set ClusterSummary.Status.KyvernoPolicyPrefix. That is needed to generate kyverno policy name
-		setClusterSummaryKyvernoPolicyPrefix(ctx, testEnv.Client, clusterSummary)
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -427,11 +403,11 @@ var _ = Describe("HandlersKyverno", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		// Set ClusterSummary.Status.KyvernoPolicyPrefix. That is needed to generate kyverno policy name
-		setClusterSummaryKyvernoPolicyPrefix(ctx, testEnv.Client, clusterSummary)
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		Expect(controllers.DeployKyverno(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -462,11 +438,11 @@ var _ = Describe("HandlersKyverno", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		// Set ClusterSummary.Status.KyvernoPolicyPrefix. That is needed to generate kyverno policy name
-		setClusterSummaryKyvernoPolicyPrefix(ctx, testEnv.Client, clusterSummary)
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		Expect(controllers.DeployKyverno(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -479,7 +455,7 @@ var _ = Describe("HandlersKyverno", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		By("Creating ConfigMap with Kyverno ClusterPolicy")
-		configMap := createConfigMapWithKyvernoPolicy(namespace, util.RandomString(5), addLabelPolicyStr)
+		configMap := createConfigMapWithKyvernoPolicy(namespace, randomString(), addLabelPolicyStr)
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 
 		By("Updating ClusterSummary to reference ConfigMap")
@@ -513,24 +489,24 @@ var _ = Describe("HandlersKyverno", func() {
 
 var _ = Describe("Hash methods", func() {
 	It("kyvernoHash returns hash considering all referenced configmap contents", func() {
-		configMapNs := util.RandomString(6)
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, util.RandomString(5), allowLabelChangeStr)
+		configMapNs := randomString()
+		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), allowLabelChangeStr)
 
-		namespace := "reconcile" + util.RandomString(5)
+		namespace := "reconcile" + randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(12),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
-				ClusterName:      util.RandomString(5),
+				ClusterName:      randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					KyvernoConfiguration: &configv1alpha1.KyvernoConfiguration{
 						PolicyRefs: []corev1.ObjectReference{
 							{Namespace: configMapNs, Name: configMap1.Name},
 							{Namespace: configMapNs, Name: configMap2.Name},
-							{Namespace: configMapNs, Name: util.RandomString(5)},
+							{Namespace: configMapNs, Name: randomString()},
 						},
 					},
 				},

@@ -53,6 +53,7 @@ func GetClient(ctx context.Context, _ logr.Logger, c client.Client) *fakeDeploye
 func (d *fakeDeployer) RegisterFeatureID(
 	featureID string,
 ) error {
+
 	return nil
 }
 
@@ -65,6 +66,7 @@ func (d *fakeDeployer) Deploy(
 	cleanup bool,
 	f deployer.RequestHandler,
 ) error {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.inProgress = append(d.inProgress, key)
 	return nil
@@ -80,6 +82,7 @@ func (d *fakeDeployer) GetResult(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool,
 ) deployer.Result {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	v, ok := d.results[key]
 	result := deployer.Result{}
@@ -101,6 +104,7 @@ func (d *fakeDeployer) IsInProgress(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool,
 ) bool {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	for i := range d.inProgress {
 		if d.inProgress[i] == key {
@@ -113,6 +117,7 @@ func (d *fakeDeployer) IsInProgress(
 func (d *fakeDeployer) CleanupEntries(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool) {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 
 	// Remove any entry we might have for this cluster/feature
@@ -125,6 +130,7 @@ func (d *fakeDeployer) StoreResult(
 	cleanup bool,
 	err error,
 ) {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.results[key] = err
 }
@@ -134,6 +140,7 @@ func (d *fakeDeployer) StoreInProgress(
 	clusterNamespace, clusterName, applicant, featureID string,
 	cleanup bool,
 ) {
+
 	key := deployer.GetKey(clusterNamespace, clusterName, applicant, featureID, cleanup)
 	d.inProgress = append(d.inProgress, key)
 }

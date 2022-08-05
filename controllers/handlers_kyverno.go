@@ -36,6 +36,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/internal/kyverno"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -50,7 +51,7 @@ func deployKyverno(ctx context.Context, c client.Client,
 	}
 
 	if !clusterSummary.DeletionTimestamp.IsZero() {
-		logger.V(1).Info("ClusterSummary is marked for deletion. Nothing to do.")
+		logger.V(logs.LogInfo).Info("ClusterSummary is marked for deletion. Nothing to do.")
 		// if clusterSummary is marked for deletion, there is nothing to deploy
 		return fmt.Errorf("clustersummary is marked for deletion")
 	}
@@ -69,13 +70,14 @@ func deployKyverno(ctx context.Context, c client.Client,
 	// First verify if kyverno is installed, if not install it
 	present, ready, err := isKyvernoReady(ctx, clusterClient, logger)
 	if err != nil {
-		logger.V(1).Error(err, "Failed to verify presence of kyverno deployment")
+		logger.V(logs.LogInfo).Error(err, "Failed to verify presence of kyverno deployment")
 		return err
 	}
 
 	if !present {
-		if err := deployKyvernoInWorklaodCluster(ctx, clusterClient,
-			clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.Replicas, logger); err != nil {
+		err = deployKyvernoInWorklaodCluster(ctx, clusterClient,
+			clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.Replicas, logger)
+		if err != nil {
 			return err
 		}
 	}
@@ -94,26 +96,28 @@ func deployKyverno(ctx context.Context, c client.Client,
 		for i := range clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {
 			reference := &clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i]
 			configMap := &corev1.ConfigMap{}
-			err := c.Get(ctx,
+			err = c.Get(ctx,
 				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configMap)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					logger.V(1).Info(fmt.Sprintf("configMap %s/%s does not exist yet",
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("configMap %s/%s does not exist yet",
 						reference.Namespace, reference.Name))
 					continue
 				}
 				return err
 			}
 
-			if err := deployKyvernoPolicy(ctx, clusterRestConfig, clusterClient,
-				configMap, clusterSummary, currentKyvernos, logger); err != nil {
+			err = deployKyvernoPolicy(ctx, clusterRestConfig, clusterClient,
+				configMap, clusterSummary, currentKyvernos, logger)
+			if err != nil {
 				return err
 			}
 		}
 	}
 
 	// Remove all policies/clusterPolicies previously deployed by this ClusterSummary and not referenced anymores
-	if err = undeployStaleKyvernoResources(ctx, clusterClient, clusterSummary, currentKyvernos, logger); err != nil {
+	err = undeployStaleKyvernoResources(ctx, clusterClient, clusterSummary, currentKyvernos, logger)
+	if err != nil {
 		return err
 	}
 
@@ -145,7 +149,7 @@ func unDeployKyverno(ctx context.Context, c client.Client,
 	}
 
 	listOptions := []client.ListOption{
-		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
+		client.MatchingLabels{ClusterSummaryLabelName: clusterSummary.Name},
 	}
 
 	clusterPolicies := &kyvernoapi.ClusterPolicyList{}
@@ -157,7 +161,8 @@ func unDeployKyverno(ctx context.Context, c client.Client,
 
 	for i := range clusterPolicies.Items {
 		cp := &clusterPolicies.Items[i]
-		if err = clusterClient.Delete(ctx, cp); err != nil {
+		err = clusterClient.Delete(ctx, cp)
+		if err != nil {
 			return err
 		}
 	}
@@ -171,7 +176,8 @@ func unDeployKyverno(ctx context.Context, c client.Client,
 
 	for i := range policies.Items {
 		p := &policies.Items[i]
-		if err = clusterClient.Delete(ctx, p); err != nil {
+		err = clusterClient.Delete(ctx, p)
+		if err != nil {
 			return err
 		}
 	}
@@ -182,6 +188,7 @@ func unDeployKyverno(ctx context.Context, c client.Client,
 // kyvernoHash returns the hash of all the Kyverno referenced configmaps.
 func kyvernoHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error) {
+
 	h := sha256.New()
 	var config string
 
@@ -220,7 +227,7 @@ func isKyvernoReady(ctx context.Context, c client.Client, logger logr.Logger) (p
 	err = c.Get(ctx, types.NamespacedName{Namespace: kyverno.Namespace, Name: kyverno.Deployment}, depl)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(5).Info("Kyverno deployment not found")
+			logger.V(logs.LogDebug).Info("Kyverno deployment not found")
 			err = nil
 			return
 		}
@@ -230,7 +237,7 @@ func isKyvernoReady(ctx context.Context, c client.Client, logger logr.Logger) (p
 	present = true
 
 	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
-		logger.V(5).Info("Not all replicas are ready for Kyverno deployment")
+		logger.V(logs.LogDebug).Info("Not all replicas are ready for Kyverno deployment")
 		return
 	}
 
@@ -258,12 +265,12 @@ func deployKyvernoInWorklaodCluster(ctx context.Context, c client.Client, replic
 	for i := range elements {
 		element, err := getUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.V(1).Error(err, "failed to convert to unstructured")
+			logger.V(logs.LogInfo).Error(err, "failed to convert to unstructured")
 			return err
 		}
 		err = c.Create(ctx, element)
 		if err != nil && !apierrors.IsAlreadyExists(err) {
-			logger.V(1).Error(err, "failed to post object")
+			logger.V(logs.LogInfo).Error(err, "failed to post object")
 			return fmt.Errorf("error creating %s %s: %w", element.GetKind(), element.GetName(), err)
 		}
 	}
@@ -275,6 +282,7 @@ func deployKyvernoPolicy(ctx context.Context, config *rest.Config, c client.Clie
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	currentKyvernos map[string]bool,
 	logger logr.Logger) error {
+
 	l := logger.WithValues("configMap", fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
 	for k := range configMap.Data {
 		// Base64 decode policy
@@ -295,13 +303,14 @@ func deployKyvernoPolicy(ctx context.Context, config *rest.Config, c client.Clie
 			return fmt.Errorf("failed to get policy from Data %.75s", string(policyDecoded))
 		}
 
-		addClusterSummaryLabel(policy, clusterSummary.Name)
+		addLabel(policy, ClusterSummaryLabelName, clusterSummary.Name)
 		name := getKyvernoPolicyName(getUnstructuredName(policy), clusterSummary)
 		policy.SetName(name)
 		currentKyvernos[name] = true
 
 		// If policy is namespaced, create namespace if not already existing
-		if err := createNamespace(ctx, c, policy.GetNamespace()); err != nil {
+		err = createNamespace(ctx, c, policy.GetNamespace())
+		if err != nil {
 			return err
 		}
 
@@ -312,7 +321,8 @@ func deployKyvernoPolicy(ctx context.Context, config *rest.Config, c client.Clie
 		if err != nil {
 			return err
 		}
-		if err = preprareObjectForUpdate(ctx, dr, policy); err != nil {
+		err = preprareObjectForUpdate(ctx, dr, policy)
+		if err != nil {
 			return err
 		}
 
@@ -332,8 +342,9 @@ func deployKyvernoPolicy(ctx context.Context, config *rest.Config, c client.Clie
 
 func undeployStaleKyvernoResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	currentKyvernos map[string]bool, logger logr.Logger) error {
+
 	listOptions := []client.ListOption{
-		client.MatchingLabels{clusterSummaryLabelName: clusterSummary.Name},
+		client.MatchingLabels{ClusterSummaryLabelName: clusterSummary.Name},
 	}
 
 	policies := &kyvernoapi.PolicyList{}
@@ -344,7 +355,8 @@ func undeployStaleKyvernoResources(ctx context.Context, c client.Client, cluster
 	}
 
 	for i := range policies.Items {
-		if err := deleteIfNotExistant(ctx, &policies.Items[i], c, currentKyvernos); err != nil {
+		err = deleteIfNotExistant(ctx, &policies.Items[i], c, currentKyvernos)
+		if err != nil {
 			return err
 		}
 	}
@@ -357,7 +369,8 @@ func undeployStaleKyvernoResources(ctx context.Context, c client.Client, cluster
 	}
 
 	for i := range clusterPolicies.Items {
-		if err := deleteIfNotExistant(ctx, &clusterPolicies.Items[i], c, currentKyvernos); err != nil {
+		err = deleteIfNotExistant(ctx, &clusterPolicies.Items[i], c, currentKyvernos)
+		if err != nil {
 			return err
 		}
 	}
@@ -366,7 +379,7 @@ func undeployStaleKyvernoResources(ctx context.Context, c client.Client, cluster
 }
 
 func getKyvernoPolicyName(policyName string, clusterSummary *configv1alpha1.ClusterSummary) string {
-	return clusterSummary.Status.KyvernoPolicyPrefix + "-" + policyName
+	return clusterSummary.Status.PolicyPrefix + "-" + policyName
 }
 
 func deleteIfNotExistant(ctx context.Context, policy client.Object, c client.Client, currentKyvernos map[string]bool) error {

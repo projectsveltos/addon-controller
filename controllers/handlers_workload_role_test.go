@@ -50,21 +50,16 @@ var _ = Describe("HandlersWorkloadRole", func() {
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
 		logger = klogr.New()
 
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
@@ -74,7 +69,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
@@ -91,40 +86,18 @@ var _ = Describe("HandlersWorkloadRole", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
 	})
 
 	AfterEach(func() {
-		ns := &corev1.Namespace{}
-		err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-			return
-		}
-		err = testEnv.Client.Delete(context.TODO(), ns)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-		err = testEnv.Client.Delete(context.TODO(), clusterFeature)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-		err = testEnv.Client.Delete(context.TODO(), clusterSummary)
-		if err != nil {
-			Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		}
-
-		workloadRules := &configv1alpha1.WorkloadRoleList{}
-		Expect(testEnv.Client.List(context.TODO(), workloadRules)).To(Succeed())
-		for i := range workloadRules.Items {
-			Expect(testEnv.Client.Delete(context.TODO(), &workloadRules.Items[i])).To(Succeed())
-		}
+		deleteResources(namespace, clusterFeature, clusterSummary)
 	})
 
 	It("deployNamespacedWorkloadRole creates and updates Role", func() {
-		roleNs := util.RandomString(6)
+		roleNs := randomString()
 		workloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type:      configv1alpha1.RoleTypeNamespaced,
@@ -144,6 +117,12 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
+
+		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
+		// This is used by DeployNamespacedWorkloadRole
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		Expect(controllers.DeployNamespacedWorkloadRole(ctx, c, workloadRole, clusterSummary, logger)).To(Succeed())
 
@@ -177,7 +156,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 	It("deployClusterWorkloadRole creates and updates ClusterRole", func() {
 		workloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type: configv1alpha1.RoleTypeCluster,
@@ -195,6 +174,12 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
+
+		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
+		// This is used by GetRoleName
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		Expect(controllers.DeployClusterWorkloadRole(ctx, c, workloadRole, clusterSummary, logger)).To(Succeed())
 
@@ -221,10 +206,10 @@ var _ = Describe("HandlersWorkloadRole", func() {
 	})
 
 	It("DeployWorkloadRoles creates ClusterRole and Role", func() {
-		roleNs := util.RandomString(6)
+		roleNs := randomString()
 		nsWorkloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type:      configv1alpha1.RoleTypeNamespaced,
@@ -237,7 +222,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		clusterWorkloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type: configv1alpha1.RoleTypeCluster,
@@ -266,6 +251,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 				Name: namespace,
 			},
 		}
+
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), nsWorkloadRole)).To(Succeed())
@@ -275,6 +261,8 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
+
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
@@ -283,7 +271,17 @@ var _ = Describe("HandlersWorkloadRole", func() {
 				string(configv1alpha1.FeatureRole), logger)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		name := controllers.GetRoleName(clusterWorkloadRole, clusterSummary.Name)
+		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
+		// This is used by GetRoleName
+		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
+
+		name := controllers.GetRoleName(clusterWorkloadRole, clusterSummary)
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			return testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: name}, currentClusterRole)
+		}, timeout, pollingInterval).Should(BeNil())
+
 		currentClusterRole := &rbacv1.ClusterRole{}
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: name}, currentClusterRole)).To(Succeed())
 		Expect(currentClusterRole.Rules).To(Equal(clusterWorkloadRole.Spec.Rules))
@@ -308,7 +306,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		role0 := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
-				Name:      util.RandomString(5),
+				Name:      randomString(),
 				Labels:    map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
 			},
 		}
@@ -316,20 +314,20 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		role1 := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
-				Name:      util.RandomString(5),
+				Name:      randomString(),
 			},
 		}
 
 		clusterRole0 := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   util.RandomString(5),
+				Name:   randomString(),
 				Labels: map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
 			},
 		}
 
 		clusterRole1 := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 		}
 
@@ -359,6 +357,8 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
+
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			return controllers.UnDeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
@@ -387,10 +387,10 @@ var _ = Describe("HandlersWorkloadRole", func() {
 	})
 
 	It("undeployStaleRoleResources removes all ClusterRole and Role created by a ClusterSummary due to WorkloadRoles not referenced anymore", func() {
-		roleNs := namespace + util.RandomString(5)
+		roleNs := namespace + randomString()
 		workloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type:      configv1alpha1.RoleTypeNamespaced,
@@ -400,7 +400,7 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{{Name: workloadRole.Name}}
 
-		roleName := controllers.GetRoleName(workloadRole, clusterSummary.Name)
+		roleName := controllers.GetRoleName(workloadRole, clusterSummary)
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      roleName,
@@ -410,9 +410,16 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		}
 		initObjects := []client.Object{
 			role,
+			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
+
+		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
+		// This is used by UndeployStaleRoleResources
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		currentRoles := map[string]bool{}
 		currentRoles[roleName] = true
@@ -462,7 +469,7 @@ var _ = Describe("Hash methods", func() {
 	It("workloadRoleHash returns hash considering all referenced workloadroles", func() {
 		workload1 := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type: configv1alpha1.RoleTypeCluster,
@@ -475,7 +482,7 @@ var _ = Describe("Hash methods", func() {
 
 		workload2 := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(6),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.WorkloadRoleSpec{
 				Type: configv1alpha1.RoleTypeNamespaced,
@@ -485,19 +492,19 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
-		namespace := "reconcile" + util.RandomString(5)
+		namespace := "reconcile" + randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(12),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
-				ClusterName:      util.RandomString(5),
+				ClusterName:      randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: workload1.Name},
 						{Name: workload2.Name},
-						{Name: util.RandomString(5)},
+						{Name: randomString()},
 					},
 				},
 			},

@@ -218,12 +218,12 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 		logger = klogr.New()
 
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
@@ -233,7 +233,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
@@ -250,38 +250,25 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
 	})
 
 	It("getClusterFeatureOwner returns ClusterFeature owner", func() {
-		clusterFeature := &configv1alpha1.ClusterFeature{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
-			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
-				ClusterSelector: selector,
-			},
-		}
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
 
-		namespace := "reconcile" + util.RandomString(5)
-		clusterName := util.RandomString(10)
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						Kind:       clusterFeature.Kind,
-						Name:       clusterFeature.Name,
-						APIVersion: clusterFeature.APIVersion,
-					},
-				},
+		clusterName := randomString()
+		clusterSummary.OwnerReferences = []metav1.OwnerReference{
+			{
+				Kind:       clusterFeature.Kind,
+				Name:       clusterFeature.Name,
+				APIVersion: clusterFeature.APIVersion,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace:   namespace,
-				ClusterName:        clusterName,
-				ClusterFeatureSpec: clusterFeature.Spec,
-			},
+		}
+
+		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
+			ClusterNamespace:   namespace,
+			ClusterName:        clusterName,
+			ClusterFeatureSpec: clusterFeature.Spec,
 		}
 
 		initObjects := []client.Object{
@@ -298,35 +285,21 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 	})
 
 	It("getClusterFeatureOwner returns nil when ClusterFeature does not exist", func() {
-		clusterFeature := &configv1alpha1.ClusterFeature{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
-			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
-				ClusterSelector: selector,
-			},
-		}
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
 
-		namespace := "reconcile" + util.RandomString(5)
-		clusterName := util.RandomString(10)
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						Kind:       clusterFeature.Kind,
-						Name:       clusterFeature.Name,
-						APIVersion: clusterFeature.APIVersion,
-					},
-				},
+		clusterName := randomString()
+		clusterSummary.OwnerReferences = []metav1.OwnerReference{
+			{
+				Kind:       clusterFeature.Kind,
+				Name:       clusterFeature.Name,
+				APIVersion: clusterFeature.APIVersion,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace:   namespace,
-				ClusterName:        clusterName,
-				ClusterFeatureSpec: clusterFeature.Spec,
-			},
+		}
+
+		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
+			ClusterNamespace:   namespace,
+			ClusterName:        clusterName,
+			ClusterFeatureSpec: clusterFeature.Spec,
 		}
 
 		initObjects := []client.Object{
@@ -374,7 +347,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 	})
 
 	It("getSecretData returns secret data", func() {
-		randomData := []byte(util.RandomString(22))
+		randomData := []byte(randomString())
 		secret := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster.Namespace,
@@ -429,6 +402,30 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(wcClient).ToNot(BeNil())
 	})
 
+	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterFeature for a CAPI Cluster", func() {
+		clusterSummary0 := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cs" + randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterFeature,
+			clusterSummary,
+			clusterSummary0,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterFeature.Name, cluster.Namespace, cluster.Name)
+		Expect(err).To(BeNil())
+		Expect(currentClusterSummary).ToNot(BeNil())
+		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
+	})
 })
 
 // waitForObject waits for the cache to be updated helps in preventing test flakes due to the cache sync delays.
@@ -452,15 +449,26 @@ func waitForObject(ctx context.Context, c client.Client, obj client.Object) erro
 	return nil
 }
 
-func setClusterSummaryKyvernoPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
+// setClusterSummaryPolicyPrefix sets ClusterSummary Status.PolicyPrefix.
+// Only use with fake client. With testEnv use waitForClusterSummaryPolicyPrefix
+func setClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
 	Expect(waitForObject(ctx, c, clusterSummary)).To(Succeed())
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Status.KyvernoPolicyPrefix = "cs-" + util.RandomString(10)
+		currentClusterSummary.Status.PolicyPrefix = "cs-" + randomString()
 		return c.Status().Update(ctx, currentClusterSummary)
 	})
 	Expect(err).To(BeNil())
+}
+
+// waitForClusterSummaryPolicyPrefix waits for ClusterSummary Status.PolicyPrefix to be set
+func waitForClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
+	Eventually(func() bool {
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		return currentClusterSummary.Status.PolicyPrefix != ""
+	}, timeout, pollingInterval).Should(BeTrue())
 }
 
 // createConfigMapWithKyvernoPolicy creates a configMap with Data containing base64 encoded policies
@@ -479,4 +487,56 @@ func createConfigMapWithKyvernoPolicy(namespace, configMapName string, policyStr
 	}
 
 	return cm
+}
+
+func randomString() string {
+	const length = 10
+	return util.RandomString(length)
+}
+
+func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterFeatureName, clusterNamespace, clusterName string) {
+	labels := clusterSummary.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels[controllers.ClusterFeatureLabelName] = clusterFeatureName
+	labels[controllers.ClusterLabelNamespace] = clusterNamespace
+	labels[controllers.ClusterLabelName] = clusterName
+
+	clusterSummary.Labels = labels
+}
+
+// deleteResources deletes following resources:
+// - namespace
+// - clusterFeature
+// - clusterSummary
+// - all WorkloadRoles
+func deleteResources(namespace string,
+	clusterFeature *configv1alpha1.ClusterFeature,
+	clusterSummary *configv1alpha1.ClusterSummary) {
+
+	ns := &corev1.Namespace{}
+	err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
+	if err != nil {
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		return
+	}
+	err = testEnv.Client.Delete(context.TODO(), ns)
+	if err != nil {
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	}
+	err = testEnv.Client.Delete(context.TODO(), clusterFeature)
+	if err != nil {
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	}
+	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
+	if err != nil {
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	}
+
+	workloadRules := &configv1alpha1.WorkloadRoleList{}
+	Expect(testEnv.Client.List(context.TODO(), workloadRules)).To(Succeed())
+	for i := range workloadRules.Items {
+		Expect(testEnv.Client.Delete(context.TODO(), &workloadRules.Items[i])).To(Succeed())
+	}
 }

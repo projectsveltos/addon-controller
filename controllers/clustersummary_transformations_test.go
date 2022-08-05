@@ -24,9 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -37,30 +35,25 @@ import (
 
 var _ = Describe("ClustersummaryTransformations map functions", func() {
 	var namespace string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
-		namespace = "map-function" + util.RandomString(5)
+		namespace = "map-function" + randomString()
 	})
 
 	It("requeueClusterFeatureForCluster returns matching ClusterFeatures", func() {
 		workloadRole := &configv1alpha1.WorkloadRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 		}
 
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
-				ClusterName:      upstreamClusterNamePrefix + util.RandomString(5),
+				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					WorkloadRoleRefs: []corev1.ObjectReference{
 						{Name: workloadRole.Name},
@@ -71,14 +64,14 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 
 		clusterSummary1 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: util.RandomString(5),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
-				ClusterName:      upstreamClusterNamePrefix + util.RandomString(5),
+				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: util.RandomString(5)},
+						{Name: randomString()},
 					},
 				},
 			},

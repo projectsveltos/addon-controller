@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForWorkloadRole(
@@ -38,7 +39,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForWorkloadRole(
 		workloadRole.Name,
 	)
 
-	logger.V(5).Info("reacting to WorkloadRole change")
+	logger.V(logs.LogDebug).Info("reacting to WorkloadRole change")
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
@@ -71,7 +72,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForConfigMap(
 		configMap.Name,
 	)
 
-	logger.V(5).Info("reacting to configMap change")
+	logger.V(logs.LogDebug).Info("reacting to configMap change")
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()

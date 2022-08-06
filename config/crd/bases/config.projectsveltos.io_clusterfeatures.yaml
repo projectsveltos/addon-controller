@@ -200,7 +200,7 @@ spec:
             description: ClusterFeatureStatus defines the observed state of ClusterFeature
             properties:
               matchinClusters:
-                description: MatchingCluster reference all the cluster-api Cluster
+                description: MatchingClusterRefs reference all the cluster-api Cluster
                   currently matching ClusterFeature ClusterSelector
                 items:
                   description: 'ObjectReference contains enough information to let

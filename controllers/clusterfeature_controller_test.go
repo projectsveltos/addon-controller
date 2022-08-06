@@ -27,11 +27,9 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -51,19 +49,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 	var matchingCluster *clusterv1.Cluster
 	var nonMatchingCluster *clusterv1.Cluster
 	var namespace string
-	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
-		var err error
-		scheme, err = setupScheme()
-		Expect(err).ToNot(HaveOccurred())
-
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
 		matchingCluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"env":  "qa",
@@ -74,7 +67,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		nonMatchingCluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"zone": "west",
@@ -84,7 +77,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
@@ -187,7 +180,8 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		err = controllers.CreateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope,
+			&corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -202,7 +196,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(owner.Kind).To(Equal(clusterFeature.Kind))
 	})
 
-	It("UpdateClusterSummary updates ClusterSummary with proper fields when ClusterFeature syncmode set to continuos", func() {
+	It("UpdateClusterSummary updates ClusterSummary with proper fields when ClusterFeature syncmode set to continuous", func() {
 		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -215,20 +209,21 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 					SyncMode: configv1alpha1.SyncModeOneTime,
 					WorkloadRoleRefs: []corev1.ObjectReference{
 						{
-							Name: "c-" + util.RandomString(5),
+							Name: "c-" + randomString(),
 						},
 					},
 				},
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
-				Name: "b-" + util.RandomString(5),
+				Name: "b-" + randomString(),
 			},
 			{
-				Name: "d-" + util.RandomString(5),
+				Name: "d-" + randomString(),
 			},
 		}
 
@@ -258,7 +253,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -273,12 +268,12 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
-				Namespace: "a-" + util.RandomString(5),
-				Name:      "b-" + util.RandomString(5),
+				Namespace: "a-" + randomString(),
+				Name:      "b-" + randomString(),
 			},
 			{
-				Namespace: "c-" + util.RandomString(5),
-				Name:      "d-" + util.RandomString(5),
+				Namespace: "c-" + randomString(),
+				Name:      "d-" + randomString(),
 			},
 		}
 
@@ -293,6 +288,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterFeatureSpec: clusterFeature.Spec,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
 			clusterFeature,
@@ -304,8 +300,8 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
-				Namespace: "a-" + util.RandomString(5),
-				Name:      "b-" + util.RandomString(5),
+				Namespace: "a-" + randomString(),
+				Name:      "b-" + randomString(),
 			},
 		}
 
@@ -329,7 +325,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -345,12 +341,12 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
-				Namespace: "a-" + util.RandomString(5),
-				Name:      "b-" + util.RandomString(5),
+				Namespace: "a-" + randomString(),
+				Name:      "b-" + randomString(),
 			},
 			{
-				Namespace: "c-" + util.RandomString(5),
-				Name:      "d-" + util.RandomString(5),
+				Namespace: "c-" + randomString(),
+				Name:      "d-" + randomString(),
 			},
 		}
 
@@ -372,6 +368,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterFeatureSpec: clusterFeature.Spec,
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
 			clusterFeature,
@@ -390,7 +387,15 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			Mux:               sync.Mutex{},
 		}
 
-		err := controllers.DeleteClusterSummary(reconciler, context.TODO(), clusterSummary)
+		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterFeature: clusterFeature,
+			ControllerName: "clusterfeature",
+		})
+		Expect(err).To(BeNil())
+
+		err = controllers.DeleteClusterSummary(reconciler, context.TODO(), clusterFeatureScope, clusterSummary)
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -399,7 +404,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries does not ClusterSummary for matching CAPI Cluster with no running control plane machine", func() {
-		clusterFeature.Status.MatchingClusters = []corev1.ObjectReference{
+		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
@@ -451,7 +456,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		clusterFeature.Status.MatchingClusters = []corev1.ObjectReference{
+		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
@@ -506,7 +511,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		clusterFeature.Status.MatchingClusters = []corev1.ObjectReference{
+		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
@@ -514,11 +519,11 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 		clusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{
-				Namespace: "x-" + util.RandomString(5),
-				Name:      "y-" + util.RandomString(5),
+				Namespace: "x-" + randomString(),
+				Name:      "y-" + randomString(),
 			},
 		}
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuos
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
 		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
@@ -529,15 +534,16 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					SyncMode: configv1alpha1.SyncModeContinuos,
+					SyncMode: configv1alpha1.SyncModeContinuous,
 					WorkloadRoleRefs: []corev1.ObjectReference{
 						{
-							Name: "c-" + util.RandomString(5),
+							Name: "c-" + randomString(),
 						},
 					},
 				},
 			},
 		}
+		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
 			clusterFeature,
@@ -581,7 +587,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName:             matchingCluster.Name,
 					clusterv1.MachineControlPlaneLabelName: "ok",
@@ -591,7 +597,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		workerMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName: matchingCluster.Name,
 				},
@@ -623,7 +629,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		cps, err := controllers.GetMachinesForCluster(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(len(cps.Items)).To(Equal(2))
 	})
@@ -632,7 +638,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName:             matchingCluster.Name,
 					clusterv1.MachineControlPlaneLabelName: "ok",
@@ -644,7 +650,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		workerMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName: matchingCluster.Name,
 				},
@@ -675,7 +681,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		ready, err := controllers.IsClusterReadyToBeConfigured(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(ready).To(Equal(true))
 	})
@@ -684,7 +690,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName:             matchingCluster.Name,
 					clusterv1.MachineControlPlaneLabelName: "ok",
@@ -694,7 +700,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		workerMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name + util.RandomString(5),
+				Name:      matchingCluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName: matchingCluster.Name,
 				},
@@ -728,7 +734,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		ready, err := controllers.IsClusterReadyToBeConfigured(reconciler, context.TODO(),
-			clusterFeatureScope, corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(ready).To(Equal(false))
 	})
@@ -745,11 +751,11 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		namespace = "reconcile" + util.RandomString(5)
+		namespace = "reconcile" + randomString()
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + util.RandomString(5),
+				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
 					"env":  "qa",
@@ -760,7 +766,7 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 
 		matchingClusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: selector,
@@ -769,7 +775,7 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 
 		nonMatchingClusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + util.RandomString(5),
+				Name: clusterFeatureNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
 				ClusterSelector: configv1alpha1.Selector("env=production"),
@@ -818,7 +824,7 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster.Namespace,
-				Name:      cluster.Name + util.RandomString(5),
+				Name:      cluster.Name + randomString(),
 				Labels: map[string]string{
 					clusterv1.ClusterLabelName:             cluster.Name,
 					clusterv1.MachineControlPlaneLabelName: "ok",

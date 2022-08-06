@@ -26,6 +26,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -40,21 +41,23 @@ type feature struct {
 
 func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
 	f feature, logger logr.Logger) error {
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
 		"clustername", clusterSummary.Spec.ClusterNamespace,
 		"applicant", clusterSummary.Name,
 		"feature", string(f.id))
-	logger.V(5).Info("request to deploy")
+	logger.V(logs.LogDebug).Info("request to deploy")
 
 	// If undeploying feature is in progress, wait for it to complete.
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(f.id), true) {
-		logger.V(5).Info("cleanup is in progress")
-		return fmt.Errorf(fmt.Sprintf("cleanup of %s still in progress. Wait before redeploying", string(f.id)))
+
+		logger.V(logs.LogDebug).Info("cleanup is in progress")
+		return fmt.Errorf("cleanup of %s still in progress. Wait before redeploying", string(f.id))
 	}
 
 	// Get hash of current configuration (at this very precise moment)
@@ -65,14 +68,14 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	hash := r.getHash(clusterSummaryScope, f.id)
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
-		logger.V(5).Info(fmt.Sprintf("configuration has changed. Current hash %q. Previous hash %q",
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("configuration has changed. Current hash %q. Previous hash %q",
 			currentHash, hash))
 	}
 
 	deployed := r.isFeatureDeployed(clusterSummaryScope, f.id)
 	if deployed && isConfigSame {
 		// feature is deployed and nothing has changed. Nothing to do.
-		logger.V(5).Info("feature is deployed and hash has not changed")
+		logger.V(logs.LogDebug).Info("feature is deployed and hash has not changed")
 		return nil
 	}
 
@@ -81,7 +84,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Feature is not deployed yet
 	if isConfigSame {
-		logger.V(5).Info("hash has not changed")
+		logger.V(logs.LogDebug).Info("hash has not changed")
 		result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(f.id), false)
 		status = r.convertResultStatus(result)
@@ -89,7 +92,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	}
 
 	if status != nil {
-		logger.V(5).Info("result is available. updating status.")
+		logger.V(logs.LogDebug).Info("result is available. updating status.")
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
 		if *status == configv1alpha1.FeatureStatusProvisioned {
 			return nil
@@ -98,7 +101,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 			return fmt.Errorf("feature is still being provisioned")
 		}
 	} else {
-		logger.V(5).Info("no result is available. mark status as provisioning")
+		logger.V(logs.LogDebug).Info("no result is available. mark status as provisioning")
 		s := configv1alpha1.FeatureStatusProvisioning
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
@@ -106,7 +109,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
-	logger.V(5).Info("queueing request to deploy")
+	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), false, f.deploy); err != nil {
 		return err
@@ -117,24 +120,26 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
 	f feature, logger logr.Logger) error {
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
 		"clustername", clusterSummary.Spec.ClusterNamespace,
 		"applicant", clusterSummary.Name)
-	logger.V(5).Info("request to un-deploy")
+	logger.V(logs.LogDebug).Info("request to un-deploy")
 
 	// If deploying feature is in progress, wait for it to complete.
 	// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
 	// parallel some resources might be left over.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(f.id), false) {
-		logger.V(5).Info("provisioning is in progress")
-		return fmt.Errorf(fmt.Sprintf("deploying %s still in progress. Wait before cleanup", string(f.id)))
+
+		logger.V(logs.LogDebug).Info("provisioning is in progress")
+		return fmt.Errorf("deploying %s still in progress. Wait before cleanup", string(f.id))
 	}
 
 	if r.isFeatureRemoved(clusterSummaryScope, f.id) {
-		logger.V(5).Info("feature is removed")
+		logger.V(logs.LogDebug).Info("feature is removed")
 		// feature is removed. Nothing to do.
 		return nil
 	}
@@ -155,13 +160,13 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 			return nil
 		}
 	} else {
-		logger.V(5).Info("no result is available. mark status as removing")
+		logger.V(logs.LogDebug).Info("no result is available. mark status as removing")
 		s := configv1alpha1.FeatureStatusRemoving
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
 	}
 
-	logger.V(5).Info("queueing request to un-deploy")
+	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), true, f.deploy); err != nil {
 		return err
@@ -174,6 +179,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 // is set to Provisioned).
 func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummaryScope *scope.ClusterSummaryScope,
 	featureID configv1alpha1.FeatureID) bool {
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
@@ -191,6 +197,7 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummaryScope *scope.
 // is set to Removed).
 func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummaryScope *scope.ClusterSummaryScope,
 	featureID configv1alpha1.FeatureID) bool {
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
@@ -208,6 +215,7 @@ func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummaryScope *scope.C
 // was processed.
 func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSummaryScope,
 	featureID configv1alpha1.FeatureID) []byte {
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
@@ -222,11 +230,12 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope,
 	featureID configv1alpha1.FeatureID, status *configv1alpha1.FeatureStatus, hash []byte, statusError error,
 	logger logr.Logger) {
+
 	if status == nil {
 		return
 	}
 	logger = logger.WithValues("hash", hash, "status", *status)
-	logger.V(5).Info("updating clustersummary status")
+	logger.V(logs.LogDebug).Info("updating clustersummary status")
 	switch *status {
 	case configv1alpha1.FeatureStatusProvisioned:
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioned, hash)

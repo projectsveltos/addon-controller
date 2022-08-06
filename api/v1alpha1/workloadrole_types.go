@@ -79,6 +79,7 @@ type WorkloadRoleList struct {
 	Items           []WorkloadRole `json:"items"`
 }
 
+// nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&WorkloadRole{}, &WorkloadRoleList{})
 }

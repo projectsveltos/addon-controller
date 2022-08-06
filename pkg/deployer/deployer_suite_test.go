@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"k8s.io/klog/v2/klogr"
+	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
@@ -51,3 +52,8 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	cancel()
 })
+
+func randomString() string {
+	const length = 10
+	return util.RandomString(length)
+}

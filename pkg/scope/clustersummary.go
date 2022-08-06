@@ -97,6 +97,7 @@ func (s *ClusterSummaryScope) initializeFeatureStatusSummary() {
 // SetFeatureStatus sets the feature status.
 func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1alpha1.FeatureID,
 	status configv1alpha1.FeatureStatus, hash []byte) {
+
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].Status = status

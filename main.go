@@ -39,15 +39,17 @@ import (
 )
 
 var (
-	setupLog = ctrl.Log.WithName("setup")
-)
-
-var (
+	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
 	enableLeaderElection bool
 	probeAddr            string
 	workers              int
 	concurrentReconciles int
+)
+
+const (
+	defaultReconcilers = 10
+	defaultWorkers     = 10
 )
 
 func main() {
@@ -90,12 +92,14 @@ func main() {
 	}
 
 	ctx := context.Background()
-	deployer := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
-	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureRole)); err != nil {
+	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureRole))
+	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureRole")
 		os.Exit(1)
 	}
-	if err := deployer.RegisterFeatureID(string(configv1alpha1.FeatureKyverno)); err != nil {
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))
+	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureKyerno")
 		os.Exit(1)
 	}
@@ -115,7 +119,7 @@ func main() {
 	if err = (&controllers.ClusterSummaryReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
-		Deployer:             deployer,
+		Deployer:             d,
 		ReferenceMap:         make(map[string]*controllers.Set),
 		ClusterSummaryMap:    make(map[string]*controllers.Set),
 		Mux:                  sync.Mutex{},
@@ -143,29 +147,29 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
-	flag.StringVar(&metricsAddr,
+	fs.StringVar(&metricsAddr,
 		"metrics-bind-address",
 		":8080",
 		"The address the metric endpoint binds to.")
 
-	flag.StringVar(&probeAddr,
+	fs.StringVar(&probeAddr,
 		"health-probe-bind-address",
 		":8081",
 		"The address the probe endpoint binds to.")
 
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	fs.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 
-	flag.IntVar(
+	fs.IntVar(
 		&workers,
 		"worker-number",
-		10,
+		defaultWorkers,
 		"Number of worker. Workers are used to deploy features in CAPI clusters")
 
-	flag.IntVar(
+	fs.IntVar(
 		&concurrentReconciles,
 		"concurrent-reconciles",
-		10,
+		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
 }

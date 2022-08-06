@@ -35,11 +35,11 @@ var (
 )
 
 var (
-	GetSecretData          = getSecretData
-	GetKubernetesClient    = getKubernetesClient
-	AddClusterSummaryLabel = addClusterSummaryLabel
-	CreateNamespace        = createNamespace
-	GetEntryKey            = getEntryKey
+	GetSecretData       = getSecretData
+	GetKubernetesClient = getKubernetesClient
+	AddLabel            = addLabel
+	CreateNamespace     = createNamespace
+	GetEntryKey         = getEntryKey
 
 	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
 	DeployClusterWorkloadRole    = deployClusterWorkloadRole
@@ -78,10 +78,6 @@ var (
 	GetUnstructured        = getUnstructured
 )
 
-const (
-	ClusterSummaryLabelName = clusterSummaryLabelName
-)
-
 var (
 	Insert = (*Set).insert
 	Erase  = (*Set).erase
@@ -92,6 +88,7 @@ var (
 
 func GetFeature(featureID configv1alpha1.FeatureID, getHash getCurrentHash,
 	deploy deployer.RequestHandler) *feature {
+
 	return &feature{
 		id:          featureID,
 		currentHash: getHash,

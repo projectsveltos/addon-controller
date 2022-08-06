@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -41,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -145,8 +145,23 @@ func (r *ClusterFeatureReconciler) reconcileDelete(
 
 	logger := clusterFeatureScope.Logger
 	logger.Info("Reconciling ClusterFeature delete")
-	logger.Info("Reconcile delete success")
 
+	clusterFeatureScope.SetMatchingClusterRefs(nil)
+
+	if err := r.cleanClusterSummaries(ctx, clusterFeatureScope); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if !r.canRemoveFinalizer(ctx, clusterFeatureScope) {
+		logger.V(logs.LogDebug).Info("Cannot remove finalizer yet")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
+	if controllerutil.ContainsFinalizer(clusterFeatureScope.ClusterFeature, configv1alpha1.ClusterFeatureFinalizer) {
+		controllerutil.RemoveFinalizer(clusterFeatureScope.ClusterFeature, configv1alpha1.ClusterFeatureFinalizer)
+	}
+
+	logger.Info("Reconcile delete success")
 	return reconcile.Result{}, nil
 }
 
@@ -169,7 +184,7 @@ func (r *ClusterFeatureReconciler) reconcileNormal(
 		return reconcile.Result{}, err
 	}
 
-	clusterFeatureScope.SetMatchingClusters(matchingCluster)
+	clusterFeatureScope.SetMatchingClusterRefs(matchingCluster)
 
 	r.updatesMaps(clusterFeatureScope)
 
@@ -260,23 +275,23 @@ func (r *ClusterFeatureReconciler) getMatchingClusters(ctx context.Context, clus
 // - creates corresponding ClusterSummary if one does not exist already
 // - updates (eventually) corresponding ClusterSummary if one already exists
 func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
-	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
-		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
-		ready, err := r.isClusterReadyToBeConfigured(ctx, clusterFeatureScope, cluster)
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
+		ready, err := r.isClusterReadyToBeConfigured(ctx, clusterFeatureScope, &cluster)
 		if err != nil {
 			return err
 		}
 		if !ready {
-			clusterFeatureScope.Logger.V(5).Info(fmt.Sprintf("Cluster %s/%s is not ready yet",
+			clusterFeatureScope.Logger.V(logs.LogDebug).Info(fmt.Sprintf("Cluster %s/%s is not ready yet",
 				cluster.Namespace, cluster.Name))
 			continue
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{}
-		clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
-		if err := r.Get(ctx, types.NamespacedName{Name: clusterSummaryName}, clusterSummary); err != nil {
+		_, err = GetClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+		if err != nil {
 			if apierrors.IsNotFound(err) {
-				if err := r.createClusterSummary(ctx, clusterFeatureScope, cluster); err != nil {
+				err = r.createClusterSummary(ctx, clusterFeatureScope, &cluster)
+				if err != nil {
 					clusterFeatureScope.Logger.Error(err, fmt.Sprintf("failed to create ClusterSummary for cluster %s/%s",
 						cluster.Namespace, cluster.Name))
 				}
@@ -286,7 +301,8 @@ func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, c
 				return err
 			}
 		} else {
-			if err := r.updateClusterSummary(ctx, clusterFeatureScope, cluster); err != nil {
+			err = r.updateClusterSummary(ctx, clusterFeatureScope, &cluster)
+			if err != nil {
 				clusterFeatureScope.Logger.Error(err, "failed to update ClusterSummary for cluster %s/%s",
 					cluster.Namespace, cluster.Name)
 				return err
@@ -302,18 +318,32 @@ func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, c
 func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
 	matching := make(map[string]bool)
 
-	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
-		reference := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
-		clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), reference.Namespace, reference.Name)
-		matching[clusterSummaryName] = true
+	getClusterInfo := func(clusterNamespace, clusterName string) string {
+		return fmt.Sprintf("%s-%s", clusterNamespace, clusterName)
+	}
+
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		reference := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
+		clusterName := getClusterInfo(reference.Namespace, reference.Name)
+		matching[clusterName] = true
+	}
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			ClusterFeatureLabelName: clusterFeatureScope.Name(),
+		},
 	}
 
 	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	if err := r.List(ctx, clusterSummaryList, listOptions...); err != nil {
+		return err
+	}
+
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterFeatureScope.ClusterFeature) {
-			if _, ok := matching[cs.Name]; !ok {
-				if err := r.deleteClusterSummary(ctx, cs); err != nil {
+			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName)]; !ok {
+				if err := r.deleteClusterSummary(ctx, clusterFeatureScope, cs); err != nil {
 					clusterFeatureScope.Logger.Error(err, "failed to update ClusterSummary for cluster %s/%s",
 						cs.Namespace, cs.Name)
 					return err
@@ -327,7 +357,8 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 
 // createClusterSummary creates ClusterSummary given a ClusterFeature and a matching CAPI Cluster
 func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
-	cluster corev1.ObjectReference) error {
+	cluster *corev1.ObjectReference) error {
+
 	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 
 	clusterSummary := &configv1alpha1.ClusterSummary{
@@ -349,21 +380,24 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
+	addLabel(clusterSummary, ClusterFeatureLabelName, clusterFeatureScope.Name())
+	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
+	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
+
 	return r.Create(ctx, clusterSummary)
 }
 
 // updateClusterSummary updates if necessary ClusterSummary given a ClusterFeature and a matching CAPI Cluster.
 // If ClusterFeature.Spec.SyncMode is set to one time, nothing will happen
 func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
-	cluster corev1.ObjectReference) error {
-	if !clusterFeatureScope.IsContinuosSync() {
+	cluster *corev1.ObjectReference) error {
+
+	if !clusterFeatureScope.IsContinuousSync() {
 		return nil
 	}
 
-	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-
-	if err := r.Get(ctx, types.NamespacedName{Name: clusterSummaryName}, clusterSummary); err != nil {
+	clusterSummary, err := GetClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+	if err != nil {
 		return err
 	}
 
@@ -377,7 +411,10 @@ func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clu
 }
 
 // deleteClusterSummary deletes ClusterSummary given a ClusterFeature and a matching CAPI Cluster
-func (r *ClusterFeatureReconciler) deleteClusterSummary(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary) error {
+func (r *ClusterFeatureReconciler) deleteClusterSummary(ctx context.Context,
+	clusterFeatureScope *scope.ClusterFeatureScope,
+	clusterSummary *configv1alpha1.ClusterSummary) error {
+
 	return r.Delete(ctx, clusterSummary)
 }
 
@@ -386,8 +423,9 @@ func (r *ClusterFeatureReconciler) deleteClusterSummary(ctx context.Context, clu
 func (r *ClusterFeatureReconciler) isClusterReadyToBeConfigured(
 	ctx context.Context,
 	clusterFeatureScope *scope.ClusterFeatureScope,
-	cluster corev1.ObjectReference,
+	cluster *corev1.ObjectReference,
 ) (bool, error) {
+
 	machineList, err := r.getMachinesForCluster(ctx, clusterFeatureScope, cluster)
 	if err != nil {
 		return false, err
@@ -396,6 +434,7 @@ func (r *ClusterFeatureReconciler) isClusterReadyToBeConfigured(
 	for i := range machineList.Items {
 		if util.IsControlPlaneMachine(&machineList.Items[i]) &&
 			machineList.Items[i].Status.GetTypedPhase() == clusterv1.MachinePhaseRunning {
+
 			return true, nil
 		}
 	}
@@ -407,8 +446,9 @@ func (r *ClusterFeatureReconciler) isClusterReadyToBeConfigured(
 func (r *ClusterFeatureReconciler) getMachinesForCluster(
 	ctx context.Context,
 	clusterFeatureScope *scope.ClusterFeatureScope,
-	cluster corev1.ObjectReference,
+	cluster *corev1.ObjectReference,
 ) (*clusterv1.MachineList, error) {
+
 	listOptions := []client.ListOption{
 		client.InNamespace(cluster.Namespace),
 		client.MatchingLabels{clusterv1.ClusterLabelName: cluster.Name},
@@ -419,15 +459,15 @@ func (r *ClusterFeatureReconciler) getMachinesForCluster(
 			cluster.Namespace, cluster.Name))
 		return nil, err
 	}
-	clusterFeatureScope.V(5).Info(fmt.Sprintf("Found %d machine", len(machineList.Items)))
+	clusterFeatureScope.V(logs.LogDebug).Info(fmt.Sprintf("Found %d machine", len(machineList.Items)))
 
 	return &machineList, nil
 }
 
 func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.ClusterFeatureScope) {
 	currentClusters := &Set{}
-	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
-		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
 		clusterName := cluster.Namespace + "/" + cluster.Name
 		currentClusters.insert(clusterName)
 	}
@@ -442,8 +482,8 @@ func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.Cluste
 	}
 
 	// For each currently matching Cluster, add ClusterFeature as consumer
-	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusters {
-		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusters[i]
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
 		clusterName := cluster.Namespace + "/" + cluster.Name
 		r.getClusterMapForEntry(clusterName).insert(clusterFeatureScope.Name())
 	}
@@ -466,4 +506,23 @@ func (r *ClusterFeatureReconciler) getClusterMapForEntry(entry string) *Set {
 		r.ClusterMap[entry] = s
 	}
 	return s
+}
+
+// canRemoveFinalizer returns true if there is no ClusterSummary left created by this
+// ClusterFeature instance
+func (r *ClusterFeatureReconciler) canRemoveFinalizer(ctx context.Context,
+	clusterFeatureScope *scope.ClusterFeatureScope,
+) bool {
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{ClusterFeatureLabelName: clusterFeatureScope.Name()},
+	}
+
+	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	if err := r.List(ctx, clusterSummaryList, listOptions...); err != nil {
+		clusterFeatureScope.Logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list clustersummaries. err %v", err))
+		return false
+	}
+
+	return len(clusterSummaryList.Items) == 0
 }

@@ -26,6 +26,8 @@ import (
 
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
 // A "request" represents the need to deploy a feature in a CAPI cluster.
@@ -79,7 +81,7 @@ func (d *deployer) startWorkloadWorkers(ctx context.Context, numOfWorker int, lo
 	controlClusterClient = d.Client
 
 	for i := 0; i < numOfWorker; i++ {
-		go processRequests(d, i, logger.WithValues("worker", fmt.Sprintf("%d", i)))
+		go processRequests(ctx, d, i, logger.WithValues("worker", fmt.Sprintf("%d", i)))
 	}
 }
 
@@ -96,10 +98,12 @@ func GetKey(clusterNamespace, clusterName, applicant, featureID string, cleanup 
 // cluster where feature needs to be deployed;
 // - featureID is a unique identifier for the feature that needs to be deployed;
 // - cleanup indicates whether this key is for a feature to be deployed or removed
+// nolint: gocritic // getkey and getfromkey are symmetric
 func getFromKey(key string) (namespace, name, applicant, featureID string, cleanup bool, err error) {
 	info := strings.Split(key, separator)
-	if len(info) != 5 {
-		err = fmt.Errorf(fmt.Sprintf("Key: %s is malformed", key))
+	const length = 5
+	if len(info) != length {
+		err = fmt.Errorf("key: %s is malformed", key)
 		return
 	}
 	namespace = info[0]
@@ -110,11 +114,11 @@ func getFromKey(key string) (namespace, name, applicant, featureID string, clean
 	return
 }
 
-func processRequests(d *deployer, i int, logger logr.Logger) {
+func processRequests(ctx context.Context, d *deployer, i int, logger logr.Logger) {
 	id := i
 	var params *requestParams
 
-	logger.V(1).Info(fmt.Sprintf("started worker %d", id))
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("started worker %d", id))
 
 	for {
 		if params != nil {
@@ -124,7 +128,7 @@ func processRequests(d *deployer, i int, logger logr.Logger) {
 			if err != nil {
 				storeResult(d, params.key, err, params.handler, logger)
 			} else {
-				err = params.handler(d.ctx, controlClusterClient,
+				err = params.handler(ctx, controlClusterClient,
 					ns, name, applicant, featureID,
 					l)
 				storeResult(d, params.key, err, params.handler, logger)
@@ -139,22 +143,22 @@ func processRequests(d *deployer, i int, logger logr.Logger) {
 				params = &requestParams{key: d.jobQueue[0].key, handler: d.jobQueue[0].handler}
 				d.jobQueue = d.jobQueue[1:]
 				l := logger.WithValues("key", params.key)
-				l.V(10).Info("take from jobQueue")
+				l.V(logs.LogVerbose).Info("take from jobQueue")
 				// Add to inProgress
-				l.V(10).Info("add to inProgress")
+				l.V(logs.LogVerbose).Info("add to inProgress")
 				d.inProgress = append(d.inProgress, params.key)
 				// If present remove from dirty
 				for i := range d.dirty {
 					if d.dirty[i] == params.key {
-						l.V(10).Info("remove from dirty")
+						l.V(logs.LogVerbose).Info("remove from dirty")
 						d.dirty = removeFromSlice(d.dirty, i)
 						break
 					}
 				}
 			}
 			d.mu.Unlock()
-		case <-d.ctx.Done():
-			logger.V(1).Info("context cancelled")
+		case <-ctx.Done():
+			logger.V(logs.LogInfo).Info("context canceled")
 			return
 		}
 	}
@@ -172,15 +176,17 @@ func storeResult(d *deployer, key string, err error, handler RequestHandler, log
 		if d.inProgress[i] != key {
 			continue
 		}
-		logger.V(10).Info("remove from inProgress")
+		logger.V(logs.LogVerbose).Info("remove from inProgress")
 		d.inProgress = removeFromSlice(d.inProgress, i)
 		break
 	}
 
+	l := logger.WithValues("key", key)
+
 	if err != nil {
-		logger.V(5).Info(fmt.Sprintf("added to result with err %s", err.Error()))
+		l.V(logs.LogDebug).Info(fmt.Sprintf("added to result with err %s", err.Error()))
 	} else {
-		logger.V(5).Info("added to result")
+		l.V(logs.LogDebug).Info("added to result")
 	}
 	d.results[key] = err
 
@@ -189,11 +195,11 @@ func storeResult(d *deployer, key string, err error, handler RequestHandler, log
 		if d.dirty[i] != key {
 			continue
 		}
-		logger.V(10).Info("add to jobQueue")
+		l.V(logs.LogVerbose).Info("add to jobQueue")
 		d.jobQueue = append(d.jobQueue, requestParams{key: d.dirty[i], handler: handler})
-		logger.V(10).Info("remove from dirty")
+		l.V(logs.LogVerbose).Info("remove from dirty")
 		d.dirty = removeFromSlice(d.dirty, i)
-		logger.V(10).Info("remove result")
+		l.V(logs.LogVerbose).Info("remove result")
 		delete(d.results, key)
 		break
 	}
@@ -215,11 +221,11 @@ func getRequestStatus(d *deployer, clusterNamespace, clusterName, applicant, fea
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	logger.V(5).Info("searching result")
+	logger.V(logs.LogDebug).Info("searching result")
 	if _, ok := d.results[key]; ok {
-		logger.V(5).Info("request already processed, result present. returning result.")
+		logger.V(logs.LogDebug).Info("request already processed, result present. returning result.")
 		if d.results[key] != nil {
-			logger.V(5).Info("returning a response with an error")
+			logger.V(logs.LogDebug).Info("returning a response with an error")
 		}
 		resp := responseParams{
 			requestParams: requestParams{
@@ -227,28 +233,28 @@ func getRequestStatus(d *deployer, clusterNamespace, clusterName, applicant, fea
 			},
 			err: d.results[key],
 		}
-		logger.V(5).Info("removing result")
+		logger.V(logs.LogDebug).Info("removing result")
 		delete(d.results, key)
 		return &resp, nil
 	}
 
 	for i := range d.inProgress {
 		if d.inProgress[i] == key {
-			logger.V(5).Info("request is still in inProgress, so being processed")
+			logger.V(logs.LogDebug).Info("request is still in inProgress, so being processed")
 			return nil, nil
 		}
 	}
 
 	for i := range d.jobQueue {
 		if d.jobQueue[i].key == key {
-			logger.V(5).Info("request is still in jobQueue, so waiting to be processed.")
+			logger.V(logs.LogDebug).Info("request is still in jobQueue, so waiting to be processed.")
 			return nil, nil
 		}
 	}
 
 	// if we get here it means, we have no response for this workload cluster, nor the
 	// request is queued or being processed
-	logger.V(5).Info("request has not been processed nor is currently queued.")
+	logger.V(logs.LogDebug).Info("request has not been processed nor is currently queued.")
 	return nil, fmt.Errorf("request has not been processed nor is currently queued")
 }
 

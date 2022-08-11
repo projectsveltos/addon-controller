@@ -25,6 +25,7 @@ import (
 	"github.com/go-logr/logr"
 	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	"github.com/pkg/errors"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -32,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer/yaml"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached"
@@ -84,6 +84,9 @@ func InitScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := kyvernoapi.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := monitoringv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -276,8 +279,8 @@ func getUnstructured(object []byte) (*unstructured.Unstructured, error) {
 	return request, nil
 }
 
-// getDynamicResourceInterface returns a dynamic ResourceInterface for the GroupVersionKind of elemen
-func getDynamicResourceInterface(config *rest.Config, element []byte) (dynamic.ResourceInterface, error) {
+// getDynamicResourceInterface returns a dynamic ResourceInterface for the policy's GroupVersionKind
+func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstructured) (dynamic.ResourceInterface, error) {
 	if config == nil {
 		return nil, fmt.Errorf("rest.Config is nil")
 	}
@@ -287,12 +290,8 @@ func getDynamicResourceInterface(config *rest.Config, element []byte) (dynamic.R
 		return nil, err
 	}
 
-	var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
-	obj := &unstructured.Unstructured{}
-	_, gvk, err := decUnstructured.Decode(element, nil, obj)
-	if err != nil {
-		return nil, err
-	}
+	gvk := policy.GroupVersionKind()
+
 	dc, err := discovery.NewDiscoveryClientForConfig(config)
 	if err != nil {
 		return nil, err
@@ -305,7 +304,7 @@ func getDynamicResourceInterface(config *rest.Config, element []byte) (dynamic.R
 	var dr dynamic.ResourceInterface
 	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
 		// namespaced resources should specify the namespace
-		dr = dynClient.Resource(mapping.Resource).Namespace(obj.GetNamespace())
+		dr = dynClient.Resource(mapping.Resource).Namespace(policy.GetNamespace())
 	} else {
 		// for cluster-wide resources
 		dr = dynClient.Resource(mapping.Resource)
@@ -334,14 +333,6 @@ func preprareObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
 	object.SetResourceVersion(currentObject.GetResourceVersion())
 
 	return nil
-}
-
-func getUnstructuredName(policy *unstructured.Unstructured) string {
-	if policy.GetNamespace() == "" {
-		return policy.GetName()
-	}
-
-	return fmt.Sprintf("%s/%s", policy.GetNamespace(), policy.GetName())
 }
 
 func getEntryKey(resourceKind ReferencedKinds, resourceNamespace, resourceName string) string {

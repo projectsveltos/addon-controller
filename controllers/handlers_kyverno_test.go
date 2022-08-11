@@ -52,8 +52,6 @@ var _ = Describe("HandlersKyverno", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		logger = klogr.New()
-
 		namespace = "reconcile" + randomString()
 
 		logger = klogr.New()
@@ -119,7 +117,7 @@ var _ = Describe("HandlersKyverno", func() {
 
 	})
 
-	It("deployKyvernoInWorklaodCluster installs kyverno in a cluster", func() {
+	It("deployKyvernoInWorklaodCluster installs kyverno CRDs in a cluster", func() {
 		Expect(controllers.DeployKyvernoInWorklaodCluster(context.TODO(), testEnv, 1, klogr.New())).To(Succeed())
 
 		customResourceDefinitions := &apiextensionsv1.CustomResourceDefinitionList{}
@@ -142,8 +140,8 @@ var _ = Describe("HandlersKyverno", func() {
 
 	It("deployKyvernoPolicy creates and updates kyverno policies", func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), checkSa)
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), checkSa)
 
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			PolicyRefs: []corev1.ObjectReference{
@@ -167,21 +165,25 @@ var _ = Describe("HandlersKyverno", func() {
 
 		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
-		// Get current clustersummary as we need Status.KyvernoPolicyPrefix to be set
+		// Get current clustersummary as we need Status.PolicyPrefix to be set
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
 		currentKyvernos := make(map[string]bool)
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() error {
-			return controllers.DeployKyvernoPolicy(context.TODO(), testEnv.Config, testEnv.Client, configMap1,
-				currentClusterSummary, currentKyvernos, logger)
-		}, timeout, pollingInterval).Should(BeNil())
+		Expect(controllers.DeployKyvernoPolicy(context.TODO(), testEnv.Config, testEnv.Client, configMap1,
+			currentClusterSummary, currentKyvernos, logger)).To(Succeed())
 
-		clusterPolicyList := &kyvernoapi.ClusterPolicyList{}
-		Expect(testEnv.List(context.TODO(), clusterPolicyList)).To(Succeed())
-		Expect(len(clusterPolicyList.Items)).ToNot(BeZero())
-		kyvernoPolicyName := controllers.GetKyvernoPolicyName("add-labels", currentClusterSummary)
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			clusterPolicyList := &kyvernoapi.ClusterPolicyList{}
+			err := testEnv.List(context.TODO(), clusterPolicyList)
+			if err != nil {
+				return false
+			}
+			return len(clusterPolicyList.Items) > 0
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		kyvernoPolicyName := controllers.GetPolicyName("add-labels", currentClusterSummary)
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
@@ -196,7 +198,7 @@ var _ = Describe("HandlersKyverno", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		version := configMap1.GetResourceVersion()
-		configMap1 = createConfigMapWithKyvernoPolicy(configMapNs, configMap1.Name, addLabelPolicyStr, allowLabelChangeStr)
+		configMap1 = createConfigMapWithPolicy(configMapNs, configMap1.Name, addLabelPolicyStr, allowLabelChangeStr)
 		configMap1.SetResourceVersion(version)
 
 		Expect(testEnv.Update(context.TODO(), configMap1)).To(Succeed())
@@ -208,7 +210,7 @@ var _ = Describe("HandlersKyverno", func() {
 			if err != nil {
 				return false
 			}
-			kyvernoPolicyName := controllers.GetKyvernoPolicyName("allowed-label-changes", currentClusterSummary)
+			kyvernoPolicyName := controllers.GetPolicyName("allowed-label-changes", currentClusterSummary)
 			clusterPolicy := &kyvernoapi.ClusterPolicy{}
 			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: kyvernoPolicyName}, clusterPolicy)
 			if err != nil {
@@ -218,80 +220,6 @@ var _ = Describe("HandlersKyverno", func() {
 			return ok &&
 				v == clusterSummary.Name
 		}, timeout, pollingInterval).Should(BeTrue())
-	})
-
-	It(`undeployStaleKyvernoResources removes all Policy/ClusterPolicy created by
-		a ClusterSummary due to ConfigMaps not referenced anymore`, func() {
-		configMapNs := randomString()
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), checkSa)
-
-		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
-			PolicyRefs: []corev1.ObjectReference{
-				{Namespace: configMapNs, Name: configMap1.Name},
-				{Namespace: configMapNs, Name: configMap2.Name},
-			},
-		}
-
-		clusterSummary.Status.PolicyPrefix = "cs-" + randomString()
-
-		// add-labels is the name of addLabelPolicyStr
-		kyvernoName1 := controllers.GetKyvernoPolicyName("add-labels", clusterSummary)
-		kyverno1 := &kyvernoapi.ClusterPolicy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   kyvernoName1,
-				Labels: map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
-			},
-		}
-		// check-sa is the name of check-sa
-		kyvernoName2 := controllers.GetKyvernoPolicyName("checkSa", clusterSummary)
-		kyverno2 := &kyvernoapi.Policy{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      kyvernoName2,
-				Namespace: "default",
-				Labels:    map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name},
-			},
-		}
-
-		initObjects := []client.Object{
-			kyverno1,
-			kyverno2,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		currentKyvernos := map[string]bool{}
-		currentKyvernos[kyvernoName1] = true
-		currentKyvernos[kyvernoName2] = true
-
-		// undeployStaleKyvernoResources finds all Policy/ClusterPolicy deployed because of clusterSummary and
-		// removes the stale ones.
-		err := controllers.UndeployStaleKyvernoResources(context.TODO(), c, clusterSummary, currentKyvernos, klogr.New())
-		Expect(err).To(BeNil())
-
-		// Since ClusterSummary is referencing configMap, expect ClusterPolicy to not be deleted
-		clusterPolicyList := &kyvernoapi.ClusterPolicyList{}
-		Expect(c.List(context.TODO(), clusterPolicyList)).To(Succeed())
-		Expect(len(clusterPolicyList.Items)).To(Equal(1))
-
-		// Since ClusterSummary is referencing configMap, expect Policy to not be deleted
-		policyList := &kyvernoapi.PolicyList{}
-		Expect(c.List(context.TODO(), policyList)).To(Succeed())
-		Expect(len(policyList.Items)).To(Equal(1))
-
-		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs = nil
-		delete(currentKyvernos, kyvernoName1)
-		delete(currentKyvernos, kyvernoName2)
-		err = controllers.UndeployStaleKyvernoResources(context.TODO(), c, clusterSummary, currentKyvernos, klogr.New())
-		Expect(err).To(BeNil())
-
-		// Since ClusterSummary is not referencing configMap with ClusterPolicy, expect ClusterPolicy to be deleted
-		Expect(c.List(context.TODO(), clusterPolicyList)).To(Succeed())
-		Expect(len(clusterPolicyList.Items)).To(Equal(0))
-
-		// Since ClusterSummary is not referencing configMap with Policy, expect Policy to be deleted
-		Expect(c.List(context.TODO(), policyList)).To(Succeed())
-		Expect(len(policyList.Items)).To(Equal(0))
 	})
 
 	It("unDeployKyverno does nothing when CAPI Cluster is not found", func() {
@@ -342,30 +270,46 @@ var _ = Describe("HandlersKyverno", func() {
 			},
 		}
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), kyverno0)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), kyverno1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), kyverno2)).To(Succeed())
+
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
-
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() error {
-			return controllers.UnDeployKyverno(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-				string(configv1alpha1.FeatureRole), logger)
-		}, timeout, pollingInterval).Should(BeNil())
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureKyverno,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+				DeployedGroupVersionKind: []string{
+					"ClusterPolicy.v1.kyverno.io",
+					"Policy.v1.kyverno.io",
+				},
+			},
+		}
+		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(controllers.UnDeployKyverno(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+			string(configv1alpha1.FeatureKyverno), logger)).To(Succeed())
 
 		// UnDeployKyverno finds all kyverno policies deployed because of a clusterSummary and deletes those.
 		// Expect all kyverno policies but Kyverno0 (ClusterSummaryLabelName is not set on it) to be deleted.
 
 		clusterPolicy := &kyvernoapi.ClusterPolicy{}
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: kyverno0.Name}, clusterPolicy)).To(Succeed())
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: kyverno1.Name}, clusterPolicy)
+			err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: kyverno0.Name}, clusterPolicy)
+			if err != nil {
+				return false
+			}
+			err = testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: kyverno1.Name}, clusterPolicy)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -455,7 +399,7 @@ var _ = Describe("HandlersKyverno", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		By("Creating ConfigMap with Kyverno ClusterPolicy")
-		configMap := createConfigMapWithKyvernoPolicy(namespace, randomString(), addLabelPolicyStr)
+		configMap := createConfigMapWithPolicy(namespace, randomString(), addLabelPolicyStr)
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 
 		By("Updating ClusterSummary to reference ConfigMap")
@@ -479,7 +423,7 @@ var _ = Describe("HandlersKyverno", func() {
 			}
 
 			// add-labels is the name of the policy addLabelPolicyStr
-			kyvernoName := controllers.GetKyvernoPolicyName("add-labels", currentClusterSummary)
+			kyvernoName := controllers.GetPolicyName("add-labels", currentClusterSummary)
 			clusterPolicy := &kyvernoapi.ClusterPolicy{}
 			return testEnv.Get(context.TODO(),
 				types.NamespacedName{Name: kyvernoName}, clusterPolicy)
@@ -490,8 +434,8 @@ var _ = Describe("HandlersKyverno", func() {
 var _ = Describe("Hash methods", func() {
 	It("kyvernoHash returns hash considering all referenced configmap contents", func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
-		configMap2 := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), allowLabelChangeStr)
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), allowLabelChangeStr)
 
 		namespace := "reconcile" + randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{

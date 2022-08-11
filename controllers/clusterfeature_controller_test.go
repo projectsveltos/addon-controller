@@ -20,12 +20,14 @@ import (
 	"context"
 	"reflect"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
@@ -118,6 +120,66 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				configv1alpha1.ClusterFeatureFinalizer,
 			),
 		).Should(BeTrue())
+	})
+
+	It("Reconciliation of deleted ClusterFeature removes finalizer only when all ClusterSummaries are gone", func() {
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   clusterFeatureNamePrefix + randomString(),
+				Labels: map[string]string{controllers.ClusterFeatureLabelName: clusterFeature.Name},
+			},
+		}
+
+		now := metav1.NewTime(time.Now())
+		clusterFeature.DeletionTimestamp = &now
+		controllerutil.AddFinalizer(clusterFeature, configv1alpha1.ClusterFeatureFinalizer)
+
+		initObjects := []client.Object{
+			clusterFeature,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterFeatureReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
+		}
+
+		clusterFeatureName := client.ObjectKey{
+			Name: clusterFeature.Name,
+		}
+
+		// Reconcile ClusterFeature. Since not all associated ClusterSummaries are
+		// gone, this reconciliation will not remove finalizer.
+
+		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterFeatureName,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Delete ClusterSummary
+		Expect(c.Delete(context.TODO(), clusterSummary)).To(Succeed())
+
+		// Reconcile ClusterFeature again. Since all associated ClusterSummaries are
+		// gone, this reconciliation will remove finalizer and remove ClusterFeature
+
+		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterFeatureName,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
 	It("getMatchingClusters returns matchin CAPI Cluster", func() {
@@ -802,9 +864,20 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
 
+		clusterFeatureName := client.ObjectKey{
+			Name: matchingClusterFeature.Name,
+		}
+
+		clusterFeatureReconciler := getClusterFeatureReconciler(testEnv.Client)
+		_, err := clusterFeatureReconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterFeatureName,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatureList := controllers.RequeueClusterFeatureForCluster(clusterFeatureReconciler, cluster)
+			clusterFeatureList := controllers.RequeueClusterFeatureForCluster(clusterFeatureReconciler,
+				cluster)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
 			for i := range clusterFeatureList {
 				if clusterFeatureList[i] == result {
@@ -839,9 +912,20 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
 
+		clusterFeatureName := client.ObjectKey{
+			Name: matchingClusterFeature.Name,
+		}
+
+		clusterFeatureReconciler := getClusterFeatureReconciler(testEnv.Client)
+		_, err := clusterFeatureReconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterFeatureName,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatureList := controllers.RequeueClusterFeatureForMachine(clusterFeatureReconciler, cpMachine)
+			clusterFeatureList := controllers.RequeueClusterFeatureForMachine(clusterFeatureReconciler,
+				cpMachine)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
 			for i := range clusterFeatureList {
 				if clusterFeatureList[i] == result {

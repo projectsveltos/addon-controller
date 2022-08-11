@@ -28,6 +28,7 @@ import (
 	"github.com/go-logr/logr"
 	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	"github.com/pkg/errors"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -171,6 +172,55 @@ spec:
         pattern:
           spec:
             serviceAccountName: "{{serviceAccountName}}"`
+
+	serviceMonitorFrontend = `apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-app
+  labels:
+    team: frontend
+spec:
+  selector:
+    matchLabels:
+      app: example-app
+  endpoints:
+  - port: web`
+
+	serviceMonitorKubeMtrics = `apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/component: exporter
+    app.kubernetes.io/name: kube-state-metrics
+    app.kubernetes.io/part-of: kube-prometheus
+    app.kubernetes.io/version: 2.5.0
+  name: kube-state-metrics
+  namespace: monitoring
+spec:
+  endpoints:
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    honorLabels: true
+    interval: 30s
+    port: https-main
+    relabelings:
+    - action: labeldrop
+      regex: (pod|service|endpoint|namespace)
+    scheme: https
+    scrapeTimeout: 30s
+    tlsConfig:
+      insecureSkipVerify: true
+  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    interval: 30s
+    port: https-self
+    scheme: https
+    tlsConfig:
+      insecureSkipVerify: true
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: exporter
+      app.kubernetes.io/name: kube-state-metrics
+      app.kubernetes.io/part-of: kube-prometheus`
 )
 
 var (
@@ -197,6 +247,9 @@ func setupScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := monitoringv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 
@@ -464,15 +517,20 @@ func setClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, cluster
 
 // waitForClusterSummaryPolicyPrefix waits for ClusterSummary Status.PolicyPrefix to be set
 func waitForClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+	currentClusterSummary.Status.PolicyPrefix = "cs" + randomString()
+	Expect(c.Status().Update(ctx, currentClusterSummary)).To(Succeed())
+
 	Eventually(func() bool {
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary = &configv1alpha1.ClusterSummary{}
 		Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		return currentClusterSummary.Status.PolicyPrefix != ""
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-// createConfigMapWithKyvernoPolicy creates a configMap with Data containing base64 encoded policies
-func createConfigMapWithKyvernoPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
+// createConfigMapWithPolicy creates a configMap with Data containing base64 encoded policies
+func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,

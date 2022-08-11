@@ -93,16 +93,7 @@ func main() {
 
 	ctx := context.Background()
 	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureRole))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureRole")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureKyerno")
-		os.Exit(1)
-	}
+	registerFeatures(d)
 
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:               mgr.GetClient(),
@@ -117,6 +108,7 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&controllers.ClusterSummaryReconciler{
+		Config:               mgr.GetConfig(),
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		Deployer:             d,
@@ -172,4 +164,22 @@ func initFlags(fs *pflag.FlagSet) {
 		"concurrent-reconciles",
 		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
+}
+
+func registerFeatures(d deployer.DeployerInterface) {
+	err := d.RegisterFeatureID(string(configv1alpha1.FeatureRole))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeatureRole")
+		os.Exit(1)
+	}
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeatureKyerno")
+		os.Exit(1)
+	}
+	err = d.RegisterFeatureID(string(configv1alpha1.FeaturePrometheus))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeaturePrometheus")
+		os.Exit(1)
+	}
 }

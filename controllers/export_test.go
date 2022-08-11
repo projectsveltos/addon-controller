@@ -35,11 +35,16 @@ var (
 )
 
 var (
-	GetSecretData       = getSecretData
-	GetKubernetesClient = getKubernetesClient
-	AddLabel            = addLabel
-	CreateNamespace     = createNamespace
-	GetEntryKey         = getEntryKey
+	GetSecretData                = getSecretData
+	GetKubernetesClient          = getKubernetesClient
+	AddLabel                     = addLabel
+	CreateNamespace              = createNamespace
+	GetEntryKey                  = getEntryKey
+	DeployContentOfConfigMap     = deployContentOfConfigMap
+	GetPolicyName                = getPolicyName
+	GetPolicyInfo                = getPolicyInfo
+	UndeployStaleResources       = undeployStaleResources
+	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
 
 	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
 	DeployClusterWorkloadRole    = deployClusterWorkloadRole
@@ -47,30 +52,45 @@ var (
 	WorkloadRoleHash             = workloadRoleHash
 	DeployWorkloadRoles          = deployWorkloadRoles
 	UnDeployWorkloadRoles        = unDeployWorkloadRoles
+	GetWorkloadRoleRefs          = getWorkloadRoleRefs
 	GetRoleName                  = getRoleName
 
 	DeployKyvernoPolicy            = deployKyvernoPolicy
 	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
 	IsKyvernoReady                 = isKyvernoReady
 	KyvernoHash                    = kyvernoHash
-	UndeployStaleKyvernoResources  = undeployStaleKyvernoResources
-	GetKyvernoPolicyName           = getKyvernoPolicyName
+	GetKyvernoRefs                 = getKyvernoRefs
 	UnDeployKyverno                = unDeployKyverno
 	DeployKyverno                  = deployKyverno
+
+	DeployPrometheusOperator                  = deployPrometheusOperator
+	DeployPrometheusOperatorInWorklaodCluster = deployPrometheusOperatorInWorklaodCluster
+	IsPrometheusOperatorReady                 = isPrometheusOperatorReady
+	DeployKubeStateMetricsInWorklaodCluster   = deployKubeStateMetricsInWorklaodCluster
+	IsKubeStateMetricsReady                   = isKubeStateMetricsReady
+	DeployKubePrometheusInWorklaodCluster     = deployKubePrometheusInWorklaodCluster
+	DeployPrometheus                          = deployPrometheus
+	PrometheusHash                            = prometheusHash
+	UnDeployPrometheus                        = unDeployPrometheus
+	GetPrometheusInstance                     = getPrometheusInstance
+	AddStorageConfig                          = addStorageConfig
 )
 
 var (
-	IsFeatureDeployed   = (*ClusterSummaryReconciler).isFeatureDeployed
-	GetHash             = (*ClusterSummaryReconciler).getHash
-	UpdateFeatureStatus = (*ClusterSummaryReconciler).updateFeatureStatus
-	DeployFeature       = (*ClusterSummaryReconciler).deployFeature
-	UndeployFeature     = (*ClusterSummaryReconciler).undeployFeature
+	IsFeatureDeployed              = (*ClusterSummaryReconciler).isFeatureDeployed
+	GetHash                        = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus            = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature                  = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature                = (*ClusterSummaryReconciler).undeployFeature
+	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
+	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
 
 	DeployRoles         = (*ClusterSummaryReconciler).deployRoles
 	UndeployRoles       = (*ClusterSummaryReconciler).undeployRoles
 	ConvertResultStatus = (*ClusterSummaryReconciler).convertResultStatus
 
 	RequeueClusterSummaryForWorkloadRole = (*ClusterSummaryReconciler).requeueClusterSummaryForWorkloadRole
+	RequeueClusterSummaryForConfigMap    = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
 )
 
 var (
@@ -87,11 +107,12 @@ var (
 )
 
 func GetFeature(featureID configv1alpha1.FeatureID, getHash getCurrentHash,
-	deploy deployer.RequestHandler) *feature {
+	deploy deployer.RequestHandler, getRefs getPolicyRefs) *feature {
 
 	return &feature{
 		id:          featureID,
 		currentHash: getHash,
 		deploy:      deploy,
+		getRefs:     getRefs,
 	}
 }

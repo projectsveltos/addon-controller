@@ -171,7 +171,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 
 	It("Update returns false when Data has not changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
-		configMap = createConfigMapWithKyvernoPolicy("default", configMap.Name, addLabelPolicyStr)
+		configMap = createConfigMapWithPolicy("default", configMap.Name, addLabelPolicyStr)
 
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{

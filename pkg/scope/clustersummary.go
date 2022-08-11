@@ -18,9 +18,11 @@ package scope
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -158,4 +160,53 @@ func (s *ClusterSummaryScope) SetFailureReason(featureID configv1alpha1.FeatureI
 			FailureReason: failureReason,
 		},
 	)
+}
+
+// SetDeployedGroupVersionKind sets the list of deployed GroupVersionKinds
+func (s *ClusterSummaryScope) SetDeployedGroupVersionKind(featureID configv1alpha1.FeatureID,
+	deployed []schema.GroupVersionKind) {
+
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			s.updateDeployedGroupVersionKind(&s.ClusterSummary.Status.FeatureSummaries[i], deployed)
+			return
+		}
+	}
+
+	s.initializeFeatureStatusSummary()
+
+	s.ClusterSummary.Status.FeatureSummaries = append(
+		s.ClusterSummary.Status.FeatureSummaries,
+		configv1alpha1.FeatureSummary{
+			FeatureID: featureID,
+		},
+	)
+
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			s.updateDeployedGroupVersionKind(&s.ClusterSummary.Status.FeatureSummaries[i], deployed)
+			return
+		}
+	}
+}
+
+func (s *ClusterSummaryScope) updateDeployedGroupVersionKind(fs *configv1alpha1.FeatureSummary,
+	deployed []schema.GroupVersionKind) {
+
+	current := make(map[string]bool)
+	for _, k := range fs.DeployedGroupVersionKind {
+		current[k] = true
+	}
+
+	for i := range deployed {
+		key := fmt.Sprintf("%s.%s.%s", deployed[i].Kind, deployed[i].Version, deployed[i].Group)
+		current[key] = true
+	}
+
+	fs.DeployedGroupVersionKind = make([]string, len(current))
+	i := 0
+	for k := range current {
+		fs.DeployedGroupVersionKind[i] = k
+		i++
+	}
 }

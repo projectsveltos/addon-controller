@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -57,6 +58,7 @@ const (
 
 // ClusterSummaryReconciler reconciles a ClusterSummary object
 type ClusterSummaryReconciler struct {
+	*rest.Config
 	client.Client
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
@@ -262,12 +264,18 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
 
+	prometheusErr := r.deployPrometheus(ctx, clusterSummaryScope, logger)
+
 	if workloadErr != nil {
 		return workloadErr
 	}
 
 	if kyvernoErr != nil {
 		return kyvernoErr
+	}
+
+	if prometheusErr != nil {
+		return prometheusErr
 	}
 
 	return nil
@@ -278,6 +286,7 @@ func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSumma
 		id:          configv1alpha1.FeatureRole,
 		currentHash: workloadRoleHash,
 		deploy:      deployWorkloadRoles,
+		getRefs:     getWorkloadRoleRefs,
 	}
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
@@ -293,6 +302,23 @@ func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSum
 		id:          configv1alpha1.FeatureKyverno,
 		currentHash: kyvernoHash,
 		deploy:      deployKyverno,
+		getRefs:     getKyvernoRefs,
+	}
+
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) deployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration == nil {
+		logger.V(logs.LogDebug).Info("no prometheus configuration")
+		return nil
+	}
+
+	f := feature{
+		id:          configv1alpha1.FeaturePrometheus,
+		currentHash: prometheusHash,
+		deploy:      deployPrometheus,
+		getRefs:     getPrometheusRefs,
 	}
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
@@ -316,12 +342,18 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
 
+	prometheusErr := r.undeployPrometheus(ctx, clusterSummaryScope, logger)
+
 	if workloadErr != nil {
 		return workloadErr
 	}
 
 	if kyvernoErr != nil {
 		return kyvernoErr
+	}
+
+	if prometheusErr != nil {
+		return prometheusErr
 	}
 
 	return nil
@@ -342,6 +374,16 @@ func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterS
 		id:          configv1alpha1.FeatureKyverno,
 		currentHash: kyvernoHash,
 		deploy:      unDeployKyverno,
+	}
+
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := feature{
+		id:          configv1alpha1.FeaturePrometheus,
+		currentHash: prometheusHash,
+		deploy:      unDeployPrometheus,
 	}
 
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
@@ -392,6 +434,13 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {
 			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Namespace
 			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Name
+			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
+		}
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil {
+		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs {
+			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Namespace
+			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Name
 			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
 		}
 	}

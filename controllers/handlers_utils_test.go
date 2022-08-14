@@ -18,19 +18,76 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 
+	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+)
+
+const (
+	serviceTemplate = `apiVersion: v1
+kind: Service
+metadata:
+  name: service0
+  namespace: %s
+spec:
+  selector:
+    app.kubernetes.io/name: service0
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 9376
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service1
+  namespace: %s
+spec:
+  selector:
+    app.kubernetes.io/name: service1
+  ports:
+  - name: name-of-service-port
+    protocol: TCP
+    port: 80
+    targetPort: http-web-svc
+`
+
+	deplTemplate = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: %s
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80`
 )
 
 var _ = Describe("HandlersUtils", func() {
@@ -108,5 +165,160 @@ var _ = Describe("HandlersUtils", func() {
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
+	})
+
+	It("deployContentOfConfigMap deploys all policies contained in a ConfigMap", func() {
+		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
+		depl := fmt.Sprintf(deplTemplate, namespace)
+
+		configMap := createConfigMapWithPolicy(namespace, randomString(), depl, services)
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+
+		Expect(waitForObject(ctx, testEnv.Client, configMap)).To(Succeed())
+
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
+
+		// Get current clustersummary as we need Status.PolicyPrefix to be set
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+
+		policies, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client,
+			configMap, currentClusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(policies)).To(Equal(3))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:%s-service0",
+			namespace, currentClusterSummary.Status.PolicyPrefix)))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:%s-service1",
+			namespace, currentClusterSummary.Status.PolicyPrefix)))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Deployment.apps:%s:%s-nginx-deployment",
+			namespace, currentClusterSummary.Status.PolicyPrefix)))
+	})
+
+	It(`undeployStaleResources removes all policies created by ClusterSummary due to ConfigMaps not referenced anymore`, func() {
+		configMapNs := randomString()
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), checkSa)
+
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: configMapNs, Name: configMap1.Name},
+				{Namespace: configMapNs, Name: configMap2.Name},
+			},
+		}
+
+		// install kyverno so crds are present. this is needed to create kyverno policies with testenv
+		Expect(controllers.DeployKyvernoInWorklaodCluster(context.TODO(), testEnv, 1, klogr.New())).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, clusterSummary)).To(Succeed())
+		// Wait for Status.PolicyPrefix to be set
+		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
+
+		// Get current clustersummary as we need Status.PolicyPrefix to be set
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+
+		// add-labels is the name of addLabelPolicyStr
+		kyvernoName1 := controllers.GetPolicyName("add-labels", currentClusterSummary)
+		kyverno1 := &kyvernoapi.ClusterPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   kyvernoName1,
+				Labels: map[string]string{controllers.ClusterSummaryLabelName: currentClusterSummary.Name},
+			},
+		}
+
+		// check-sa is the name of check-sa
+		kyvernoName2 := controllers.GetPolicyName("check-sa", currentClusterSummary)
+		kyverno2 := &kyvernoapi.Policy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      kyvernoName2,
+				Namespace: "default",
+				Labels:    map[string]string{controllers.ClusterSummaryLabelName: currentClusterSummary.Name},
+			},
+		}
+
+		// Add list of GroupVersionKind this ClusterSummary has deployed in the CAPI Cluster
+		// because of the Kyverno feature. This is used by UndeployStaleResources.
+		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureKyverno,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+				DeployedGroupVersionKind: []string{
+					"ClusterPolicy.v1.kyverno.io",
+					"Policy.v1.kyverno.io",
+				},
+			},
+		}
+
+		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), kyverno1)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), kyverno2)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, kyverno2)).To(Succeed())
+
+		Expect(addTypeInformationToObject(testEnv.Scheme(), kyverno1)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), kyverno2)).To(Succeed())
+
+		currentKyvernos := map[string]bool{}
+		currentKyvernos[controllers.GetPolicyInfo(kyverno1)] = true
+		currentKyvernos[controllers.GetPolicyInfo(kyverno2)] = true
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1alpha1.FeatureKyverno)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
+		// removes the stale ones.
+		err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
+			deployedGKVs, currentKyvernos)
+		Expect(err).To(BeNil())
+
+		// Consistently loop so testEnv Cache is synced
+		Consistently(func() error {
+			// Since ClusterSummary is referencing configMap, expect ClusterPolicy to not be deleted
+			currentClusterPolicy := &kyvernoapi.ClusterPolicy{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: kyvernoName1}, currentClusterPolicy)
+		}, timeout, pollingInterval).Should(BeNil())
+
+		// Consistently loop so testEnv Cache is synced
+		Consistently(func() error {
+			// Since ClusterSummary is referencing configMap, expect Policy to not be deleted
+			currentPolicy := &kyvernoapi.Policy{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: kyverno2.Namespace, Name: kyvernoName2}, currentPolicy)
+		}, timeout, pollingInterval).Should(BeNil())
+
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs = nil
+		delete(currentKyvernos, controllers.GetPolicyInfo(kyverno1))
+		delete(currentKyvernos, controllers.GetPolicyInfo(kyverno2))
+
+		err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
+			deployedGKVs, currentKyvernos)
+		Expect(err).To(BeNil())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			// Since ClusterSummary is not referencing configMap with ClusterPolicy, expect ClusterPolicy to be deleted
+			currentClusterPolicy := &kyvernoapi.ClusterPolicy{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: kyvernoName1}, currentClusterPolicy)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			// Since ClusterSummary is not referencing configMap with Policy, expect Policy to be deleted
+			currentPolicy := &kyvernoapi.Policy{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: kyverno2.Namespace, Name: kyvernoName2}, currentPolicy)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })

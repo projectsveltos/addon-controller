@@ -12,62 +12,24 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 )
 
 var _ = Describe("Workload", func() {
 	const (
-		key        = "env"
-		value      = "fv"
 		namePrefix = "workload"
 	)
 
 	It("Deploy and updates WorkloadRoles correctly", Label("FV"), func() {
-		Byf("Add label %s:%s to Cluster %s/%s", key, value, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			currentCluster := &clusterv1.Cluster{}
-			Expect(k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-				currentCluster)).To(Succeed())
-
-			currentLabels := currentCluster.Labels
-			if currentLabels == nil {
-				currentLabels = make(map[string]string)
-			}
-			currentLabels[key] = value
-
-			return k8sClient.Update(context.TODO(), currentCluster)
-		})
-		Expect(err).To(BeNil())
-
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
 
-		Byf("Verifying Cluster %s/%s is a match for ClusterFeature %s",
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterFeature.Name)
-		Eventually(func() bool {
-			currentClusterFeature := &configv1alpha1.ClusterFeature{}
-			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
-			return err == nil &&
-				len(currentClusterFeature.Status.MatchingClusterRefs) == 1 &&
-				currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
-		}, timeout, pollingInterval).Should(BeTrue())
+		verifyClusterFeatureMatches(clusterFeature)
 
-		Byf("Verifying ClusterSummary is created")
-		clusterSummary, err := getClusterSummary(context.TODO(), clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		Expect(err).To(BeNil())
-		Expect(clusterSummary).ToNot(BeNil())
-
-		ref, err := getClusterSummaryOwnerReference(clusterSummary)
-		Expect(err).To(BeNil())
-		Expect(ref).ToNot(BeNil())
-		Expect(ref.Name).To(Equal(clusterFeature.Name))
+		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Create a workload role")
 		roleNs := randomString()
@@ -80,7 +42,6 @@ var _ = Describe("Workload", func() {
 				Namespace: &roleNs,
 				Rules: []rbacv1.PolicyRule{
 					{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-					// {Verbs: []string{"get", "list"}, APIGroups: []string{"apiextensions.k8s.io"}, Resources: []string{"customresourcedefinitions"}},
 				},
 			},
 		}
@@ -94,14 +55,7 @@ var _ = Describe("Workload", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
-		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
-		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
-			return err == nil &&
-				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 1 &&
-				currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[0].Name == workloadRole.Name
-		}, timeout, pollingInterval).Should(BeTrue())
+		clusterSummary := verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -150,13 +104,7 @@ var _ = Describe("Workload", func() {
 		currentClusterFeature.Spec.WorkloadRoleRefs = []corev1.ObjectReference{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
-		Byf("Verifying ClusterSummary %s is updated", clusterSummary.Name)
-		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err = k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
-			return err == nil &&
-				len(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs) == 0
-		}, timeout, pollingInterval).Should(BeTrue())
+		clusterSummary = verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying proper role is removed in the workload cluster")
 		Eventually(func() bool {

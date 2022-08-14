@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -246,7 +245,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
 		// changed (so hash in ClusterSummary Status matches hash of all referenced WorkloadRole Specs).
@@ -261,7 +260,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 
 		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.DeployKyverno)
+			controllers.KyvernoHash, controllers.DeployKyverno, controllers.GetKyvernoRefs)
 
 		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
 		// changed (no change in Kyverno configuration).
@@ -286,7 +285,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		}
 
 		configMapNs := randomString()
-		configMap := createConfigMapWithKyvernoPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
 
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
@@ -332,7 +331,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		workload.Spec.Rules = append(workload.Spec.Rules,
 			rbacv1.PolicyRule{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}})
 		Expect(c.Update(context.TODO(), workload)).To(Succeed())
-		configMap = createConfigMapWithKyvernoPolicy(configMapNs, configMap.Name, checkSa)
+		configMap = createConfigMapWithPolicy(configMapNs, configMap.Name, checkSa)
 		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
@@ -340,7 +339,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
 		// does not match anymore the hash of all referenced WorkloadRole Specs). In such situation, DeployFeature calls dep.Deploy.
@@ -355,7 +354,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 
 		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.DeployKyverno)
+			controllers.KyvernoHash, controllers.DeployKyverno, controllers.GetKyvernoRefs)
 
 		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
 		// does not match anymore the hash of all referenced WorkloadRole Specs). In such situation, DeployFeature calls dep.Deploy.
@@ -398,7 +397,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
@@ -441,7 +440,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		// ClusterSummary Status is reporting feature has removed.
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
@@ -475,7 +474,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
@@ -514,7 +513,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.DeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
@@ -546,11 +545,78 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(c, dep)
 
 		f := controllers.GetFeature(configv1alpha1.FeatureRole,
-			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles)
+			controllers.WorkloadRoleHash, controllers.UnDeployWorkloadRoles, controllers.GetWorkloadRoleRefs)
 
 		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Role still in progress. Wait before cleanup"))
+	})
+
+	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {
+		configMapNs := randomString()
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), checkSa)
+
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: configMapNs, Name: configMap1.Name},
+				{Namespace: configMapNs, Name: configMap2.Name},
+			},
+		}
+
+		initObjects := []client.Object{
+			workload,
+			clusterSummary,
+			clusterFeature,
+			configMap1,
+			configMap2,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		reconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+
+		Expect(controllers.UpdateDeployedGroupVersionKind(reconciler, context.TODO(), clusterSummaryScope,
+			configv1alpha1.FeatureKyverno, clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs,
+			logger)).To(Succeed())
+
+		cs := clusterSummaryScope.ClusterSummary
+		Expect(cs.Status.FeatureSummaries).ToNot(BeNil())
+		Expect(len(cs.Status.FeatureSummaries)).To(Equal(1))
+		Expect(cs.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureKyverno))
+		Expect(cs.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("Policy.v1.kyverno.io"))
+		Expect(cs.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("ClusterPolicy.v1.kyverno.io"))
+	})
+
+	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
+			Replicas: 1,
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: randomString(), Name: randomString()},
+			},
+		}
+		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: randomString(), Name: randomString()},
+				{Namespace: randomString(), Name: randomString()},
+			},
+		}
+		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
+			{Namespace: randomString(), Name: randomString()},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		reconciler := getClusterSummaryReconciler(nil, nil)
+		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
+		expectedLength := len(clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs) +
+			len(clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs) +
+			len(clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs)
+		Expect(controllers.Len(set)).To(Equal(expectedLength))
 	})
 })
 
@@ -599,15 +665,4 @@ func getClusterSummaryScope(c client.Client, logger logr.Logger,
 	})
 	Expect(err).To(BeNil())
 	return clusterSummaryScope
-}
-
-func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
-	return &controllers.ClusterSummaryReconciler{
-		Client:            c,
-		Scheme:            scheme,
-		Deployer:          dep,
-		ReferenceMap:      make(map[string]*controllers.Set),
-		ClusterSummaryMap: make(map[string]*controllers.Set),
-		Mux:               sync.Mutex{},
-	}
 }

@@ -27,12 +27,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2/klogr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 	"github.com/projectsveltos/cluster-api-feature-manager/internal/test/helpers"
-	fakedeployer "github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer/fake"
+	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
 )
 
 var (
@@ -40,9 +40,6 @@ var (
 	cancel  context.CancelFunc
 	ctx     context.Context
 	scheme  *runtime.Scheme
-
-	clusterFeatureReconciler *controllers.ClusterFeatureReconciler
-	clusterSummaryReconciler *controllers.ClusterSummaryReconciler
 )
 
 func TestControllers(t *testing.T) {
@@ -67,29 +64,6 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
-	clusterFeatureReconciler = &controllers.ClusterFeatureReconciler{
-		Client:            testEnv.Client,
-		Scheme:            scheme,
-		ClusterMap:        make(map[string]*controllers.Set),
-		ClusterFeatureMap: make(map[string]*controllers.Set),
-		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
-		Mux:               sync.Mutex{},
-	}
-
-	dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-	Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureRole))).To(Succeed())
-	clusterSummaryReconciler = &controllers.ClusterSummaryReconciler{
-		Client:            testEnv.Client,
-		Scheme:            scheme,
-		ReferenceMap:      make(map[string]*controllers.Set),
-		ClusterSummaryMap: make(map[string]*controllers.Set),
-		Mux:               sync.Mutex{},
-		Deployer:          dep,
-	}
-
-	Expect(clusterFeatureReconciler.SetupWithManager(testEnv.Manager)).To(Succeed())
-	Expect(clusterSummaryReconciler.SetupWithManager(testEnv.Manager)).To(Succeed())
-
 	go func() {
 		By("Starting the manager")
 		if err := testEnv.StartManager(ctx); err != nil {
@@ -108,3 +82,25 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
+
+func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
+	return &controllers.ClusterSummaryReconciler{
+		Client:            c,
+		Scheme:            scheme,
+		Deployer:          dep,
+		ReferenceMap:      make(map[string]*controllers.Set),
+		ClusterSummaryMap: make(map[string]*controllers.Set),
+		Mux:               sync.Mutex{},
+	}
+}
+
+func getClusterFeatureReconciler(c client.Client) *controllers.ClusterFeatureReconciler {
+	return &controllers.ClusterFeatureReconciler{
+		Client:            c,
+		Scheme:            scheme,
+		ClusterMap:        make(map[string]*controllers.Set),
+		ClusterFeatureMap: make(map[string]*controllers.Set),
+		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+		Mux:               sync.Mutex{},
+	}
+}

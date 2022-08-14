@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -53,6 +54,51 @@ type KyvernoConfiguration struct {
 	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
 }
 
+// InstallationMode specifies how prometheus is deployed in a CAPI Cluster.
+//+kubebuilder:validation:Enum:=KubeStateMetrics;KubePrometheus;Custom
+type InstallationMode string
+
+const (
+	// InstallationModeCustom will cause Prometheus Operator to be installed
+	// and any PolicyRefs.
+	InstallationModeCustom = InstallationMode("Custom")
+
+	// InstallationModeKubeStateMetrics will cause Prometheus Operator to be installed
+	// and any PolicyRefs. On top of that, KubeStateMetrics will also be installed
+	// and a Promethus CRD instance will be created to scrape KubeStateMetrics metrics.
+	InstallationModeKubeStateMetrics = InstallationMode("KubeStateMetrics")
+
+	// InstallationModeKubePrometheus will cause the Kube-Prometheus stack to be deployed.
+	// Any PolicyRefs will be installed after that.
+	// Kube-Prometheus stack includes KubeStateMetrics.
+	InstallationModeKubePrometheus = InstallationMode("KubePrometheus")
+)
+
+type PrometheusConfiguration struct {
+	// InstallationMode indicates what type of resources will be deployed in a
+	// CAPI Cluster.
+	// +kubebuilder:default:=Custom
+	// +optional
+	InstallationMode InstallationMode `json:"installationMode,omitempty"`
+
+	// storageClassName is the name of the StorageClass Prometheus will use to claim storage.
+	// +optional
+	StorageClassName *string `json:"storageClassName,omitempty"`
+
+	// StorageQuantity indicates the amount of storage Prometheus will request from storageclass
+	// if defined. (40Gi for instance)
+	// If not defined and StorageClassName is defined, 40Gi will be used.
+	// +optional
+	StorageQuantity *resource.Quantity `json:"storageQuantity,omitempty"`
+
+	// PolicyRef references ConfigMaps containing the Prometheus operator policies
+	// that need to be deployed in the workload cluster. This includes:
+	// - Prometheus, Alertmanager, ThanosRuler, ServiceMonitor, PodMonitor, Probe,
+	// PrometheusRule, AlertmanagerConfig CRD instances;
+	// -  Any other configuration needed for prometheus (like storageclass configuration)
+	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+}
+
 // ClusterFeatureSpec defines the desired state of ClusterFeature
 type ClusterFeatureSpec struct {
 	// ClusterSelector identifies ClusterAPI clusters to associate to.
@@ -79,6 +125,11 @@ type ClusterFeatureSpec struct {
 	// specified Kyverno policies.
 	// +optional
 	KyvernoConfiguration *KyvernoConfiguration `json:"kyvernoConfiguration,omitempty"`
+
+	// PrometheusConfiguration contains the Prometheus configuration.
+	// If not nil, at the very least Prometheus operator will be deployed in the workload cluster
+	// +optional
+	PrometheusConfiguration *PrometheusConfiguration `json:"prometheusConfiguration,omitempty"`
 }
 
 // ClusterFeatureStatus defines the observed state of ClusterFeature

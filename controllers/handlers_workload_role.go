@@ -23,6 +23,7 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -40,24 +40,7 @@ func deployWorkloadRoles(ctx context.Context, c client.Client,
 	logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
-		return err
-	}
-
-	if !clusterSummary.DeletionTimestamp.IsZero() {
-		logger.V(logs.LogInfo).Info("ClusterSummary is marked for deletion. Nothing to do.")
-		// if clusterSummary is marked for deletion, there is nothing to deploy
-		return fmt.Errorf("clustersummary is marked for deletion")
-	}
-
-	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
-		return err
-	}
-
-	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
+	clusterSummary, clusterClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
 	if err != nil {
 		return err
 	}
@@ -178,6 +161,10 @@ func workloadRoleHash(ctx context.Context, c client.Client, clusterSummaryScope 
 
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+func getWorkloadRoleRefs(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference {
+	return nil
 }
 
 // deployWorkloadRole deploys a workload role in a CAPI cluster.

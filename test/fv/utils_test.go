@@ -3,6 +3,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,6 +19,11 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+)
+
+const (
+	key   = "env"
+	value = "fv"
 )
 
 // Byf is a simple wrapper around By.
@@ -167,4 +173,66 @@ func getClusterSummary(ctx context.Context,
 	}
 
 	return &clusterSummaryList.Items[0], nil
+}
+
+func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
+	clusterNamespace, clusterName string) *configv1alpha1.ClusterSummary {
+
+	Byf("Verifying ClusterSummary is created")
+	Eventually(func() bool {
+		clusterSummary, err := getClusterSummary(context.TODO(),
+			clusterFeature.Name, clusterNamespace, clusterName)
+		return err == nil &&
+			clusterSummary != nil
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	clusterSummary, err := getClusterSummary(context.TODO(),
+		clusterFeature.Name, clusterNamespace, clusterName)
+	Expect(err).To(BeNil())
+	Expect(clusterSummary).ToNot(BeNil())
+
+	Byf("Verifying ClusterSummary ownerReference")
+	ref, err := getClusterSummaryOwnerReference(clusterSummary)
+	Expect(err).To(BeNil())
+	Expect(ref).ToNot(BeNil())
+	Expect(ref.Name).To(Equal(clusterFeature.Name))
+
+	Byf("Verifying ClusterSummary configuration")
+	Eventually(func() bool {
+		var currentClusterSummary *configv1alpha1.ClusterSummary
+		currentClusterSummary, err = getClusterSummary(context.TODO(),
+			clusterFeature.Name, clusterNamespace, clusterName)
+		if err != nil {
+			return false
+		}
+
+		return reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration,
+			clusterFeature.Spec.KyvernoConfiguration) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration,
+				clusterFeature.Spec.PrometheusConfiguration) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs,
+				clusterFeature.Spec.WorkloadRoleRefs) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterName, clusterName)
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	clusterSummary, err = getClusterSummary(context.TODO(),
+		clusterFeature.Name, clusterNamespace, clusterName)
+	Expect(err).To(BeNil())
+	Expect(clusterSummary).ToNot(BeNil())
+
+	return clusterSummary
+}
+
+func verifyClusterFeatureMatches(clusterFeature *configv1alpha1.ClusterFeature) {
+	Byf("Verifying Cluster %s/%s is a match for ClusterFeature %s",
+		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterFeature.Name)
+	Eventually(func() bool {
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
+		return err == nil &&
+			len(currentClusterFeature.Status.MatchingClusterRefs) == 1 &&
+			currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
+			currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
+	}, timeout, pollingInterval).Should(BeTrue())
 }

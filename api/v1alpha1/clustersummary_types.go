@@ -26,7 +26,7 @@ const (
 	ClusterSummaryFinalizer = "clustersummaryfinalizer.projectsveltos.io"
 )
 
-// +kubebuilder:validation:Enum:=Kyverno;Role
+// +kubebuilder:validation:Enum:=Kyverno;Role;Prometheus
 type FeatureID string
 
 const (
@@ -35,6 +35,9 @@ const (
 
 	// FeatureRole is the identifier for ClusterRole/Role feature
 	FeatureRole = FeatureID("Role")
+
+	// FeaturePrometheus is the identifier for Prometheus feature
+	FeaturePrometheus = FeatureID("Prometheus")
 )
 
 // +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;Removing;Removed
@@ -82,6 +85,11 @@ type FeatureSummary struct {
 	// FailureMessage provides more information about the error.
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in the workload
+	// cluster because of this feature. Each element has format kind.version.group
+	// +optional
+	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

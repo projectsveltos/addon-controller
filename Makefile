@@ -287,16 +287,78 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) 
 ##@ Generators
 
 .PHONY: clean-generated-files
-clean-generated-files: clean-kyverno ## Removes generated files
+clean-generated-files: clean-kyverno clean-prometheus clean-kube-prometheus clean-kube-state-metrics ## Removes generated files.
 
 # Kyverno
 
 KYVERNO_VERSION :=1.7
 KYVERNO_YAML_FILE := internal/kyverno/kyverno.yaml
 
-clean-kyverno: ## Remove kyverno downloaded and generated file
+.PHONY: clean-kyverno
+clean-kyverno: ## Remove kyverno generated file.
 	rm -f $(KYVERNO_YAML_FILE)
 
+.PHONY: kyverno
 kyverno: ## Download kyverno install.yaml and generate kyverno files.
 	curl -L https://raw.githubusercontent.com/kyverno/kyverno/release-$(KYVERNO_VERSION)/config/release/install.yaml -o $(KYVERNO_YAML_FILE)
-	cd internal/kyverno; go generate	
+	cd internal/kyverno; go generate
+
+
+# Prometheus Operator
+
+PROMETHEUS_VERSION := v0.58.0
+PROMETHEUS_YAML_FILE := internal/prometheus/prometheus.yaml
+
+.PHONY: clean-prometheus
+clean-prometheus: ## Remove prometheus generated file.
+	rm -f $(PROMETHEUS_YAML_FILE)
+
+.PHONY: prometheus
+prometheus: ## Download prometheus and generate prometheus files.
+	rm -rf tmp; mkdir tmp; cd tmp; git clone git@github.com:prometheus-operator/prometheus-operator.git; \
+	cd prometheus-operator; git checkout tags/$(PROMETHEUS_VERSION) -b $(PROMETHEUS_VERSION); \
+	cp bundle.yaml ../../$(PROMETHEUS_YAML_FILE); \
+	cd ../../; rm -rf tmp; \
+	cd internal/prometheus; go generate
+
+# Kube Prometheus
+
+KUBE_PROMETHEUS := v0.11.0
+KUBE_PROMETHEUS_YAML_FILE := internal/prometheus/kubeprometheus/kube_prometheus.yaml
+
+.PHONY: clean-kube-prometheus
+clean-kube-prometheus: ## Remove kube-prometheus generated file.
+	rm -f $(KUBE_PROMETHEUS_YAML_FILE)
+
+.PHONY: kube-prometheus
+kube-prometheus: ## Download prometheus and generate kube-prometheus config files.
+	rm -rf $(KUBE_PROMETHEUS_YAML_FILE); \
+	rm -rf tmp; mkdir tmp; cd tmp; git clone git@github.com:prometheus-operator/kube-prometheus.git; \
+	cd kube-prometheus; git checkout tags/$(KUBE_PROMETHEUS) -b $(KUBE_PROMETHEUS); \
+	cd ../../; \
+	scripts/concatenate_files.sh tmp/kube-prometheus/manifests/setup yaml --- $(KUBE_PROMETHEUS_YAML_FILE); \
+	scripts/concatenate_files.sh tmp/kube-prometheus/manifests yaml --- $(KUBE_PROMETHEUS_YAML_FILE); \
+	rm -rf tmp; \
+	cd internal/prometheus/kubeprometheus; go generate
+
+# Kube-State-Metrics
+
+KUBE_STATE_METRICS := v2.5.0
+KUBE_STATE_METRICS_YAML_FILE := internal/prometheus/kubestatemetrics/kube_state_metrics.yaml
+
+.PHONY: clean-kube-state-metrics
+clean-kube-state-metrics: ## Remove kube-state-metrics generated file.
+	rm -f $(KUBE_STATE_METRICS_YAML_FILE)
+
+.PHONY: kube-state-metrics
+kube-state-metrics: ## Download generate kube-state-metrics config files.
+	rm -rf $(KUBE_STATE_METRICS_YAML_FILE); \
+	rm -rf tmp; mkdir tmp; cd tmp; git clone git@github.com:kubernetes/kube-state-metrics.git; \
+	cd kube-state-metrics; git checkout tags/$(KUBE_STATE_METRICS) -b $(KUBE_STATE_METRICS); \
+	cd ../../; \
+	scripts/concatenate_files.sh tmp/kube-state-metrics/examples/standard yaml --- $(KUBE_STATE_METRICS_YAML_FILE); \
+	rm -rf tmp; \
+	cd internal/prometheus/kubestatemetrics; go generate
+
+aaa:
+	cd internal/prometheus/kubeprometheus; go generate

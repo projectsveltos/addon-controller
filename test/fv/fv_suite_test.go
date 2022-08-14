@@ -11,8 +11,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
 	. "github.com/onsi/gomega"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,7 +30,7 @@ var (
 )
 
 const (
-	timeout         = 2 * time.Minute
+	timeout         = 3 * time.Minute
 	pollingInterval = 2 * time.Second
 )
 
@@ -68,6 +71,7 @@ var _ = BeforeSuite(func() {
 	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
 	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(kyvernoapi.AddToScheme(scheme)).To(Succeed())
+	Expect(monitoringv1.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
@@ -91,7 +95,7 @@ var _ = BeforeSuite(func() {
 			client.InNamespace(kindWorkloadCluster.Namespace),
 			client.MatchingLabels{clusterv1.ClusterLabelName: kindWorkloadCluster.Name},
 		}
-		err := k8sClient.List(context.TODO(), machineList, listOptions...)
+		err = k8sClient.List(context.TODO(), machineList, listOptions...)
 		if err != nil {
 			return false
 		}
@@ -104,4 +108,20 @@ var _ = BeforeSuite(func() {
 		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 
+	Byf("Add label %s:%s to Cluster %s/%s", key, value, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentCluster := &clusterv1.Cluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+			currentCluster)).To(Succeed())
+
+		currentLabels := currentCluster.Labels
+		if currentLabels == nil {
+			currentLabels = make(map[string]string)
+		}
+		currentLabels[key] = value
+
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
 })

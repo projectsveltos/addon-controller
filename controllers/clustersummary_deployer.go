@@ -22,6 +22,9 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -30,13 +33,16 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
-type getCurrentHash func(cctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
+type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
+
+type getPolicyRefs func(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference
 
 type feature struct {
 	id          configv1alpha1.FeatureID
 	currentHash getCurrentHash
 	deploy      deployer.RequestHandler
+	getRefs     getPolicyRefs
 }
 
 func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -107,6 +113,12 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
 	}
 
+	logger.V(logs.LogDebug).Info("updating deployed GVKs")
+	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id, f.getRefs(clusterSummaryScope), logger)
+	if err != nil {
+		return err
+	}
+
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
@@ -125,7 +137,8 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
 		"clustername", clusterSummary.Spec.ClusterNamespace,
-		"applicant", clusterSummary.Name)
+		"applicant", clusterSummary.Name,
+		"feature", string(f.id))
 	logger.V(logs.LogDebug).Info("request to un-deploy")
 
 	// If deploying feature is in progress, wait for it to complete.
@@ -272,5 +285,46 @@ func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *
 		return nil
 	}
 
+	return nil
+}
+
+func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, featureID configv1alpha1.FeatureID,
+	references []corev1.ObjectReference, logger logr.Logger) error {
+
+	// Colllect  all referenced configMaps.
+	configMaps, err := collectConfigMaps(ctx, r.Client, references, logger)
+	if err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps. Err: %v", err))
+		return err
+	}
+
+	// Collect all policies present in each referenced configmap.
+	referencedPolicies := make([]*unstructured.Unstructured, 0)
+	for i := range configMaps {
+		cm := &configMaps[i]
+		policies, err := collectContentOfConfigMap(cm, logger)
+		if err != nil {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect content of configMap. Err: %v", err))
+			return err
+		}
+		referencedPolicies = append(referencedPolicies, policies...)
+	}
+
+	gvkMap := make(map[schema.GroupVersionKind]bool)
+	for i := range referencedPolicies {
+		policy := referencedPolicies[i]
+		gvkMap[policy.GroupVersionKind()] = true
+	}
+
+	i := 0
+	gvks := make([]schema.GroupVersionKind, len(gvkMap))
+	for k := range gvkMap {
+		gvks[i] = k
+		i++
+	}
+
+	// update status with list of GroupVersionKinds deployed in a CAPI Cluster
+	clusterSummaryScope.SetDeployedGroupVersionKind(featureID, gvks)
 	return nil
 }

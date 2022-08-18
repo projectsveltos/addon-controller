@@ -23,8 +23,10 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -83,7 +85,8 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 	policies := make([]string, 0)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
-		addLabel(policy, ClusterSummaryLabelName, clusterSummary.Name)
+		addLabel(policy, ConfigLabelName, configMap.Name)
+		addLabel(policy, ConfigLabelNamespace, configMap.Namespace)
 		name := getPolicyName(policy.GetName(), clusterSummary)
 		policy.SetName(name)
 
@@ -100,10 +103,12 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 		if err != nil {
 			return nil, err
 		}
-		err = preprareObjectForUpdate(ctx, dr, policy)
+		err = preprareObjectForUpdate(ctx, dr, policy, configMap.Namespace, configMap.Name)
 		if err != nil {
 			return nil, err
 		}
+
+		addOwnerReference(policy, clusterSummary)
 
 		if policy.GetResourceVersion() != "" {
 			err = c.Update(ctx, policy)
@@ -157,8 +162,8 @@ func collectContentOfConfigMap(configMap *corev1.ConfigMap, logger logr.Logger) 
 	return policies, nil
 }
 
-func getPolicyName(policyName string, clusterSummary *configv1alpha1.ClusterSummary) string {
-	return clusterSummary.Status.PolicyPrefix + "-" + policyName
+func getPolicyName(policyName string, _ *configv1alpha1.ClusterSummary) string {
+	return policyName
 }
 
 func getPolicyInfo(policy client.Object) string {
@@ -318,6 +323,11 @@ func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clu
 	for i := range deployedGVKs {
 		mapping, err := mapper.RESTMapping(deployedGVKs[i].GroupKind(), deployedGVKs[i].Version)
 		if err != nil {
+			// if CRDs does not exist anymore, ignore error. No instances of
+			// such CRD can be left anyway.
+			if meta.IsNoMatchError(err) {
+				continue
+			}
 			return err
 		}
 
@@ -334,9 +344,19 @@ func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clu
 
 		for j := range list.Items {
 			r := list.Items[j]
-			if !hasLabel(&r, ClusterSummaryLabelName, clusterSummary.Name) {
+			// Verify if this policy was deployed because of a clustersummary (ConfigLabelName
+			// is present as label in such a case).
+			if !hasLabel(&r, ConfigLabelName, "") {
 				continue
 			}
+
+			removeOwnerReference(&r, clusterSummary)
+
+			if len(r.GetOwnerReferences()) != 0 {
+				// Other ClusterSummary are still deploying this very same policy
+				continue
+			}
+
 			err = deleteIfNotExistant(ctx, &r, clusterClient, currentPolicies)
 			if err != nil {
 				return err
@@ -358,12 +378,22 @@ func deleteIfNotExistant(ctx context.Context, policy client.Object, c client.Cli
 	return nil
 }
 
+// hasLabel search if key is one of the label.
+// If value is empty, returns true if key is present.
+// If value is not empty, returns true if key is present and value is a match.
 func hasLabel(u *unstructured.Unstructured, key, value string) bool {
 	lbls := u.GetLabels()
 	if lbls == nil {
 		return false
 	}
-	return lbls[key] == value
+
+	v, ok := lbls[key]
+
+	if value == "" {
+		return ok
+	}
+
+	return v == value
 }
 
 func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
@@ -380,4 +410,33 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 	}
 
 	return gvks
+}
+
+func isDeploymentReady(ctx context.Context, c client.Client,
+	deploymentNamespace, deploymentName string,
+	logger logr.Logger) (present, ready bool, err error) {
+
+	logger = logger.WithValues("deploymentNamespace", deploymentNamespace, "deploymentName", deploymentName)
+	present = false
+	ready = false
+	depl := &appsv1.Deployment{}
+	err = c.Get(ctx, types.NamespacedName{Namespace: deploymentNamespace, Name: deploymentName}, depl)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(logs.LogDebug).Info("deployment not found")
+			err = nil
+			return
+		}
+		return
+	}
+
+	present = true
+
+	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
+		logger.V(logs.LogDebug).Info("Not all replicas are ready for deployment")
+		return
+	}
+
+	ready = true
+	return
 }

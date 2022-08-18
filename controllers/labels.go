@@ -29,6 +29,16 @@ const (
 	// by a ClusterFeature instance
 	ClusterFeatureLabelName = "projectsveltos.io/cluster-feature-name"
 
+	// configLabelName is added to each policy deployed by a ClusterSummary
+	// instance to a CAPI Cluster. Indicates the name of the ConfigMap
+	// containing the policy.
+	ConfigLabelName = "projectsveltos.io/config-map-name"
+
+	// configLabelNamespace is added to each policy deployed by a ClusterSummary
+	// instance to a CAPI Cluster. Indicates the namespace of the ConfigMap
+	// containing the policy.
+	ConfigLabelNamespace = "projectsveltos.io/config-map-namespace"
+
 	// clusterLabelNamespace is the label set on ClusterSummary instances created
 	// by a ClusterFeature instance for a given cluster
 	ClusterLabelNamespace = "projectsveltos.io/cluster-namespace"

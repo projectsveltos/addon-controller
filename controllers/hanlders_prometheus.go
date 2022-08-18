@@ -24,11 +24,9 @@ import (
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -84,8 +82,10 @@ func deployPrometheus(ctx context.Context, c client.Client,
 
 	currentPolicies := make(map[string]bool, 0)
 	if clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil {
+		refs := getPrometheusRefs(clusterSummary)
+
 		var confgiMaps []corev1.ConfigMap
-		confgiMaps, err = collectConfigMaps(ctx, c, clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs, logger)
+		confgiMaps, err = collectConfigMaps(ctx, c, refs, logger)
 		if err != nil {
 			return err
 		}
@@ -182,9 +182,9 @@ func prometheusHash(ctx context.Context, c client.Client, clusterSummaryScope *s
 	return h.Sum(nil), nil
 }
 
-func getPrometheusRefs(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil {
-		return clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs
+func getPrometheusRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
+	if clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil {
+		return clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs
 	}
 	return nil
 }
@@ -218,60 +218,14 @@ func shouldInstallKubePrometheusStack(clusterSummary *configv1alpha1.ClusterSumm
 func isPrometheusOperatorReady(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (present, ready bool, err error) {
 
-	namespace := prometheus.Namespace
-	logger = logger.WithValues("prometheusnamespace", namespace, "prometheusdeployment", prometheus.Deployment)
-	present = false
-	ready = false
-	depl := &appsv1.Deployment{}
-	err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: prometheus.Deployment}, depl)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogDebug).Info("Prometheus operator deployment not found")
-			err = nil
-			return
-		}
-		return
-	}
-
-	present = true
-
-	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
-		logger.V(logs.LogDebug).Info("Not all replicas are ready for prometheus operator deployment")
-		return
-	}
-
-	ready = true
-	return
+	return isDeploymentReady(ctx, c, prometheus.Namespace, prometheus.Deployment, logger)
 }
 
 // isKubeStateMetricsReady checks whether KubeStateMetrics deployment is present and ready
 func isKubeStateMetricsReady(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (present, ready bool, err error) {
 
-	logger = logger.WithValues("ksmnamespace", kubestatemetrics.Namespace,
-		"ksmdeployment", kubestatemetrics.Deployment)
-	present = false
-	ready = false
-	depl := &appsv1.Deployment{}
-	err = c.Get(ctx, types.NamespacedName{Namespace: kubestatemetrics.Namespace, Name: kubestatemetrics.Deployment}, depl)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogDebug).Info("KubeStateMetrics deployment not found")
-			err = nil
-			return
-		}
-		return
-	}
-
-	present = true
-
-	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
-		logger.V(logs.LogDebug).Info("Not all replicas are ready for KubeStateMetrics deployment")
-		return
-	}
-
-	ready = true
-	return
+	return isDeploymentReady(ctx, c, kubestatemetrics.Namespace, kubestatemetrics.Deployment, logger)
 }
 
 func deployPrometheusOperator(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
@@ -301,18 +255,16 @@ func deployPrometheusOperator(ctx context.Context, c client.Client, clusterSumma
 func deployKubeStateMetrics(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) error {
 
-	// Deploy ClusterRole/ClusterRoleBinding/ServiceAccount for prometheus
-	if err := deployPrometheusPermissions(ctx, c, logger); err != nil {
+	// Deploy ClusterRole and ClusterRoleBinding for prometheus
+	if err := deployPrometheusClusterRole(ctx, c, logger); err != nil {
 		return nil
 	}
 
-	logger.V(logs.LogDebug).Info("deploying prometheus instance")
 	// Deploy Prometheus instance
 	if err := deployDoc(ctx, c, kubeprometheus.Prometheus, logger); err != nil {
 		return nil
 	}
 
-	logger.V(logs.LogDebug).Info("deploying kubestatemetrics servicemonitor")
 	// Deploy ServiceMonitor to scrape KubeStateMetrics
 	if err := deployDoc(ctx, c, kubeprometheus.KSMServiceMonitor, logger); err != nil {
 		return nil
@@ -339,16 +291,12 @@ func deployKubeStateMetrics(ctx context.Context, c client.Client, clusterSummary
 	return nil
 }
 
-// deployPrometheusPermissions deploys ClusterRole/ClusterRoleBinding and ServiceAccount for
-// Prometheus
-func deployPrometheusPermissions(ctx context.Context, c client.Client, logger logr.Logger) error {
-	logger.V(logs.LogDebug).Info("deploying prometheus ClusterRole")
+func deployPrometheusClusterRole(ctx context.Context, c client.Client, logger logr.Logger) error {
 	err := deployDoc(ctx, c, prometheus.PrometheusClusterRole, logger)
 	if err != nil {
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("deploying prometheus ClusterRoleBinding")
 	clusterRoleBinding := fmt.Sprintf(string(prometheus.PrometheusClusterRoleBindingTemplate),
 		kubeprometheus.PrometheusServiceAccountName)
 	err = deployDoc(ctx, c, []byte(clusterRoleBinding), logger)
@@ -356,20 +304,7 @@ func deployPrometheusPermissions(ctx context.Context, c client.Client, logger lo
 		return err
 	}
 
-	sa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      kubeprometheus.PrometheusServiceAccountName,
-			Namespace: prometheus.Namespace,
-		},
-	}
-
-	logger.V(logs.LogDebug).Info("deploying prometheus serviceaccount")
-	err = c.Create(ctx, sa)
-	if err != nil && apierrors.IsAlreadyExists(err) {
-		return nil
-	}
-
-	return err
+	return nil
 }
 
 func deployKubePrometheusStack(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
@@ -409,7 +344,6 @@ func deployPrometheusOperatorInWorklaodCluster(ctx context.Context, c client.Cli
 func deployKubeStateMetricsInWorklaodCluster(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) error {
 
-	logger.V(logs.LogDebug).Info("deploying kubestatemetrics")
 	if err := createNamespace(ctx, c, kubestatemetrics.Namespace); err != nil {
 		return err
 	}
@@ -448,8 +382,8 @@ func addStorageConfig(ctx context.Context, c client.Client, clusterSummary *conf
 	}
 
 	if prometheusInstance.Spec.Storage == nil {
-		const defaultQuantity = 40000000
-		quantity := resource.NewQuantity(defaultQuantity, resource.BinarySI)
+		const req int64 = 40000000
+		quantity := resource.NewQuantity(req, resource.BinarySI)
 		if clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.StorageQuantity != nil {
 			quantity = clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.StorageQuantity
 		}

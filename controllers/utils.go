@@ -23,9 +23,7 @@ import (
 	"io/ioutil"
 
 	"github.com/go-logr/logr"
-	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	"github.com/pkg/errors"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -81,12 +79,6 @@ func InitScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := configv1alpha1.AddToScheme(s); err != nil {
-		return nil, err
-	}
-	if err := kyvernoapi.AddToScheme(s); err != nil {
-		return nil, err
-	}
-	if err := monitoringv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -313,10 +305,15 @@ func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstr
 	return dr, nil
 }
 
-// preprareObjectForUpdate finds if object currently exists. If so, it gets ResourceVersion
-// and set for object, so that object can be applied overridding any content but status
+// preprareObjectForUpdate finds if object currently exists. If object exists:
+// - verifies this object was created by same ConfigMap. Returns an error otherwise.
+// This is needed to prevent misconfigurations. An example would be when different
+// ConfigMaps are referenced by ClusterFeature(s) and contain same policy namespace/name
+// (content might be different) and are about to be deployed in the same CAPI Cluster;
+// - gets ResourceVersion and set for object, so that object can be applied overridding
+// any content but status
 func preprareObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
-	object *unstructured.Unstructured) error {
+	object *unstructured.Unstructured, configMapNamespace, configMapName string) error {
 
 	if object == nil {
 		return fmt.Errorf("object is nil")
@@ -330,9 +327,84 @@ func preprareObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
 		return err
 	}
 
+	if labels := object.GetLabels(); labels != nil {
+		namespace, namespaceOk := labels[ConfigLabelNamespace]
+		name, nameOk := labels[ConfigLabelName]
+
+		if namespaceOk {
+			if namespace != configMapNamespace {
+				return fmt.Errorf("policy (kind: %s) %s is currently deployed by ConfigMap: %s/%s",
+					object.GetKind(), object.GetName(), namespace, name)
+			}
+		}
+		if nameOk {
+			if name != configMapName {
+				return fmt.Errorf("policy (kind: %s) %s is currently deployed by ConfigMap: %s/%s",
+					object.GetKind(), object.GetName(), namespace, name)
+			}
+		}
+	}
+
 	object.SetResourceVersion(currentObject.GetResourceVersion())
 
 	return nil
+}
+
+// addOwnerReference adds clusterSummary as an object's OwnerReference.
+// OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
+// reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
+// because of different ClusterSummary. When cleaning up, a policy can be removed only if no more ClusterSummary
+// are listed as OwnerReferences.
+func addOwnerReference(object *unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary) {
+	onwerReferences := object.GetOwnerReferences()
+	if onwerReferences == nil {
+		onwerReferences = make([]metav1.OwnerReference, 0)
+	}
+
+	for i := range onwerReferences {
+		ref := &onwerReferences[i]
+		if ref.Kind == clusterSummary.Kind &&
+			ref.Name == clusterSummary.Name {
+
+			return
+		}
+	}
+
+	onwerReferences = append(onwerReferences,
+		metav1.OwnerReference{
+			APIVersion: clusterSummary.APIVersion,
+			Kind:       clusterSummary.Kind,
+			Name:       clusterSummary.Name,
+			UID:        clusterSummary.UID,
+		},
+	)
+
+	object.SetOwnerReferences(onwerReferences)
+}
+
+// removeOwnerReference removes clusterSummary as an OwnerReference from object.
+// OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
+// reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
+// because of different ClusterSummary. When cleaning up, a policy can be removed only if no more ClusterSummary
+// are listed as OwnerReferences.
+func removeOwnerReference(object *unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary) {
+	onwerReferences := object.GetOwnerReferences()
+	if onwerReferences == nil {
+		return
+	}
+
+	for i := range onwerReferences {
+		ref := &onwerReferences[i]
+		if ref.Kind == clusterSummary.Kind &&
+			ref.Name == clusterSummary.Name {
+
+			onwerReferences[i] = onwerReferences[len(onwerReferences)-1]
+			onwerReferences = onwerReferences[:len(onwerReferences)-1]
+			break
+		}
+	}
+
+	object.SetOwnerReferences(onwerReferences)
 }
 
 func getEntryKey(resourceKind ReferencedKinds, resourceNamespace, resourceName string) string {

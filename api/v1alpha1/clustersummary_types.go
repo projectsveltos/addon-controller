@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,12 +27,15 @@ const (
 	ClusterSummaryFinalizer = "clustersummaryfinalizer.projectsveltos.io"
 )
 
-// +kubebuilder:validation:Enum:=Kyverno;Role;Prometheus
+// +kubebuilder:validation:Enum:=Kyverno;Role;Prometheus;Gatekeeper
 type FeatureID string
 
 const (
 	// FeatureKyverno is the identifier for Kyverno feature
 	FeatureKyverno = FeatureID("Kyverno")
+
+	// FeatureGatekeeper is the identifier for Gatekeeper feature
+	FeatureGatekeeper = FeatureID("Gatekeeper")
 
 	// FeatureRole is the identifier for ClusterRole/Role feature
 	FeatureRole = FeatureID("Role")
@@ -114,9 +118,13 @@ type ClusterSummaryStatus struct {
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"clusterSummaries,omitempty"`
 
-	// PolicyPrefix is the prefix added to policies deployed by ClusterSummary
-	// instance in a CAPI Cluster
-	PolicyPrefix string `json:"policyPrefix,omitempty"`
+	// GatekeeperSortedPolicies contains gatekeeper referenced configmaps
+	// ordered by ConfigMaps containing ConstraintTemplates last.
+	// When deploying Gatekeeper policies, ConstraintTemplates need to be
+	// installed first.
+	// When cleaning Gatekeeper policies, non ConstraintTemplates need to
+	// be cleaned first.
+	GatekeeperSortedPolicies []corev1.ObjectReference `json:"gatekeeperSortedPolicies,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -166,13 +167,14 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		// Mark all features as removed
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureGatekeeper, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureRole, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
-		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Since all features are now marked as removed, reconciliation will
 		// remove finalizer
@@ -285,7 +287,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 
-		configMap := createConfigMapWithPolicy(configMapNs, randomString(), serviceMonitorFrontend)
+		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(serviceMonitorFrontend, randomString()))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 		referencingClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			Replicas: 1,

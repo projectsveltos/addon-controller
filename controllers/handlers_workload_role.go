@@ -163,7 +163,7 @@ func workloadRoleHash(ctx context.Context, c client.Client, clusterSummaryScope 
 	return h.Sum(nil), nil
 }
 
-func getWorkloadRoleRefs(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference {
+func getWorkloadRoleRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
 	return nil
 }
 
@@ -258,7 +258,7 @@ func deployNamespacedWorkloadRole(ctx context.Context, clusterClient client.Clie
 }
 
 func getRoleName(workloadRole *configv1alpha1.WorkloadRole, clusterSummary *configv1alpha1.ClusterSummary) string {
-	return clusterSummary.Status.PolicyPrefix + "-" + workloadRole.Name
+	return workloadRole.Name
 }
 
 func undeployStaleRoleResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary, currentRoles map[string]bool) error {

@@ -185,8 +185,6 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(waitForObject(ctx, testEnv.Client, configMap)).To(Succeed())
 
-		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
-
 		// Get current clustersummary as we need Status.PolicyPrefix to be set
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
@@ -195,18 +193,20 @@ var _ = Describe("HandlersUtils", func() {
 			configMap, currentClusterSummary, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(policies)).To(Equal(3))
-		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:%s-service0",
-			namespace, currentClusterSummary.Status.PolicyPrefix)))
-		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:%s-service1",
-			namespace, currentClusterSummary.Status.PolicyPrefix)))
-		Expect(policies).To(ContainElement(fmt.Sprintf("Deployment.apps:%s:%s-nginx-deployment",
-			namespace, currentClusterSummary.Status.PolicyPrefix)))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:service0",
+			namespace)))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Service.:%s:service1",
+			namespace)))
+		Expect(policies).To(ContainElement(fmt.Sprintf("Deployment.apps:%s:nginx-deployment",
+			namespace)))
 	})
 
 	It(`undeployStaleResources removes all policies created by ClusterSummary due to ConfigMaps not referenced anymore`, func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
-		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), checkSa)
+		addLabelPolicyName := randomString()
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(addLabelPolicyStr, addLabelPolicyName))
+		checkSaName := randomString()
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(checkSa, checkSaName))
 
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			PolicyRefs: []corev1.ObjectReference{
@@ -220,29 +220,33 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterSummary)).To(Succeed())
-		// Wait for Status.PolicyPrefix to be set
-		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		// Get current clustersummary as we need Status.PolicyPrefix to be set
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
-		// add-labels is the name of addLabelPolicyStr
-		kyvernoName1 := controllers.GetPolicyName("add-labels", currentClusterSummary)
+		Expect(addTypeInformationToObject(testEnv.Scheme(), currentClusterSummary)).To(Succeed())
+
+		kyvernoName1 := controllers.GetPolicyName(addLabelPolicyName, currentClusterSummary)
 		kyverno1 := &kyvernoapi.ClusterPolicy{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   kyvernoName1,
-				Labels: map[string]string{controllers.ClusterSummaryLabelName: currentClusterSummary.Name},
+				Name: kyvernoName1,
+				Labels: map[string]string{
+					controllers.ConfigLabelNamespace: configMap1.Namespace,
+					controllers.ConfigLabelName:      configMap1.Name,
+				},
 			},
 		}
 
-		// check-sa is the name of check-sa
-		kyvernoName2 := controllers.GetPolicyName("check-sa", currentClusterSummary)
+		kyvernoName2 := controllers.GetPolicyName(checkSaName, currentClusterSummary)
 		kyverno2 := &kyvernoapi.Policy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      kyvernoName2,
 				Namespace: "default",
-				Labels:    map[string]string{controllers.ClusterSummaryLabelName: currentClusterSummary.Name},
+				Labels: map[string]string{
+					controllers.ConfigLabelNamespace: configMap2.Namespace,
+					controllers.ConfigLabelName:      configMap2.Name,
+				},
 			},
 		}
 
@@ -263,6 +267,9 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Client.Create(context.TODO(), kyverno1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), kyverno2)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, kyverno2)).To(Succeed())
+
+		addOwnerReference(context.TODO(), testEnv.Client, kyverno1, currentClusterSummary)
+		addOwnerReference(context.TODO(), testEnv.Client, kyverno2, currentClusterSummary)
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), kyverno1)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), kyverno2)).To(Succeed())
@@ -295,7 +302,7 @@ var _ = Describe("HandlersUtils", func() {
 				types.NamespacedName{Namespace: kyverno2.Namespace, Name: kyvernoName2}, currentPolicy)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs = nil
+		currentClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs = nil
 		delete(currentKyvernos, controllers.GetPolicyInfo(kyverno1))
 		delete(currentKyvernos, controllers.GetPolicyInfo(kyverno2))
 

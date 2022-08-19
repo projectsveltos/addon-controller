@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -203,8 +202,6 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
-	r.generatePolicyNamePrefix(clusterSummaryScope)
-
 	r.updatesMaps(clusterSummaryScope)
 
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
@@ -264,6 +261,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
 
+	gatekeeperErr := r.deployGatekeeper(ctx, clusterSummaryScope, logger)
+
 	prometheusErr := r.deployPrometheus(ctx, clusterSummaryScope, logger)
 
 	if workloadErr != nil {
@@ -272,6 +271,10 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	if kyvernoErr != nil {
 		return kyvernoErr
+	}
+
+	if gatekeeperErr != nil {
+		return gatekeeperErr
 	}
 
 	if prometheusErr != nil {
@@ -295,7 +298,10 @@ func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSumma
 func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration == nil {
 		logger.V(logs.LogDebug).Info("no kyverno configuration")
-		return nil
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureKyverno) {
+			logger.V(logs.LogDebug).Info("no kyverno status. Do not reconcile this")
+			return nil
+		}
 	}
 
 	f := feature{
@@ -308,10 +314,32 @@ func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSum
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
+func (r *ClusterSummaryReconciler) deployGatekeeper(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration == nil {
+		logger.V(logs.LogDebug).Info("no gatekeeper configuration")
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureGatekeeper) {
+			logger.V(logs.LogDebug).Info("no gatekeeper status. Do not reconcile this")
+			return nil
+		}
+	}
+
+	f := feature{
+		id:          configv1alpha1.FeatureGatekeeper,
+		currentHash: gatekeeperHash,
+		deploy:      deployGatekeeper,
+		getRefs:     getGatekeeperRefs,
+	}
+
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
 func (r *ClusterSummaryReconciler) deployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration == nil {
 		logger.V(logs.LogDebug).Info("no prometheus configuration")
-		return nil
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeaturePrometheus) {
+			logger.V(logs.LogDebug).Info("no prometheus status. Do not reconcile this")
+			return nil
+		}
 	}
 
 	f := feature{
@@ -342,6 +370,8 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
 
+	gatekeeperErr := r.unDeployGatekeeper(ctx, clusterSummaryScope, logger)
+
 	prometheusErr := r.undeployPrometheus(ctx, clusterSummaryScope, logger)
 
 	if workloadErr != nil {
@@ -350,6 +380,10 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	if kyvernoErr != nil {
 		return kyvernoErr
+	}
+
+	if gatekeeperErr != nil {
+		return gatekeeperErr
 	}
 
 	if prometheusErr != nil {
@@ -379,6 +413,16 @@ func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterS
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
+func (r *ClusterSummaryReconciler) unDeployGatekeeper(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := feature{
+		id:          configv1alpha1.FeatureGatekeeper,
+		currentHash: gatekeeperHash,
+		deploy:      unDeployGatekeeper,
+	}
+
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
 func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := feature{
 		id:          configv1alpha1.FeaturePrometheus,
@@ -387,14 +431,6 @@ func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clust
 	}
 
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) generatePolicyNamePrefix(clusterSummaryScope *scope.ClusterSummaryScope) {
-	if clusterSummaryScope.ClusterSummary.Status.PolicyPrefix == "" {
-		// TODO: make sure no two ClusterSummary get same prefix
-		const length = 10
-		clusterSummaryScope.ClusterSummary.Status.PolicyPrefix = "cs" + util.RandomString(length)
-	}
 }
 
 func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {
@@ -434,6 +470,13 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {
 			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Namespace
 			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Name
+			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
+		}
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
+		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs {
+			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs[i].Namespace
+			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs[i].Name
 			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
 		}
 	}

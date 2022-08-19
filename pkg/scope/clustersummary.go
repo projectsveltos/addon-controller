@@ -193,20 +193,22 @@ func (s *ClusterSummaryScope) SetDeployedGroupVersionKind(featureID configv1alph
 func (s *ClusterSummaryScope) updateDeployedGroupVersionKind(fs *configv1alpha1.FeatureSummary,
 	deployed []schema.GroupVersionKind) {
 
+	tmp := make([]string, 0)
+
+	// Preserve the order
 	current := make(map[string]bool)
 	for _, k := range fs.DeployedGroupVersionKind {
 		current[k] = true
+		tmp = append(tmp, k)
 	}
 
 	for i := range deployed {
 		key := fmt.Sprintf("%s.%s.%s", deployed[i].Kind, deployed[i].Version, deployed[i].Group)
-		current[key] = true
+		if _, ok := current[key]; !ok {
+			current[key] = true
+			tmp = append(tmp, key)
+		}
 	}
 
-	fs.DeployedGroupVersionKind = make([]string, len(current))
-	i := 0
-	for k := range current {
-		fs.DeployedGroupVersionKind[i] = k
-		i++
-	}
+	fs.DeployedGroupVersionKind = tmp
 }

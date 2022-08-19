@@ -285,7 +285,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		}
 
 		configMapNs := randomString()
-		configMap := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
+		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
 
 		clusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs = []corev1.ObjectReference{
 			{Name: workload.Name},
@@ -331,7 +331,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		workload.Spec.Rules = append(workload.Spec.Rules,
 			rbacv1.PolicyRule{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}})
 		Expect(c.Update(context.TODO(), workload)).To(Succeed())
-		configMap = createConfigMapWithPolicy(configMapNs, configMap.Name, checkSa)
+		configMap = createConfigMapWithPolicy(configMapNs, configMap.Name, fmt.Sprintf(checkSa, randomString()))
 		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
@@ -554,8 +554,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), addLabelPolicyStr)
-		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), checkSa)
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(checkSa, randomString()))
 
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			PolicyRefs: []corev1.ObjectReference{

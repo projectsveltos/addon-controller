@@ -54,6 +54,13 @@ type KyvernoConfiguration struct {
 	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
 }
 
+type GatekeeperConfiguration struct {
+	// PolicyRef references ConfigMaps containing the Gatekeeper policies
+	// that need to be deployed in the workload cluster. This includes and it is not limited
+	// to contrainttemplates, configs, etc.
+	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+}
+
 // InstallationMode specifies how prometheus is deployed in a CAPI Cluster.
 //+kubebuilder:validation:Enum:=KubeStateMetrics;KubePrometheus;Custom
 type InstallationMode string
@@ -125,6 +132,12 @@ type ClusterFeatureSpec struct {
 	// specified Kyverno policies.
 	// +optional
 	KyvernoConfiguration *KyvernoConfiguration `json:"kyvernoConfiguration,omitempty"`
+
+	// GatekeeperConfiguration contains the Gatekeeper configuration.
+	// If not nil, Gatekeeper will be deployed in the workload cluster along with, if any,
+	// specified Gatekeeper policies.
+	// +optional
+	GatekeeperConfiguration *GatekeeperConfiguration `json:"gatekeeperConfiguration,omitempty"`
 
 	// PrometheusConfiguration contains the Prometheus configuration.
 	// If not nil, at the very least Prometheus operator will be deployed in the workload cluster

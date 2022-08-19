@@ -177,6 +177,11 @@ func registerFeatures(d deployer.DeployerInterface) {
 		setupLog.Error(err, "failed to register feature FeatureKyerno")
 		os.Exit(1)
 	}
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureGatekeeper))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeatureGatekeeper")
+		os.Exit(1)
+	}
 	err = d.RegisterFeatureID(string(configv1alpha1.FeaturePrometheus))
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeaturePrometheus")

@@ -55,7 +55,6 @@ var (
 	GetWorkloadRoleRefs          = getWorkloadRoleRefs
 	GetRoleName                  = getRoleName
 
-	DeployKyvernoPolicy            = deployKyvernoPolicy
 	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
 	IsKyvernoReady                 = isKyvernoReady
 	KyvernoHash                    = kyvernoHash
@@ -74,6 +73,14 @@ var (
 	UnDeployPrometheus                        = unDeployPrometheus
 	GetPrometheusInstance                     = getPrometheusInstance
 	AddStorageConfig                          = addStorageConfig
+
+	DeployGatekeeperInWorklaodCluster = deployGatekeeperInWorklaodCluster
+	IsGatekeeperReady                 = isGatekeeperReady
+	UnDeployGatekeeper                = unDeployGatekeeper
+	DeployGatekeeper                  = deployGatekeeper
+	GatekeeperHash                    = gatekeeperHash
+	HasContraintTemplates             = hasContraintTemplates
+	SortConfigMapByConstraintsFirst   = sortConfigMapByConstraintsFirst
 )
 
 var (
@@ -96,6 +103,8 @@ var (
 var (
 	GetClusterFeatureOwner = getClusterFeatureOwner
 	GetUnstructured        = getUnstructured
+	AddOwnerReference      = addOwnerReference
+	RemoveOwnerReference   = removeOwnerReference
 )
 
 var (

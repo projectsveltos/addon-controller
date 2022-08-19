@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
+	opav1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
 	"github.com/pkg/errors"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +38,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -63,7 +63,7 @@ const (
 	addLabelPolicyStr = `apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: add-labels
+  name: %s
   annotations:
     policies.kyverno.io/title: Add Labels
     policies.kyverno.io/category: Sample
@@ -92,7 +92,7 @@ spec:
 	allowLabelChangeStr = `apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
-  name: allowed-label-changes
+  name: %s
   annotations:
     pod-policies.kyverno.io/autogen-controllers: none
     policies.kyverno.io/title: Allowed Label Changes
@@ -140,7 +140,7 @@ spec:
 	checkSa = `apiVersion: kyverno.io/v1
 kind: Policy
 metadata:
-  name: check-sa
+  name: %s
   namespace: default
   annotations:
     policies.kyverno.io/title: Check ServiceAccount
@@ -176,7 +176,7 @@ spec:
 	serviceMonitorFrontend = `apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: example-app
+  name: %s
   labels:
     team: frontend
 spec:
@@ -194,7 +194,7 @@ metadata:
     app.kubernetes.io/name: kube-state-metrics
     app.kubernetes.io/part-of: kube-prometheus
     app.kubernetes.io/version: 2.5.0
-  name: kube-state-metrics
+  name: %s
   namespace: monitoring
 spec:
   endpoints:
@@ -244,6 +244,9 @@ func setupScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := kyvernoapi.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := opav1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
@@ -367,7 +370,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 	})
 
 	It("getUnstructured returns proper object", func() {
-		policy, err := controllers.GetUnstructured([]byte(addLabelPolicyStr))
+		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(addLabelPolicyStr, randomString())))
 		Expect(err).To(BeNil())
 		Expect(policy.GetKind()).To(Equal("ClusterPolicy"))
 	})
@@ -479,7 +482,45 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
 	})
+
+	It("addOwnerReference adds an OwnerReference to an object. removeOwnerReference removes it", func() {
+		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(addLabelPolicyStr, randomString())))
+		Expect(err).To(BeNil())
+		Expect(policy.GetKind()).To(Equal("ClusterPolicy"))
+
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		controllers.AddOwnerReference(policy, clusterSummary)
+
+		Expect(policy.GetOwnerReferences()).ToNot(BeNil())
+		Expect(len(policy.GetOwnerReferences())).To(Equal(1))
+		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal("ClusterSummary"))
+		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterSummary.Name))
+
+		controllers.RemoveOwnerReference(policy, clusterSummary)
+		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
+	})
 })
+
+// addOwnerReference adds owner as OwnerReference of obj
+func addOwnerReference(ctx context.Context, c client.Client, obj, owner client.Object) {
+	objCopy := obj.DeepCopyObject().(client.Object)
+	key := client.ObjectKeyFromObject(obj)
+	Expect(c.Get(ctx, key, objCopy)).To(Succeed())
+	refs := objCopy.GetOwnerReferences()
+	if refs == nil {
+		refs = make([]metav1.OwnerReference, 0)
+	}
+	refs = append(refs,
+		metav1.OwnerReference{
+			UID:        owner.GetUID(),
+			Name:       owner.GetName(),
+			Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
+			APIVersion: owner.GetResourceVersion(),
+		})
+	objCopy.SetOwnerReferences(refs)
+	Expect(c.Update(ctx, objCopy)).To(Succeed())
+}
 
 // waitForObject waits for the cache to be updated helps in preventing test flakes due to the cache sync delays.
 func waitForObject(ctx context.Context, c client.Client, obj client.Object) error {
@@ -500,33 +541,6 @@ func waitForObject(ctx context.Context, c client.Client, obj client.Object) erro
 		return errors.Wrapf(err, "object %s, %s is not being added to the testenv client cache", obj.GetObjectKind().GroupVersionKind().String(), key)
 	}
 	return nil
-}
-
-// setClusterSummaryPolicyPrefix sets ClusterSummary Status.PolicyPrefix.
-// Only use with fake client. With testEnv use waitForClusterSummaryPolicyPrefix
-func setClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
-	Expect(waitForObject(ctx, c, clusterSummary)).To(Succeed())
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Status.PolicyPrefix = "cs-" + randomString()
-		return c.Status().Update(ctx, currentClusterSummary)
-	})
-	Expect(err).To(BeNil())
-}
-
-// waitForClusterSummaryPolicyPrefix waits for ClusterSummary Status.PolicyPrefix to be set
-func waitForClusterSummaryPolicyPrefix(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
-	currentClusterSummary := &configv1alpha1.ClusterSummary{}
-	Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-	currentClusterSummary.Status.PolicyPrefix = "cs" + randomString()
-	Expect(c.Status().Update(ctx, currentClusterSummary)).To(Succeed())
-
-	Eventually(func() bool {
-		currentClusterSummary = &configv1alpha1.ClusterSummary{}
-		Expect(c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		return currentClusterSummary.Status.PolicyPrefix != ""
-	}, timeout, pollingInterval).Should(BeTrue())
 }
 
 // createConfigMapWithPolicy creates a configMap with Data containing base64 encoded policies

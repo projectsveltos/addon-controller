@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"reflect"
 
 	"github.com/gdexlab/go-render/render"
@@ -245,14 +246,17 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("unDeployPrometheus removes all Kyverno policies created by a ClusterSummary", func() {
-		serviceMonitor0, err := controllers.GetUnstructured([]byte(serviceMonitorFrontend))
+		serviceMonitor0, err := controllers.GetUnstructured([]byte(fmt.Sprintf(serviceMonitorFrontend, randomString())))
 		Expect(err).To(BeNil())
 		serviceMonitor0.SetNamespace(namespace)
 
-		serviceMonitor1, err := controllers.GetUnstructured([]byte(serviceMonitorKubeMtrics))
+		serviceMonitor1, err := controllers.GetUnstructured([]byte(fmt.Sprintf(serviceMonitorKubeMtrics, randomString())))
 		Expect(err).To(BeNil())
 		serviceMonitor1.SetNamespace(namespace)
-		serviceMonitor1.SetLabels(map[string]string{controllers.ClusterSummaryLabelName: clusterSummary.Name})
+		serviceMonitor1.SetLabels(map[string]string{
+			controllers.ConfigLabelName:      randomString(),
+			controllers.ConfigLabelNamespace: randomString(),
+		})
 
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -269,16 +273,13 @@ var _ = Describe("HanldersPrometheus", func() {
 				Name: namespace,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor0)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor1)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
-		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = nil
 		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeaturePrometheus,
@@ -290,29 +291,41 @@ var _ = Describe("HanldersPrometheus", func() {
 		}
 		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
+		Expect(addTypeInformationToObject(testEnv.Scheme(), currentClusterSummary)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor1)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, serviceMonitor1)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, serviceMonitor1, currentClusterSummary)
+
+		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor0)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, serviceMonitor0)).To(Succeed())
+
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
 		Expect(controllers.UnDeployPrometheus(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureKyverno), klogr.New())).To(Succeed())
+			string(configv1alpha1.FeaturePrometheus), klogr.New())).To(Succeed())
 
 		// UnDeployPrometheus finds all policies deployed because of a clusterSummary and deletes those.
-		// Expect all kyverno policies but ServiceMonitor0 (ClusterSummaryLabelName is not set on it) to be deleted.
+		// Expect all kyverno policies but ServiceMonitor0 (ConfigLabelNamespace/ConfigLabelName is not set on it
+		// and ClusterSummary is the only OwnerReference) to be deleted.
 
 		serviceMonitor := &monitoringv1.ServiceMonitor{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
-				types.NamespacedName{Namespace: serviceMonitor0.GetNamespace(), Name: serviceMonitor0.GetName()}, serviceMonitor)
-			if err != nil {
-				return false
-			}
 			err = testEnv.Client.Get(context.TODO(),
-				types.NamespacedName{Namespace: serviceMonitor1.GetNamespace(), Name: serviceMonitor1.GetName()}, serviceMonitor)
+				types.NamespacedName{Namespace: serviceMonitor1.GetNamespace(), Name: serviceMonitor1.GetName()},
+				serviceMonitor)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Since serviceMonitor) was not created by clusterSummary, expect it to be still present
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: serviceMonitor0.GetNamespace(),
+				Name: serviceMonitor0.GetName()}, serviceMonitor)).To(Succeed())
 	})
 
 	It("getPrometheusInstance returns prometheus instance", func() {
@@ -372,8 +385,10 @@ var _ = Describe("HanldersPrometheus", func() {
 var _ = Describe("Hash methods", func() {
 	It("prometheusHash returns hash considering all referenced configmap contents", func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), serviceMonitorFrontend)
-		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), serviceMonitorKubeMtrics)
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(),
+			fmt.Sprintf(serviceMonitorFrontend, randomString()))
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(),
+			fmt.Sprintf(serviceMonitorKubeMtrics, randomString()))
 
 		namespace := "reconcile" + randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
@@ -489,6 +504,4 @@ func prepareForPrometheusDeployment(clusterSummary *configv1alpha1.ClusterSummar
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
-
-	waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
 }

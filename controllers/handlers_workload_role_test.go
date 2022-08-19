@@ -118,12 +118,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
-
-		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
-		// This is used by DeployNamespacedWorkloadRole
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
-
 		Expect(controllers.DeployNamespacedWorkloadRole(ctx, c, workloadRole, clusterSummary, logger)).To(Succeed())
 
 		listOptions := []client.ListOption{
@@ -174,12 +168,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
-
-		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
-		// This is used by GetRoleName
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		Expect(controllers.DeployClusterWorkloadRole(ctx, c, workloadRole, clusterSummary, logger)).To(Succeed())
 
@@ -261,8 +249,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
-		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
-
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
@@ -270,10 +256,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 			return controllers.DeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 				string(configv1alpha1.FeatureRole), logger)
 		}, timeout, pollingInterval).Should(BeNil())
-
-		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
-		// This is used by GetRoleName
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		name := controllers.GetRoleName(clusterWorkloadRole, clusterSummary)
 		// Eventual loop so testEnv Cache is synced
@@ -357,8 +339,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
-		waitForClusterSummaryPolicyPrefix(context.TODO(), testEnv.Client, clusterSummary)
-
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			return controllers.UnDeployWorkloadRoles(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
@@ -414,12 +394,6 @@ var _ = Describe("HandlersWorkloadRole", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		setClusterSummaryPolicyPrefix(context.TODO(), c, clusterSummary)
-
-		// Read the current clusterSummary, so clusterSummary.Status.PolicyPrefix is set.
-		// This is used by UndeployStaleRoleResources
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 
 		currentRoles := map[string]bool{}
 		currentRoles[roleName] = true

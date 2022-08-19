@@ -36,7 +36,7 @@ import (
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
-type getPolicyRefs func(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference
+type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference
 
 type feature struct {
 	id          configv1alpha1.FeatureID
@@ -114,7 +114,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	}
 
 	logger.V(logs.LogDebug).Info("updating deployed GVKs")
-	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id, f.getRefs(clusterSummaryScope), logger)
+	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id, f.getRefs(clusterSummaryScope.ClusterSummary), logger)
 	if err != nil {
 		return err
 	}
@@ -186,6 +186,22 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	}
 
 	return fmt.Errorf("cleanup request is queued")
+}
+
+// isFeatureStatusPresent returns true if feature status is set.
+// That means feature was deployed/being deployed
+func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummaryScope *scope.ClusterSummaryScope,
+	featureID configv1alpha1.FeatureID) bool {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	for i := range clusterSummary.Status.FeatureSummaries {
+		fs := clusterSummary.Status.FeatureSummaries[i]
+		if fs.FeatureID == featureID {
+			return true
+		}
+	}
+	return false
 }
 
 // isFeatureDeployed returns true if feature is marked as deployed (present in FeatureSummaries and status
@@ -292,7 +308,7 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 	clusterSummaryScope *scope.ClusterSummaryScope, featureID configv1alpha1.FeatureID,
 	references []corev1.ObjectReference, logger logr.Logger) error {
 
-	// Colllect  all referenced configMaps.
+	// Collect  all referenced configMaps.
 	configMaps, err := collectConfigMaps(ctx, r.Client, references, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps. Err: %v", err))
@@ -311,17 +327,14 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 		referencedPolicies = append(referencedPolicies, policies...)
 	}
 
+	gvks := make([]schema.GroupVersionKind, 0)
 	gvkMap := make(map[schema.GroupVersionKind]bool)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
-		gvkMap[policy.GroupVersionKind()] = true
-	}
-
-	i := 0
-	gvks := make([]schema.GroupVersionKind, len(gvkMap))
-	for k := range gvkMap {
-		gvks[i] = k
-		i++
+		if _, ok := gvkMap[policy.GroupVersionKind()]; !ok {
+			gvks = append(gvks, policy.GroupVersionKind())
+			gvkMap[policy.GroupVersionKind()] = true
+		}
 	}
 
 	// update status with list of GroupVersionKinds deployed in a CAPI Cluster

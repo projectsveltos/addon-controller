@@ -287,7 +287,7 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) 
 ##@ Generators
 
 .PHONY: clean-generated-files
-clean-generated-files: clean-kyverno clean-prometheus clean-kube-prometheus clean-kube-state-metrics ## Removes generated files.
+clean-generated-files: clean-kyverno clean-gatekeeper clean-prometheus clean-kube-prometheus clean-kube-state-metrics ## Removes generated files.
 
 # Kyverno
 
@@ -302,6 +302,20 @@ clean-kyverno: ## Remove kyverno generated file.
 kyverno: ## Download kyverno install.yaml and generate kyverno files.
 	curl -L https://raw.githubusercontent.com/kyverno/kyverno/release-$(KYVERNO_VERSION)/config/release/install.yaml -o $(KYVERNO_YAML_FILE)
 	cd internal/kyverno; go generate
+
+# GATEKEEPER
+
+GATEKEEPER_VERSION :=v3.9.0
+GATEKEEPER_YAML_FILE := internal/gatekeeper/gatekeeper.yaml
+
+.PHONY: clean-gatekeeper
+clean-gatekeeper: ## Remove gatekeeper generated file.
+	rm -f $(GATEKEEPER_YAML_FILE)
+
+.PHONY: gatekeeper
+gatekeeper: ## Download gatekeeper generate gatekeeper files.
+	curl -L https://raw.githubusercontent.com/open-policy-agent/gatekeeper/$(GATEKEEPER_VERSION)/deploy/gatekeeper.yaml -o $(GATEKEEPER_YAML_FILE)
+	cd internal/gatekeeper; go generate
 
 
 # Prometheus Operator

@@ -24,11 +24,9 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -74,8 +72,10 @@ func deployKyverno(ctx context.Context, c client.Client,
 
 	currentPolicies := make(map[string]bool, 0)
 	if clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
+		refs := getKyvernoRefs(clusterSummary)
+
 		var confgiMaps []corev1.ConfigMap
-		confgiMaps, err = collectConfigMaps(ctx, c, clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs, logger)
+		confgiMaps, err = collectConfigMaps(ctx, c, refs, logger)
 		if err != nil {
 			return err
 		}
@@ -172,38 +172,16 @@ func kyvernoHash(ctx context.Context, c client.Client, clusterSummaryScope *scop
 	return h.Sum(nil), nil
 }
 
-func getKyvernoRefs(clusterSummaryScope *scope.ClusterSummaryScope) []corev1.ObjectReference {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
-		return clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs
+func getKyvernoRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
+	if clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
+		return clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs
 	}
 	return nil
 }
 
 // isKyvernoReady checks whether kyverno deployment is present and ready
 func isKyvernoReady(ctx context.Context, c client.Client, logger logr.Logger) (present, ready bool, err error) {
-	logger = logger.WithValues("kyvernonamespace", kyverno.Namespace, "kyvernodeployment", kyverno.Deployment)
-	present = false
-	ready = false
-	depl := &appsv1.Deployment{}
-	err = c.Get(ctx, types.NamespacedName{Namespace: kyverno.Namespace, Name: kyverno.Deployment}, depl)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogDebug).Info("Kyverno deployment not found")
-			err = nil
-			return
-		}
-		return
-	}
-
-	present = true
-
-	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
-		logger.V(logs.LogDebug).Info("Not all replicas are ready for Kyverno deployment")
-		return
-	}
-
-	ready = true
-	return
+	return isDeploymentReady(ctx, c, kyverno.Namespace, kyverno.Deployment, logger)
 }
 
 func changeReplicas(content string, r uint) string {
@@ -222,21 +200,4 @@ func changeReplicas(content string, r uint) string {
 func deployKyvernoInWorklaodCluster(ctx context.Context, c client.Client, replicas uint, logger logr.Logger) error {
 	kyvernoYAML := changeReplicas(string(kyverno.KyvernoYAML), replicas)
 	return deployDoc(ctx, c, []byte(kyvernoYAML), logger)
-}
-
-func deployKyvernoPolicy(ctx context.Context, config *rest.Config, c client.Client,
-	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	currentKyvernos map[string]bool,
-	logger logr.Logger) error {
-
-	addedPolicies, err := deployContentOfConfigMap(ctx, config, c, configMap, clusterSummary, logger)
-	if err != nil {
-		return err
-	}
-
-	for _, p := range addedPolicies {
-		currentKyvernos[p] = true
-	}
-
-	return nil
 }

@@ -27,7 +27,9 @@ import (
 	"strings"
 	"text/template"
 
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubectl/pkg/scheme"
 )
 
@@ -57,11 +59,15 @@ const Namespace = {{ printf "\"%s\"" .Namespace }}
 // Gatekeeper deployment names
 var Deployments = []string{ {{range $element := .Deployments}} "{{$element}}", {{end}} }
 
+const AuditDeployment = {{ printf "\"%s\"" .AuditDeployment }}
+
 var {{ .ExportedName }}YAML = []byte({{- printf "%s" .YAML -}})
 `
 
 	separator = "---\n"
 )
+
+const auditDeploymentName = "gatekeeper-audit"
 
 func generateGatekeeper(filename, outputFilename, exportedName string) {
 	fileAbs, err := filepath.Abs(filename)
@@ -79,6 +85,7 @@ func generateGatekeeper(filename, outputFilename, exportedName string) {
 
 	namespaceName := getNamespaceName(contentStr)
 	deploymentNames := getDeploymentNames(contentStr)
+	verifyAuditDeploymentName(contentStr)
 
 	contentStr = "`" + contentStr + "`"
 
@@ -91,16 +98,18 @@ func generateGatekeeper(filename, outputFilename, exportedName string) {
 
 	// Store file contents.
 	type Info struct {
-		YAML         string
-		Namespace    string
-		Deployments  []string
-		ExportedName string
+		YAML            string
+		Namespace       string
+		Deployments     []string
+		AuditDeployment string
+		ExportedName    string
 	}
 	mi := Info{
-		YAML:         contentStr,
-		Namespace:    namespaceName,
-		Deployments:  deploymentNames,
-		ExportedName: exportedName,
+		YAML:            contentStr,
+		Namespace:       namespaceName,
+		Deployments:     deploymentNames,
+		ExportedName:    exportedName,
+		AuditDeployment: auditDeploymentName,
 	}
 
 	// Generate template.
@@ -176,6 +185,46 @@ func getDeploymentNames(content string) []string {
 	}
 
 	return deploymentNames
+}
+
+func verifyAuditDeploymentName(content string) {
+	found := false
+
+	elements := strings.Split(content, separator)
+	for i := range elements {
+		if elements[i] == "" {
+			continue
+		}
+
+		element, err := getUnstructured([]byte(elements[i]))
+		if err != nil {
+			panic(err)
+		}
+
+		if element.IsList() {
+			continue
+		}
+
+		if element.GetKind() == "Deployment" && element.GetName() == auditDeploymentName {
+			found = true
+
+			// Verifies it contains only one container
+			depl := &appsv1.Deployment{}
+			err = runtime.DefaultUnstructuredConverter.FromUnstructured(element.UnstructuredContent(), depl)
+			if err != nil {
+				panic(err)
+			}
+			if len(depl.Spec.Template.Spec.Containers) != 1 {
+				panic(fmt.Errorf("audit deployment has more than one container"))
+			}
+
+			break
+		}
+	}
+
+	if found == false {
+		panic(fmt.Errorf("did not find audit deployment"))
+	}
 }
 
 func getUnstructured(object []byte) (*unstructured.Unstructured, error) {

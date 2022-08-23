@@ -48,6 +48,24 @@ spec:
                       If not nil, Gatekeeper will be deployed in the workload cluster
                       along with, if any, specified Gatekeeper policies.
                     properties:
+                      auditChunkSize:
+                        default: 500
+                        description: AuditChunkSize is the Kubernetes API chunking
+                          List results when retrieving cluster resources using discovery
+                          client
+                        type: integer
+                      auditFromCache:
+                        default: false
+                        description: AuditFromCache, if set to true, pull resources
+                          from OPA cache when auditing. Note that this requires replication
+                          of Kubernetes resources into OPA before they can be evaluated
+                          against the enforced policies
+                        type: boolean
+                      auditInterval:
+                        default: 60
+                        description: AuditInterval is the audit interval time. Disable
+                          audit interval by setting 0
+                        type: integer
                       policyRef:
                         description: PolicyRef references ConfigMaps containing the
                           Gatekeeper policies that need to be deployed in the workload

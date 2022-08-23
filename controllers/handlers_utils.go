@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"fmt"
 	"strings"
 
@@ -135,14 +134,7 @@ func collectContentOfConfigMap(configMap *corev1.ConfigMap, logger logr.Logger) 
 
 	l := logger.WithValues("configMap", fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
 	for k := range configMap.Data {
-		// Base64 decode policy
-		policyDecoded, err := b64.StdEncoding.DecodeString(configMap.Data[k])
-		if err != nil {
-			l.Error(err, fmt.Sprintf("failed to base64 decode policy from Data. Key: %s", k))
-			return nil, err
-		}
-
-		elements := strings.Split(string(policyDecoded), separator)
+		elements := strings.Split(configMap.Data[k], separator)
 		for i := range elements {
 			policy, err := getUnstructured([]byte(elements[i]))
 			if err != nil {

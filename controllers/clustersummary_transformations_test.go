@@ -40,10 +40,11 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		namespace = "map-function" + randomString()
 	})
 
-	It("requeueClusterFeatureForCluster returns matching ClusterFeatures", func() {
-		workloadRole := &configv1alpha1.WorkloadRole{
+	It("RequeueClusterSummaryForConfigMap returns matching ClusterSummary", func() {
+		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name:      randomString(),
+				Namespace: randomString(),
 			},
 		}
 
@@ -55,8 +56,8 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: workloadRole.Name},
+					ResourceRefs: []corev1.ObjectReference{
+						{Namespace: configMap.Namespace, Name: configMap.Name},
 					},
 				},
 			},
@@ -70,15 +71,15 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: randomString()},
+					ResourceRefs: []corev1.ObjectReference{
+						{Namespace: configMap.Namespace, Name: randomString()},
 					},
 				},
 			},
 		}
 
 		initObjects := []client.Object{
-			workloadRole,
+			configMap,
 			clusterSummary0,
 			clusterSummary1,
 		}
@@ -95,17 +96,17 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 
 		set := controllers.Set{}
 		controllers.Insert(&set, clusterSummary0.Name)
-		key := controllers.GetEntryKey(controllers.WorkloadRole, "", workloadRole.Name)
+		key := controllers.GetEntryKey(controllers.ConfigMap, configMap.Namespace, configMap.Name)
 		reconciler.ReferenceMap[key] = &set
 
-		requests := controllers.RequeueClusterSummaryForWorkloadRole(reconciler, workloadRole)
+		requests := controllers.RequeueClusterSummaryForConfigMap(reconciler, configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
 		controllers.Insert(&set, clusterSummary1.Name)
 		reconciler.ReferenceMap[key] = &set
 
-		requests = controllers.RequeueClusterSummaryForWorkloadRole(reconciler, workloadRole)
+		requests = controllers.RequeueClusterSummaryForConfigMap(reconciler, configMap)
 		Expect(requests).To(HaveLen(2))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary0.Name}}))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary1.Name}}))

@@ -167,9 +167,9 @@ func initFlags(fs *pflag.FlagSet) {
 }
 
 func registerFeatures(d deployer.DeployerInterface) {
-	err := d.RegisterFeatureID(string(configv1alpha1.FeatureRole))
+	err := d.RegisterFeatureID(string(configv1alpha1.FeatureResources))
 	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureRole")
+		setupLog.Error(err, "failed to register feature FeatureResources")
 		os.Exit(1)
 	}
 	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))

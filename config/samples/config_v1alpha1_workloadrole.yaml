@@ -1,6 +1,0 @@
-apiVersion: config.projectsveltos.io/v1alpha1
-kind: WorkloadRole
-metadata:
-  name: workloadrole-sample
-spec:
-  # TODO(user): Add fields here

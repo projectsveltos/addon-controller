@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,7 +27,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -103,16 +101,7 @@ var _ = Describe("Kyverno", func() {
 
 	It("Deploy and updates Kyverno correctly", Label("FV"), func() {
 		Byf("Add configMap containing kyverno policy")
-		labelsEncoded := b64.StdEncoding.EncodeToString([]byte(labels))
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      namePrefix + randomString(),
-			},
-			Data: map[string]string{
-				"addlabel": labelsEncoded,
-			},
-		}
+		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), labels)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -158,8 +147,7 @@ var _ = Describe("Kyverno", func() {
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-		ingressEncoded := b64.StdEncoding.EncodeToString([]byte(ingress))
-		currentConfigMap.Data["ingress"] = ingressEncoded
+		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, ingress)
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
 		policyName = "disallow-empty-ingress-host"

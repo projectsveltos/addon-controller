@@ -20,11 +20,13 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"unicode/utf8"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -227,8 +229,8 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 			clusterFeature.Spec.KyvernoConfiguration) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration,
 				clusterFeature.Spec.PrometheusConfiguration) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs,
-				clusterFeature.Spec.WorkloadRoleRefs) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs,
+				clusterFeature.Spec.ResourceRefs) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterName, clusterName)
 	}, timeout, pollingInterval).Should(BeTrue())
@@ -252,4 +254,40 @@ func verifyClusterFeatureMatches(clusterFeature *configv1alpha1.ClusterFeature) 
 			currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
 			currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
 	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+// createConfigMapWithPolicy creates a configMap with passed in policies
+// nolint: unparam // want to keep namespace as args
+func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      configMapName,
+		},
+		Data: map[string]string{},
+	}
+	for i := range policyStrs {
+		key := fmt.Sprintf("policy%d.yaml", i)
+		if utf8.Valid([]byte(policyStrs[i])) {
+			cm.Data[key] = policyStrs[i]
+		} else {
+			cm.BinaryData[key] = []byte(policyStrs[i])
+		}
+	}
+
+	return cm
+}
+
+// updateConfigMapWithPolicy updates a configMap with passed in policies
+func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *corev1.ConfigMap {
+	for i := range policyStrs {
+		key := fmt.Sprintf("policy%d.yaml", i)
+		if utf8.Valid([]byte(policyStrs[i])) {
+			cm.Data[key] = policyStrs[i]
+		} else {
+			cm.BinaryData[key] = []byte(policyStrs[i])
+		}
+	}
+
+	return cm
 }

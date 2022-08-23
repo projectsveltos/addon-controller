@@ -57,15 +57,11 @@ type ReferencedKinds int64
 
 const (
 	ConfigMap ReferencedKinds = iota
-	WorkloadRole
 )
 
 func (s ReferencedKinds) String() string {
-	switch s {
-	case ConfigMap:
+	if s == ConfigMap {
 		return "configmap"
-	case WorkloadRole:
-		return "worklaodrole"
 	}
 	return "unknown"
 }

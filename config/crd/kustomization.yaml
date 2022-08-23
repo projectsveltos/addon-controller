@@ -2,7 +2,6 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/config.projectsveltos.io_workloadroles.yaml
 - bases/config.projectsveltos.io_clusterfeatures.yaml
 - bases/config.projectsveltos.io_clustersummaries.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
@@ -10,14 +9,12 @@ resources:
 patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
-#- patches/webhook_in_workloadroles.yaml
 #- patches/webhook_in_clusterfeatures.yaml
 #- patches/webhook_in_clustersummaries.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable cert-manager, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
-#- patches/cainjection_in_workloadroles.yaml
 #- patches/cainjection_in_clusterfeatures.yaml
 #- patches/cainjection_in_clustersummaries.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch

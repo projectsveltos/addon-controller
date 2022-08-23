@@ -23,42 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
-
-func (r *ClusterSummaryReconciler) requeueClusterSummaryForWorkloadRole(
-	o client.Object,
-) []reconcile.Request {
-
-	workloadRole := o.(*configv1alpha1.WorkloadRole)
-	logger := klogr.New().WithValues(
-		"objectMapper",
-		"requeueClusterSummaryForWorkloadRole",
-		"workloadRole",
-		workloadRole.Name,
-	)
-
-	logger.V(logs.LogDebug).Info("reacting to WorkloadRole change")
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	key := getEntryKey(WorkloadRole, "", workloadRole.Name)
-	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())
-
-	consumers := r.getReferenceMapForEntry(key).items()
-
-	for i := range consumers {
-		requests[i] = ctrl.Request{
-			NamespacedName: client.ObjectKey{
-				Name: consumers[i],
-			},
-		}
-	}
-
-	return requests
-}
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForConfigMap(
 	o client.Object,

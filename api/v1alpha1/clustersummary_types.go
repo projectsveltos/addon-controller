@@ -27,7 +27,7 @@ const (
 	ClusterSummaryFinalizer = "clustersummaryfinalizer.projectsveltos.io"
 )
 
-// +kubebuilder:validation:Enum:=Kyverno;Role;Prometheus;Gatekeeper
+// +kubebuilder:validation:Enum:=Kyverno;Resources;Prometheus;Gatekeeper
 type FeatureID string
 
 const (
@@ -37,8 +37,8 @@ const (
 	// FeatureGatekeeper is the identifier for Gatekeeper feature
 	FeatureGatekeeper = FeatureID("Gatekeeper")
 
-	// FeatureRole is the identifier for ClusterRole/Role feature
-	FeatureRole = FeatureID("Role")
+	// FeatureResources is the identifier for generic Resources feature
+	FeatureResources = FeatureID("Resources")
 
 	// FeaturePrometheus is the identifier for Prometheus feature
 	FeaturePrometheus = FeatureID("Prometheus")

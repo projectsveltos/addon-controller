@@ -58,7 +58,27 @@ type GatekeeperConfiguration struct {
 	// PolicyRef references ConfigMaps containing the Gatekeeper policies
 	// that need to be deployed in the workload cluster. This includes and it is not limited
 	// to contrainttemplates, configs, etc.
+	// +optional
 	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+
+	// AuditInterval is the audit interval time.
+	// Disable audit interval by setting 0
+	// +kubebuilder:default:=60
+	// +optional
+	AuditInterval uint `json:"auditInterval,omitempty"`
+
+	// AuditChunkSize is the Kubernetes API chunking List results when retrieving
+	// cluster resources using discovery client
+	// +kubebuilder:default:=500
+	// +optional
+	AuditChunkSize uint `json:"auditChunkSize,omitempty"`
+
+	// AuditFromCache, if set to true, pull resources from OPA cache when auditing.
+	// Note that this requires replication of Kubernetes resources into OPA before
+	// they can be evaluated against the enforced policies
+	// +kubebuilder:default:=false
+	// +optional
+	AuditFromCache bool `json:"auditFromCache,omitempty"`
 }
 
 // InstallationMode specifies how prometheus is deployed in a CAPI Cluster.

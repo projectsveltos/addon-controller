@@ -23,6 +23,8 @@ const Namespace = "gatekeeper-system"
 // Gatekeeper deployment names
 var Deployments = []string{"gatekeeper-audit", "gatekeeper-controller-manager"}
 
+const AuditDeployment = "gatekeeper-audit"
+
 var GatekeeperYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:

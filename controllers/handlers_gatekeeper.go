@@ -23,6 +23,7 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -54,6 +55,11 @@ func deployGatekeeper(ctx context.Context, c client.Client,
 
 	if !present {
 		err = deployGatekeeperInWorklaodCluster(ctx, clusterClient, logger)
+		if err != nil {
+			return err
+		}
+
+		err = applyAuditOptions(ctx, clusterClient, clusterSummary, logger)
 		if err != nil {
 			return err
 		}
@@ -229,12 +235,38 @@ func isGatekeeperReady(ctx context.Context, c client.Client, logger logr.Logger)
 	return
 }
 
-func deployGatekeeperInWorklaodCluster(ctx context.Context, c client.Client, logger logr.Logger) error {
+func deployGatekeeperInWorklaodCluster(ctx context.Context, c client.Client,
+	logger logr.Logger) error {
+
 	if err := createNamespace(ctx, c, gatekeeper.Namespace); err != nil {
 		return err
 	}
 
 	return deployDoc(ctx, c, gatekeeper.GatekeeperYAML, logger)
+}
+
+func applyAuditOptions(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) error {
+
+	auditDeployment := &appsv1.Deployment{}
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: gatekeeper.Namespace, Name: gatekeeper.AuditDeployment},
+		auditDeployment)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get gatekeeper audit deployment")
+		return err
+	}
+
+	containers := auditDeployment.Spec.Template.Spec.Containers
+	containers[0].Args = append(containers[0].Args,
+		fmt.Sprintf("--audit-chunk-size=%d", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditChunkSize),
+		fmt.Sprintf("--audit-interval=%d", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditInterval),
+		fmt.Sprintf("--audit-from-cache=%t", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditFromCache))
+
+	auditDeployment.Spec.Template.Spec.Containers = containers
+
+	return c.Update(ctx, auditDeployment)
 }
 
 // sortConfigMapByConstraintsFirst sort configMap slice by putting ConfigMaps with ConstraintTemplate first

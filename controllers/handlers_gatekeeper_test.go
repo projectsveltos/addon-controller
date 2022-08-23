@@ -167,6 +167,9 @@ var _ = Describe("HandlersGatekeeper", func() {
 
 	It("deployGatekeeperInWorklaodCluster installs Gatekeeper CRDs in a cluster", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration = &configv1alpha1.GatekeeperConfiguration{}
+
 		Expect(controllers.DeployGatekeeperInWorklaodCluster(context.TODO(), c, klogr.New())).To(Succeed())
 
 		customResourceDefinitions := &apiextensionsv1.CustomResourceDefinitionList{}

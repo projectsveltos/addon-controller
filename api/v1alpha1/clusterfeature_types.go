@@ -142,10 +142,10 @@ type ClusterFeatureSpec struct {
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
-	// WorkloadRoleRefs references all the WorkloadRoles that will be used
-	// to create ClusterRole/Role in the workload cluster.
+	// ResourceRefs references all the ConfigMaps containing kubernetes resources
+	// that need to be deployed in the matching CAPI clusters.
 	// +optional
-	WorkloadRoleRefs []corev1.ObjectReference `json:"workloadRoleRefs,omitempty"`
+	ResourceRefs []corev1.ObjectReference `json:"resourceRefs,omitempty"`
 
 	// KyvernoConfiguration contains the Kyverno configuration.
 	// If not nil, Kyverno will be deployed in the workload cluster along with, if any,

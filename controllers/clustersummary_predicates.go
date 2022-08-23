@@ -25,49 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
-
-// WorkloadRolePredicates predicates for WorkloadRole. ClusterSummaryReconciler watches WorkloadRole events
-// and react to those by reconciling itself based on following predicates
-func WorkloadRolePredicates(logger logr.Logger) predicate.Funcs {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			newWorkloadRole := e.ObjectNew.(*configv1alpha1.WorkloadRole)
-			oldWorkloadRole := e.ObjectOld.(*configv1alpha1.WorkloadRole)
-			log := logger.WithValues("predicate", "updateEvent",
-				"workloadrole", newWorkloadRole.Name,
-			)
-
-			if oldWorkloadRole == nil {
-				log.V(logs.LogVerbose).Info("Old WorkloadRole is nil. Reconcile ClusterSummaries.")
-				return true
-			}
-
-			if !reflect.DeepEqual(oldWorkloadRole.Spec, newWorkloadRole.Spec) {
-				log.V(logs.LogVerbose).Info(
-					"WorkloadRole Spec changed. Will attempt to reconcile associated ClusterSummaries.",
-				)
-				return true
-			}
-
-			// otherwise, return false
-			log.V(logs.LogVerbose).Info(
-				"WorkloadRole did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
-			return false
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			return CreateFuncTrue(e, logger)
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return DeleteFuncTrue(e, logger)
-		},
-		GenericFunc: func(e event.GenericEvent) bool {
-			return GenericFuncFalse(e, logger)
-		},
-	}
-}
 
 // ConfigMapPredicates predicates for ConfigMaps. ClusterSummaryReconciler watches ConfigMap events
 // and react to those by reconciling itself based on following predicates

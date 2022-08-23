@@ -68,26 +68,27 @@ type ClusterSummaryReconciler struct {
 	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of referenced resources
 
 	// Reason for the two maps:
-	// ClusterSummary references WorkloadRoles. When a WorkloadRole changes, all the ClusterSummaries referencing it need to be
-	// reconciled. In order to achieve so, ClusterSummary reconciler could watch for WorkloadRoles. When a WorkloadRole spec changes,
+	// ClusterSummary references ConfigMaps containing policies to be deployed in a CAPI Cluster.
+	// When a ConfigMap changes, all the ClusterSummaries referencing it need to be reconciled.
+	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps. When a ConfigMap spec changes,
 	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
-	// (given a WorkloadRole, return all the ClusterSummary referencing such WorkloadRole).
+	// (given a ConfigMap, return all the ClusterSummary referencing such ConfigMap).
 	// In the MapFunc, if the list ClusterSummaries operation failed, we would be unable to retry or re-enqueue the ClusterSummaries
-	// referencing the WorkloadRole that changed.
+	// referencing the ConfigMap that changed.
 	// Instead the approach taken is following:
 	// - when a ClusterSummary is reconciled, update the ReferenceMap;
-	// - in the MapFunc, given the WorkloadRole that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
+	// - in the MapFunc, given the ConfigMap that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
 	// using the ReferenceMap);
-	// - if a ClusterSummary is referencing a WorkloadRole but its reconciliation is still queued, when WorkloadRole changes, ReferenceMap
+	// - if a ClusterSummary is referencing a ConfigMap but its reconciliation is still queued, when ConfigMap changes, ReferenceMap
 	// won't have such ClusterSummary. This is not a problem as ClusterSummary reconciliation is already queued and will happen.
 	//
 	// The ClusterSummaryMap is used to update ReferenceMap. Consider following scenarios to understand the need:
-	// 1. ClusterSummary A references WorkloadRoles 1 and 2. When reconciled, ReferenceMap will have 1 => A and 2 => A;
+	// 1. ClusterSummary A references ConfigMaps 1 and 2. When reconciled, ReferenceMap will have 1 => A and 2 => A;
 	// and ClusterSummaryMap A => 1,2
-	// 2. ClusterSummary A changes and now references WorkloadRole 1 only. We ned to remove the entry 2 => A in ReferenceMap. But
+	// 2. ClusterSummary A changes and now references ConfigMap 1 only. We ned to remove the entry 2 => A in ReferenceMap. But
 	// when we reconcile ClusterSummary we have its current version we don't have its previous version. So we use ClusterSummaryMap (at this
-	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references WorkloadRole 1 only and looking
-	// at ClusterSummaryMap we know it used to reference WorkloadRole 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
+	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references ConfigMap 1 only and looking
+	// at ClusterSummaryMap we know it used to reference ConfigMap 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
 	// update, we update ClusterSummaryMap (so new value will be A => 1)
 	//
 	// Same logic applies to Kyverno (kyverno configuration references configmaps containing kyverno policies)
@@ -96,7 +97,6 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
-//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=workloadroles,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
@@ -226,18 +226,9 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+	return c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForConfigMap),
 		ConfigMapPredicates(klogr.New().WithValues("predicate", "configmappredicate")),
-	); err != nil {
-		return err
-	}
-
-	// When WorkloadRole changes, according to WorkloadRolePredicates,
-	// one or more ClusterSummaries need to be reconciled.
-	return c.Watch(&source.Kind{Type: &configv1alpha1.WorkloadRole{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForWorkloadRole),
-		WorkloadRolePredicates(klogr.New().WithValues("predicate", "workloadrolepredicate")),
 	)
 }
 
@@ -257,7 +248,7 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 }
 
 func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	workloadErr := r.deployRoles(ctx, clusterSummaryScope, logger)
+	coreResourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
 	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
 
@@ -265,8 +256,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	prometheusErr := r.deployPrometheus(ctx, clusterSummaryScope, logger)
 
-	if workloadErr != nil {
-		return workloadErr
+	if coreResourceErr != nil {
+		return coreResourceErr
 	}
 
 	if kyvernoErr != nil {
@@ -284,12 +275,12 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) deployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := feature{
-		id:          configv1alpha1.FeatureRole,
-		currentHash: workloadRoleHash,
-		deploy:      deployWorkloadRoles,
-		getRefs:     getWorkloadRoleRefs,
+		id:          configv1alpha1.FeatureResources,
+		currentHash: resourcesHash,
+		deploy:      deployResources,
+		getRefs:     getResourceRefs,
 	}
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
@@ -366,7 +357,7 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 		return err
 	}
 
-	workloadErr := r.undeployRoles(ctx, clusterSummaryScope, logger)
+	coreResourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
 
 	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
 
@@ -374,8 +365,8 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	prometheusErr := r.undeployPrometheus(ctx, clusterSummaryScope, logger)
 
-	if workloadErr != nil {
-		return workloadErr
+	if coreResourceErr != nil {
+		return coreResourceErr
 	}
 
 	if kyvernoErr != nil {
@@ -393,11 +384,11 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) undeployRoles(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := feature{
-		id:          configv1alpha1.FeatureRole,
-		currentHash: workloadRoleHash,
-		deploy:      unDeployWorkloadRoles,
+		id:          configv1alpha1.FeatureResources,
+		currentHash: resourcesHash,
+		deploy:      undeployResources,
 	}
 
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
@@ -462,9 +453,10 @@ func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.Cluste
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
 	currentReferences := &Set{}
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs {
-		workloadRoleName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.WorkloadRoleRefs[i].Name
-		currentReferences.insert(getEntryKey(WorkloadRole, "", workloadRoleName))
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs {
+		cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs[i].Namespace
+		cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs[i].Name
+		currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
 		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {

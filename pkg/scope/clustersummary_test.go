@@ -114,10 +114,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioned, hash)
+		scope.SetFeatureStatus(configv1alpha1.FeatureResources, configv1alpha1.FeatureStatusProvisioned, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioned))
 	})
@@ -140,12 +140,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		found := false
 		failureMessage := failedToDeploy
-		scope.SetFailureMessage(configv1alpha1.FeatureRole, &failureMessage)
+		scope.SetFailureMessage(configv1alpha1.FeatureResources, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1alpha1.FeatureRole {
+			if fs.FeatureID == configv1alpha1.FeatureResources {
 				found = true
 				Expect(fs.FailureMessage).ToNot(BeNil())
 				Expect(*fs.FailureMessage).To(Equal(failureMessage))
@@ -167,10 +167,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureMessage := failedToDeploy
-		scope.SetFailureMessage(configv1alpha1.FeatureRole, &failureMessage)
+		scope.SetFailureMessage(configv1alpha1.FeatureKyverno, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureKyverno))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(Equal(failureMessage))
 	})
@@ -193,12 +193,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		found := false
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioning, hash)
+		scope.SetFeatureStatus(configv1alpha1.FeaturePrometheus, configv1alpha1.FeatureStatusProvisioning, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1alpha1.FeatureRole {
+			if fs.FeatureID == configv1alpha1.FeaturePrometheus {
 				found = true
 				Expect(fs.Status).To(Equal(configv1alpha1.FeatureStatusProvisioning))
 			}
@@ -243,10 +243,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1alpha1.FeatureRole, configv1alpha1.FeatureStatusProvisioning, hash)
+		scope.SetFeatureStatus(configv1alpha1.FeatureGatekeeper, configv1alpha1.FeatureStatusProvisioning, hash)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureGatekeeper))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioning))
 	})
 
@@ -268,12 +268,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		found := false
 		failureReason := apiserverNotReachable
-		scope.SetFailureReason(configv1alpha1.FeatureRole, &failureReason)
+		scope.SetFailureReason(configv1alpha1.FeatureGatekeeper, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1alpha1.FeatureRole {
+			if fs.FeatureID == configv1alpha1.FeatureGatekeeper {
 				found = true
 				Expect(fs.FailureReason).ToNot(BeNil())
 				Expect(*fs.FailureReason).To(Equal(failureReason))
@@ -295,10 +295,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureReason := apiserverNotReachable
-		scope.SetFailureReason(configv1alpha1.FeatureRole, &failureReason)
+		scope.SetFailureReason(configv1alpha1.FeatureResources, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureRole))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureReason).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureReason).To(Equal(failureReason))
 	})

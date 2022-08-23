@@ -305,23 +305,10 @@ spec:
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     x-kubernetes-int-or-string: true
                 type: object
-              syncMode:
-                default: OneTime
-                description: SyncMode specifies how features are synced in a matching
-                  workload cluster. - OneTime means, first time a workload cluster
-                  matches the ClusterFeature, features will be deployed in such cluster.
-                  Any subsequent feature configuration change won't be applied into
-                  the matching workload clusters; - Continuous means first time a
-                  workload cluster matches the ClusterFeature, features will be deployed
-                  in such a cluster. Any subsequent feature configuration change will
-                  be applied into the matching workload clusters.
-                enum:
-                - OneTime
-                - Continuous
-                type: string
-              workloadRoleRefs:
-                description: WorkloadRoleRefs references all the WorkloadRoles that
-                  will be used to create ClusterRole/Role in the workload cluster.
+              resourceRefs:
+                description: ResourceRefs references all the ConfigMaps containing
+                  kubernetes resources that need to be deployed in the matching CAPI
+                  clusters.
                 items:
                   description: 'ObjectReference contains enough information to let
                     you inspect or modify the referred object. --- New uses of this
@@ -383,6 +370,20 @@ spec:
                       type: string
                   type: object
                 type: array
+              syncMode:
+                default: OneTime
+                description: SyncMode specifies how features are synced in a matching
+                  workload cluster. - OneTime means, first time a workload cluster
+                  matches the ClusterFeature, features will be deployed in such cluster.
+                  Any subsequent feature configuration change won't be applied into
+                  the matching workload clusters; - Continuous means first time a
+                  workload cluster matches the ClusterFeature, features will be deployed
+                  in such a cluster. Any subsequent feature configuration change will
+                  be applied into the matching workload clusters.
+                enum:
+                - OneTime
+                - Continuous
+                type: string
             required:
             - clusterSelector
             type: object

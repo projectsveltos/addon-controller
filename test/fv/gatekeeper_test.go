@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	b64 "encoding/base64"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +26,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -204,28 +202,10 @@ var _ = Describe("Gatekeeper", func() {
 
 	It("Deploy and updates Gatkeeper correctly", Label("FV"), func() {
 		Byf("Add configMap containing gatekeeper policy")
-		replicaLimitisTemplateEncoded := b64.StdEncoding.EncodeToString([]byte(replicaLimitisTemplae))
-		configMapTemplate := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      namePrefix + randomString(),
-			},
-			Data: map[string]string{
-				"data": replicaLimitisTemplateEncoded,
-			},
-		}
+		configMapTemplate := createConfigMapWithPolicy("default", namePrefix+randomString(), replicaLimitisTemplae)
 		Expect(k8sClient.Create(context.TODO(), configMapTemplate)).To(Succeed())
 
-		replicaLimitisEncoded := b64.StdEncoding.EncodeToString([]byte(replicaLimitis))
-		configMap := &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
-				Name:      namePrefix + randomString(),
-			},
-			Data: map[string]string{
-				"data": replicaLimitisEncoded,
-			},
-		}
+		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), replicaLimitis)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -273,15 +253,13 @@ var _ = Describe("Gatekeeper", func() {
 		currentConfigMapTemplate := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMapTemplate.Namespace, Name: configMapTemplate.Name}, currentConfigMapTemplate)).To(Succeed())
-		disallowLatestTemplateEncoded := b64.StdEncoding.EncodeToString([]byte(disallowLatestTemplate))
-		currentConfigMapTemplate.Data["data"] = disallowLatestTemplateEncoded
+		currentConfigMapTemplate = updateConfigMapWithPolicy(currentConfigMapTemplate, disallowLatestTemplate)
 		Expect(k8sClient.Update(context.TODO(), currentConfigMapTemplate)).To(Succeed())
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-		disallowLatestEncoded := b64.StdEncoding.EncodeToString([]byte(disallowLatest))
-		currentConfigMap.Data["data"] = disallowLatestEncoded
+		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, disallowLatest)
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
 		policyName = "k8sdisallowedtags"

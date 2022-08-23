@@ -18,9 +18,9 @@ package controllers_test
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -221,6 +221,24 @@ spec:
       app.kubernetes.io/component: exporter
       app.kubernetes.io/name: kube-state-metrics
       app.kubernetes.io/part-of: kube-prometheus`
+
+	viewClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: %s
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]`
+
+	modifyClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: %s
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list", "create", "delete", "update"]`
 )
 
 var (
@@ -553,9 +571,26 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 		Data: map[string]string{},
 	}
 	for i := range policyStrs {
-		key := fmt.Sprintf("policy%d", i)
-		policyEncoded := b64.StdEncoding.EncodeToString([]byte(policyStrs[i]))
-		cm.Data[key] = policyEncoded
+		key := fmt.Sprintf("policy%d.yaml", i)
+		if utf8.Valid([]byte(policyStrs[i])) {
+			cm.Data[key] = policyStrs[i]
+		} else {
+			cm.BinaryData[key] = []byte(policyStrs[i])
+		}
+	}
+
+	return cm
+}
+
+// updateConfigMapWithPolicy updates a configMap with passed in policies
+func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *corev1.ConfigMap {
+	for i := range policyStrs {
+		key := fmt.Sprintf("policy%d.yaml", i)
+		if utf8.Valid([]byte(policyStrs[i])) {
+			cm.Data[key] = policyStrs[i]
+		} else {
+			cm.BinaryData[key] = []byte(policyStrs[i])
+		}
 	}
 
 	return cm
@@ -582,7 +617,6 @@ func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, cl
 // - namespace
 // - clusterFeature
 // - clusterSummary
-// - all WorkloadRoles
 func deleteResources(namespace string,
 	clusterFeature *configv1alpha1.ClusterFeature,
 	clusterSummary *configv1alpha1.ClusterSummary) {
@@ -604,11 +638,5 @@ func deleteResources(namespace string,
 	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	}
-
-	workloadRules := &configv1alpha1.WorkloadRoleList{}
-	Expect(testEnv.Client.List(context.TODO(), workloadRules)).To(Succeed())
-	for i := range workloadRules.Items {
-		Expect(testEnv.Client.Delete(context.TODO(), &workloadRules.Items[i])).To(Succeed())
 	}
 }

@@ -117,7 +117,7 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.Spec.ClusterName = clusterName
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoving},
-			{FeatureID: configv1alpha1.FeatureRole, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
@@ -170,7 +170,7 @@ var _ = Describe("ClustersummaryController", func() {
 		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureGatekeeper, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureRole, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
@@ -193,19 +193,17 @@ var _ = Describe("ClustersummaryController", func() {
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 	var referencingClusterSummary *configv1alpha1.ClusterSummary
 	var nonReferencingClusterSummary *configv1alpha1.ClusterSummary
-	var workloadRole *configv1alpha1.WorkloadRole
+	var configMap *corev1.ConfigMap
 
 	BeforeEach(func() {
 		var err error
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		workloadRole = &configv1alpha1.WorkloadRole{
+		configMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			Spec: configv1alpha1.WorkloadRoleSpec{
-				Type: configv1alpha1.RoleTypeNamespaced,
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 
@@ -215,8 +213,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: workloadRole.Name},
+					ResourceRefs: []corev1.ObjectReference{
+						{Namespace: configMap.Namespace, Name: configMap.Name},
 					},
 				},
 			},
@@ -228,8 +226,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					WorkloadRoleRefs: []corev1.ObjectReference{
-						{Name: workloadRole.Name + randomString()},
+					ResourceRefs: []corev1.ObjectReference{
+						{Namespace: configMap.Namespace, Name: configMap.Name + randomString()},
 					},
 				},
 			},
@@ -239,41 +237,6 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 	AfterEach(func() {
 		Expect(testEnv.Client.Delete(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
-	})
-
-	It("requeueClusterSummaryForWorkloadRole returns correct ClusterSummary for a WorkloadRole", func() {
-		Expect(testEnv.Client.Create(context.TODO(), workloadRole)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
-
-		clusterSummaryName := client.ObjectKey{
-			Name: referencingClusterSummary.Name,
-		}
-
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureRole))).To(Succeed())
-		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
-
-		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterSummaryName,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() bool {
-			clusterSummaryList := controllers.RequeueClusterSummaryForWorkloadRole(clusterSummaryReconciler, workloadRole)
-			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
-			for i := range clusterSummaryList {
-				if clusterSummaryList[i] == result {
-					return true
-				}
-			}
-			return false
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Expect(testEnv.Client.Delete(context.TODO(), workloadRole)).To(Succeed())
 	})
 
 	It("requeueClusterSummaryForConfigMap returns correct ClusterSummary for a ConfigMap", func() {
@@ -306,7 +269,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureRole))).To(Succeed())
+		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{

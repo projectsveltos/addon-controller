@@ -46,14 +46,10 @@ var (
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
 
-	DeployNamespacedWorkloadRole = deployNamespacedWorkloadRole
-	DeployClusterWorkloadRole    = deployClusterWorkloadRole
-	UndeployStaleRoleResources   = undeployStaleRoleResources
-	WorkloadRoleHash             = workloadRoleHash
-	DeployWorkloadRoles          = deployWorkloadRoles
-	UnDeployWorkloadRoles        = unDeployWorkloadRoles
-	GetWorkloadRoleRefs          = getWorkloadRoleRefs
-	GetRoleName                  = getRoleName
+	ResourcesHash     = resourcesHash
+	DeployResources   = deployResources
+	UndeployResources = undeployResources
+	GetResourceRefs   = getResourceRefs
 
 	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
 	IsKyvernoReady                 = isKyvernoReady
@@ -70,6 +66,7 @@ var (
 	DeployKubePrometheusInWorklaodCluster     = deployKubePrometheusInWorklaodCluster
 	DeployPrometheus                          = deployPrometheus
 	PrometheusHash                            = prometheusHash
+	GetPrometheusRefs                         = getPrometheusRefs
 	UnDeployPrometheus                        = unDeployPrometheus
 	GetPrometheusInstance                     = getPrometheusInstance
 	AddStorageConfig                          = addStorageConfig
@@ -92,12 +89,9 @@ var (
 	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
 	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
 
-	DeployRoles         = (*ClusterSummaryReconciler).deployRoles
-	UndeployRoles       = (*ClusterSummaryReconciler).undeployRoles
 	ConvertResultStatus = (*ClusterSummaryReconciler).convertResultStatus
 
-	RequeueClusterSummaryForWorkloadRole = (*ClusterSummaryReconciler).requeueClusterSummaryForWorkloadRole
-	RequeueClusterSummaryForConfigMap    = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
+	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
 )
 
 var (

@@ -22,7 +22,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -264,6 +264,10 @@ func (in *FeatureSummary) DeepCopyInto(out *FeatureSummary) {
 		in, out := &in.DeployedGroupVersionKind, &out.DeployedGroupVersionKind
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.LastAppliedTime != nil {
+		in, out := &in.LastAppliedTime, &out.LastAppliedTime
+		*out = (*in).DeepCopy()
 	}
 }
 

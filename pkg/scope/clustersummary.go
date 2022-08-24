@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -211,4 +212,25 @@ func (s *ClusterSummaryScope) updateDeployedGroupVersionKind(fs *configv1alpha1.
 	}
 
 	fs.DeployedGroupVersionKind = tmp
+}
+
+func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.FeatureID,
+	lastAppliedTime *metav1.Time) {
+
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			s.ClusterSummary.Status.FeatureSummaries[i].LastAppliedTime = lastAppliedTime
+			return
+		}
+	}
+
+	s.initializeFeatureStatusSummary()
+
+	s.ClusterSummary.Status.FeatureSummaries = append(
+		s.ClusterSummary.Status.FeatureSummaries,
+		configv1alpha1.FeatureSummary{
+			FeatureID:       featureID,
+			LastAppliedTime: lastAppliedTime,
+		},
+	)
 }

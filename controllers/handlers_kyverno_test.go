@@ -364,15 +364,20 @@ var _ = Describe("HandlersKyverno", func() {
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("kyverno deployment is not ready yet"))
 
-		// Make sure kyverno deployment is present and marked as ready, so DeployKyverno starts installing
-		// kyverno policies
-		currentDepl := &appsv1.Deployment{}
-		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{Namespace: kyverno.Namespace, Name: kyverno.Deployment}, currentDepl)).To(Succeed())
-		currentDepl.Status.AvailableReplicas = 1
-		currentDepl.Status.Replicas = 1
-		currentDepl.Status.ReadyReplicas = 1
-		Expect(testEnv.Status().Update(context.TODO(), currentDepl)).To(Succeed())
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() error {
+			// Make sure kyverno deployment is present and marked as ready, so DeployKyverno starts installing
+			// kyverno policies
+			currentDepl := &appsv1.Deployment{}
+			if err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: kyverno.Namespace, Name: kyverno.Deployment}, currentDepl); err != nil {
+				return err
+			}
+			currentDepl.Status.AvailableReplicas = 1
+			currentDepl.Status.Replicas = 1
+			currentDepl.Status.ReadyReplicas = 1
+			return testEnv.Status().Update(context.TODO(), currentDepl)
+		}, timeout, pollingInterval).Should(BeNil())
 
 		Expect(controllers.DeployKyverno(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())

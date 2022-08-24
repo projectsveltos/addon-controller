@@ -455,6 +455,10 @@ spec:
                         at a fixed point in time
                       format: byte
                       type: string
+                    lastAppliedTime:
+                      description: LastAppliedTime is the time feature was last reconciled
+                      format: date-time
+                      type: string
                     status:
                       description: Status represents the state of the feature in the
                         workload cluster

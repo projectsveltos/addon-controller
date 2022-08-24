@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -265,6 +267,7 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	}
 	logger = logger.WithValues("hash", hash, "status", *status)
 	logger.V(logs.LogDebug).Info("updating clustersummary status")
+	now := metav1.NewTime(time.Now())
 	switch *status {
 	case configv1alpha1.FeatureStatusProvisioned:
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioned, hash)
@@ -281,6 +284,8 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 		err := statusError.Error()
 		clusterSummaryScope.SetFailureMessage(featureID, &err)
 	}
+
+	clusterSummaryScope.SetLastAppliedTime(featureID, &now)
 }
 
 func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *configv1alpha1.FeatureStatus {

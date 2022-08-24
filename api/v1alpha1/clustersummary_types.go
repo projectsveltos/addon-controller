@@ -94,6 +94,10 @@ type FeatureSummary struct {
 	// cluster because of this feature. Each element has format kind.version.group
 	// +optional
 	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
+
+	// LastAppliedTime is the time feature was last reconciled
+	// +optional
+	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

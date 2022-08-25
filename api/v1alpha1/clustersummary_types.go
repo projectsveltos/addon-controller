@@ -27,7 +27,7 @@ const (
 	ClusterSummaryFinalizer = "clustersummaryfinalizer.projectsveltos.io"
 )
 
-// +kubebuilder:validation:Enum:=Kyverno;Resources;Prometheus;Gatekeeper
+// +kubebuilder:validation:Enum:=Kyverno;Resources;Prometheus;Gatekeeper;Contour
 type FeatureID string
 
 const (
@@ -42,6 +42,9 @@ const (
 
 	// FeaturePrometheus is the identifier for Prometheus feature
 	FeaturePrometheus = FeatureID("Prometheus")
+
+	// FeatureContour is the identifier for Contour feature
+	FeatureContour = FeatureID("Contour")
 )
 
 // +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;Removing;Removed

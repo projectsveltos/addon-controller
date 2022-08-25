@@ -212,25 +212,22 @@ func getGatekeeperRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.O
 // Return present=true, ready=false if at least one deployment is not ready.
 // Return present=true, ready=true if all deployments are present and ready
 func isGatekeeperReady(ctx context.Context, c client.Client, logger logr.Logger) (present, ready bool, err error) {
+	present = true
+	ready = true
+
 	for i := range gatekeeper.Deployments {
-		present, ready, err = isDeploymentReady(ctx, c, gatekeeper.Namespace, gatekeeper.Deployments[i], logger)
+		var tmpPresent, tmpReady bool
+		tmpPresent, tmpReady, err = isDeploymentReady(ctx, c, gatekeeper.Namespace, gatekeeper.Deployments[i], logger)
 		if err != nil {
 			return
 		}
-		if !present {
+		if !tmpPresent {
 			present = false
-			ready = false
-			return
 		}
-		if !ready {
-			present = true
+		if !tmpReady {
 			ready = false
-			return
 		}
 	}
-
-	present = true
-	ready = true
 
 	return
 }

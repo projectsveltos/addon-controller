@@ -99,7 +99,7 @@ var _ = Describe("HanldersPrometheus", func() {
 
 	It("deployPrometheusOperatorInWorklaodCluster installs prometheus CRDs in a cluster", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeCustom,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeCustom,
 		}
 		Expect(controllers.DeployPrometheusOperatorInWorklaodCluster(context.TODO(), testEnv,
 			clusterSummary, klogr.New())).To(Succeed())
@@ -124,7 +124,7 @@ var _ = Describe("HanldersPrometheus", func() {
 
 	It("deployPrometheusOperator deploys prometheus operator deployment in the right namespace", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeCustom,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeCustom,
 		}
 		Expect(controllers.DeployPrometheusOperatorInWorklaodCluster(context.TODO(), testEnv,
 			clusterSummary, klogr.New())).To(Succeed())
@@ -144,7 +144,7 @@ var _ = Describe("HanldersPrometheus", func() {
 
 	It("deployKubeStateMetrics deploys KubeStateMetrics deployment", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeKubeStateMetrics,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeKubeStateMetrics,
 		}
 		Expect(controllers.DeployKubeStateMetricsInWorklaodCluster(context.TODO(), testEnv,
 			clusterSummary, klogr.New())).To(Succeed())
@@ -159,7 +159,7 @@ var _ = Describe("HanldersPrometheus", func() {
 
 	It("deployKubePrometheusInWorklaodCluster deploys prometheus operator deployment", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeKubePrometheus,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeKubePrometheus,
 		}
 		Expect(controllers.DeployKubePrometheusInWorklaodCluster(context.TODO(), testEnv,
 			clusterSummary, klogr.New())).To(Succeed())
@@ -180,7 +180,7 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus deploys prometheus operator with InstallationModeCustom", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.InstallationModeCustom, cluster)
+		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeCustom, cluster)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -194,7 +194,7 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus deploys kubeStateMetrics and Prometheus operator with InstallationModeKubeStateMetrics", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.InstallationModeKubeStateMetrics, cluster)
+		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeKubeStateMetrics, cluster)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -215,7 +215,7 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus deploys kubeStateMetrics and Prometheus operator with InstallationModeKubePrometheus", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.InstallationModeKubePrometheus, cluster)
+		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeKubePrometheus, cluster)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -400,7 +400,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterName:      randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					PrometheusConfiguration: &configv1alpha1.PrometheusConfiguration{
-						InstallationMode: configv1alpha1.InstallationModeCustom,
+						InstallationMode: configv1alpha1.PrometheusInstallationModeCustom,
 						PolicyRefs: []corev1.ObjectReference{
 							{Namespace: configMapNs, Name: configMap1.Name},
 							{Namespace: configMapNs, Name: configMap2.Name},
@@ -448,7 +448,7 @@ func verifyDeployment(clusterSummary *configv1alpha1.ClusterSummary,
 ) {
 
 	clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-		InstallationMode: configv1alpha1.InstallationModeKubeStateMetrics,
+		InstallationMode: configv1alpha1.PrometheusInstallationModeKubeStateMetrics,
 	}
 	Expect(deployFunc(context.TODO(), testEnv.Client,
 		clusterSummary, klogr.New())).To(Succeed())
@@ -477,7 +477,7 @@ func verifyDeployment(clusterSummary *configv1alpha1.ClusterSummary,
 }
 
 func prepareForPrometheusDeployment(clusterSummary *configv1alpha1.ClusterSummary,
-	installationMode configv1alpha1.InstallationMode,
+	installationMode configv1alpha1.PrometheusInstallationMode,
 	cluster *clusterv1.Cluster) {
 
 	secret := &corev1.Secret{

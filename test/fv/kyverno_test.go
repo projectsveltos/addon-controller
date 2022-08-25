@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -164,13 +163,13 @@ var _ = Describe("Kyverno", func() {
 		currentClusterFeature.Spec.KyvernoConfiguration = nil
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
-		clusterSummary = verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying proper role is removed in the workload cluster")
 		Eventually(func() bool {
 			policy := &kyvernoapi.ClusterPolicy{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: fmt.Sprintf("%s-add-labels", clusterSummary.Name)}, policy)
+				types.NamespacedName{Name: "add-labels"}, policy)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

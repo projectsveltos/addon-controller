@@ -287,7 +287,11 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(GOIMPORTS) 
 ##@ Generators
 
 .PHONY: clean-generated-files
-clean-generated-files: clean-kyverno clean-gatekeeper clean-prometheus clean-kube-prometheus clean-kube-state-metrics ## Removes generated files.
+clean-generated-files: clean-kyverno clean-gatekeeper clean-prometheus clean-kube-prometheus clean-kube-state-metrics \
+	clean-contour ## Removes generated files.
+
+.PHONY: generate-files
+generate-files: kyverno gatekeeper prometheus kube-prometheus kube-state-metrics contour ## Rebuild all generated files for supported features.
 
 # Kyverno
 
@@ -300,7 +304,8 @@ clean-kyverno: ## Remove kyverno generated file.
 
 .PHONY: kyverno
 kyverno: ## Download kyverno install.yaml and generate kyverno files.
-	curl -L https://raw.githubusercontent.com/kyverno/kyverno/release-$(KYVERNO_VERSION)/config/release/install.yaml -o $(KYVERNO_YAML_FILE)
+	rm -rf $(KYVERNO_YAML_FILE); \
+	curl -L https://raw.githubusercontent.com/kyverno/kyverno/release-$(KYVERNO_VERSION)/config/release/install.yaml -o $(KYVERNO_YAML_FILE); \
 	cd internal/kyverno; go generate
 
 # GATEKEEPER
@@ -314,9 +319,9 @@ clean-gatekeeper: ## Remove gatekeeper generated file.
 
 .PHONY: gatekeeper
 gatekeeper: ## Download gatekeeper generate gatekeeper files.
-	curl -L https://raw.githubusercontent.com/open-policy-agent/gatekeeper/$(GATEKEEPER_VERSION)/deploy/gatekeeper.yaml -o $(GATEKEEPER_YAML_FILE)
+	rm -rf $(GATEKEEPER_YAML_FILE); \
+	curl -L https://raw.githubusercontent.com/open-policy-agent/gatekeeper/$(GATEKEEPER_VERSION)/deploy/gatekeeper.yaml -o $(GATEKEEPER_YAML_FILE); \
 	cd internal/gatekeeper; go generate
-
 
 # Prometheus Operator
 
@@ -329,6 +334,7 @@ clean-prometheus: ## Remove prometheus generated file.
 
 .PHONY: prometheus
 prometheus: ## Download prometheus and generate prometheus files.
+	rm -rf $(PROMETHEUS_YAML_FILE); \
 	rm -rf tmp; mkdir tmp; cd tmp; git clone git@github.com:prometheus-operator/prometheus-operator.git; \
 	cd prometheus-operator; git checkout tags/$(PROMETHEUS_VERSION) -b $(PROMETHEUS_VERSION); \
 	cp bundle.yaml ../../$(PROMETHEUS_YAML_FILE); \
@@ -374,5 +380,21 @@ kube-state-metrics: ## Download generate kube-state-metrics config files.
 	rm -rf tmp; \
 	cd internal/prometheus/kubestatemetrics; go generate
 
-aaa:
-	cd internal/prometheus/kubeprometheus; go generate
+# Contour
+
+CONTOUR := 1.22
+CONTOUR_GATEWAY_YAML_FILE := internal/contour/contour_gateway.yaml
+CONTOUR_YAML_FILE := internal/contour/contour.yaml
+
+.PHONY: clean-contour
+clean-contour: ## Remove contour generated file.
+	rm -f $(CONTOUR_GATEWAY_YAML_FILE); \
+	rm -f $(CONTOUR_YAML_FILE)
+
+.PHONY: contour
+contour: ## Download generate contour config files.
+	rm -rf $(CONTOUR_GATEWAY_YAML_FILE); \
+	rm -rf $(CONTOUR_YAML_FILE); \
+	curl -L https://raw.githubusercontent.com/projectcontour/contour/release-$(CONTOUR)/examples/render/contour-gateway-provisioner.yaml -o $(CONTOUR_GATEWAY_YAML_FILE); \
+	curl -L https://raw.githubusercontent.com/projectcontour/contour/release-$(CONTOUR)/examples/render/contour.yaml -o $(CONTOUR_YAML_FILE); \
+	cd internal/contour; go generate

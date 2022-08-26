@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
@@ -57,6 +58,8 @@ const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
 	clusterFeatureNamePrefix  = "cluster-feature"
+
+	customResourceDefinitionCRD = "CustomResourceDefinition"
 )
 
 const (
@@ -273,7 +276,9 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := monitoringv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-
+	if err := gatewayapi.AddToScheme(s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 

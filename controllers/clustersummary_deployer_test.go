@@ -448,7 +448,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeCustom,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeCustom,
 		}
 
 		initObjects := []client.Object{
@@ -481,7 +481,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeCustom,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeCustom,
 		}
 
 		initObjects := []client.Object{
@@ -586,8 +586,21 @@ var _ = Describe("ClustersummaryDeployer", func() {
 				{Namespace: randomString(), Name: randomString()},
 			},
 		}
+		clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration = &configv1alpha1.GatekeeperConfiguration{
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: randomString(), Name: randomString()},
+				{Namespace: randomString(), Name: randomString()},
+			},
+		}
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
 			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: randomString(), Name: randomString()},
+				{Namespace: randomString(), Name: randomString()},
+			},
+		}
+		clusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration = &configv1alpha1.ContourConfiguration{
+			PolicyRefs: []corev1.ObjectReference{
+				{Namespace: randomString(), Name: randomString()},
 				{Namespace: randomString(), Name: randomString()},
 				{Namespace: randomString(), Name: randomString()},
 			},
@@ -602,7 +615,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
 		expectedLength := len(clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs) +
+			len(clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs) +
 			len(clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs) +
+			len(clusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs) +
 			len(clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs)
 		Expect(controllers.Len(set)).To(Equal(expectedLength))
 	})

@@ -172,6 +172,7 @@ var _ = Describe("ClustersummaryController", func() {
 			{FeatureID: configv1alpha1.FeatureGatekeeper, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureContour, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
 		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())

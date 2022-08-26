@@ -118,6 +118,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	logger.V(logs.LogDebug).Info("updating deployed GVKs")
 	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id, f.getRefs(clusterSummaryScope.ClusterSummary), logger)
 	if err != nil {
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
 
@@ -126,6 +127,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), false, f.deploy); err != nil {
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
 
@@ -184,6 +186,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), true, f.deploy); err != nil {
+		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
 

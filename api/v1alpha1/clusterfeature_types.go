@@ -81,24 +81,24 @@ type GatekeeperConfiguration struct {
 	AuditFromCache bool `json:"auditFromCache,omitempty"`
 }
 
-// InstallationMode specifies how prometheus is deployed in a CAPI Cluster.
+// PrometheusInstallationMode specifies how prometheus is deployed in a CAPI Cluster.
 //+kubebuilder:validation:Enum:=KubeStateMetrics;KubePrometheus;Custom
-type InstallationMode string
+type PrometheusInstallationMode string
 
 const (
 	// InstallationModeCustom will cause Prometheus Operator to be installed
 	// and any PolicyRefs.
-	InstallationModeCustom = InstallationMode("Custom")
+	PrometheusInstallationModeCustom = PrometheusInstallationMode("Custom")
 
 	// InstallationModeKubeStateMetrics will cause Prometheus Operator to be installed
 	// and any PolicyRefs. On top of that, KubeStateMetrics will also be installed
 	// and a Promethus CRD instance will be created to scrape KubeStateMetrics metrics.
-	InstallationModeKubeStateMetrics = InstallationMode("KubeStateMetrics")
+	PrometheusInstallationModeKubeStateMetrics = PrometheusInstallationMode("KubeStateMetrics")
 
 	// InstallationModeKubePrometheus will cause the Kube-Prometheus stack to be deployed.
 	// Any PolicyRefs will be installed after that.
 	// Kube-Prometheus stack includes KubeStateMetrics.
-	InstallationModeKubePrometheus = InstallationMode("KubePrometheus")
+	PrometheusInstallationModeKubePrometheus = PrometheusInstallationMode("KubePrometheus")
 )
 
 type PrometheusConfiguration struct {
@@ -106,7 +106,7 @@ type PrometheusConfiguration struct {
 	// CAPI Cluster.
 	// +kubebuilder:default:=Custom
 	// +optional
-	InstallationMode InstallationMode `json:"installationMode,omitempty"`
+	InstallationMode PrometheusInstallationMode `json:"installationMode,omitempty"`
 
 	// storageClassName is the name of the StorageClass Prometheus will use to claim storage.
 	// +optional
@@ -123,6 +123,34 @@ type PrometheusConfiguration struct {
 	// - Prometheus, Alertmanager, ThanosRuler, ServiceMonitor, PodMonitor, Probe,
 	// PrometheusRule, AlertmanagerConfig CRD instances;
 	// -  Any other configuration needed for prometheus (like storageclass configuration)
+	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+}
+
+// ContourInstallationMode specifies how contour is deployed in a CAPI Cluster.
+//+kubebuilder:validation:Enum:=Contour;Gateway
+type ContourInstallationMode string
+
+const (
+	// ContourInstallationModeGateway will cause Contour Gateway Provisioner to
+	// be deployed.
+	ContourInstallationModeGateway = ContourInstallationMode("Gateway")
+
+	// ContourInstallationModeContour will cause Contour to be deployed.
+	ContourInstallationModeContour = ContourInstallationMode("Contour")
+)
+
+type ContourConfiguration struct {
+	// InstallationMode indicates what type of resources will be deployed in a
+	// CAPI Cluster.
+	// +kubebuilder:default:=Contour
+	// +optional
+	InstallationMode ContourInstallationMode `json:"installationMode,omitempty"`
+
+	// PolicyRef references ConfigMaps containing the Contour policies
+	// that need to be deployed in the workload cluster. This includes:
+	// - ContourConfiguration, ContourDeployment, HTTPProxy, GatewayClass, Gateway,
+	// HTTPRoute, etc.
+	// -  Any other configuration needed for Contour
 	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
 }
 
@@ -163,6 +191,11 @@ type ClusterFeatureSpec struct {
 	// If not nil, at the very least Prometheus operator will be deployed in the workload cluster
 	// +optional
 	PrometheusConfiguration *PrometheusConfiguration `json:"prometheusConfiguration,omitempty"`
+
+	// ContourConfiguration contains the Contour configuration.
+	// If not nil, contour will be deployed in the workload cluster
+	// +optional
+	ContourConfiguration *ContourConfiguration `json:"contourConfiguration,omitempty"`
 }
 
 // ClusterFeatureStatus defines the observed state of ClusterFeature

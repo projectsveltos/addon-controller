@@ -36,6 +36,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 )
@@ -90,6 +91,7 @@ var _ = BeforeSuite(func() {
 	Expect(kyvernoapi.AddToScheme(scheme)).To(Succeed())
 	Expect(monitoringv1.AddToScheme(scheme)).To(Succeed())
 	Expect(opav1.AddToScheme(scheme)).To(Succeed())
+	Expect(gatewayapi.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})

@@ -67,7 +67,7 @@ var _ = Describe("Prometheus", func() {
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterFeature.Spec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
-			InstallationMode: configv1alpha1.InstallationModeKubeStateMetrics,
+			InstallationMode: configv1alpha1.PrometheusInstallationModeKubeStateMetrics,
 			PolicyRefs: []corev1.ObjectReference{
 				{Namespace: configMap.Namespace, Name: configMap.Name},
 			},

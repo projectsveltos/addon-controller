@@ -78,6 +78,19 @@ var (
 	GatekeeperHash                    = gatekeeperHash
 	HasContraintTemplates             = hasContraintTemplates
 	SortConfigMapByConstraintsFirst   = sortConfigMapByConstraintsFirst
+	ApplyAuditOptions                 = applyAuditOptions
+
+	IsContourGatewayReady                 = isContourGatewayReady
+	IsContourReady                        = isContourReady
+	DeployContourGateway                  = deployContourGateway
+	DeployRegularContour                  = deployRegularContour
+	UnDeployContour                       = unDeployContour
+	DeployContour                         = deployContour
+	ContourHash                           = contourHash
+	DeployContourGatewayInWorklaodCluster = deployContourGatewayInWorklaodCluster
+	DeployContourInWorklaodCluster        = deployContourInWorklaodCluster
+	ShouldInstallContourGateway           = shouldInstallContourGateway
+	ShouldInstallContour                  = shouldInstallContour
 )
 
 var (

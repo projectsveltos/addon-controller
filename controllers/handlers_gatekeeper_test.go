@@ -46,7 +46,8 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
-const gatekeeperConstraint = `apiVersion: templates.gatekeeper.sh/v1
+const (
+	httpsOnlyConstraint = `apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
   name: k8shttpsonly
@@ -79,6 +80,105 @@ spec:
           count(ingress.spec.tls) > 0
           ingress.metadata.annotations["kubernetes.io/ingress.allow-http"] == "false"
         }`
+
+	blockWildcarContraint = `apiVersion: templates.gatekeeper.sh/v1
+ kind: ConstraintTemplate
+ metadata:
+   name: k8sblockwildcardingress
+   annotations:
+	 description: >-
+	   Users should not be able to create Ingresses with a blank or wildcard (*) hostname 
+	   since that would enable them to intercept traffic for other services in the cluster,
+	   even if they don't have access to those services.
+ spec:
+   crd:
+	 spec:
+	   names:
+		 kind: K8sBlockWildcardIngress
+   targets:
+	 - target: admission.k8s.gatekeeper.sh
+	   rego: |
+		 package K8sBlockWildcardIngress
+		 contains_wildcard(hostname) = true {
+		   hostname == ""
+		 }
+		 contains_wildcard(hostname) = true {
+		   contains(hostname, "*")
+		 }
+		 violation[{"msg": msg}] {
+		   input.review.kind.kind == "Ingress"
+		   # object.get is required to detect omitted host fields
+		   hostname := object.get(input.review.object.spec.rules[_], "host", "")
+		   contains_wildcard(hostname)
+		   msg := sprintf("Hostname '%v' is not allowed since it counts as a wildcard, which can be used to intercept traffic from other applications.", [hostname])
+		 }`
+
+	podDisruptionBudgetConstraint = `apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: k8spoddisruptionbudget
+  annotations:
+    description: >-
+      Disallow the following scenarios when deploying PodDisruptionBudgets or resources that implement the 
+	  replica subresource (e.g. Deployment, ReplicationController, ReplicaSet, StatefulSet):
+      1. Deployment of PodDisruptionBudgets with .spec.maxUnavailable == 0
+      2. Deployment of PodDisruptionBudgets with .spec.minAvailable == .spec.replicas of the resource with replica subresource
+      This will prevent PodDisruptionBudgets from blocking voluntary disruptions such as node draining.
+      https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sPodDisruptionBudget
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8spoddisruptionbudget
+        violation[{"msg": msg}] {
+          input.review.kind.kind == "PodDisruptionBudget"
+          pdb := input.review.object
+          not valid_pdb_max_unavailable(pdb)
+          msg := sprintf(
+            "PodDisruptionBudget <%v> has maxUnavailable of 0, only positive integers are allowed for maxUnavailable",
+            [pdb.metadata.name],
+          )
+        }
+        violation[{"msg": msg}] {
+          obj := input.review.object
+          pdb := data.inventory.namespace[obj.metadata.namespace]["policy/v1"].PodDisruptionBudget[_]
+          obj.spec.selector.matchLabels == pdb.spec.selector.matchLabels
+          not valid_pdb_max_unavailable(pdb)
+          msg := sprintf(
+            "%v <%v> has been selected by PodDisruptionBudget <%v> but has maxUnavailable of 0, only positive integers are allowed for maxUnavailable",
+            [obj.kind, obj.metadata.name, pdb.metadata.name],
+          )
+        }
+        violation[{"msg": msg}] {
+          obj := input.review.object
+          pdb := data.inventory.namespace[obj.metadata.namespace]["policy/v1"].PodDisruptionBudget[_]
+          obj.spec.selector.matchLabels == pdb.spec.selector.matchLabels
+          not valid_pdb_min_available(obj, pdb)
+          msg := sprintf(
+            "%v <%v> has %v replica(s) but PodDisruptionBudget <%v> has minAvailable of %v, 
+			PodDisruptionBudget count should always be lower than replica(s), and not used when replica(s) is set to 1",
+            [obj.kind, obj.metadata.name, obj.spec.replicas, pdb.metadata.name, pdb.spec.minAvailable, obj.spec.replicas],
+          )
+        }
+        valid_pdb_min_available(obj, pdb) {
+          # default to -1 if minAvailable is not set so valid_pdb_min_available is always true
+          # for objects with >= 0 replicas. If minAvailable defaults to >= 0, objects with
+          # replicas field might violate this constraint if they are equal to the default set here
+          min_available := object.get(pdb.spec, "minAvailable", -1)
+          obj.spec.replicas > min_available
+        }
+        valid_pdb_max_unavailable(pdb) {
+          # default to 1 if maxUnavailable is not set so valid_pdb_max_unavailable always returns true.
+          # If maxUnavailable defaults to 0, it violates this constraint because all pods needs to be
+          # available and no pods can be evicted voluntarily
+          max_unavailable := object.get(pdb.spec, "maxUnavailable", 1)
+          max_unavailable > 0
+        }`
+)
 
 var _ = Describe("HandlersGatekeeper", func() {
 	var logger logr.Logger
@@ -201,7 +301,7 @@ var _ = Describe("HandlersGatekeeper", func() {
 		for i := range elements {
 			policy, err := controllers.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
-			if policy.GetKind() == "CustomResourceDefinition" {
+			if policy.GetKind() == customResourceDefinitionCRD {
 				Expect(testEnv.Client.Create(context.TODO(), policy)).To(Succeed())
 			}
 		}
@@ -310,7 +410,7 @@ var _ = Describe("HandlersGatekeeper", func() {
 	})
 
 	It("hasContraintTemplates returns true only if configmap contains a ConsraintTemplate", func() {
-		configMap := createConfigMapWithPolicy(randomString(), randomString(), gatekeeperConstraint)
+		configMap := createConfigMapWithPolicy(randomString(), randomString(), httpsOnlyConstraint)
 		Expect(controllers.HasContraintTemplates(configMap, klogr.New())).To(BeTrue())
 
 		configMap = createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
@@ -323,7 +423,7 @@ var _ = Describe("HandlersGatekeeper", func() {
 		configMap1 := createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
 		configMaps = append(configMaps, *configMap1)
 
-		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), gatekeeperConstraint)
+		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), httpsOnlyConstraint)
 		configMaps = append(configMaps, *configMap2)
 
 		configMap3 := createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(checkSa, randomString()))
@@ -337,12 +437,44 @@ var _ = Describe("HandlersGatekeeper", func() {
 		Expect(sortedSlice).To(ContainElement(*configMap3))
 		Expect(sortedSlice).To(ContainElement(*configMap1))
 	})
+
+	It("applyAuditOptions adds options to audit deployment", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration = &configv1alpha1.GatekeeperConfiguration{
+			AuditInterval:  60,
+			AuditFromCache: true,
+			AuditChunkSize: 300,
+		}
+
+		// Deploy gatekeper so audit deployment is created.
+		Expect(controllers.DeployGatekeeperInWorklaodCluster(context.TODO(), c, klogr.New())).To(Succeed())
+
+		Expect(controllers.ApplyAuditOptions(context.TODO(), c, clusterSummary, klogr.New())).To(Succeed())
+
+		auditDepl := &appsv1.Deployment{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: gatekeeper.Namespace, Name: gatekeeper.AuditDeployment},
+			auditDepl)).To(Succeed())
+
+		Expect(len(auditDepl.Spec.Template.Spec.Containers)).To(Equal(1))
+		auditChunkSize := fmt.Sprintf("--audit-chunk-size=%d", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditChunkSize)
+		Expect(auditDepl.Spec.Template.Spec.Containers[0].Args).To(ContainElement(auditChunkSize))
+
+		auditFromCache := fmt.Sprintf("--audit-from-cache=%t", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditFromCache)
+		Expect(auditDepl.Spec.Template.Spec.Containers[0].Args).To(ContainElement(auditFromCache))
+
+		auditInterval := fmt.Sprintf("--audit-interval=%d", clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.AuditInterval)
+		Expect(auditDepl.Spec.Template.Spec.Containers[0].Args).To(ContainElement(auditInterval))
+	})
 })
 
 var _ = Describe("Hash methods", func() {
 	It("gatekeeperHash returns hash considering all referenced configmap contents", func() {
 		configMapNs := randomString()
-		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), gatekeeperConstraint)
+		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), httpsOnlyConstraint)
+		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), blockWildcarContraint)
+		configMap3 := createConfigMapWithPolicy(configMapNs, randomString(), podDisruptionBudgetConstraint)
 
 		namespace := "reconcile" + randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
@@ -356,7 +488,8 @@ var _ = Describe("Hash methods", func() {
 					GatekeeperConfiguration: &configv1alpha1.GatekeeperConfiguration{
 						PolicyRefs: []corev1.ObjectReference{
 							{Namespace: configMapNs, Name: configMap1.Name},
-							{Namespace: configMapNs, Name: randomString()},
+							{Namespace: configMapNs, Name: configMap2.Name},
+							{Namespace: configMapNs, Name: configMap3.Name},
 						},
 					},
 				},
@@ -366,6 +499,8 @@ var _ = Describe("Hash methods", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			configMap1,
+			configMap2,
+			configMap3,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -379,6 +514,8 @@ var _ = Describe("Hash methods", func() {
 		Expect(err).To(BeNil())
 
 		config := render.AsCode(configMap1.Data)
+		config += render.AsCode(configMap2.Data)
+		config += render.AsCode(configMap3.Data)
 		h := sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)

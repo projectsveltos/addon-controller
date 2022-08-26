@@ -256,6 +256,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	prometheusErr := r.deployPrometheus(ctx, clusterSummaryScope, logger)
 
+	contourErr := r.deployContour(ctx, clusterSummaryScope, logger)
+
 	if coreResourceErr != nil {
 		return coreResourceErr
 	}
@@ -270,6 +272,10 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	if prometheusErr != nil {
 		return prometheusErr
+	}
+
+	if contourErr != nil {
+		return contourErr
 	}
 
 	return nil
@@ -343,6 +349,25 @@ func (r *ClusterSummaryReconciler) deployPrometheus(ctx context.Context, cluster
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
+func (r *ClusterSummaryReconciler) deployContour(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration == nil {
+		logger.V(logs.LogDebug).Info("no contour configuration")
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureContour) {
+			logger.V(logs.LogDebug).Info("no contour status. Do not reconcile this")
+			return nil
+		}
+	}
+
+	f := feature{
+		id:          configv1alpha1.FeatureContour,
+		currentHash: contourHash,
+		deploy:      deployContour,
+		getRefs:     getContourRefs,
+	}
+
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
 func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
@@ -357,7 +382,7 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 		return err
 	}
 
-	coreResourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
+	resourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
 
 	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
 
@@ -365,8 +390,10 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	prometheusErr := r.undeployPrometheus(ctx, clusterSummaryScope, logger)
 
-	if coreResourceErr != nil {
-		return coreResourceErr
+	contourErr := r.undeployContour(ctx, clusterSummaryScope, logger)
+
+	if resourceErr != nil {
+		return resourceErr
 	}
 
 	if kyvernoErr != nil {
@@ -379,6 +406,10 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	if prometheusErr != nil {
 		return prometheusErr
+	}
+
+	if contourErr != nil {
+		return contourErr
 	}
 
 	return nil
@@ -419,6 +450,16 @@ func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clust
 		id:          configv1alpha1.FeaturePrometheus,
 		currentHash: prometheusHash,
 		deploy:      unDeployPrometheus,
+	}
+
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) undeployContour(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := feature{
+		id:          configv1alpha1.FeatureContour,
+		currentHash: contourHash,
+		deploy:      unDeployContour,
 	}
 
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
@@ -476,6 +517,13 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs {
 			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Namespace
 			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Name
+			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
+		}
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration != nil {
+		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs {
+			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs[i].Namespace
+			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs[i].Name
 			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
 		}
 	}

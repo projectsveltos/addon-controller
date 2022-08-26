@@ -195,7 +195,7 @@ func shouldInstallPrometheusOperator(clusterSummary *configv1alpha1.ClusterSumma
 	return clusterSummary != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.InstallationMode !=
-			configv1alpha1.InstallationModeKubePrometheus
+			configv1alpha1.PrometheusInstallationModeKubePrometheus
 }
 
 // shouldInstallKubeStateMetrics returns true if kube state metrics needs to be installed
@@ -203,7 +203,7 @@ func shouldInstallKubeStateMetrics(clusterSummary *configv1alpha1.ClusterSummary
 	return clusterSummary != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.InstallationMode ==
-			configv1alpha1.InstallationModeKubeStateMetrics
+			configv1alpha1.PrometheusInstallationModeKubeStateMetrics
 }
 
 // shouldInstallKubePrometheusStack returns true if kube prometheus stack needs to be installed
@@ -211,7 +211,7 @@ func shouldInstallKubePrometheusStack(clusterSummary *configv1alpha1.ClusterSumm
 	return clusterSummary != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil &&
 		clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.InstallationMode ==
-			configv1alpha1.InstallationModeKubePrometheus
+			configv1alpha1.PrometheusInstallationModeKubePrometheus
 }
 
 // isPrometheusOperatorReady checks whether prometheus operator deployment is present and ready

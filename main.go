@@ -187,4 +187,9 @@ func registerFeatures(d deployer.DeployerInterface) {
 		setupLog.Error(err, "failed to register feature FeaturePrometheus")
 		os.Exit(1)
 	}
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureContour))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeatureContour")
+		os.Exit(1)
+	}
 }

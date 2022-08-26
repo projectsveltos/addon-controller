@@ -75,8 +75,7 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) ([]string, error) {
 
-	l := logger.WithValues("configMap", fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
-	referencedPolicies, err := collectContentOfConfigMap(configMap, l)
+	referencedPolicies, err := collectContentOfConfigMap(configMap, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +107,9 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 		}
 
 		addOwnerReference(policy, clusterSummary)
+
+		l := logger.WithValues("resourceNamespace", policy.GetNamespace(), "resourceName", policy.GetName())
+		l.V(logs.LogDebug).Info("deploying policy")
 
 		if policy.GetResourceVersion() != "" {
 			err = c.Update(ctx, policy)
@@ -281,8 +283,9 @@ func deployConfigMaps(ctx context.Context, configMaps []corev1.ConfigMap, cluste
 
 	for i := range configMaps {
 		configMap := &configMaps[i]
-
-		tmpDeployed, err := deployContentOfConfigMap(ctx, capiClusterConfig, capiClusterClient, configMap, clusterSummary, logger)
+		l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
+		l.V(logs.LogDebug).Info("deploying ConfigMap content")
+		tmpDeployed, err := deployContentOfConfigMap(ctx, capiClusterConfig, capiClusterClient, configMap, clusterSummary, l)
 		if err != nil {
 			return nil, err
 		}

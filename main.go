@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
 	//+kubebuilder:scaffold:imports
@@ -91,7 +92,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
+	// Setup the context that's going to be used in controllers and for the manager.
+	ctx := ctrl.SetupSignalHandler()
+
 	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
 	registerFeatures(d)
 
@@ -122,17 +125,12 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
-	}
+	setupChecks(mgr)
+
+	setupIndexes(ctx, mgr)
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
@@ -190,6 +188,24 @@ func registerFeatures(d deployer.DeployerInterface) {
 	err = d.RegisterFeatureID(string(configv1alpha1.FeatureContour))
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureContour")
+		os.Exit(1)
+	}
+}
+
+func setupIndexes(ctx context.Context, mgr ctrl.Manager) {
+	if err := index.AddDefaultIndexes(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to setup indexes")
+		os.Exit(1)
+	}
+}
+
+func setupChecks(mgr ctrl.Manager) {
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
 }

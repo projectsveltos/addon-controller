@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -287,6 +288,11 @@ func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, c
 			continue
 		}
 
+		// ClusterFeature does not look at whether Cluster is paused or not.
+		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
+		// continuous).
+		// ClusterSummary won't program cluster in paused state.
+
 		_, err = GetClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -372,6 +378,8 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 					UID:        clusterFeatureScope.ClusterFeature.UID,
 				},
 			},
+			// Copy annotation. Paused annotation might be set on ClusterFeature.
+			Annotations: clusterFeatureScope.ClusterFeature.Annotations,
 		},
 		Spec: configv1alpha1.ClusterSummarySpec{
 			ClusterNamespace:   cluster.Namespace,
@@ -392,6 +400,12 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster *corev1.ObjectReference) error {
 
+	currentCluster := &clusterv1.Cluster{}
+	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)
+	if err != nil {
+		return err
+	}
+
 	if !clusterFeatureScope.IsContinuousSync() {
 		return nil
 	}
@@ -401,11 +415,13 @@ func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clu
 		return err
 	}
 
-	if reflect.DeepEqual(clusterFeatureScope.ClusterFeature.Spec, clusterSummary.Spec.ClusterFeatureSpec) {
+	if reflect.DeepEqual(clusterFeatureScope.ClusterFeature.Spec, clusterSummary.Spec.ClusterFeatureSpec) &&
+		reflect.DeepEqual(clusterFeatureScope.ClusterFeature.Annotations, clusterSummary.Annotations) {
 		// Nothing has changed
 		return nil
 	}
 
+	clusterSummary.Annotations = clusterFeatureScope.ClusterFeature.Annotations
 	clusterSummary.Spec.ClusterFeatureSpec = clusterFeatureScope.ClusterFeature.Spec
 	return r.Update(ctx, clusterSummary)
 }

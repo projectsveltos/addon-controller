@@ -35,6 +35,20 @@ var (
 )
 
 var (
+	IsFeatureDeployed              = (*ClusterSummaryReconciler).isFeatureDeployed
+	GetHash                        = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus            = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature                  = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature                = (*ClusterSummaryReconciler).undeployFeature
+	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
+	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
+	IsClusterPaused                = (*ClusterSummaryReconciler).isClusterPaused
+
+	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
+	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
+)
+
+var (
 	GetSecretData                = getSecretData
 	GetKubernetesClient          = getKubernetesClient
 	AddLabel                     = addLabel
@@ -91,20 +105,6 @@ var (
 	DeployContourInWorklaodCluster        = deployContourInWorklaodCluster
 	ShouldInstallContourGateway           = shouldInstallContourGateway
 	ShouldInstallContour                  = shouldInstallContour
-)
-
-var (
-	IsFeatureDeployed              = (*ClusterSummaryReconciler).isFeatureDeployed
-	GetHash                        = (*ClusterSummaryReconciler).getHash
-	UpdateFeatureStatus            = (*ClusterSummaryReconciler).updateFeatureStatus
-	DeployFeature                  = (*ClusterSummaryReconciler).deployFeature
-	UndeployFeature                = (*ClusterSummaryReconciler).undeployFeature
-	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
-	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
-
-	ConvertResultStatus = (*ClusterSummaryReconciler).convertResultStatus
-
-	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
 )
 
 var (

@@ -123,7 +123,7 @@ type PrometheusConfiguration struct {
 	// - Prometheus, Alertmanager, ThanosRuler, ServiceMonitor, PodMonitor, Probe,
 	// PrometheusRule, AlertmanagerConfig CRD instances;
 	// -  Any other configuration needed for prometheus (like storageclass configuration)
-	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 }
 
 // ContourInstallationMode specifies how contour is deployed in a CAPI Cluster.
@@ -151,7 +151,7 @@ type ContourConfiguration struct {
 	// - ContourConfiguration, ContourDeployment, HTTPProxy, GatewayClass, Gateway,
 	// HTTPRoute, etc.
 	// -  Any other configuration needed for Contour
-	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 }
 
 // ClusterFeatureSpec defines the desired state of ClusterFeature

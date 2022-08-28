@@ -223,7 +223,7 @@ var _ = Describe("Gatekeeper", func() {
 
 		clusterSummary := verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("getting client to access the workload cluster")
+		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
@@ -270,7 +270,7 @@ var _ = Describe("Gatekeeper", func() {
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("changing clusterfeature to not require any gatekeeper configuration anymore")
+		Byf("Changing clusterfeature to not require any gatekeeper configuration anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
 		currentClusterFeature.Spec.GatekeeperConfiguration = nil

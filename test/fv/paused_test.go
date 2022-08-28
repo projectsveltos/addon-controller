@@ -18,9 +18,11 @@ package fv_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -31,39 +33,23 @@ import (
 )
 
 const (
-	updateClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+	devNamespace = `apiVersion: v1
+kind: Namespace
 metadata:
-  name: configmap-updater
-rules:
-- apiGroups: [""]
-  #
-  # at the HTTP level, the name of the resource for accessing ConfigMap
-  # objects is "configmaps"
-  resources: ["configmaps"]
-  resourceNames: ["my-configmap"]
-  verbs: ["update", "get"]`
-
-	allClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: configmap-all
-rules:
-- apiGroups: [""]
-  #
-  # at the HTTP level, the name of the resource for accessing ConfigMap
-  # objects is "configmaps"
-  resources: ["configmaps"]
-  resourceNames: ["my-configmap"]
-  verbs: ["*"]`
+  name: %s
+  labels:
+    name: fv`
 )
 
-var _ = Describe("Feature", func() {
+var _ = Describe("Feature", Serial, func() {
 	const (
-		namePrefix = "feature"
+		namePrefix = "paused"
 	)
 
-	It("Deploy and updates resources referenced in ResourceRefs correctly", Label("FV"), func() {
+	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV"), func() {
+		Byf("Setting Cluster as paused")
+		setClusterPausedField(true)
+
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -73,8 +59,9 @@ var _ = Describe("Feature", func() {
 
 		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Create a configMap with a ClusterRole")
-		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), updateClusterRole)
+		devNamespaceName := randomString()
+		Byf("Create a configMap with a Namespace")
+		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), fmt.Sprintf(devNamespace, devNamespaceName))
 
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
@@ -93,35 +80,24 @@ var _ = Describe("Feature", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying proper ClusterRole is created in the workload cluster")
+		Byf("Verifying namespace is not created in the workload cluster as cluster is paused")
+		Consistently(func() bool {
+			currentNamespace := &corev1.Namespace{}
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Setting Cluster as unpaused")
+		setClusterPausedField(false)
+
+		Byf("Verifying namespace is created in the workload cluster as cluster is not paused anymore")
 		Eventually(func() error {
-			currentClusterRole := &rbacv1.ClusterRole{}
-			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
+			currentNamespace := &corev1.Namespace{}
+			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureResources, configv1alpha1.FeatureStatusProvisioned)
-
-		By("Updating ConfigMap to reference new ClusterRole")
-		currentConfigMap := &corev1.ConfigMap{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, allClusterRole)
-		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
-
-		Byf("Verifying new clusterrole is deployed in the workload cluster")
-		Eventually(func() error {
-			currentClusterRole := &rbacv1.ClusterRole{}
-			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-all"}, currentClusterRole)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying old clusterrole is removed from the workload cluster")
-		Eventually(func() bool {
-			currentClusterRole := &rbacv1.ClusterRole{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
-			return err != nil &&
-				apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
@@ -141,3 +117,11 @@ var _ = Describe("Feature", func() {
 		deleteClusterFeature(clusterFeature)
 	})
 })
+
+func setClusterPausedField(paused bool) {
+	cluster := &clusterv1.Cluster{}
+	Expect(k8sClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name}, cluster)).To(Succeed())
+	cluster.Spec.Paused = paused
+	Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
+}

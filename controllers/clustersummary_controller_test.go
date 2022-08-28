@@ -45,6 +45,7 @@ import (
 var _ = Describe("ClustersummaryController", func() {
 	var clusterFeature *configv1alpha1.ClusterFeature
 	var clusterSummary *configv1alpha1.ClusterSummary
+	var cluster *clusterv1.Cluster
 	var namespace string
 	var clusterName string
 
@@ -69,12 +70,46 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, namespace, clusterName)
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: namespace,
+			},
+		}
+	})
+
+	It("isClusterPaused returns true if CAPI Cluster has Spec.Paused set", func() {
+		initObjects := []client.Object{
+			clusterFeature,
+			clusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ReferenceMap:      make(map[string]*controllers.Set),
+			ClusterSummaryMap: make(map[string]*controllers.Set),
+			Mux:               sync.Mutex{},
+		}
+
+		Expect(controllers.IsClusterPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
+
+		cluster.Spec.Paused = true
+		Expect(c.Update(context.TODO(), cluster)).To(Succeed())
+
+		Expect(controllers.IsClusterPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
 	})
 
 	It("Adds finalizer", func() {
 		initObjects := []client.Object{
 			clusterFeature,
 			clusterSummary,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -124,13 +159,6 @@ var _ = Describe("ClustersummaryController", func() {
 		now := metav1.NewTime(time.Now())
 		clusterSummary.DeletionTimestamp = &now
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-
-		cluster := &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterName,
-				Namespace: namespace,
-			},
-		}
 
 		initObjects := []client.Object{
 			clusterSummary,
@@ -195,6 +223,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 	var referencingClusterSummary *configv1alpha1.ClusterSummary
 	var nonReferencingClusterSummary *configv1alpha1.ClusterSummary
 	var configMap *corev1.ConfigMap
+	var cluster *clusterv1.Cluster
+	var namespace string
 
 	BeforeEach(func() {
 		var err error
@@ -208,11 +238,22 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
+		namespace = "reconcile" + randomString()
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+			},
+		}
+
 		referencingClusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					ResourceRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: configMap.Name},
@@ -226,6 +267,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					ResourceRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: configMap.Name + randomString()},
@@ -238,25 +281,27 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 	AfterEach(func() {
 		Expect(testEnv.Client.Delete(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
 	})
 
 	It("requeueClusterSummaryForConfigMap returns correct ClusterSummary for a ConfigMap", func() {
-		configMapNs := randomString()
-
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
+				Name: namespace,
 			},
 		}
 
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(serviceMonitorFrontend, randomString()))
+		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+
+		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(serviceMonitorFrontend, randomString()))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 		referencingClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			Replicas: 1,
 			PolicyRefs: []corev1.ObjectReference{
-				{Namespace: configMapNs, Name: configMap.Name},
+				{Namespace: namespace, Name: configMap.Name},
 			},
 		}
 

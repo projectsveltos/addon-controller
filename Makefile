@@ -124,6 +124,12 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "Start projectsveltos"
 	$(MAKE) deploy-projectsveltos
 
+	@echo "wait for cluster to be provisioned"
+	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+
+	@echo "sleep allowing control plane to be ready"
+	sleep 60
+
 	@echo "get kubeconfig to access workload cluster"
 	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
 

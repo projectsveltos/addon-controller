@@ -51,7 +51,7 @@ spec:
                     - Contour
                     - Gateway
                     type: string
-                  policyRef:
+                  policyRefs:
                     description: 'PolicyRef references ConfigMaps containing the Contour
                       policies that need to be deployed in the workload cluster. This
                       includes: - ContourConfiguration, ContourDeployment, HTTPProxy,
@@ -302,7 +302,7 @@ spec:
                     - KubePrometheus
                     - Custom
                     type: string
-                  policyRef:
+                  policyRefs:
                     description: 'PolicyRef references ConfigMaps containing the Prometheus
                       operator policies that need to be deployed in the workload cluster.
                       This includes: - Prometheus, Alertmanager, ThanosRuler, ServiceMonitor,

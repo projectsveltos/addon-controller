@@ -128,7 +128,7 @@ var _ = BeforeSuite(func() {
 		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 
-	Byf("Add label %s:%s to Cluster %s/%s", key, value, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	Byf("Set Cluster %s:%s unpaused and add label %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, key, value)
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentCluster := &clusterv1.Cluster{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -140,6 +140,8 @@ var _ = BeforeSuite(func() {
 			currentLabels = make(map[string]string)
 		}
 		currentLabels[key] = value
+		currentCluster.Labels = currentLabels
+		currentCluster.Spec.Paused = false
 
 		return k8sClient.Update(context.TODO(), currentCluster)
 	})

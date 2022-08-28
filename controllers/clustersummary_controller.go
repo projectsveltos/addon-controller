@@ -31,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -204,6 +205,15 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	r.updatesMaps(clusterSummaryScope)
 
+	paused, err := r.isClusterPaused(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if paused {
+		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+		return reconcile.Result{}, nil
+	}
+
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
@@ -222,6 +232,15 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
+	}
+
+	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
+	// need to be reconciled.
+	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
+		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+	); err != nil {
+		return err
 	}
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
@@ -248,6 +267,9 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 }
 
 func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace, "clustername", clusterSummary.Spec.ClusterName)
+
 	coreResourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
 	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
@@ -537,4 +559,19 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry string) *Set {
 		r.ReferenceMap[entry] = s
 	}
 	return s
+}
+
+// isClusterPaused returns true if CAPI Cluster is paused
+func (r *ClusterSummaryReconciler) isClusterPaused(ctx context.Context,
+	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+
+	cluster := &clusterv1.Cluster{}
+	err := r.Client.Get(ctx,
+		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
+	if err != nil {
+		return false, err
+	}
+
+	// If CAPI Cluster is paused (Spec.Paused) or ClusterSummary has Paused annotation
+	return annotations.IsPaused(cluster, clusterSummary), nil
 }

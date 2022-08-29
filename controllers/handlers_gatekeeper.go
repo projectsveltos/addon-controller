@@ -41,25 +41,25 @@ func deployGatekeeper(ctx context.Context, c client.Client,
 	logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary, clusterClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
+	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
 	if err != nil {
 		return err
 	}
 
 	// First verify if gatekeeper is installed, if not install it
-	present, ready, err := isGatekeeperReady(ctx, clusterClient, logger)
+	present, ready, err := isGatekeeperReady(ctx, remoteClient, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "Failed to verify presence of gatekeeper deployments")
 		return err
 	}
 
 	if !present {
-		err = deployGatekeeperInWorklaodCluster(ctx, clusterClient, logger)
+		err = deployGatekeeperInWorklaodCluster(ctx, remoteClient, logger)
 		if err != nil {
 			return err
 		}
 
-		err = applyAuditOptions(ctx, clusterClient, clusterSummary, logger)
+		err = applyAuditOptions(ctx, remoteClient, clusterSummary, logger)
 		if err != nil {
 			return err
 		}
@@ -69,52 +69,52 @@ func deployGatekeeper(ctx context.Context, c client.Client,
 		return fmt.Errorf("gatekeeper deployments are not ready yet")
 	}
 
-	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
 
-	currentPolicies := make(map[string]bool, 0)
+	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	var configMaps []corev1.ConfigMap
+
+	// do not use getGatekeeperRefs.
+	// When deploying, Constraints need to be deployed first. Then policies can. Otherwise
+	// needed CRD won't be found.
+	// getGatekeeperRefs returns policies first, constraints later. Cause when removing stale
+	// objects we need to first remove policies, then constraints in order to avoid CRD not found.
+	var refs []corev1.ObjectReference
 	if clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
-		var configMaps []corev1.ConfigMap
-
-		// do not use getGatekeeperRefs.
-		// When deploying, Constraints need to be deployed first. Then policies can. Otherwise
-		// needed CRD won't be found.
-		// getGatekeeperRefs returns policies first, constraints later. Cause when removing stale
-		// objects we need to first remove policies, then constraints in order to avoid CRD not found.
-		var refs []corev1.ObjectReference
-		if clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
-			refs = clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs
-		}
-
-		configMaps, err = collectConfigMaps(ctx, c, refs, logger)
-		if err != nil {
-			return err
-		}
-
-		configMaps, err = sortConfigMapByConstraintsFirst(configMaps, logger)
-		if err != nil {
-			return err
-		}
-
-		err = updateGatekeeperSortedPolicies(ctx, c, clusterSummary, configMaps)
-		if err != nil {
-			return err
-		}
-
-		var deployed []string
-		deployed, err = deployConfigMaps(ctx, configMaps, clusterSummary, clusterClient, clusterRestConfig, logger)
-		if err != nil {
-			return err
-		}
-
-		for _, k := range deployed {
-			currentPolicies[k] = true
-		}
+		refs = clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs
 	}
 
-	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
+	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
+	if err != nil {
+		return err
+	}
+
+	configMaps, err = sortConfigMapByConstraintsFirst(configMaps, logger)
+	if err != nil {
+		return err
+	}
+
+	err = updateGatekeeperSortedPolicies(ctx, c, clusterSummary, configMaps)
+	if err != nil {
+		return err
+	}
+
+	var deployed []configv1alpha1.Resource
+	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureGatekeeper,
+		configMaps, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range deployed {
+		key := getPolicyInfo(&deployed[i])
+		currentPolicies[key] = deployed[i]
+	}
+
+	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureGatekeeper), currentPolicies)
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func unDeployGatekeeper(ctx context.Context, c client.Client,
 	}
 
 	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureGatekeeper), map[string]bool{})
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureGatekeeper), map[string]configv1alpha1.Resource{})
 	if err != nil {
 		return err
 	}

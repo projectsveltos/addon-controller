@@ -56,6 +56,25 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
+  - clusterconfigurations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterconfigurations/status
+  verbs:
+  - get
+  - list
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
   - clusterfeatures
   verbs:
   - get

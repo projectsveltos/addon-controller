@@ -110,6 +110,12 @@ var _ = Describe("Contour", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for contour", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureContour, configv1alpha1.FeatureStatusProvisioned)
 
+		policies := []policy{
+			{kind: "GatewayClass", name: "contour", namespace: "", group: "gateway.networking.k8s.io"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureContour, policies)
+
 		Byf("Modifying configMap")
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -124,6 +130,12 @@ var _ = Describe("Contour", func() {
 				types.NamespacedName{Namespace: "projectcontour", Name: "contour"}, policy)
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
+
+		policies = []policy{
+			{kind: "Gateway", name: "contour", namespace: "projectcontour", group: "gateway.networking.k8s.io"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureContour, policies)
 
 		Byf("Changing clusterfeature to not require any contour configuration anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}

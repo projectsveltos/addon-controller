@@ -1,0 +1,168 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: clusterconfigurations.config.projectsveltos.io
+spec:
+  group: config.projectsveltos.io
+  names:
+    kind: ClusterConfiguration
+    listKind: ClusterConfigurationList
+    plural: clusterconfigurations
+    singular: clusterconfiguration
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ClusterConfiguration is the Schema for the clusterconfigurations
+          API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          status:
+            description: ClusterConfigurationStatus defines the observed state of
+              ClusterConfiguration
+            properties:
+              clusterFeatureResources:
+                description: ClusterFeatureResources is the list of resources currently
+                  deployed in a CAPI Cluster due to ClusterFeatures
+                items:
+                  description: ClusterFeatureResource keeps info on all of the resources
+                    deployed in this CAPI Cluster due to a given ClusterFeature
+                  properties:
+                    Features:
+                      description: Features contains the list of policies deployed
+                        in the CAPI Cluster because of a given feature
+                      items:
+                        properties:
+                          featureID:
+                            description: FeatureID is an indentifier of the feature
+                              whose status is reported
+                            enum:
+                            - Kyverno
+                            - Resources
+                            - Prometheus
+                            - Gatekeeper
+                            - Contour
+                            type: string
+                          resources:
+                            description: Resources is a list of resources deployed
+                              in the CAPI Cluster.
+                            items:
+                              properties:
+                                group:
+                                  description: Group of the resource deployed in the
+                                    CAPI Cluster.
+                                  type: string
+                                kind:
+                                  description: Kind of the resource deployed in the
+                                    CAPI Cluster.
+                                  minLength: 1
+                                  type: string
+                                lastAppliedTime:
+                                  description: LastAppliedTime identifies when this
+                                    resource was last applied to the cluster.
+                                  format: date-time
+                                  type: string
+                                name:
+                                  description: Name of the resource deployed in the
+                                    CAPI Cluster.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: Namespace of the resource deployed
+                                    in the CAPI Cluster. Empty for resources scoped
+                                    at cluster level.
+                                  type: string
+                                owner:
+                                  description: Owner is the list of ConfigMap/Secret
+                                    containing this resource.
+                                  properties:
+                                    apiVersion:
+                                      description: API version of the referent.
+                                      type: string
+                                    fieldPath:
+                                      description: 'If referring to a piece of an
+                                        object instead of an entire object, this string
+                                        should contain a valid JSON/Go field access
+                                        statement, such as desiredState.manifest.containers[2].
+                                        For example, if the object reference is to
+                                        a container within a pod, this would take
+                                        on a value like: "spec.containers{name}" (where
+                                        "name" refers to the name of the container
+                                        that triggered the event) or if no container
+                                        name is specified "spec.containers[2]" (container
+                                        with index 2 in this pod). This syntax is
+                                        chosen only to have some well-defined way
+                                        of referencing a part of an object. TODO:
+                                        this design is not final and this field is
+                                        subject to change in the future.'
+                                      type: string
+                                    kind:
+                                      description: 'Kind of the referent. More info:
+                                        https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                      type: string
+                                    name:
+                                      description: 'Name of the referent. More info:
+                                        https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                                      type: string
+                                    namespace:
+                                      description: 'Namespace of the referent. More
+                                        info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                                      type: string
+                                    resourceVersion:
+                                      description: 'Specific resourceVersion to which
+                                        this reference is made, if any. More info:
+                                        https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                                      type: string
+                                    uid:
+                                      description: 'UID of the referent. More info:
+                                        https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                                      type: string
+                                  type: object
+                              required:
+                              - group
+                              - kind
+                              - lastAppliedTime
+                              - name
+                              - owner
+                              type: object
+                            type: array
+                        required:
+                        - featureID
+                        type: object
+                      type: array
+                    clusterFeatureName:
+                      description: ClusterFeatureName is the name of the ClusterFeature
+                        matching the CAPI Cluster.
+                      type: string
+                  required:
+                  - clusterFeatureName
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

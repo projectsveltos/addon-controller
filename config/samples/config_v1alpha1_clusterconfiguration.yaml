@@ -1,0 +1,6 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterConfiguration
+metadata:
+  name: clusterconfiguration-sample
+spec:
+  # TODO(user): Add fields here

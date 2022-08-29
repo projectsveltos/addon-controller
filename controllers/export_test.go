@@ -29,6 +29,8 @@ var (
 	DeleteClusterSummary         = (*ClusterFeatureReconciler).deleteClusterSummary
 	GetMachinesForCluster        = (*ClusterFeatureReconciler).getMachinesForCluster
 	IsClusterReadyToBeConfigured = (*ClusterFeatureReconciler).isClusterReadyToBeConfigured
+	UpdateClusterConfiguration   = (*ClusterFeatureReconciler).updateClusterConfiguration
+	CleanClusterConfiguration    = (*ClusterFeatureReconciler).cleanClusterConfiguration
 
 	RequeueClusterFeatureForCluster = (*ClusterFeatureReconciler).requeueClusterFeatureForCluster
 	RequeueClusterFeatureForMachine = (*ClusterFeatureReconciler).requeueClusterFeatureForMachine
@@ -46,9 +48,11 @@ var (
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
+	RequeueClusterSummaryForCluster   = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
 )
 
 var (
+	GetClusterSummary            = getClusterSummary
 	GetSecretData                = getSecretData
 	GetKubernetesClient          = getKubernetesClient
 	AddLabel                     = addLabel

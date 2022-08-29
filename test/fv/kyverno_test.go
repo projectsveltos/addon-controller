@@ -142,6 +142,12 @@ var _ = Describe("Kyverno", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for kyverno", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureKyverno, configv1alpha1.FeatureStatusProvisioned)
 
+		policies := []policy{
+			{kind: "ClusterPolicy", name: "add-labels", namespace: "", group: "kyverno.io"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKyverno, policies)
+
 		Byf("Modifying configMap")
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -156,6 +162,12 @@ var _ = Describe("Kyverno", func() {
 			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
+
+		policies = []policy{
+			{kind: "ClusterPolicy", name: "disallow-empty-ingress-host", namespace: "", group: "kyverno.io"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKyverno, policies)
 
 		Byf("Changing clusterfeature to not require any kyverno configuration anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}

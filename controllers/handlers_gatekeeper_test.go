@@ -47,6 +47,8 @@ import (
 )
 
 const (
+	gatekeeperGroup = "externaldata.gatekeeper.sh"
+
 	httpsOnlyConstraint = `apiVersion: templates.gatekeeper.sh/v1
 kind: ConstraintTemplate
 metadata:
@@ -220,7 +222,8 @@ var _ = Describe("HandlersGatekeeper", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+
+		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
 	AfterEach(func() {
@@ -276,8 +279,8 @@ var _ = Describe("HandlersGatekeeper", func() {
 		Expect(c.List(context.TODO(), customResourceDefinitions)).To(Succeed())
 		constrainttemplatesFound := false
 		for i := range customResourceDefinitions.Items {
-			if customResourceDefinitions.Items[i].Spec.Group == "templates.gatekeeper.sh" {
-				if customResourceDefinitions.Items[i].Spec.Names.Plural == "constrainttemplates" {
+			if customResourceDefinitions.Items[i].Spec.Group == gatekeeperGroup {
+				if customResourceDefinitions.Items[i].Spec.Names.Plural == "providers" {
 					constrainttemplatesFound = true
 				}
 			}
@@ -306,6 +309,21 @@ var _ = Describe("HandlersGatekeeper", func() {
 			}
 		}
 
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			customResourceDefinitionList := &apiextensionsv1.CustomResourceDefinitionList{}
+			err := testEnv.List(context.TODO(), customResourceDefinitionList)
+			if err != nil {
+				return false
+			}
+			for i := range customResourceDefinitionList.Items {
+				if customResourceDefinitionList.Items[i].Spec.Group == gatekeeperGroup {
+					return true
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		ct0 := &opav1.ConstraintTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -333,28 +351,6 @@ var _ = Describe("HandlersGatekeeper", func() {
 			},
 		}
 
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
-
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
-
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ct1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ct2)).To(Succeed())
 
@@ -379,10 +375,12 @@ var _ = Describe("HandlersGatekeeper", func() {
 		}
 		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+			return err == nil &&
+				currentClusterSummary.Status.FeatureSummaries != nil
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.UnDeployGatekeeper(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureGatekeeper), logger)).To(Succeed())
@@ -400,13 +398,6 @@ var _ = Describe("HandlersGatekeeper", func() {
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
-	})
-
-	It("deployGatekeeper returns an error when CAPI Cluster does not exist", func() {
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		err := controllers.DeployGatekeeper(context.TODO(), testEnv.Client,
-			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
-		Expect(err).ToNot(BeNil())
 	})
 
 	It("hasContraintTemplates returns true only if configmap contains a ConsraintTemplate", func() {

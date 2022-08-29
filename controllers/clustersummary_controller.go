@@ -98,6 +98,8 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;delete
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations/status,verbs=get;list;update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
@@ -172,6 +174,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	logger.Info("Reconciling ClusterSummary delete")
 
 	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
@@ -199,6 +202,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
 		if err := r.addFinalizer(ctx, clusterSummaryScope); err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to add finalizer")
 			return reconcile.Result{}, err
 		}
 	}
@@ -215,6 +219,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	}
 
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 

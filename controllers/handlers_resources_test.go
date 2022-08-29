@@ -30,7 +30,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -81,7 +80,8 @@ var _ = Describe("HandlersResource", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+
+		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
 	AfterEach(func() {
@@ -92,33 +92,15 @@ var _ = Describe("HandlersResource", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
 
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
+		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, configMap)).To(Succeed())
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
@@ -170,27 +152,8 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), role0)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), role1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole0)).To(Succeed())
@@ -212,9 +175,12 @@ var _ = Describe("HandlersResource", func() {
 		}
 		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+			return err == nil &&
+				currentClusterSummary.Status.FeatureSummaries != nil
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.UndeployResources(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureKyverno), klogr.New())).To(Succeed())
@@ -244,26 +210,6 @@ var _ = Describe("HandlersResource", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
-
-func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error {
-	gvks, _, err := scheme.ObjectKinds(obj)
-	if err != nil {
-		return fmt.Errorf("missing apiVersion or kind and cannot assign it; %w", err)
-	}
-
-	for _, gvk := range gvks {
-		if gvk.Kind == "" {
-			continue
-		}
-		if gvk.Version == "" || gvk.Version == runtime.APIVersionInternal {
-			continue
-		}
-		obj.GetObjectKind().SetGroupVersionKind(gvk)
-		break
-	}
-
-	return nil
-}
 
 var _ = Describe("Hash methods", func() {
 	It("ResourcesHash returns hash considering all referenced core resources", func() {

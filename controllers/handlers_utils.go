@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,7 +35,9 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -73,14 +76,14 @@ func createNamespace(ctx context.Context, clusterClient client.Client, namespace
 // and kind.group::name for cluster wide policies.
 func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client.Client,
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) ([]string, error) {
+	logger logr.Logger) ([]configv1alpha1.Resource, error) {
 
 	referencedPolicies, err := collectContentOfConfigMap(configMap, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	policies := make([]string, 0)
+	policies := make([]configv1alpha1.Resource, 0)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
 		addLabel(policy, ConfigLabelName, configMap.Name)
@@ -121,7 +124,18 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 			return nil, err
 		}
 
-		policies = append(policies, getPolicyInfo(policy))
+		policies = append(policies, configv1alpha1.Resource{
+			Name:            policy.GetName(),
+			Namespace:       policy.GetNamespace(),
+			Kind:            policy.GetKind(),
+			Group:           policy.GetObjectKind().GroupVersionKind().Group,
+			LastAppliedTime: &metav1.Time{Time: time.Now()},
+			Owner: corev1.ObjectReference{
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+				Kind:      configMap.Kind,
+			},
+		})
 	}
 
 	return policies, nil
@@ -160,12 +174,12 @@ func getPolicyName(policyName string, _ *configv1alpha1.ClusterSummary) string {
 	return policyName
 }
 
-func getPolicyInfo(policy client.Object) string {
+func getPolicyInfo(policy *configv1alpha1.Resource) string {
 	return fmt.Sprintf("%s.%s:%s:%s",
-		policy.GetObjectKind().GroupVersionKind().Kind,
-		policy.GetObjectKind().GroupVersionKind().Group,
-		policy.GetNamespace(),
-		policy.GetName())
+		policy.Kind,
+		policy.Group,
+		policy.Namespace,
+		policy.Name)
 }
 
 // getClusterSummaryAndCAPIClusterClient gets ClusterSummary and the client to access the associated
@@ -275,30 +289,48 @@ func collectConfigMaps(ctx context.Context, controlClusterClient client.Client,
 }
 
 // deployConfigMaps deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
-func deployConfigMaps(ctx context.Context, configMaps []corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	capiClusterClient client.Client, capiClusterConfig *rest.Config,
-	logger logr.Logger) ([]string, error) {
+func deployConfigMaps(ctx context.Context, c client.Client, remoteConfig *rest.Config,
+	featureID configv1alpha1.FeatureID, configMaps []corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) ([]configv1alpha1.Resource, error) {
 
-	deployed := make([]string, 0)
+	deployed := make([]configv1alpha1.Resource, 0)
+
+	remoteClient, err := client.New(remoteConfig, client.Options{})
+	if err != nil {
+		return nil, err
+	}
 
 	for i := range configMaps {
 		configMap := &configMaps[i]
 		l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 		l.V(logs.LogDebug).Info("deploying ConfigMap content")
-		tmpDeployed, err := deployContentOfConfigMap(ctx, capiClusterConfig, capiClusterClient, configMap, clusterSummary, l)
+		var tmpDeployed []configv1alpha1.Resource
+		tmpDeployed, err = deployContentOfConfigMap(ctx, remoteConfig, remoteClient, configMap, clusterSummary, l)
 		if err != nil {
 			return nil, err
 		}
 
 		deployed = append(deployed, tmpDeployed...)
 	}
+
+	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	err = updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterFeatureOwnerRef, featureID, deployed)
+	if err != nil {
+		return nil, err
+	}
+
 	return deployed, nil
 }
 
 func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clusterClient client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary,
 	deployedGVKs []schema.GroupVersionKind,
-	currentPolicies map[string]bool) error {
+	currentPolicies map[string]configv1alpha1.Resource) error {
 
 	// Do not use due to metav1.Selector limitation
 	// labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{ClusterSummaryLabelName: clusterSummary.Name}}
@@ -362,8 +394,13 @@ func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clu
 	return nil
 }
 
-func deleteIfNotExistant(ctx context.Context, policy client.Object, c client.Client, currentPolicies map[string]bool) error {
-	name := getPolicyInfo(policy)
+func deleteIfNotExistant(ctx context.Context, policy client.Object, c client.Client, currentPolicies map[string]configv1alpha1.Resource) error {
+	name := getPolicyInfo(&configv1alpha1.Resource{
+		Kind:      policy.GetObjectKind().GroupVersionKind().Kind,
+		Group:     policy.GetObjectKind().GroupVersionKind().Group,
+		Name:      policy.GetName(),
+		Namespace: policy.GetNamespace(),
+	})
 	if _, ok := currentPolicies[name]; !ok {
 		if err := c.Delete(ctx, policy); err != nil {
 			return err
@@ -434,4 +471,50 @@ func isDeploymentReady(ctx context.Context, c client.Client,
 
 	ready = true
 	return
+}
+
+func updateClusterConfiguration(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string,
+	clusterFeatureOwnerRef *metav1.OwnerReference,
+	featureID configv1alpha1.FeatureID,
+	deployed []configv1alpha1.Resource) error {
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get ClusterConfiguration for CAPI Cluster
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, clusterConfiguration)
+		if err != nil {
+			return err
+		}
+
+		var index int
+		index, err = configv1alpha1.GetClusterConfigurationSectionIndex(clusterConfiguration, clusterFeatureOwnerRef.Name)
+		if err != nil {
+			return err
+		}
+
+		isPresent := false
+		for i := range clusterConfiguration.Status.ClusterFeatureResources[index].Features {
+			if clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].FeatureID == featureID {
+				clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].Resources = deployed
+				isPresent = true
+				break
+			}
+		}
+
+		if !isPresent {
+			if clusterConfiguration.Status.ClusterFeatureResources[index].Features == nil {
+				clusterConfiguration.Status.ClusterFeatureResources[index].Features = make([]configv1alpha1.Feature, 0)
+			}
+			clusterConfiguration.Status.ClusterFeatureResources[index].Features = append(clusterConfiguration.Status.ClusterFeatureResources[index].Features,
+				configv1alpha1.Feature{FeatureID: featureID, Resources: deployed},
+			)
+		}
+
+		clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *clusterFeatureOwnerRef)
+
+		return c.Status().Update(ctx, clusterConfiguration)
+	})
+
+	return err
 }

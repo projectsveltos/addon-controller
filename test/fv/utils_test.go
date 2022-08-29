@@ -291,3 +291,77 @@ func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *core
 
 	return cm
 }
+
+type policy struct {
+	name      string
+	namespace string
+	kind      string
+	group     string
+}
+
+func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterName string,
+	featureID configv1alpha1.FeatureID, expectedPolicies []policy) {
+
+	Eventually(func() bool {
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, currentClusterConfiguration)
+		if err != nil {
+			return false
+		}
+		if currentClusterConfiguration.Status.ClusterFeatureResources == nil {
+			return false
+		}
+		return verifyClusterConfigurationEntryForClusterFeature(currentClusterConfiguration, clusterFeatureName,
+			featureID, expectedPolicies)
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func verifyClusterConfigurationEntryForClusterFeature(clusterConfiguration *configv1alpha1.ClusterConfiguration,
+	clusterFeatureName string, featureID configv1alpha1.FeatureID, expectedPolicies []policy) bool {
+
+	for i := range clusterConfiguration.Status.ClusterFeatureResources {
+		if clusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeatureName {
+			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterFeatureResources[i].Features, featureID, expectedPolicies)
+		}
+	}
+
+	return false
+}
+
+func verifyClusterConfigurationPolicies(deployedFeatures []configv1alpha1.Feature, featureID configv1alpha1.FeatureID,
+	expectedPolicies []policy) bool {
+
+	index := -1
+	for i := range deployedFeatures {
+		if deployedFeatures[i].FeatureID == featureID {
+			index = i
+		}
+	}
+
+	if index < 0 {
+		return false
+	}
+
+	for i := range expectedPolicies {
+		policy := expectedPolicies[i]
+		found := false
+		for j := range deployedFeatures[index].Resources {
+			r := deployedFeatures[index].Resources[j]
+			if r.Namespace == policy.namespace &&
+				r.Name == policy.name &&
+				r.Kind == policy.kind &&
+				r.Group == policy.group {
+
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	return true
+}

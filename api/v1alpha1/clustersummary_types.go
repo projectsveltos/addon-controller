@@ -17,8 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const (
@@ -123,7 +127,7 @@ type ClusterSummaryStatus struct {
 	// directly managed by ClusterFeature.
 	// +listType=atomic
 	// +optional
-	FeatureSummaries []FeatureSummary `json:"clusterSummaries,omitempty"`
+	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
 
 	// GatekeeperSortedPolicies contains gatekeeper referenced configmaps
 	// ordered by ConfigMaps containing ConstraintTemplates last.
@@ -159,4 +163,22 @@ type ClusterSummaryList struct {
 // nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterSummary{}, &ClusterSummaryList{})
+}
+
+// GetOwnerClusterFeatureName returns the ClusterFeature owning a given ClusterSummary
+func GetOwnerClusterFeatureName(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
+	for _, ref := range clusterSummary.OwnerReferences {
+		if ref.Kind != "ClusterFeature" {
+			continue
+		}
+		gv, err := schema.ParseGroupVersion(ref.APIVersion)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		if gv.Group == GroupVersion.Group {
+			return &ref, nil
+		}
+	}
+
+	return nil, fmt.Errorf("ClusterFeature owner not found")
 }

@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 	"github.com/projectsveltos/cluster-api-feature-manager/internal/test/helpers"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
@@ -70,6 +71,8 @@ var _ = BeforeSuite(func() {
 			panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
 		}
 	}()
+
+	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)

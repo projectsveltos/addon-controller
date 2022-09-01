@@ -504,7 +504,7 @@ spec:
           status:
             description: ClusterSummaryStatus defines the observed state of ClusterSummary
             properties:
-              clusterSummaries:
+              featureSummaries:
                 description: FeatureSummaries reports the status of each workload
                   cluster feature directly managed by ClusterFeature.
                 items:

@@ -249,6 +249,13 @@ var _ = Describe("Gatekeeper", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Gatekeeper", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureGatekeeper, configv1alpha1.FeatureStatusProvisioned)
 
+		policies := []policy{
+			{kind: "ConstraintTemplate", name: "k8sreplicalimits", namespace: "", group: "templates.gatekeeper.sh"},
+			{kind: "K8sReplicaLimits", name: "replica-limits", namespace: "", group: "constraints.gatekeeper.sh"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureGatekeeper, policies)
+
 		Byf("Modifying configMap")
 		currentConfigMapTemplate := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -269,6 +276,13 @@ var _ = Describe("Gatekeeper", func() {
 			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: policyName}, policy)
 			return err
 		}, timeout, pollingInterval).Should(BeNil())
+
+		policies = []policy{
+			{kind: "ConstraintTemplate", name: "k8sdisallowedtags", namespace: "", group: "templates.gatekeeper.sh"},
+			{kind: "K8sDisallowedTags", name: "container-image-must-not-have-latest-tag", namespace: "", group: "constraints.gatekeeper.sh"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureGatekeeper, policies)
 
 		Byf("Changing clusterfeature to not require any gatekeeper configuration anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}

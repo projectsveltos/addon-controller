@@ -38,38 +38,38 @@ func deployResources(ctx context.Context, c client.Client,
 	logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary, clusterClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
+	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
 	if err != nil {
 		return err
 	}
 
-	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
 
-	currentPolicies := make(map[string]bool, 0)
-	if clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs != nil {
-		refs := getResourceRefs(clusterSummary)
+	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	refs := getResourceRefs(clusterSummary)
 
-		var confgiMaps []corev1.ConfigMap
-		confgiMaps, err = collectConfigMaps(ctx, c, refs, logger)
-		if err != nil {
-			return err
-		}
-
-		var deployed []string
-		deployed, err = deployConfigMaps(ctx, confgiMaps, clusterSummary, clusterClient, clusterRestConfig, logger)
-		if err != nil {
-			return err
-		}
-
-		for _, k := range deployed {
-			currentPolicies[k] = true
-		}
+	var configMaps []corev1.ConfigMap
+	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
+	if err != nil {
+		return err
 	}
 
-	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
+	var deployed []configv1alpha1.Resource
+	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
+		configMaps, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range deployed {
+		key := getPolicyInfo(&deployed[i])
+		currentPolicies[key] = deployed[i]
+	}
+
+	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies)
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), map[string]bool{})
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), map[string]configv1alpha1.Resource{})
 	if err != nil {
 		return err
 	}

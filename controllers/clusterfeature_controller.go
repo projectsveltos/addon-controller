@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -84,6 +84,7 @@ type ClusterFeatureReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;update;create;delete
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;create;watch
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
@@ -150,6 +151,11 @@ func (r *ClusterFeatureReconciler) reconcileDelete(
 	clusterFeatureScope.SetMatchingClusterRefs(nil)
 
 	if err := r.cleanClusterSummaries(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
+		return reconcile.Result{}, err
+	}
+	if err := r.cleanClusterConfigurations(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
 
@@ -189,12 +195,26 @@ func (r *ClusterFeatureReconciler) reconcileNormal(
 
 	r.updatesMaps(clusterFeatureScope)
 
-	// For each matching CAPI Cluster, create/update corresponding ClusterSummary
-	if err := r.updateClusterSummaries(ctx, clusterFeatureScope); err != nil {
+	// For each matching CAPI Cluster, create/update corresponding ClusterConfiguration
+	if err := r.updateClusterConfigurations(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to update ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
+	// For each matching CAPI Cluster, create/update corresponding ClusterSummary
+	if err := r.updateClusterSummaries(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummaries")
+		return reconcile.Result{}, err
+	}
+
 	// For CAPI Cluster not matching ClusterFeature, deletes corresponding ClusterSummary
 	if err := r.cleanClusterSummaries(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
+		return reconcile.Result{}, err
+	}
+	// For CAPI Cluster not matching ClusterFeature, removes ClusterFeature as OwnerReference
+	// from corresponding ClusterConfiguration
+	if err := r.cleanClusterConfigurations(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
 
@@ -260,6 +280,12 @@ func (r *ClusterFeatureReconciler) getMatchingClusters(ctx context.Context, clus
 
 	for i := range clusterList.Items {
 		cluster := &clusterList.Items[i]
+
+		if !cluster.DeletionTimestamp.IsZero() {
+			// Only existing cluster can match
+			continue
+		}
+
 		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
 			matching = append(matching, corev1.ObjectReference{
 				Kind:      cluster.Kind,
@@ -293,7 +319,7 @@ func (r *ClusterFeatureReconciler) updateClusterSummaries(ctx context.Context, c
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
 
-		_, err = GetClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+		_, err = getClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				err = r.createClusterSummary(ctx, clusterFeatureScope, &cluster)
@@ -361,6 +387,121 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 	return nil
 }
 
+// cleanClusterConfigurations finds all ClusterConfigurations currently owned by ClusterFeature.
+// For each such ClusterConfigurations:
+// - remove ClusterFeature as OwnerReference
+// -if no more OwnerReferences are left, delete ClusterConfigurations
+func (r *ClusterFeatureReconciler) cleanClusterConfigurations(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
+	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
+
+	matchingClusterMap := make(map[string]bool)
+
+	info := func(namespace, name string) string {
+		return fmt.Sprintf("%s--%s", namespace, name)
+	}
+
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		ref := &clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
+		matchingClusterMap[info(ref.Namespace, ref.Name)] = true
+	}
+
+	err := r.List(ctx, clusterConfiguratioList)
+	if err != nil {
+		return err
+	}
+
+	for i := range clusterConfiguratioList.Items {
+		cc := &clusterConfiguratioList.Items[i]
+
+		// If CAPI Cluster is still a match, continue (don't remove ClusterFeature as OwnerReference)
+		if _, ok := matchingClusterMap[info(cc.Namespace, cc.Name)]; ok {
+			continue
+		}
+
+		err = r.cleanClusterConfiguration(ctx, clusterFeatureScope.ClusterFeature, cc)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ClusterFeatureReconciler) cleanClusterConfiguration(ctx context.Context, clusterFeature *configv1alpha1.ClusterFeature,
+	clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	// remove ClusterFeature as one of the ClusterConfiguration's owners
+	err := r.cleanClusterConfigurationOwnerReferences(ctx, clusterFeature, clusterConfiguration)
+	if err != nil {
+		return err
+	}
+
+	// remove the section in ClusterConfiguration.Status.ClusterFeatureResource used for this ClusterFeature
+	err = r.cleanClusterConfigurationClusterFeatureResources(ctx, clusterFeature, clusterConfiguration)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClusterFeatureReconciler) cleanClusterConfigurationOwnerReferences(ctx context.Context, clusterFeature *configv1alpha1.ClusterFeature,
+	clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	ownerRef := metav1.OwnerReference{
+		Kind:       clusterFeature.Kind,
+		UID:        clusterFeature.UID,
+		APIVersion: clusterFeature.APIVersion,
+		Name:       clusterFeature.Name,
+	}
+
+	if !util.IsOwnedByObject(clusterConfiguration, clusterFeature) {
+		return nil
+	}
+
+	clusterConfiguration.OwnerReferences = util.RemoveOwnerRef(clusterConfiguration.OwnerReferences, ownerRef)
+	if len(clusterConfiguration.OwnerReferences) == 0 {
+		return r.Delete(ctx, clusterConfiguration)
+	} else {
+		return r.Update(ctx, clusterConfiguration)
+	}
+}
+
+func (r *ClusterFeatureReconciler) cleanClusterConfigurationClusterFeatureResources(ctx context.Context, clusterFeature *configv1alpha1.ClusterFeature,
+	clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration, err := getClusterConfiguration(ctx, r.Client,
+			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		if err != nil {
+			// If ClusterConfiguration is not found, nothing to do here.
+			// ClusterConfiguration is removed if ClusterFeature was the last owner.
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		toBeUpdated := false
+		for i := range currentClusterConfiguration.Status.ClusterFeatureResources {
+			if currentClusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName != clusterFeature.Name {
+				continue
+			}
+			// Order is not important. So move the element at index i with last one in order to avoid moving all elements.
+			length := len(currentClusterConfiguration.Status.ClusterFeatureResources)
+			currentClusterConfiguration.Status.ClusterFeatureResources[i] = currentClusterConfiguration.Status.ClusterFeatureResources[length-1]
+			currentClusterConfiguration.Status.ClusterFeatureResources = currentClusterConfiguration.Status.ClusterFeatureResources[:length-1]
+			toBeUpdated = true
+			break
+		}
+
+		if toBeUpdated {
+			return r.Status().Update(ctx, currentClusterConfiguration)
+		}
+		return nil
+	})
+	return err
+}
+
 // createClusterSummary creates ClusterSummary given a ClusterFeature and a matching CAPI Cluster
 func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster *corev1.ObjectReference) error {
@@ -400,17 +541,11 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster *corev1.ObjectReference) error {
 
-	currentCluster := &clusterv1.Cluster{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)
-	if err != nil {
-		return err
-	}
-
 	if !clusterFeatureScope.IsContinuousSync() {
 		return nil
 	}
 
-	clusterSummary, err := GetClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
 	if err != nil {
 		return err
 	}
@@ -432,6 +567,141 @@ func (r *ClusterFeatureReconciler) deleteClusterSummary(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) error {
 
 	return r.Delete(ctx, clusterSummary)
+}
+
+// updateClusterConfigurations for each CAPI Cluster currently matching ClusterFeature:
+// - creates corresponding ClusterConfiguration if one does not exist already
+// - updates (eventually) corresponding ClusterConfiguration if one already exists
+// Both create and update only add ClusterFeature as OwnerReference for ClusterConfiguration
+func (r *ClusterFeatureReconciler) updateClusterConfigurations(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
+	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
+		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
+
+		// Create ClusterConfiguration if not already existing.
+		err := r.createClusterConfiguration(ctx, &cluster)
+		if err != nil {
+			clusterFeatureScope.Logger.Error(err, fmt.Sprintf("failed to create ClusterConfiguration for cluster %s/%s",
+				cluster.Namespace, cluster.Name))
+			return err
+		}
+
+		// Update ClusterConfiguration
+		err = r.updateClusterConfiguration(ctx, clusterFeatureScope, &cluster)
+		if err != nil {
+			clusterFeatureScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterConfiguration for cluster %s/%s",
+				cluster.Namespace, cluster.Name))
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createClusterConfiguration creates ClusterConfiguration given a CAPI Cluster.
+// If already existing, return nil
+func (r *ClusterFeatureReconciler) createClusterConfiguration(ctx context.Context, cluster *corev1.ObjectReference) error {
+	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      cluster.Name,
+		},
+	}
+
+	err := r.Create(ctx, clusterConfiguration)
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
+	}
+
+	return err
+}
+
+// updateClusterConfiguration updates if necessary ClusterConfiguration given a ClusterFeature and a matching CAPI Cluster.
+// Update consists in:
+// - adding ClusterFeature as one of OwnerReferences for ClusterConfiguration
+// - adding a section in Status.ClusterFeatureResources for this ClusterFeature
+func (r *ClusterFeatureReconciler) updateClusterConfiguration(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
+	cluster *corev1.ObjectReference) error {
+
+	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace, cluster.Name)
+	if err != nil {
+		return err
+	}
+
+	// add ClusterFeature as one of the ClusterConfiguration's owners
+	err = r.updateClusterConfigurationOwnerReferences(ctx, clusterFeatureScope.ClusterFeature, clusterConfiguration)
+	if err != nil {
+		return err
+	}
+
+	// add a section in ClusterConfiguration.Status.ClusterFeatureResource for ClusterFeature
+	err = r.updateClusterConfigurationClusterFeatureResources(ctx, clusterFeatureScope.ClusterFeature, clusterConfiguration)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// updateClusterConfigurationOwnerReferences adds clusterFeature as owner of ClusterConfiguration
+func (r *ClusterFeatureReconciler) updateClusterConfigurationOwnerReferences(ctx context.Context,
+	clusterFeature *configv1alpha1.ClusterFeature, clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	if util.IsOwnedByObject(clusterConfiguration, clusterFeature) {
+		return nil
+	}
+
+	ownerRef := metav1.OwnerReference{
+		Kind:       clusterFeature.Kind,
+		UID:        clusterFeature.UID,
+		APIVersion: clusterFeature.APIVersion,
+		Name:       clusterFeature.Name,
+	}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration, err := getClusterConfiguration(ctx, r.Client,
+			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		if err != nil {
+			return err
+		}
+
+		currentClusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, ownerRef)
+		return r.Update(ctx, currentClusterConfiguration)
+	})
+	return err
+}
+
+// updateClusterConfigurationClusterFeatureResources adds a section for ClusterFeature in clusterConfiguration
+// Status.ClusterFeatureResources
+func (r *ClusterFeatureReconciler) updateClusterConfigurationClusterFeatureResources(ctx context.Context,
+	clusterFeature *configv1alpha1.ClusterFeature, clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	currentClusterConfiguration, err := getClusterConfiguration(ctx, r.Client,
+		clusterConfiguration.Namespace, clusterConfiguration.Name)
+	if err != nil {
+		return err
+	}
+
+	for i := range currentClusterConfiguration.Status.ClusterFeatureResources {
+		if currentClusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeature.Name {
+			return nil
+		}
+	}
+
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration, err = getClusterConfiguration(ctx, r.Client,
+			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		if err != nil {
+			return err
+		}
+
+		currentClusterConfiguration.Status.ClusterFeatureResources = append(currentClusterConfiguration.Status.ClusterFeatureResources,
+			configv1alpha1.ClusterFeatureResource{ClusterFeatureName: clusterFeature.Name})
+
+		return r.Status().Update(ctx, currentClusterConfiguration)
+	})
+	return err
 }
 
 // isClusterReadyToBeConfigured gets all Machines for a given CAPI Cluster and returns true

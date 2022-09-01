@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"unicode/utf8"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,19 +27,15 @@ import (
 	"github.com/go-logr/logr"
 	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	opav1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
-	"github.com/pkg/errors"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -524,124 +519,3 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })
-
-// addOwnerReference adds owner as OwnerReference of obj
-func addOwnerReference(ctx context.Context, c client.Client, obj, owner client.Object) {
-	objCopy := obj.DeepCopyObject().(client.Object)
-	key := client.ObjectKeyFromObject(obj)
-	Expect(c.Get(ctx, key, objCopy)).To(Succeed())
-	refs := objCopy.GetOwnerReferences()
-	if refs == nil {
-		refs = make([]metav1.OwnerReference, 0)
-	}
-	refs = append(refs,
-		metav1.OwnerReference{
-			UID:        owner.GetUID(),
-			Name:       owner.GetName(),
-			Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
-			APIVersion: owner.GetResourceVersion(),
-		})
-	objCopy.SetOwnerReferences(refs)
-	Expect(c.Update(ctx, objCopy)).To(Succeed())
-}
-
-// waitForObject waits for the cache to be updated helps in preventing test flakes due to the cache sync delays.
-func waitForObject(ctx context.Context, c client.Client, obj client.Object) error {
-	// Makes sure the cache is updated with the new object
-	objCopy := obj.DeepCopyObject().(client.Object)
-	key := client.ObjectKeyFromObject(obj)
-	if err := wait.ExponentialBackoff(
-		cacheSyncBackoff,
-		func() (done bool, err error) {
-			if err := c.Get(ctx, key, objCopy); err != nil {
-				if apierrors.IsNotFound(err) {
-					return false, nil
-				}
-				return false, err
-			}
-			return true, nil
-		}); err != nil {
-		return errors.Wrapf(err, "object %s, %s is not being added to the testenv client cache", obj.GetObjectKind().GroupVersionKind().String(), key)
-	}
-	return nil
-}
-
-// createConfigMapWithPolicy creates a configMap with Data containing base64 encoded policies
-func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      configMapName,
-		},
-		Data: map[string]string{},
-	}
-	for i := range policyStrs {
-		key := fmt.Sprintf("policy%d.yaml", i)
-		if utf8.Valid([]byte(policyStrs[i])) {
-			cm.Data[key] = policyStrs[i]
-		} else {
-			cm.BinaryData[key] = []byte(policyStrs[i])
-		}
-	}
-
-	return cm
-}
-
-// updateConfigMapWithPolicy updates a configMap with passed in policies
-func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *corev1.ConfigMap {
-	for i := range policyStrs {
-		key := fmt.Sprintf("policy%d.yaml", i)
-		if utf8.Valid([]byte(policyStrs[i])) {
-			cm.Data[key] = policyStrs[i]
-		} else {
-			cm.BinaryData[key] = []byte(policyStrs[i])
-		}
-	}
-
-	return cm
-}
-
-func randomString() string {
-	const length = 10
-	return util.RandomString(length)
-}
-
-func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterFeatureName, clusterNamespace, clusterName string) {
-	labels := clusterSummary.Labels
-	if labels == nil {
-		labels = make(map[string]string)
-	}
-	labels[controllers.ClusterFeatureLabelName] = clusterFeatureName
-	labels[controllers.ClusterLabelNamespace] = clusterNamespace
-	labels[controllers.ClusterLabelName] = clusterName
-
-	clusterSummary.Labels = labels
-}
-
-// deleteResources deletes following resources:
-// - namespace
-// - clusterFeature
-// - clusterSummary
-func deleteResources(namespace string,
-	clusterFeature *configv1alpha1.ClusterFeature,
-	clusterSummary *configv1alpha1.ClusterSummary) {
-
-	ns := &corev1.Namespace{}
-	err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
-	if err != nil {
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-		return
-	}
-	err = testEnv.Client.Delete(context.TODO(), ns)
-	if err != nil {
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	}
-	err = testEnv.Client.Delete(context.TODO(), clusterFeature)
-	if err != nil {
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	}
-	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
-	if err != nil {
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	}
-}

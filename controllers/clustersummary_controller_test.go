@@ -52,31 +52,38 @@ var _ = Describe("ClustersummaryController", func() {
 	BeforeEach(func() {
 		namespace = "reconcile" + randomString()
 
+		clusterName = randomString()
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"dc": "eng",
+				},
+			},
+		}
+
 		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterFeatureNamePrefix + randomString(),
 			},
+			Spec: configv1alpha1.ClusterFeatureSpec{
+				ClusterSelector: selector,
+			},
 		}
 
-		clusterName = randomString()
 		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummaryName,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace: namespace,
-				ClusterName:      clusterName,
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, namespace, clusterName)
 
-		cluster = &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterName,
-				Namespace: namespace,
-			},
-		}
+		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
 	It("isClusterPaused returns true if CAPI Cluster has Spec.Paused set", func() {
@@ -148,8 +155,6 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
 			Replicas: 1,
 		}
-		clusterSummary.Spec.ClusterNamespace = namespace
-		clusterSummary.Spec.ClusterName = clusterName
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoving},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
@@ -167,6 +172,8 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		addOwnerReference(context.TODO(), c, clusterSummary, clusterFeature)
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
@@ -326,6 +333,51 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			clusterSummaryList := controllers.RequeueClusterSummaryForConfigMap(clusterSummaryReconciler, configMap)
+			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
+			for i := range clusterSummaryList {
+				if clusterSummaryList[i] == result {
+					return true
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
+	})
+
+	It("requeueClusterSummaryForCluster returns correct ClusterSummary for a CAPI Cluster", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+
+		clusterSummaryName := client.ObjectKey{
+			Name: referencingClusterSummary.Name,
+		}
+
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
+		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
+
+		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterSummaryName,
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
 			for i := range clusterSummaryList {
 				if clusterSummaryList[i] == result {

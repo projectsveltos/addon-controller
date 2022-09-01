@@ -85,7 +85,8 @@ var _ = Describe("HanldersPrometheus", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+
+		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
 	AfterEach(func() {
@@ -173,14 +174,26 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus returns an error when CAPI Cluster does not exist", func() {
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		currentCluster := &clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), currentCluster)).To(Succeed())
+
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)
+			return err != nil &&
+				apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		err := controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
 		Expect(err).ToNot(BeNil())
 	})
 
 	It("deployPrometheus deploys prometheus operator with InstallationModeCustom", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeCustom, cluster)
+		setInstallationMode(testEnv.Client, clusterSummary, configv1alpha1.PrometheusInstallationModeCustom)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -194,7 +207,7 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus deploys kubeStateMetrics and Prometheus operator with InstallationModeKubeStateMetrics", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeKubeStateMetrics, cluster)
+		setInstallationMode(testEnv.Client, clusterSummary, configv1alpha1.PrometheusInstallationModeKubeStateMetrics)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -215,7 +228,7 @@ var _ = Describe("HanldersPrometheus", func() {
 	})
 
 	It("deployPrometheus deploys kubeStateMetrics and Prometheus operator with InstallationModeKubePrometheus", func() {
-		prepareForPrometheusDeployment(clusterSummary, configv1alpha1.PrometheusInstallationModeKubePrometheus, cluster)
+		setInstallationMode(testEnv.Client, clusterSummary, configv1alpha1.PrometheusInstallationModeKubePrometheus)
 
 		Expect(controllers.DeployPrometheus(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())).To(Succeed())
@@ -258,25 +271,6 @@ var _ = Describe("HanldersPrometheus", func() {
 			controllers.ConfigLabelNamespace: randomString(),
 		})
 
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
-
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = nil
@@ -293,18 +287,12 @@ var _ = Describe("HanldersPrometheus", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), currentClusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor1)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, serviceMonitor1)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, serviceMonitor1, currentClusterSummary)
 
 		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor0)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, serviceMonitor0)).To(Succeed())
-
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
 		Expect(controllers.UnDeployPrometheus(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeaturePrometheus), klogr.New())).To(Succeed())
@@ -476,32 +464,25 @@ func verifyDeployment(clusterSummary *configv1alpha1.ClusterSummary,
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-func prepareForPrometheusDeployment(clusterSummary *configv1alpha1.ClusterSummary,
-	installationMode configv1alpha1.PrometheusInstallationMode,
-	cluster *clusterv1.Cluster) {
+func setInstallationMode(c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	installationMode configv1alpha1.PrometheusInstallationMode) {
 
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: clusterSummary.Spec.ClusterNamespace,
-			Name:      clusterSummary.Spec.ClusterName + "-kubeconfig",
-		},
-		Data: map[string][]byte{
-			"data": testEnv.Kubeconfig,
-		},
-	}
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterSummary.Spec.ClusterNamespace,
-		},
-	}
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	Expect(c.Get(context.TODO(),
+		types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
-	clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
+	currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration = &configv1alpha1.PrometheusConfiguration{
 		InstallationMode: installationMode,
 	}
-	Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
-	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+	Expect(c.Update(context.TODO(), currentClusterSummary))
+
+	// Eventual loop so testEnv Cache is synced
+	Eventually(func() bool {
+		err := c.Get(context.TODO(),
+			types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+		return err == nil &&
+			currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil &&
+			currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.InstallationMode == installationMode
+	}, timeout, pollingInterval).Should(BeTrue())
 }

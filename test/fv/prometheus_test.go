@@ -115,6 +115,12 @@ var _ = Describe("Prometheus", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for prometheus", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeaturePrometheus, configv1alpha1.FeatureStatusProvisioned)
 
+		policies := []policy{
+			{kind: "ServiceMonitor", name: smName, namespace: prometheus.Namespace, group: "monitoring.coreos.com"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeaturePrometheus, policies)
+
 		Byf("Modifying configMap %s/%s", configMap.Namespace, configMap.Name)
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -132,6 +138,12 @@ var _ = Describe("Prometheus", func() {
 				types.NamespacedName{Namespace: prometheus.Namespace, Name: policyName}, currentServiceMonitor)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		policies = []policy{
+			{kind: "ServiceMonitor", name: policyName, namespace: prometheus.Namespace, group: "monitoring.coreos.com"},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeaturePrometheus, policies)
 
 		Byf("Changing clusterfeature to not require any prometheus configuration anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}

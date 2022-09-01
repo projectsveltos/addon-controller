@@ -48,8 +48,8 @@ var (
 )
 
 const (
-	timeout         = 3 * time.Minute
-	pollingInterval = 2 * time.Second
+	timeout         = 4 * time.Minute
+	pollingInterval = 5 * time.Second
 )
 
 func TestFv(t *testing.T) {

@@ -91,9 +91,9 @@ func GetClusterSummaryName(clusterFeatureName, clusterNamespace, clusterName str
 	return fmt.Sprintf("%s-%x", clusterFeatureName, sha[:10])
 }
 
-// GetClusterSummary returns the ClusterSummary instance created by a specific ClusterFeature for a specific
+// getClusterSummary returns the ClusterSummary instance created by a specific ClusterFeature for a specific
 // CAPI Cluster
-func GetClusterSummary(ctx context.Context, c client.Client,
+func getClusterSummary(ctx context.Context, c client.Client,
 	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
@@ -120,6 +120,19 @@ func GetClusterSummary(ctx context.Context, c client.Client,
 	}
 
 	return &clusterSummaryList.Items[0], nil
+}
+
+// getClusterConfiguration returns the ClusterConfiguration instance for a specific CAPI Cluster
+func getClusterConfiguration(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string) (*configv1alpha1.ClusterConfiguration, error) {
+
+	clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+	if err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, clusterConfiguration); err != nil {
+		return nil, err
+	}
+
+	return clusterConfiguration, nil
 }
 
 // getClusterFeatureOwner returns the ClusterFeature owning this clusterSummary.

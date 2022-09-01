@@ -96,7 +96,8 @@ var _ = Describe("HandlersContour", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+
+		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
 	AfterEach(func() {
@@ -259,28 +260,8 @@ var _ = Describe("HandlersContour", func() {
 			},
 		}
 
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
-
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), policy1)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, policy1)).To(Succeed())
@@ -303,15 +284,17 @@ var _ = Describe("HandlersContour", func() {
 		}
 		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+			return err == nil &&
+				currentClusterSummary.Status.FeatureSummaries != nil
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.UnDeployContour(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureGatekeeper), logger)).To(Succeed())
+			string(configv1alpha1.FeatureContour), logger)).To(Succeed())
 
-		// UnDeployGatekeeper finds all contour policies deployed because of a clusterSummary and deletes those.
+		// UnDeployContour finds all contour policies deployed because of a clusterSummary and deletes those.
 		// Expect all GatewayClass policies but policy0 (ConfigLabelName is not set on it) to be deleted.
 
 		policy := &gatewayapi.GatewayClass{}
@@ -327,7 +310,10 @@ var _ = Describe("HandlersContour", func() {
 	})
 
 	It("deployContour returns an error when CAPI Cluster does not exist", func() {
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		currentCluster := &clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), currentCluster)).To(Succeed())
 		err := controllers.DeployContour(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
 		Expect(err).ToNot(BeNil())

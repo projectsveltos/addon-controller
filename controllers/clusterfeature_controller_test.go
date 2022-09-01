@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -120,6 +121,134 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				configv1alpha1.ClusterFeatureFinalizer,
 			),
 		).Should(BeTrue())
+	})
+
+	It("UpdateClusterConfiguration idempotently adds ClusterFeature as OwnerReference and in Status.ClusterFeatureResources", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: matchingCluster.Namespace,
+				Name:      matchingCluster.Name,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterFeature,
+			ns,
+			clusterConfiguration,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterFeatureReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
+		}
+
+		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterFeature: clusterFeature,
+			ControllerName: "clusterfeature",
+		})
+		Expect(err).To(BeNil())
+
+		clusterRef := corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name}
+		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterFeatureScope, &clusterRef)).To(Succeed())
+
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
+
+		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
+		Expect(currentClusterConfiguration.OwnerReferences[0].Name).To(Equal(clusterFeature.Name))
+
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
+
+		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterFeatureScope, &clusterRef)).To(Succeed())
+
+		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
+	})
+
+	It("CleanClusterConfiguration idempotently removes ClusterFeature as OwnerReference and from Status.ClusterFeatureResources", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterFeature,
+			ns,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+
+		// Preprare clusterConfiguration with Status section. OwnerReference
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: matchingCluster.Namespace,
+				Name:      matchingCluster.Name,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind:       currentClusterFeature.Kind,
+						Name:       currentClusterFeature.Name,
+						APIVersion: currentClusterFeature.APIVersion,
+						UID:        currentClusterFeature.UID,
+					},
+					{ // Add a second fake Owner, so that when removing ClusterFeature as owner,
+						// ClusterConfiguration is not deleted
+						Kind:       currentClusterFeature.Kind,
+						Name:       randomString(),
+						APIVersion: currentClusterFeature.APIVersion,
+						UID:        types.UID(randomString()),
+					},
+				},
+			},
+			Status: configv1alpha1.ClusterConfigurationStatus{
+				ClusterFeatureResources: []configv1alpha1.ClusterFeatureResource{
+					{ClusterFeatureName: clusterFeature.Name},
+				},
+			},
+		}
+
+		Expect(c.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+
+		reconciler := &controllers.ClusterFeatureReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			ClusterMap:        make(map[string]*controllers.Set),
+			ClusterFeatureMap: make(map[string]*controllers.Set),
+			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			Mux:               sync.Mutex{},
+		}
+
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterFeature, clusterConfiguration)).To(Succeed())
+
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
+
+		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(0))
+
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterFeature, clusterConfiguration)).To(Succeed())
+
+		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(0))
 	})
 
 	It("Reconciliation of deleted ClusterFeature removes finalizer only when all ClusterSummaries are gone", func() {
@@ -848,9 +977,10 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 	AfterEach(func() {
 		ns := &corev1.Namespace{}
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), matchingClusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
 	It("RequeueClusterFeatureForCluster returns correct ClusterFeatures for a CAPI cluster", func() {
@@ -859,10 +989,21 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 				Name: namespace,
 			},
 		}
+
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      cluster.Name,
+			},
+		}
+
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterFeature)).To(Succeed())
 
 		clusterFeatureName := client.ObjectKey{
 			Name: matchingClusterFeature.Name,
@@ -889,11 +1030,20 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 	})
 
 	It("RequeueClusterFeatureForMachine returns correct ClusterFeatures for a CAPI machine", func() {
+		By(fmt.Sprintf("MGIANLUC namespace %s", namespace))
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
 			},
 		}
+
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      cluster.Name,
+			},
+		}
+
 		cpMachine := &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster.Namespace,
@@ -908,9 +1058,12 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterFeature)).To(Succeed())
 
 		clusterFeatureName := client.ObjectKey{
 			Name: matchingClusterFeature.Name,

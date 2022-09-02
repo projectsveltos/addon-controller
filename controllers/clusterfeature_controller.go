@@ -154,13 +154,19 @@ func (r *ClusterFeatureReconciler) reconcileDelete(
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
 		return reconcile.Result{}, err
 	}
+
+	if !r.allClusterSummariesGone(ctx, clusterFeatureScope) {
+		logger.V(logs.LogInfo).Info("Not all cluster summaries are gone")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
 	if err := r.cleanClusterConfigurations(ctx, clusterFeatureScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
 
 	if !r.canRemoveFinalizer(ctx, clusterFeatureScope) {
-		logger.V(logs.LogDebug).Info("Cannot remove finalizer yet")
+		logger.V(logs.LogInfo).Info("Cannot remove finalizer yet")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
@@ -393,6 +399,10 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 // -if no more OwnerReferences are left, delete ClusterConfigurations
 func (r *ClusterFeatureReconciler) cleanClusterConfigurations(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
 	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
+
+	if !r.allClusterSummariesGone(ctx, clusterFeatureScope) {
+		return fmt.Errorf("not all ClusterSummaries owned by ClusterFeature are gone. Wait")
+	}
 
 	matchingClusterMap := make(map[string]bool)
 
@@ -797,6 +807,15 @@ func (r *ClusterFeatureReconciler) getClusterMapForEntry(entry string) *Set {
 // canRemoveFinalizer returns true if there is no ClusterSummary left created by this
 // ClusterFeature instance
 func (r *ClusterFeatureReconciler) canRemoveFinalizer(ctx context.Context,
+	clusterFeatureScope *scope.ClusterFeatureScope,
+) bool {
+
+	return r.allClusterSummariesGone(ctx, clusterFeatureScope)
+}
+
+// allClusterSummariesGone returns true if all ClusterSummaries owned by
+// a clusterfeature instances are gone.
+func (r *ClusterFeatureReconciler) allClusterSummariesGone(ctx context.Context,
 	clusterFeatureScope *scope.ClusterFeatureScope,
 ) bool {
 

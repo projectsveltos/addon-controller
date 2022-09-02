@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -128,14 +127,6 @@ type ClusterSummaryStatus struct {
 	// +listType=atomic
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
-
-	// GatekeeperSortedPolicies contains gatekeeper referenced configmaps
-	// ordered by ConfigMaps containing ConstraintTemplates last.
-	// When deploying Gatekeeper policies, ConstraintTemplates need to be
-	// installed first.
-	// When cleaning Gatekeeper policies, non ConstraintTemplates need to
-	// be cleaned first.
-	GatekeeperSortedPolicies []corev1.ObjectReference `json:"gatekeeperSortedPolicies,omitempty"`
 }
 
 //+kubebuilder:object:root=true

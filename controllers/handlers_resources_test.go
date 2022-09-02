@@ -106,7 +106,7 @@ var _ = Describe("HandlersResource", func() {
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
-			return controllers.DeployResources(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 				string(configv1alpha1.FeatureResources), klogr.New())
 		}, timeout, pollingInterval).Should(BeNil())
 
@@ -182,8 +182,8 @@ var _ = Describe("HandlersResource", func() {
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(controllers.UndeployResources(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureKyverno), klogr.New())).To(Succeed())
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+			string(configv1alpha1.FeatureResources), klogr.New())).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect role0 and cluster0 to be deleted. role1 should remain as ConfigLabelName is not set on it

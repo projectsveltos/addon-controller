@@ -219,8 +219,8 @@ var _ = Describe("HandlersContour", func() {
 			clusterSummary,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-		err := controllers.UnDeployContour(context.TODO(), c,
-			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
+		err := controllers.GenericUndeploy(context.TODO(), c,
+			cluster.Namespace, cluster.Name, clusterSummary.Name, string(configv1alpha1.FeatureContour), klogr.New())
 		Expect(err).To(BeNil())
 	})
 
@@ -291,7 +291,7 @@ var _ = Describe("HandlersContour", func() {
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(controllers.UnDeployContour(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureContour), logger)).To(Succeed())
 
 		// UnDeployContour finds all contour policies deployed because of a clusterSummary and deletes those.
@@ -314,6 +314,13 @@ var _ = Describe("HandlersContour", func() {
 		Expect(testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)).To(Succeed())
 		Expect(testEnv.Delete(context.TODO(), currentCluster)).To(Succeed())
+
+		Eventually(func() bool {
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		err := controllers.DeployContour(context.TODO(), testEnv.Client,
 			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
 		Expect(err).ToNot(BeNil())

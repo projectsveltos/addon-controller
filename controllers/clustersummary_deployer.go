@@ -24,9 +24,13 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -44,6 +48,7 @@ type feature struct {
 	id          configv1alpha1.FeatureID
 	currentHash getCurrentHash
 	deploy      deployer.RequestHandler
+	undeploy    deployer.RequestHandler
 	getRefs     getPolicyRefs
 }
 
@@ -126,12 +131,69 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Feature must be (re)deployed.
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), false, f.deploy); err != nil {
+		clusterSummary.Name, string(f.id), false, genericDeploy); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
 
 	return fmt.Errorf("request is queued")
+}
+
+func genericDeploy(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, featureID string,
+	logger logr.Logger) error {
+
+	// Code common to all features
+	// Feature specific code (featureHandler.deploy is invoked)
+	// Code common to all features
+
+	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
+
+	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger)
+	if err != nil {
+		return err
+	}
+
+	var remoteRestConfig *rest.Config
+	remoteRestConfig, err = getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	// Get ClusterSummary that requested this
+	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
+	if err != nil {
+		return err
+	}
+
+	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	refs := featureHandler.getRefs(clusterSummary)
+
+	var configMaps []corev1.ConfigMap
+	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
+	if err != nil {
+		return err
+	}
+
+	var deployed []configv1alpha1.Resource
+	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureID(featureID),
+		configMaps, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range deployed {
+		key := getPolicyInfo(&deployed[i])
+		currentPolicies[key] = deployed[i]
+	}
+
+	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureID(featureID)), currentPolicies)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -185,12 +247,71 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), true, f.deploy); err != nil {
+		clusterSummary.Name, string(f.id), true, genericUndeploy); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
 
 	return fmt.Errorf("cleanup request is queued")
+}
+
+func genericUndeploy(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant, featureID string,
+	logger logr.Logger) error {
+
+	// Code common to all features
+	// Feature specific code (featureHandler.undeploy is invoked)
+	// Code common to all features
+
+	// Get ClusterSummary that requested this
+	clusterSummary := &configv1alpha1.ClusterSummary{}
+	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
+		return err
+	}
+
+	// Get CAPI Cluster
+	cluster := &clusterv1.Cluster{}
+	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
+			return nil
+		}
+		return err
+	}
+
+	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
+	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger); err != nil {
+		return err
+	}
+
+	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureID(featureID)), map[string]configv1alpha1.Resource{})
+	if err != nil {
+		return err
+	}
+
+	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	err = updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterFeatureOwnerRef, configv1alpha1.FeatureID(featureID), nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // isFeatureStatusPresent returns true if feature status is set.

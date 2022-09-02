@@ -253,8 +253,8 @@ var _ = Describe("HanldersPrometheus", func() {
 			clusterSummary,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-		err := controllers.UnDeployPrometheus(context.TODO(), c,
-			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
+		err := controllers.GenericUndeploy(context.TODO(), c,
+			cluster.Namespace, cluster.Name, clusterSummary.Name, string(configv1alpha1.FeaturePrometheus), klogr.New())
 		Expect(err).To(BeNil())
 	})
 
@@ -294,7 +294,7 @@ var _ = Describe("HanldersPrometheus", func() {
 		Expect(testEnv.Client.Create(context.TODO(), serviceMonitor0)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, serviceMonitor0)).To(Succeed())
 
-		Expect(controllers.UnDeployPrometheus(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeaturePrometheus), klogr.New())).To(Succeed())
 
 		// UnDeployPrometheus finds all policies deployed because of a clusterSummary and deletes those.

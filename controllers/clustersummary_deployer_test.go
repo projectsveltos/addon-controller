@@ -239,30 +239,28 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeatureResources,
-			controllers.ResourcesHash, controllers.DeployResources, controllers.GetResourceRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
 		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
 		// changed (so hash in ClusterSummary Status matches hash of all referenced ResourceRefs).
 		// DeployeFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run DeployFeature then validate key is not added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 
-		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.DeployKyverno, controllers.GetKyvernoRefs)
+		f = controllers.GetHandlersForFeature(configv1alpha1.FeatureKyverno)
 
 		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
 		// changed (no change in Kyverno configuration).
 		// DeployeFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run DeployFeature then validate key is not added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key = deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -329,14 +327,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeatureResources,
-			controllers.ResourcesHash, controllers.DeployResources, controllers.GetResourceRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
 		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
 		// does not match anymore the hash of all referenced ResourceRefs). In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -344,14 +341,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 
-		f = controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.DeployKyverno, controllers.GetKyvernoRefs)
+		f = controllers.GetHandlersForFeature(configv1alpha1.FeatureKyverno)
 
 		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
 		// does not match anymore the hash of all referenced ReferenceRefs). In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -389,13 +385,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeatureResources,
-			controllers.ResourcesHash, controllers.DeployResources, controllers.GetResourceRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -431,14 +426,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.UnDeployKyverno, controllers.GetKyvernoRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureKyverno)
 
 		// ClusterSummary Status is reporting feature has removed.
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run UndeployFeature then validate key is not added to InProgress
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -464,13 +458,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeaturePrometheus,
-			controllers.PrometheusHash, controllers.UnDeployPrometheus, controllers.GetPrometheusRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeaturePrometheus)
 
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run UndeployFeature then validate key is added to InProgress
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
@@ -502,10 +495,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeaturePrometheus,
-			controllers.PrometheusHash, controllers.UnDeployPrometheus, controllers.GetPrometheusRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeaturePrometheus)
 
-		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup of Prometheus still in progress. Wait before redeploying"))
 	})
@@ -533,10 +525,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetFeature(configv1alpha1.FeatureKyverno,
-			controllers.KyvernoHash, controllers.UnDeployKyverno, controllers.GetKyvernoRefs)
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureKyverno)
 
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, *f, klogr.New())
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Kyverno still in progress. Wait before cleanup"))
 	})

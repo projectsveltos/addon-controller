@@ -259,6 +259,8 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			},
 		}
 
+		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+
 		now := metav1.NewTime(time.Now())
 		clusterFeature.DeletionTimestamp = &now
 		controllerutil.AddFinalizer(clusterFeature, configv1alpha1.ClusterFeatureFinalizer)
@@ -269,6 +271,8 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		addOwnerReference(ctx, c, clusterSummary, clusterFeature)
 
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
@@ -283,8 +287,11 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			Name: clusterFeature.Name,
 		}
 
-		// Reconcile ClusterFeature. Since not all associated ClusterSummaries are
-		// gone, this reconciliation will not remove finalizer.
+		// Reconcile ClusterFeature. ClusterSummary will be marked for deletion.
+		// ClusterSummary has tough a finalizer (and there is no controller for it in this
+		// test) so ClusterSummary won't be removed.
+		// Since ClusterSummary won't be removed, ClusterFeature's finalizer will not be
+		// removed.
 
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterFeatureName,
@@ -295,8 +302,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Delete ClusterSummary
-		Expect(c.Delete(context.TODO(), clusterSummary)).To(Succeed())
+		// Remove ClusterSummary finalizer
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		controllerutil.RemoveFinalizer(currentClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		err = c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
 		// Reconcile ClusterFeature again. Since all associated ClusterSummaries are
 		// gone, this reconciliation will remove finalizer and remove ClusterFeature

@@ -86,7 +86,7 @@ var _ = Describe("ClustersummaryController", func() {
 		prepareForDeployment(clusterFeature, clusterSummary, cluster)
 	})
 
-	It("isClusterPaused returns true if CAPI Cluster has Spec.Paused set", func() {
+	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {
 		initObjects := []client.Object{
 			clusterFeature,
 			clusterSummary,
@@ -104,12 +104,12 @@ var _ = Describe("ClustersummaryController", func() {
 			Mux:               sync.Mutex{},
 		}
 
-		Expect(controllers.IsClusterPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
+		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
 
 		cluster.Spec.Paused = true
 		Expect(c.Update(context.TODO(), cluster)).To(Succeed())
 
-		Expect(controllers.IsClusterPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
+		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
 	})
 
 	It("Adds finalizer", func() {

@@ -65,6 +65,8 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
+	controllers.CreatFeatureHandlerMaps()
+
 	go func() {
 		By("Starting the manager")
 		if err := testEnv.StartManager(ctx); err != nil {

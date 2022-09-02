@@ -173,6 +173,15 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	logger.Info("Reconciling ClusterSummary delete")
 
+	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if paused {
+		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+		return reconcile.Result{}, nil
+	}
+
 	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
@@ -209,7 +218,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	r.updatesMaps(clusterSummaryScope)
 
-	paused, err := r.isClusterPaused(ctx, clusterSummaryScope.ClusterSummary)
+	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -309,12 +318,7 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 }
 
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeatureResources,
-		currentHash: resourcesHash,
-		deploy:      deployResources,
-		getRefs:     getResourceRefs,
-	}
+	f := getHandlersForFeature(configv1alpha1.FeatureResources)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -328,12 +332,7 @@ func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSum
 		}
 	}
 
-	f := feature{
-		id:          configv1alpha1.FeatureKyverno,
-		currentHash: kyvernoHash,
-		deploy:      deployKyverno,
-		getRefs:     getKyvernoRefs,
-	}
+	f := getHandlersForFeature(configv1alpha1.FeatureKyverno)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -347,12 +346,7 @@ func (r *ClusterSummaryReconciler) deployGatekeeper(ctx context.Context, cluster
 		}
 	}
 
-	f := feature{
-		id:          configv1alpha1.FeatureGatekeeper,
-		currentHash: gatekeeperHash,
-		deploy:      deployGatekeeper,
-		getRefs:     getGatekeeperRefs,
-	}
+	f := getHandlersForFeature(configv1alpha1.FeatureGatekeeper)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -366,12 +360,7 @@ func (r *ClusterSummaryReconciler) deployPrometheus(ctx context.Context, cluster
 		}
 	}
 
-	f := feature{
-		id:          configv1alpha1.FeaturePrometheus,
-		currentHash: prometheusHash,
-		deploy:      deployPrometheus,
-		getRefs:     getPrometheusRefs,
-	}
+	f := getHandlersForFeature(configv1alpha1.FeaturePrometheus)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -385,12 +374,7 @@ func (r *ClusterSummaryReconciler) deployContour(ctx context.Context, clusterSum
 		}
 	}
 
-	f := feature{
-		id:          configv1alpha1.FeatureContour,
-		currentHash: contourHash,
-		deploy:      deployContour,
-		getRefs:     getContourRefs,
-	}
+	f := getHandlersForFeature(configv1alpha1.FeatureContour)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -443,52 +427,27 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 }
 
 func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeatureResources,
-		currentHash: resourcesHash,
-		deploy:      undeployResources,
-	}
-
+	f := getHandlersForFeature(configv1alpha1.FeatureResources)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeatureKyverno,
-		currentHash: kyvernoHash,
-		deploy:      unDeployKyverno,
-	}
-
+	f := getHandlersForFeature(configv1alpha1.FeatureKyverno)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) unDeployGatekeeper(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeatureGatekeeper,
-		currentHash: gatekeeperHash,
-		deploy:      unDeployGatekeeper,
-	}
-
+	f := getHandlersForFeature(configv1alpha1.FeatureGatekeeper)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeaturePrometheus,
-		currentHash: prometheusHash,
-		deploy:      unDeployPrometheus,
-	}
-
+	f := getHandlersForFeature(configv1alpha1.FeaturePrometheus)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployContour(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := feature{
-		id:          configv1alpha1.FeatureContour,
-		currentHash: contourHash,
-		deploy:      unDeployContour,
-	}
-
+	f := getHandlersForFeature(configv1alpha1.FeatureContour)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
@@ -566,8 +525,8 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry string) *Set {
 	return s
 }
 
-// isClusterPaused returns true if CAPI Cluster is paused
-func (r *ClusterSummaryReconciler) isClusterPaused(ctx context.Context,
+// isPaused returns true if CAPI Cluster is paused or ClusterSummary has paused annotation.
+func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
 	cluster := &clusterv1.Cluster{}

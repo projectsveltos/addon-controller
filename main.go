@@ -96,7 +96,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
-	registerFeatures(d)
+	controllers.RegisterFeatures(d, setupLog)
 
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:               mgr.GetClient(),
@@ -162,34 +162,6 @@ func initFlags(fs *pflag.FlagSet) {
 		"concurrent-reconciles",
 		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
-}
-
-func registerFeatures(d deployer.DeployerInterface) {
-	err := d.RegisterFeatureID(string(configv1alpha1.FeatureResources))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureResources")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureKyerno")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureGatekeeper))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureGatekeeper")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeaturePrometheus))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeaturePrometheus")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureContour))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureContour")
-		os.Exit(1)
-	}
 }
 
 func setupIndexes(ctx context.Context, mgr ctrl.Manager) {

@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -37,44 +36,7 @@ func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
-	if err != nil {
-		return err
-	}
-
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
-	refs := getResourceRefs(clusterSummary)
-
-	var configMaps []corev1.ConfigMap
-	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
-	if err != nil {
-		return err
-	}
-
-	var deployed []configv1alpha1.Resource
-	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
-		configMaps, clusterSummary, logger)
-	if err != nil {
-		return err
-	}
-
-	for i := range deployed {
-		key := getPolicyInfo(&deployed[i])
-		currentPolicies[key] = deployed[i]
-	}
-
-	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies)
-	if err != nil {
-		return err
-	}
-
+	// Nothing specific to do
 	return nil
 }
 
@@ -82,38 +44,7 @@ func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
-		return err
-	}
-
-	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
-			return nil
-		}
-		return err
-	}
-
-	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), map[string]configv1alpha1.Resource{})
-	if err != nil {
-		return err
-	}
-
+	// Nothing specific to do
 	return nil
 }
 

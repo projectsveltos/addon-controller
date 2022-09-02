@@ -44,7 +44,7 @@ var (
 	UndeployFeature                = (*ClusterSummaryReconciler).undeployFeature
 	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
 	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
-	IsClusterPaused                = (*ClusterSummaryReconciler).isClusterPaused
+	IsPaused                       = (*ClusterSummaryReconciler).isPaused
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
@@ -52,6 +52,11 @@ var (
 )
 
 var (
+	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
+	GetHandlersForFeature   = getHandlersForFeature
+	GenericDeploy           = genericDeploy
+	GenericUndeploy         = genericUndeploy
+
 	GetClusterSummary            = getClusterSummary
 	GetSecretData                = getSecretData
 	GetKubernetesClient          = getKubernetesClient
@@ -64,16 +69,13 @@ var (
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
 
-	ResourcesHash     = resourcesHash
-	DeployResources   = deployResources
-	UndeployResources = undeployResources
-	GetResourceRefs   = getResourceRefs
+	ResourcesHash   = resourcesHash
+	GetResourceRefs = getResourceRefs
 
 	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
 	IsKyvernoReady                 = isKyvernoReady
 	KyvernoHash                    = kyvernoHash
 	GetKyvernoRefs                 = getKyvernoRefs
-	UnDeployKyverno                = unDeployKyverno
 	DeployKyverno                  = deployKyverno
 
 	DeployPrometheusOperator                  = deployPrometheusOperator
@@ -85,13 +87,11 @@ var (
 	DeployPrometheus                          = deployPrometheus
 	PrometheusHash                            = prometheusHash
 	GetPrometheusRefs                         = getPrometheusRefs
-	UnDeployPrometheus                        = unDeployPrometheus
 	GetPrometheusInstance                     = getPrometheusInstance
 	AddStorageConfig                          = addStorageConfig
 
 	DeployGatekeeperInWorklaodCluster = deployGatekeeperInWorklaodCluster
 	IsGatekeeperReady                 = isGatekeeperReady
-	UnDeployGatekeeper                = unDeployGatekeeper
 	DeployGatekeeper                  = deployGatekeeper
 	GatekeeperHash                    = gatekeeperHash
 	HasContraintTemplates             = hasContraintTemplates
@@ -102,7 +102,6 @@ var (
 	IsContourReady                        = isContourReady
 	DeployContourGateway                  = deployContourGateway
 	DeployRegularContour                  = deployRegularContour
-	UnDeployContour                       = unDeployContour
 	DeployContour                         = deployContour
 	ContourHash                           = contourHash
 	DeployContourGatewayInWorklaodCluster = deployContourGatewayInWorklaodCluster

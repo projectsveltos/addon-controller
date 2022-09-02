@@ -169,8 +169,8 @@ var _ = Describe("HandlersKyverno", func() {
 			clusterSummary,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-		err := controllers.UnDeployKyverno(context.TODO(), c,
-			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
+		err := controllers.GenericUndeploy(context.TODO(), c,
+			cluster.Namespace, cluster.Name, clusterSummary.Name, string(configv1alpha1.FeatureKyverno), klogr.New())
 		Expect(err).To(BeNil())
 	})
 
@@ -234,7 +234,7 @@ var _ = Describe("HandlersKyverno", func() {
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(controllers.UnDeployKyverno(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureKyverno), logger)).To(Succeed())
 
 		// UnDeployKyverno finds all kyverno policies deployed because of a clusterSummary and deletes those.
@@ -355,8 +355,8 @@ var _ = Describe("HandlersKyverno", func() {
 		By("Verifying kyverno ClusterPolicy is present")
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
-			if err := controllers.DeployKyverno(context.TODO(), testEnv.Client,
-				cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New()); err != nil {
+			if err := controllers.GenericDeploy(context.TODO(), testEnv.Client,
+				cluster.Namespace, cluster.Name, clusterSummary.Name, string(configv1alpha1.FeatureKyverno), klogr.New()); err != nil {
 				return err
 			}
 

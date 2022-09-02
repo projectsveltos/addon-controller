@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -69,57 +68,6 @@ func deployGatekeeper(ctx context.Context, c client.Client,
 		return fmt.Errorf("gatekeeper deployments are not ready yet")
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
-	var configMaps []corev1.ConfigMap
-
-	// do not use getGatekeeperRefs.
-	// When deploying, Constraints need to be deployed first. Then policies can. Otherwise
-	// needed CRD won't be found.
-	// getGatekeeperRefs returns policies first, constraints later. Cause when removing stale
-	// objects we need to first remove policies, then constraints in order to avoid CRD not found.
-	var refs []corev1.ObjectReference
-	if clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
-		refs = clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs
-	}
-
-	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
-	if err != nil {
-		return err
-	}
-
-	configMaps, err = sortConfigMapByConstraintsFirst(configMaps, logger)
-	if err != nil {
-		return err
-	}
-
-	err = updateGatekeeperSortedPolicies(ctx, c, clusterSummary, configMaps)
-	if err != nil {
-		return err
-	}
-
-	var deployed []configv1alpha1.Resource
-	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureGatekeeper,
-		configMaps, clusterSummary, logger)
-	if err != nil {
-		return err
-	}
-
-	for i := range deployed {
-		key := getPolicyInfo(&deployed[i])
-		currentPolicies[key] = deployed[i]
-	}
-
-	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureGatekeeper), currentPolicies)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -127,38 +75,7 @@ func unDeployGatekeeper(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
-		return err
-	}
-
-	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
-			return nil
-		}
-		return err
-	}
-
-	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureGatekeeper), map[string]configv1alpha1.Resource{})
-	if err != nil {
-		return err
-	}
-
+	// Nothing specific to do
 	return nil
 }
 
@@ -198,11 +115,7 @@ func gatekeeperHash(ctx context.Context, c client.Client, clusterSummaryScope *s
 
 func getGatekeeperRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
 	if clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
-		if clusterSummary.Status.GatekeeperSortedPolicies != nil {
-			return clusterSummary.Status.GatekeeperSortedPolicies
-		} else {
-			return clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs
-		}
+		return clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs
 	}
 	return nil
 }
@@ -304,22 +217,4 @@ func hasContraintTemplates(cm *corev1.ConfigMap, logger logr.Logger) (bool, erro
 	}
 
 	return false, nil
-}
-
-func updateGatekeeperSortedPolicies(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, configMaps []corev1.ConfigMap) error {
-
-	length := len(configMaps)
-	clusterSummary.Status.GatekeeperSortedPolicies = make([]corev1.ObjectReference, length)
-	for i := range configMaps {
-		clusterSummary.Status.GatekeeperSortedPolicies[i] = corev1.ObjectReference{
-			Kind:       configMaps[length-i-1].GetObjectKind().GroupVersionKind().Kind,
-			Namespace:  configMaps[length-i-1].GetNamespace(),
-			Name:       configMaps[length-i-1].GetName(),
-			UID:        configMaps[length-i-1].GetUID(),
-			APIVersion: configMaps[length-i-1].GetResourceVersion(),
-		}
-	}
-
-	return c.Status().Update(ctx, clusterSummary)
 }

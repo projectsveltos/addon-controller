@@ -293,8 +293,8 @@ var _ = Describe("HandlersGatekeeper", func() {
 			clusterSummary,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-		err := controllers.UnDeployGatekeeper(context.TODO(), c,
-			cluster.Namespace, cluster.Name, clusterSummary.Name, "", klogr.New())
+		err := controllers.GenericUndeploy(context.TODO(), c,
+			cluster.Namespace, cluster.Name, clusterSummary.Name, string(configv1alpha1.FeatureGatekeeper), klogr.New())
 		Expect(err).To(BeNil())
 	})
 
@@ -382,7 +382,7 @@ var _ = Describe("HandlersGatekeeper", func() {
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(controllers.UnDeployGatekeeper(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureGatekeeper), logger)).To(Succeed())
 
 		// UnDeployGatekeeper finds all gatekeeper policies deployed because of a clusterSummary and deletes those.

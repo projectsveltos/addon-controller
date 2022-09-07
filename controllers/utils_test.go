@@ -512,7 +512,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 		Expect(policy.GetOwnerReferences()).ToNot(BeNil())
 		Expect(len(policy.GetOwnerReferences())).To(Equal(1))
-		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal("ClusterSummary"))
+		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterSummaryKind))
 		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterSummary.Name))
 
 		controllers.RemoveOwnerReference(policy, clusterSummary)

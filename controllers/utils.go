@@ -111,7 +111,7 @@ func getClusterSummary(ctx context.Context, c client.Client,
 
 	if len(clusterSummaryList.Items) == 0 {
 		return nil, apierrors.NewNotFound(
-			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: "ClusterSummary"}, "")
+			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: configv1alpha1.ClusterSummaryKind}, "")
 	}
 
 	if len(clusterSummaryList.Items) != 1 {
@@ -141,7 +141,7 @@ func getClusterFeatureOwner(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterFeature, error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != "ClusterFeature" {
+		if ref.Kind != configv1alpha1.ClusterFeatureKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)

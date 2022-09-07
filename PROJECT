@@ -6,7 +6,6 @@ repo: github.com/projectsveltos/cluster-api-feature-manager
 resources:
 - api:
     crdVersion: v1
-    namespaced: false
   controller: true
   domain: projectsveltos.io
   group: config
@@ -15,7 +14,6 @@ resources:
   version: v1alpha1
 - api:
     crdVersion: v1
-    namespaced: false
   controller: true
   domain: projectsveltos.io
   group: config
@@ -28,6 +26,14 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterConfiguration
+  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: SubstitutionRule
   path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
   version: v1alpha1
 version: "3"

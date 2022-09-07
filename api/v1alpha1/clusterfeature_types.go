@@ -26,6 +26,8 @@ const (
 	// ClusterFeatureFinalizer allows ClusterFeatureReconciler to clean up resources associated with
 	// ClusterFeature before removing it from the apiserver.
 	ClusterFeatureFinalizer = "clusterfeaturefinalizer.projectsveltos.io"
+
+	ClusterFeatureKind = "ClusterFeature"
 )
 
 type Selector string

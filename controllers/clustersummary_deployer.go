@@ -121,7 +121,8 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	}
 
 	logger.V(logs.LogDebug).Info("updating deployed GVKs")
-	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id, f.getRefs(clusterSummaryScope.ClusterSummary), logger)
+	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id,
+		f.getRefs(clusterSummaryScope.ClusterSummary), logger)
 	if err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
@@ -448,7 +449,7 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 	referencedPolicies := make([]*unstructured.Unstructured, 0)
 	for i := range configMaps {
 		cm := &configMaps[i]
-		policies, err := collectContentOfConfigMap(cm, logger)
+		policies, err := collectContentOfConfigMap(ctx, clusterSummaryScope.ClusterSummary, cm, logger)
 		if err != nil {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect content of configMap. Err: %v", err))
 			return err

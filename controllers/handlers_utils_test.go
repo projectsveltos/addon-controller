@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 
-	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -93,6 +93,7 @@ spec:
 
 var _ = Describe("HandlersUtils", func() {
 	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterFeature *configv1alpha1.ClusterFeature
 	var namespace string
 
 	BeforeEach(func() {
@@ -108,7 +109,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterFeature := &configv1alpha1.ClusterFeature{
+		clusterFeature = &configv1alpha1.ClusterFeature{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterFeatureNamePrefix + randomString(),
 			},
@@ -129,6 +130,10 @@ var _ = Describe("HandlersUtils", func() {
 		}
 
 		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+	})
+
+	AfterEach(func() {
+		deleteResources(namespace, clusterFeature, clusterSummary)
 	})
 
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {

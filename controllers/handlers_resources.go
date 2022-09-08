@@ -56,8 +56,8 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	var config string
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs {
-		reference := &clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs[i]
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
+		reference := &clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i]
 		configmap := &corev1.ConfigMap{}
 		err := c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
 		if err != nil {
@@ -79,5 +79,5 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 }
 
 func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
-	return clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs
+	return clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs
 }

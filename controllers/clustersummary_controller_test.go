@@ -262,7 +262,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					ResourceRefs: []corev1.ObjectReference{
+					PolicyRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: configMap.Name},
 					},
 				},
@@ -277,7 +277,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					ResourceRefs: []corev1.ObjectReference{
+					PolicyRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: configMap.Name + randomString()},
 					},
 				},

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -57,7 +58,7 @@ var _ = Describe("Template", func() {
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Spec.ResourceRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 
@@ -93,7 +94,7 @@ var _ = Describe("Template", func() {
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.ResourceRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

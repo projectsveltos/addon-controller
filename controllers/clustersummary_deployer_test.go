@@ -199,7 +199,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy("default", randomString(), render.AsCode(clusterRole))
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
@@ -271,13 +271,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 
 		kyvernoConfigMap := createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
 
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
@@ -367,7 +367,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		configMap := createConfigMapWithPolicy(namespace, render.AsCode(clusterRole))
 
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 
@@ -596,7 +596,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 				{Namespace: randomString(), Name: randomString()},
 			},
 		}
-		clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: randomString(), Name: randomString()},
 		}
 
@@ -609,7 +609,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			len(clusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs) +
 			len(clusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs) +
 			len(clusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs) +
-			len(clusterSummary.Spec.ClusterFeatureSpec.ResourceRefs)
+			len(clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs)
 		Expect(controllers.Len(set)).To(Equal(expectedLength))
 	})
 })

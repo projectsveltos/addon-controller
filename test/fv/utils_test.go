@@ -229,8 +229,8 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 			clusterFeature.Spec.KyvernoConfiguration) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration,
 				clusterFeature.Spec.PrometheusConfiguration) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs,
-				clusterFeature.Spec.ResourceRefs) &&
+			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
+				clusterFeature.Spec.PolicyRefs) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterName, clusterName)
 	}, timeout, pollingInterval).Should(BeTrue())

@@ -56,7 +56,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					ResourceRefs: []corev1.ObjectReference{
+					PolicyRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: configMap.Name},
 					},
 				},
@@ -71,7 +71,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					ResourceRefs: []corev1.ObjectReference{
+					PolicyRefs: []corev1.ObjectReference{
 						{Namespace: configMap.Namespace, Name: randomString()},
 					},
 				},

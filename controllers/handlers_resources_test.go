@@ -94,7 +94,7 @@ var _ = Describe("HandlersResource", func() {
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs = []corev1.ObjectReference{
+		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
 			{Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -245,7 +245,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					ResourceRefs: []corev1.ObjectReference{
+					PolicyRefs: []corev1.ObjectReference{
 						{Namespace: configMap1.Namespace, Name: configMap1.Name},
 						{Namespace: configMap2.Namespace, Name: configMap2.Name},
 						{Namespace: randomString(), Name: randomString()},

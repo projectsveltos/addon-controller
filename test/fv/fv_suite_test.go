@@ -22,11 +22,12 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/TwinProduction/go-color"
 	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
-	. "github.com/onsi/ginkgo/v2"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
-	. "github.com/onsi/gomega"
 	opav1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"

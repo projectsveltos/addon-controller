@@ -94,8 +94,6 @@ var (
 	IsGatekeeperReady                 = isGatekeeperReady
 	DeployGatekeeper                  = deployGatekeeper
 	GatekeeperHash                    = gatekeeperHash
-	HasContraintTemplates             = hasContraintTemplates
-	SortConfigMapByConstraintsFirst   = sortConfigMapByConstraintsFirst
 	ApplyAuditOptions                 = applyAuditOptions
 
 	IsContourGatewayReady                 = isContourGatewayReady
@@ -115,6 +113,13 @@ var (
 	GetUnstructured        = getUnstructured
 	AddOwnerReference      = addOwnerReference
 	RemoveOwnerReference   = removeOwnerReference
+)
+
+var (
+	IsTemplate          = isTemplate
+	PropValue           = propValue
+	GetObject           = getObject
+	InstantiateTemplate = instantiateTemplate
 )
 
 var (

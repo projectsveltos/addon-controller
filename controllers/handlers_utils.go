@@ -74,11 +74,11 @@ func createNamespace(ctx context.Context, clusterClient client.Client, namespace
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client.Client,
+func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) ([]configv1alpha1.Resource, error) {
 
-	referencedPolicies, err := collectContentOfConfigMap(configMap, logger)
+	referencedPolicies, err := collectContentOfConfigMap(ctx, clusterSummary, configMap, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 		policy.SetName(name)
 
 		// If policy is namespaced, create namespace if not already existing
-		err := createNamespace(ctx, c, policy.GetNamespace())
+		err := createNamespace(ctx, remoteClient, policy.GetNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,7 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 		// If policy already exists, just get current version and update it by overridding
 		// all metadata and spec.
 		// If policy does not exist already, create it
-		dr, err := getDynamicResourceInterface(config, policy)
+		dr, err := getDynamicResourceInterface(remoteConfig, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -115,9 +115,9 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 		l.V(logs.LogDebug).Info("deploying policy")
 
 		if policy.GetResourceVersion() != "" {
-			err = c.Update(ctx, policy)
+			err = remoteClient.Update(ctx, policy)
 		} else {
-			err = c.Create(ctx, policy)
+			err = remoteClient.Create(ctx, policy)
 		}
 
 		if err != nil {
@@ -145,7 +145,9 @@ func deployContentOfConfigMap(ctx context.Context, config *rest.Config, c client
 // ConfigMap.Data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
-func collectContentOfConfigMap(configMap *corev1.ConfigMap, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+func collectContentOfConfigMap(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	configMap *corev1.ConfigMap, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+
 	policies := make([]*unstructured.Unstructured, 0)
 
 	l := logger.WithValues("configMap", fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
@@ -156,6 +158,24 @@ func collectContentOfConfigMap(configMap *corev1.ConfigMap, logger logr.Logger) 
 			if err != nil {
 				l.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 				return nil, err
+			}
+
+			if isTemplate(policy) {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s/%s is a template",
+					policy.GetNamespace(), policy.GetName()))
+				var instance string
+				// If policy is a template, instantiate it given current state of system, then deploy
+				instance, err = instantiateTemplate(ctx, getManagementClusterClient(), getManagementClusterConfig(),
+					clusterSummary, elements[i], logger)
+				if err != nil {
+					return nil, err
+				}
+
+				policy, err = getUnstructured([]byte(instance))
+				if err != nil {
+					l.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+					return nil, err
+				}
 			}
 
 			if policy == nil {

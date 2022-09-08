@@ -72,7 +72,7 @@ func getClusterfeature(namePrefix string, clusterLabels map[string]string) *conf
 func getClusterSummaryOwnerReference(clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterFeature, error) {
 	Byf("Checking clusterSummary %s owner reference is set", clusterSummary.Name)
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != "ClusterFeature" {
+		if ref.Kind != configv1alpha1.ClusterFeatureKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -183,7 +183,7 @@ func getClusterSummary(ctx context.Context,
 
 	if len(clusterSummaryList.Items) == 0 {
 		return nil, apierrors.NewNotFound(
-			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: "ClusterSummary"}, "")
+			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: configv1alpha1.ClusterSummaryKind}, "")
 	}
 
 	if len(clusterSummaryList.Items) != 1 {

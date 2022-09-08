@@ -65,6 +65,7 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
+	controllers.SetManagementClusterAccess(testEnv.Client, testEnv.Config)
 	controllers.CreatFeatureHandlerMaps()
 
 	go func() {

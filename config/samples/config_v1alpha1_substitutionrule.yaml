@@ -1,0 +1,6 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: SubstitutionRule
+metadata:
+  name: substitutionrule-sample
+spec:
+  # TODO(user): Add fields here

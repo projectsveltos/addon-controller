@@ -28,6 +28,8 @@ const (
 	// ClusterSummaryFinalizer allows ClusterSummaryReconciler to clean up resources associated with
 	// ClusterSummary before removing it from the apiserver.
 	ClusterSummaryFinalizer = "clustersummaryfinalizer.projectsveltos.io"
+
+	ClusterSummaryKind = "ClusterSummary"
 )
 
 // +kubebuilder:validation:Enum:=Kyverno;Resources;Prometheus;Gatekeeper;Contour
@@ -159,7 +161,7 @@ func init() {
 // GetOwnerClusterFeatureName returns the ClusterFeature owning a given ClusterSummary
 func GetOwnerClusterFeatureName(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != "ClusterFeature" {
+		if ref.Kind != ClusterFeatureKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)

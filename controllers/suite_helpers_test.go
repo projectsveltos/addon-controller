@@ -164,11 +164,11 @@ func deleteResources(namespace string,
 		Expect(testEnv.Client.Delete(context.TODO(), &clusterConfigurationList.Items[i])).To(Succeed())
 	}
 
-	err = testEnv.Client.Delete(context.TODO(), clusterFeature)
+	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
-	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
+	err = testEnv.Client.Delete(context.TODO(), clusterFeature)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}

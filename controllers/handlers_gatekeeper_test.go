@@ -400,35 +400,6 @@ var _ = Describe("HandlersGatekeeper", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
-	It("hasContraintTemplates returns true only if configmap contains a ConsraintTemplate", func() {
-		configMap := createConfigMapWithPolicy(randomString(), randomString(), httpsOnlyConstraint)
-		Expect(controllers.HasContraintTemplates(configMap, klogr.New())).To(BeTrue())
-
-		configMap = createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
-		Expect(controllers.HasContraintTemplates(configMap, klogr.New())).To(BeFalse())
-	})
-
-	It("sortConfigMapByConstraintsFirst sorts a ConfigMap slice by putting ConfigMaps with ConstraintTemplate first", func() {
-		configMaps := make([]corev1.ConfigMap, 0)
-
-		configMap1 := createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(addLabelPolicyStr, randomString()))
-		configMaps = append(configMaps, *configMap1)
-
-		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), httpsOnlyConstraint)
-		configMaps = append(configMaps, *configMap2)
-
-		configMap3 := createConfigMapWithPolicy(randomString(), randomString(), fmt.Sprintf(checkSa, randomString()))
-		configMaps = append(configMaps, *configMap3)
-
-		sortedSlice, err := controllers.SortConfigMapByConstraintsFirst(configMaps, klogr.New())
-		Expect(err).To(BeNil())
-		Expect(sortedSlice).ToNot(BeNil())
-		Expect(len(sortedSlice)).To(Equal(len(configMaps)))
-		Expect(sortedSlice[0].Name).To(Equal(configMap2.Name))
-		Expect(sortedSlice).To(ContainElement(*configMap3))
-		Expect(sortedSlice).To(ContainElement(*configMap1))
-	})
-
 	It("applyAuditOptions adds options to audit deployment", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 

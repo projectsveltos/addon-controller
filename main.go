@@ -98,6 +98,8 @@ func main() {
 	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
 	controllers.RegisterFeatures(d, setupLog)
 
+	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
+
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
@@ -107,7 +109,7 @@ func main() {
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterFeature")
+		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterFeatureKind)
 		os.Exit(1)
 	}
 	if err = (&controllers.ClusterSummaryReconciler{
@@ -120,7 +122,7 @@ func main() {
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterSummary")
+		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

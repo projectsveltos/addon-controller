@@ -46,6 +46,10 @@ const (
 	// clusterLabelName is the label set on ClusterSummary instances created
 	// by a ClusterFeature instance for a given cluster
 	ClusterLabelName = "projectsveltos.io/cluster-name"
+
+	// PolicyTemplate is the annotation that must be set on a policy when the
+	// policy is a template and needs variable sustitution.
+	PolicyTemplate = "projectsveltos.io/template"
 )
 
 // addLabel adds label to an object

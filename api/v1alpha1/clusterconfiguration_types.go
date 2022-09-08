@@ -23,6 +23,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	ClusterConfigurationKind = "ClusterConfiguration"
+)
+
 type Resource struct {
 	// Name of the resource deployed in the CAPI Cluster.
 	// +kubebuilder:validation:MinLength=1

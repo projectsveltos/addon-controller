@@ -81,7 +81,7 @@ var _ = Describe("Feature", func() {
 		Byf("Update ClusterFeature %s to reference ConfigMap %s/%s", clusterFeature.Name, configMap.Namespace, configMap.Name)
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.ResourceRefs = []corev1.ObjectReference{
+		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
 			{Kind: configMap.Kind, Namespace: configMap.Namespace, Name: configMap.Name},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
@@ -137,7 +137,7 @@ var _ = Describe("Feature", func() {
 
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.ResourceRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

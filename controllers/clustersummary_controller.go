@@ -480,9 +480,9 @@ func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.Cluste
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
 	currentReferences := &Set{}
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs {
-		cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs[i].Namespace
-		cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ResourceRefs[i].Name
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
+		cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
+		cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
 		currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {

@@ -53,7 +53,7 @@ type KyvernoConfiguration struct {
 
 	// PolicyRef references ConfigMaps containing the Kyverno policies
 	// that need to be deployed in the workload cluster.
-	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 }
 
 type GatekeeperConfiguration struct {
@@ -61,7 +61,7 @@ type GatekeeperConfiguration struct {
 	// that need to be deployed in the workload cluster. This includes and it is not limited
 	// to contrainttemplates, configs, etc.
 	// +optional
-	PolicyRefs []corev1.ObjectReference `json:"policyRef,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 
 	// AuditInterval is the audit interval time.
 	// Disable audit interval by setting 0
@@ -172,10 +172,10 @@ type ClusterFeatureSpec struct {
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
-	// ResourceRefs references all the ConfigMaps containing kubernetes resources
+	// PolicyRefs references all the ConfigMaps containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional
-	ResourceRefs []corev1.ObjectReference `json:"resourceRefs,omitempty"`
+	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 
 	// KyvernoConfiguration contains the Kyverno configuration.
 	// If not nil, Kyverno will be deployed in the workload cluster along with, if any,

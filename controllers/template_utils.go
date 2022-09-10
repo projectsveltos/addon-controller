@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-logr/logr"
 	tunstructured "github.com/totherme/unstructured"
+	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,7 +88,7 @@ func instantiateTemplate(ctx context.Context, c client.Client, config *rest.Conf
 			return policy, err
 		}
 
-		logger.V(logs.LogInfo).Info("value for match %s is %s", matches[i][0], substitutionValue)
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("value for match %s is %s", matches[i][0], substitutionValue))
 		policy = strings.ReplaceAll(policy, matches[i][0], substitutionValue)
 	}
 
@@ -112,11 +113,6 @@ func getSubstituitionValue(ctx context.Context, c client.Client, config *rest.Co
 	}
 
 	substitutionValue, err := propValue(ctx, c, u, propName, logger)
-	if err != nil {
-		return "", err
-	}
-
-	err = validatePropValue(substitutionValue)
 	if err != nil {
 		return "", err
 	}
@@ -171,6 +167,10 @@ func getObject(ctx context.Context, c client.Client, config *rest.Config,
 		if err != nil {
 			return nil, err
 		}
+		err = validatePropValue(name)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		name = substituitionRule.Spec.Name
 	}
@@ -183,6 +183,10 @@ func getObject(ctx context.Context, c client.Client, config *rest.Config,
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("get namespace from SubstituionRule %s (propName %s)",
 			info[0], info[1]))
 		namespace, err = getSubstituitionValue(ctx, c, config, clusterSummary, info[0], info[1], logger)
+		if err != nil {
+			return nil, err
+		}
+		err = validatePropValue(namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -343,10 +347,18 @@ func propValue(ctx context.Context, c client.Client, unstructuredContent map[str
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("GetByPointer: propName:%s got result: %v",
 		propName, result.RawValue()))
 
+	return printValue(result)
+}
+
+func printValue(result tunstructured.Data) (string, error) {
 	if result.IsString() {
 		return stringResult(result)
 	} else if result.IsBool() {
 		return boolResult(result)
+	} else if result.IsList() {
+		return listResult(result)
+	} else if result.IsOb() {
+		return obResult(result)
 	}
 
 	return fmt.Sprintf("%v", result.RawValue()), nil
@@ -370,6 +382,48 @@ func boolResult(result tunstructured.Data) (string, error) {
 	}
 
 	return fmt.Sprintf("%t", boolResult), nil
+}
+
+// listResult stringify result
+func listResult(result tunstructured.Data) (string, error) {
+	listResult, err := result.ListValue()
+	if err != nil {
+		return "", err
+	}
+
+	return listToString(listResult)
+}
+
+func listToString(list []tunstructured.Data) (string, error) {
+	result := "[ "
+	for i := range list {
+		tmp, err := printValue(list[i])
+		if err != nil {
+			return "", err
+		}
+		result += tmp + ","
+	}
+
+	result += "]"
+	return result, nil
+}
+
+// obResult stringify result
+func obResult(result tunstructured.Data) (string, error) {
+	obResult, err := result.ObValue()
+	if err != nil {
+		return "", err
+	}
+
+	out, err := yaml.Marshal(obResult)
+	if err != nil {
+		return "", err
+	}
+	return mapToString(string(out)), nil
+}
+
+func mapToString(s string) string {
+	return fmt.Sprintf("{%s}", strings.ReplaceAll(s, "\n", ","))
 }
 
 // validatePropValue validates value. Value is used to dynamically

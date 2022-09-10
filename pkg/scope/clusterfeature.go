@@ -68,7 +68,7 @@ type ClusterFeatureScope struct {
 	controllerName string
 }
 
-// PatchObject persists the cluster configuration and status.
+// PatchObject persists the feature configuration and status.
 func (s *ClusterFeatureScope) PatchObject(ctx context.Context) error {
 	return s.patchHelper.Patch(
 		ctx,

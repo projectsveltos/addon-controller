@@ -50,7 +50,7 @@ var _ = Describe("Template", func() {
 		namePrefix = "template"
 	)
 
-	It("Deploy and updates Contour correctly", Label("FV"), func() {
+	It("Deploy a template correctly", Label("FV"), func() {
 		Byf("Add configMap containing a template policy. Policy has annotation to indicate it is a template")
 		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), templatePolicy)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())

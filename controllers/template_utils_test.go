@@ -52,6 +52,22 @@ spec:
       encapsulation: VXLANCrossSubnet
       natOutgoing: Enabled
       nodeSelector: all()`
+
+	configMap = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: set-label
+  namespace: default
+  labels:
+    "{{ Cluster:/metadata/labels }}"`
+
+	templateClusterFeature = `apiVersion: v1alpha1
+kind: ClusterFeature
+metadata:
+  name: set-list
+spec:
+  policyRefs:
+    "{{ get-cluster-feature:/spec/policyRefs }}"`
 )
 
 var _ = Describe("Template Utils", func() {
@@ -69,7 +85,8 @@ var _ = Describe("Template Utils", func() {
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					"dc":   "eng",
+					"zone": "central",
 				},
 			},
 		}
@@ -267,11 +284,73 @@ var _ = Describe("Template Utils", func() {
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentCluster)).To(Succeed())
 
+		By("Instantiate a policy that requires a string as substitution value")
 		By("Using a policy template  cidr:  \"{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}\"")
 		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
 			clusterSummary, installation, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(policy).ToNot(ContainSubstring("{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}"))
 		Expect(policy).To(ContainSubstring(podCird))
+	})
+
+	It("InstantiateTemplate instantiates a policy template (map field)", func() {
+		By("Instantiate a policy that requires a map as substitution value")
+		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
+			clusterSummary, configMap, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(policy).ToNot(ContainSubstring("{{ Cluster:/metadata/labels }}"))
+		u, err := controllers.GetUnstructured([]byte(policy))
+		Expect(err).To(BeNil())
+		Expect(u.GetLabels()).ToNot(BeNil())
+		Expect(len(u.GetLabels())).To(Equal(2)) // 2 is the length of labels on Cluster
+	})
+
+	It("InstantiateTemplate instantiates a policy template (slice field)", func() {
+		By("Creating a ClusterFeature with same name as Cluster")
+		// When instantiating later on, cf.Spec.PolicyRef will be the value of instantiation
+		// Name of following clusterFeature is set to Cluster.Name and it is what
+		// cfSubstituitionRule expect it.
+		cf := &configv1alpha1.ClusterFeature{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cluster.Name,
+			},
+			Spec: configv1alpha1.ClusterFeatureSpec{
+				PolicyRefs: []corev1.ObjectReference{
+					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
+					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
+					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
+				},
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), cf))
+		Expect(waitForObject(ctx, testEnv.Client, cf)).To(Succeed())
+
+		By("Creating get-cluster-feature SubstitutionRule")
+		cfSubstituitionRule := &configv1alpha1.SubstitutionRule{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "get-cluster-feature",
+			},
+			Spec: configv1alpha1.SubstitutionRuleSpec{
+				Kind:       "ClusterFeature",
+				APIVersion: "config.projectsveltos.io/v1alpha1",
+				Name:       "Cluster:/metadata/name",
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), cfSubstituitionRule)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, cf)).To(Succeed())
+
+		By("Instantiate a policy that requires a slice as substitution value")
+		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
+			clusterSummary, templateClusterFeature, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(policy).ToNot(ContainSubstring("{{ get-cluster-feature:/spec/policyRefs }}"))
+		u, err := controllers.GetUnstructured([]byte(policy))
+		Expect(err).To(BeNil())
+
+		// Convert unstructured to ClusterFeature
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), currentClusterFeature)).To(Succeed())
+		Expect(len(currentClusterFeature.Spec.PolicyRefs)).ToNot(BeZero())
+		Expect(len(currentClusterFeature.Spec.PolicyRefs)).To(Equal(len(cf.Spec.PolicyRefs)))
 	})
 })

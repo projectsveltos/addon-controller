@@ -102,7 +102,7 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	return client.New(restConfig, client.Options{Scheme: scheme})
 }
 
-// nolint: unparam // this method will be used to verify failed statuses as well
+// nolint: unparam // keep status as args. It will be handy to verify failure scenarios
 func verifyFeatureStatus(clusterSummaryName string, featureID configv1alpha1.FeatureID, status configv1alpha1.FeatureStatus) {
 	Eventually(func() bool {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
@@ -225,10 +225,8 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 			return false
 		}
 
-		return reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration,
-			clusterFeature.Spec.KyvernoConfiguration) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration,
-				clusterFeature.Spec.PrometheusConfiguration) &&
+		return reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+			clusterFeature.Spec.HelmCharts) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
 				clusterFeature.Spec.PolicyRefs) &&
 			reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) &&
@@ -257,7 +255,6 @@ func verifyClusterFeatureMatches(clusterFeature *configv1alpha1.ClusterFeature) 
 }
 
 // createConfigMapWithPolicy creates a configMap with passed in policies
-// nolint: unparam // want to keep namespace as args
 func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -300,7 +297,7 @@ type policy struct {
 }
 
 func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterName string,
-	featureID configv1alpha1.FeatureID, expectedPolicies []policy) {
+	featureID configv1alpha1.FeatureID, expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) {
 
 	Eventually(func() bool {
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
@@ -313,16 +310,18 @@ func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterNam
 			return false
 		}
 		return verifyClusterConfigurationEntryForClusterFeature(currentClusterConfiguration, clusterFeatureName,
-			featureID, expectedPolicies)
+			featureID, expectedPolicies, expectedCharts)
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
 func verifyClusterConfigurationEntryForClusterFeature(clusterConfiguration *configv1alpha1.ClusterConfiguration,
-	clusterFeatureName string, featureID configv1alpha1.FeatureID, expectedPolicies []policy) bool {
+	clusterFeatureName string, featureID configv1alpha1.FeatureID,
+	expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) bool {
 
 	for i := range clusterConfiguration.Status.ClusterFeatureResources {
 		if clusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeatureName {
-			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterFeatureResources[i].Features, featureID, expectedPolicies)
+			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterFeatureResources[i].Features, featureID,
+				expectedPolicies, expectedCharts)
 		}
 	}
 
@@ -330,7 +329,7 @@ func verifyClusterConfigurationEntryForClusterFeature(clusterConfiguration *conf
 }
 
 func verifyClusterConfigurationPolicies(deployedFeatures []configv1alpha1.Feature, featureID configv1alpha1.FeatureID,
-	expectedPolicies []policy) bool {
+	expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) bool {
 
 	index := -1
 	for i := range deployedFeatures {
@@ -352,6 +351,26 @@ func verifyClusterConfigurationPolicies(deployedFeatures []configv1alpha1.Featur
 				r.Name == policy.name &&
 				r.Kind == policy.kind &&
 				r.Group == policy.group {
+
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	for i := range expectedCharts {
+		chart := expectedCharts[i]
+		found := false
+		By(fmt.Sprintf("Verifying %s %s %s", chart.ChartName, chart.ChartVersion, chart.Namespace))
+		for j := range deployedFeatures[index].Charts {
+			c := deployedFeatures[index].Charts[j]
+			if c.ChartName == chart.ChartName &&
+				c.ChartVersion == chart.ChartVersion &&
+				c.Namespace == chart.Namespace {
 
 				found = true
 				break

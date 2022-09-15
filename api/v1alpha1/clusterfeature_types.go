@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,116 +43,47 @@ const (
 	SyncModeContinuous = SyncMode("Continuous")
 )
 
-// MGIANLUC: Kyverno generate ClusterRoleBinding https://kyverno.io/docs/writing-policies/generate/
-
-type KyvernoConfiguration struct {
-	// +kubebuilder:default:=1
-	// Replicas is the number of kyverno replicas required
-	Replicas uint `json:"replicas,omitempty"`
-
-	// PolicyRef references ConfigMaps containing the Kyverno policies
-	// that need to be deployed in the workload cluster.
-	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
-}
-
-type GatekeeperConfiguration struct {
-	// PolicyRef references ConfigMaps containing the Gatekeeper policies
-	// that need to be deployed in the workload cluster. This includes and it is not limited
-	// to contrainttemplates, configs, etc.
-	// +optional
-	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
-
-	// AuditInterval is the audit interval time.
-	// Disable audit interval by setting 0
-	// +kubebuilder:default:=60
-	// +optional
-	AuditInterval uint `json:"auditInterval,omitempty"`
-
-	// AuditChunkSize is the Kubernetes API chunking List results when retrieving
-	// cluster resources using discovery client
-	// +kubebuilder:default:=500
-	// +optional
-	AuditChunkSize uint `json:"auditChunkSize,omitempty"`
-
-	// AuditFromCache, if set to true, pull resources from OPA cache when auditing.
-	// Note that this requires replication of Kubernetes resources into OPA before
-	// they can be evaluated against the enforced policies
-	// +kubebuilder:default:=false
-	// +optional
-	AuditFromCache bool `json:"auditFromCache,omitempty"`
-}
-
-// PrometheusInstallationMode specifies how prometheus is deployed in a CAPI Cluster.
-//+kubebuilder:validation:Enum:=KubeStateMetrics;KubePrometheus;Custom
-type PrometheusInstallationMode string
+// HelmChartAction specifies action on an helm chart
+//+kubebuilder:validation:Enum:=Install;Uninstall
+type HelmChartAction string
 
 const (
-	// InstallationModeCustom will cause Prometheus Operator to be installed
-	// and any PolicyRefs.
-	PrometheusInstallationModeCustom = PrometheusInstallationMode("Custom")
+	// HelmChartActionInstall will cause Helm chart to be installed
+	HelmChartActionInstall = HelmChartAction("Install")
 
-	// InstallationModeKubeStateMetrics will cause Prometheus Operator to be installed
-	// and any PolicyRefs. On top of that, KubeStateMetrics will also be installed
-	// and a Promethus CRD instance will be created to scrape KubeStateMetrics metrics.
-	PrometheusInstallationModeKubeStateMetrics = PrometheusInstallationMode("KubeStateMetrics")
-
-	// InstallationModeKubePrometheus will cause the Kube-Prometheus stack to be deployed.
-	// Any PolicyRefs will be installed after that.
-	// Kube-Prometheus stack includes KubeStateMetrics.
-	PrometheusInstallationModeKubePrometheus = PrometheusInstallationMode("KubePrometheus")
+	// HelmChartActionUninstall will cause Helm chart to be removed
+	HelmChartActionUninstall = HelmChartAction("Uninstall")
 )
 
-type PrometheusConfiguration struct {
-	// InstallationMode indicates what type of resources will be deployed in a
-	// CAPI Cluster.
-	// +kubebuilder:default:=Custom
+type HelmChart struct {
+	// RepositoryURL is the URL helm chart repository
+	// +kubebuilder:validation:MinLength=1
+	RepositoryURL string `json:"repositoryURL"`
+
+	// RepositoryName is the name helm chart repository
+	// +kubebuilder:validation:MinLength=1
+	RepositoryName string `json:"repositoryName"`
+
+	// ChartName is the chart name
+	// +kubebuilder:validation:MinLength=1
+	ChartName string `json:"chartName"`
+
+	// ChartVersion is the chart version
+	// +kubebuilder:validation:MinLength=1
+	ChartVersion string `json:"chartVersion"`
+
+	// ReleaseName is the chart release
+	// +kubebuilder:validation:MinLength=1
+	ReleaseName string `json:"releaseName"`
+
+	// ReleaseNamespace is the namespace release will be installed
+	// +kubebuilder:validation:MinLength=1
+	ReleaseNamespace string `json:"releaseNamespace"`
+
+	// HelmChartAction is the action that will be taken on the helm chart
+	// +kubebuilder:default:=Install
 	// +optional
-	InstallationMode PrometheusInstallationMode `json:"installationMode,omitempty"`
-
-	// storageClassName is the name of the StorageClass Prometheus will use to claim storage.
-	// +optional
-	StorageClassName *string `json:"storageClassName,omitempty"`
-
-	// StorageQuantity indicates the amount of storage Prometheus will request from storageclass
-	// if defined. (40Gi for instance)
-	// If not defined and StorageClassName is defined, 40Gi will be used.
-	// +optional
-	StorageQuantity *resource.Quantity `json:"storageQuantity,omitempty"`
-
-	// PolicyRef references ConfigMaps containing the Prometheus operator policies
-	// that need to be deployed in the workload cluster. This includes:
-	// - Prometheus, Alertmanager, ThanosRuler, ServiceMonitor, PodMonitor, Probe,
-	// PrometheusRule, AlertmanagerConfig CRD instances;
-	// -  Any other configuration needed for prometheus (like storageclass configuration)
-	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
-}
-
-// ContourInstallationMode specifies how contour is deployed in a CAPI Cluster.
-//+kubebuilder:validation:Enum:=Contour;Gateway
-type ContourInstallationMode string
-
-const (
-	// ContourInstallationModeGateway will cause Contour Gateway Provisioner to
-	// be deployed.
-	ContourInstallationModeGateway = ContourInstallationMode("Gateway")
-
-	// ContourInstallationModeContour will cause Contour to be deployed.
-	ContourInstallationModeContour = ContourInstallationMode("Contour")
-)
-
-type ContourConfiguration struct {
-	// InstallationMode indicates what type of resources will be deployed in a
-	// CAPI Cluster.
-	// +kubebuilder:default:=Contour
-	// +optional
-	InstallationMode ContourInstallationMode `json:"installationMode,omitempty"`
-
-	// PolicyRef references ConfigMaps containing the Contour policies
-	// that need to be deployed in the workload cluster. This includes:
-	// - ContourConfiguration, ContourDeployment, HTTPProxy, GatewayClass, Gateway,
-	// HTTPRoute, etc.
-	// -  Any other configuration needed for Contour
-	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
+	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
 }
 
 // ClusterFeatureSpec defines the desired state of ClusterFeature
@@ -177,27 +107,8 @@ type ClusterFeatureSpec struct {
 	// +optional
 	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
 
-	// KyvernoConfiguration contains the Kyverno configuration.
-	// If not nil, Kyverno will be deployed in the workload cluster along with, if any,
-	// specified Kyverno policies.
-	// +optional
-	KyvernoConfiguration *KyvernoConfiguration `json:"kyvernoConfiguration,omitempty"`
-
-	// GatekeeperConfiguration contains the Gatekeeper configuration.
-	// If not nil, Gatekeeper will be deployed in the workload cluster along with, if any,
-	// specified Gatekeeper policies.
-	// +optional
-	GatekeeperConfiguration *GatekeeperConfiguration `json:"gatekeeperConfiguration,omitempty"`
-
-	// PrometheusConfiguration contains the Prometheus configuration.
-	// If not nil, at the very least Prometheus operator will be deployed in the workload cluster
-	// +optional
-	PrometheusConfiguration *PrometheusConfiguration `json:"prometheusConfiguration,omitempty"`
-
-	// ContourConfiguration contains the Contour configuration.
-	// If not nil, contour will be deployed in the workload cluster
-	// +optional
-	ContourConfiguration *ContourConfiguration `json:"contourConfiguration,omitempty"`
+	// Helm charts
+	HelmCharts []HelmChart `json:"helmCharts,omitempty"`
 }
 
 // ClusterFeatureStatus defines the observed state of ClusterFeature

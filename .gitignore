@@ -7,10 +7,6 @@
 
 # tmp files
 *.tmp
-internal/kyverno/kyverno.yaml
-internal/prometheus/prometheus.yaml
-internal/kubeprometheus/kube_prometheus.yaml
-internal/kubestatemetrics/kube_state_metrics.yaml
 
 # Test binary, built with `go test -c`
 *.test

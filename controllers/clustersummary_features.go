@@ -36,24 +36,9 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 		setupLog.Error(err, "failed to register feature FeatureResources")
 		os.Exit(1)
 	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKyverno))
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureHelm))
 	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureKyerno")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureGatekeeper))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureGatekeeper")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeaturePrometheus))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeaturePrometheus")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureContour))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureContour")
+		setupLog.Error(err, "failed to register feature FeatureHelm")
 		os.Exit(1)
 	}
 
@@ -63,20 +48,11 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 func creatFeatureHandlerMaps() {
 	featuresHandlers = make(map[configv1alpha1.FeatureID]feature)
 
-	featuresHandlers[configv1alpha1.FeaturePrometheus] = feature{id: configv1alpha1.FeaturePrometheus, currentHash: prometheusHash,
-		deploy: deployPrometheus, undeploy: unDeployPrometheus, getRefs: getPrometheusRefs}
-
-	featuresHandlers[configv1alpha1.FeatureKyverno] = feature{id: configv1alpha1.FeatureKyverno, currentHash: kyvernoHash,
-		deploy: deployKyverno, undeploy: unDeployKyverno, getRefs: getKyvernoRefs}
-
-	featuresHandlers[configv1alpha1.FeatureGatekeeper] = feature{id: configv1alpha1.FeatureGatekeeper, currentHash: gatekeeperHash,
-		deploy: deployGatekeeper, undeploy: unDeployGatekeeper, getRefs: getGatekeeperRefs}
-
-	featuresHandlers[configv1alpha1.FeatureContour] = feature{id: configv1alpha1.FeatureContour, currentHash: contourHash,
-		deploy: deployContour, undeploy: unDeployContour, getRefs: getContourRefs}
-
 	featuresHandlers[configv1alpha1.FeatureResources] = feature{id: configv1alpha1.FeatureResources, currentHash: resourcesHash,
 		deploy: deployResources, undeploy: undeployResources, getRefs: getResourceRefs}
+
+	featuresHandlers[configv1alpha1.FeatureHelm] = feature{id: configv1alpha1.FeatureHelm, currentHash: helmHash,
+		deploy: deployHelmCharts, undeploy: undeployHelmCharts, getRefs: getHelmRefs}
 }
 
 func getHandlersForFeature(featureID configv1alpha1.FeatureID) feature {

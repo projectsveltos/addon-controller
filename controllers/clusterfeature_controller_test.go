@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -1042,7 +1041,6 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 	})
 
 	It("RequeueClusterFeatureForMachine returns correct ClusterFeatures for a CAPI machine", func() {
-		By(fmt.Sprintf("MGIANLUC namespace %s", namespace))
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,

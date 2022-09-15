@@ -91,13 +91,12 @@ type ClusterSummaryReconciler struct {
 	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references ConfigMap 1 only and looking
 	// at ClusterSummaryMap we know it used to reference ConfigMap 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
 	// update, we update ClusterSummaryMap (so new value will be A => 1)
-	//
-	// Same logic applies to Kyverno (kyverno configuration references configmaps containing kyverno policies)
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=substitutionrules,verbs=get;list;watch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;delete
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations/status,verbs=get;list;update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
@@ -286,95 +285,43 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	coreResourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
-	kyvernoErr := r.deployKyverno(ctx, clusterSummaryScope, logger)
-
-	gatekeeperErr := r.deployGatekeeper(ctx, clusterSummaryScope, logger)
-
-	prometheusErr := r.deployPrometheus(ctx, clusterSummaryScope, logger)
-
-	contourErr := r.deployContour(ctx, clusterSummaryScope, logger)
+	helmErr := r.deployHelm(ctx, clusterSummaryScope, logger)
 
 	if coreResourceErr != nil {
 		return coreResourceErr
 	}
 
-	if kyvernoErr != nil {
-		return kyvernoErr
-	}
-
-	if gatekeeperErr != nil {
-		return gatekeeperErr
-	}
-
-	if prometheusErr != nil {
-		return prometheusErr
-	}
-
-	if contourErr != nil {
-		return contourErr
+	if helmErr != nil {
+		return helmErr
 	}
 
 	return nil
 }
 
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs == nil {
+		logger.V(logs.LogDebug).Info("no policy configuration")
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureResources) {
+			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
+			return nil
+		}
+	}
+
 	f := getHandlersForFeature(configv1alpha1.FeatureResources)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) deployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration == nil {
-		logger.V(logs.LogDebug).Info("no kyverno configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureKyverno) {
-			logger.V(logs.LogDebug).Info("no kyverno status. Do not reconcile this")
+func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.HelmCharts == nil {
+		logger.V(logs.LogDebug).Info("no helm configuration")
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureHelm) {
+			logger.V(logs.LogDebug).Info("no helm status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1alpha1.FeatureKyverno)
-
-	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) deployGatekeeper(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration == nil {
-		logger.V(logs.LogDebug).Info("no gatekeeper configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureGatekeeper) {
-			logger.V(logs.LogDebug).Info("no gatekeeper status. Do not reconcile this")
-			return nil
-		}
-	}
-
-	f := getHandlersForFeature(configv1alpha1.FeatureGatekeeper)
-
-	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) deployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration == nil {
-		logger.V(logs.LogDebug).Info("no prometheus configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeaturePrometheus) {
-			logger.V(logs.LogDebug).Info("no prometheus status. Do not reconcile this")
-			return nil
-		}
-	}
-
-	f := getHandlersForFeature(configv1alpha1.FeaturePrometheus)
-
-	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) deployContour(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration == nil {
-		logger.V(logs.LogDebug).Info("no contour configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureContour) {
-			logger.V(logs.LogDebug).Info("no contour status. Do not reconcile this")
-			return nil
-		}
-	}
-
-	f := getHandlersForFeature(configv1alpha1.FeatureContour)
+	f := getHandlersForFeature(configv1alpha1.FeatureHelm)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -395,32 +342,14 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	resourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
 
-	kyvernoErr := r.undeployKyverno(ctx, clusterSummaryScope, logger)
-
-	gatekeeperErr := r.unDeployGatekeeper(ctx, clusterSummaryScope, logger)
-
-	prometheusErr := r.undeployPrometheus(ctx, clusterSummaryScope, logger)
-
-	contourErr := r.undeployContour(ctx, clusterSummaryScope, logger)
+	helmErr := r.undeployHelm(ctx, clusterSummaryScope, logger)
 
 	if resourceErr != nil {
 		return resourceErr
 	}
 
-	if kyvernoErr != nil {
-		return kyvernoErr
-	}
-
-	if gatekeeperErr != nil {
-		return gatekeeperErr
-	}
-
-	if prometheusErr != nil {
-		return prometheusErr
-	}
-
-	if contourErr != nil {
-		return contourErr
+	if helmErr != nil {
+		return helmErr
 	}
 
 	return nil
@@ -431,23 +360,8 @@ func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, cluste
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) undeployKyverno(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureKyverno)
-	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) unDeployGatekeeper(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureGatekeeper)
-	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) undeployPrometheus(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeaturePrometheus)
-	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
-}
-
-func (r *ClusterSummaryReconciler) undeployContour(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureContour)
+func (r *ClusterSummaryReconciler) undeployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := getHandlersForFeature(configv1alpha1.FeatureHelm)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
@@ -484,34 +398,6 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
 		cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
 		currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
-	}
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration != nil {
-		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs {
-			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Namespace
-			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration.PolicyRefs[i].Name
-			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
-		}
-	}
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration != nil {
-		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs {
-			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs[i].Namespace
-			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.GatekeeperConfiguration.PolicyRefs[i].Name
-			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
-		}
-	}
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration != nil {
-		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs {
-			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Namespace
-			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PrometheusConfiguration.PolicyRefs[i].Name
-			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
-		}
-	}
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration != nil {
-		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs {
-			cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs[i].Namespace
-			cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.ContourConfiguration.PolicyRefs[i].Name
-			currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
-		}
 	}
 	return currentReferences
 }

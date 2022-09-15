@@ -36,7 +36,45 @@ func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	// Nothing specific to do
+	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
+
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	// Get ClusterSummary that requested this
+	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
+	if err != nil {
+		return err
+	}
+
+	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	refs := featureHandler.getRefs(clusterSummary)
+
+	var configMaps []corev1.ConfigMap
+	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
+	if err != nil {
+		return err
+	}
+
+	var deployed []configv1alpha1.Resource
+	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
+		configMaps, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range deployed {
+		key := getPolicyInfo(&deployed[i])
+		currentPolicies[key] = deployed[i]
+	}
+
+	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -44,7 +82,41 @@ func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	// Nothing specific to do
+	// Get ClusterSummary that requested this
+	clusterSummary := &configv1alpha1.ClusterSummary{}
+	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), map[string]configv1alpha1.Resource{})
+	if err != nil {
+		return err
+	}
+
+	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	err = updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterFeatureOwnerRef, configv1alpha1.FeatureResources, nil, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

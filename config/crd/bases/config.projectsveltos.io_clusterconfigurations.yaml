@@ -49,15 +49,51 @@ spec:
                         in the CAPI Cluster because of a given feature
                       items:
                         properties:
+                          charts:
+                            description: Charts is a list of helm charts deployed
+                              in the CAPI Cluster.
+                            items:
+                              properties:
+                                appVersion:
+                                  description: AppVersion is the version of the app
+                                    deployed in the CAPI Cluster.
+                                  type: string
+                                chartName:
+                                  description: ChartName of the chart deployed in
+                                    the CAPI Cluster.
+                                  minLength: 1
+                                  type: string
+                                chartVersion:
+                                  description: ChartVersion is the version of the
+                                    helm chart deployed in the CAPI Cluster.
+                                  type: string
+                                lastAppliedTime:
+                                  description: LastAppliedTime identifies when this
+                                    resource was last applied to the cluster.
+                                  format: date-time
+                                  type: string
+                                namespace:
+                                  description: Namespace where chart is deployed in
+                                    the CAPI Cluster.
+                                  type: string
+                                repoURL:
+                                  description: RepoURL URL of the repo containing
+                                    the helm chart deployed in the CAPI Cluster.
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - chartName
+                              - chartVersion
+                              - lastAppliedTime
+                              - repoURL
+                              type: object
+                            type: array
                           featureID:
                             description: FeatureID is an indentifier of the feature
                               whose status is reported
                             enum:
-                            - Kyverno
                             - Resources
-                            - Prometheus
-                            - Gatekeeper
-                            - Contour
+                            - Helm
                             type: string
                           resources:
                             description: Resources is a list of resources deployed

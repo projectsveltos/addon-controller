@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -244,47 +243,6 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterSummaryNa
 	return clusterSummary, clusterClient, nil
 }
 
-func deployDoc(ctx context.Context, c client.Client, doc []byte, logger logr.Logger) error {
-	elements := strings.Split(string(doc), separator)
-	for i := range elements {
-		if elements[i] == "" {
-			continue
-		}
-
-		logger.V(logs.LogVerbose).Info(fmt.Sprintf("element: %s", elements[i]))
-
-		element, err := getUnstructured([]byte(elements[i]))
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to convert to unstructured")
-			return err
-		}
-
-		if element.IsList() {
-			var list *unstructured.UnstructuredList
-			list, err = element.ToList()
-			if err != nil {
-				return err
-			}
-			for i := range list.Items {
-				u := &list.Items[i]
-				err = c.Create(ctx, u)
-				if err != nil && !apierrors.IsAlreadyExists(err) {
-					logger.V(logs.LogInfo).Error(err, "failed to post object")
-					return fmt.Errorf("error creating %s %s: %w", element.GetKind(), element.GetName(), err)
-				}
-			}
-		} else {
-			err = c.Create(ctx, element)
-			if err != nil && !apierrors.IsAlreadyExists(err) {
-				logger.V(logs.LogInfo).Error(err, "failed to post object")
-				return fmt.Errorf("error creating %s %s: %w", element.GetKind(), element.GetName(), err)
-			}
-		}
-	}
-
-	return nil
-}
-
 // collectConfigMaps collects all referenced configMaps in control cluster
 func collectConfigMaps(ctx context.Context, controlClusterClient client.Client,
 	references []corev1.ObjectReference, logger logr.Logger) ([]corev1.ConfigMap, error) {
@@ -339,7 +297,7 @@ func deployConfigMaps(ctx context.Context, c client.Client, remoteConfig *rest.C
 	}
 
 	err = updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterFeatureOwnerRef, featureID, deployed)
+		clusterFeatureOwnerRef, featureID, deployed, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -464,40 +422,12 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 	return gvks
 }
 
-func isDeploymentReady(ctx context.Context, c client.Client,
-	deploymentNamespace, deploymentName string,
-	logger logr.Logger) (present, ready bool, err error) {
-
-	logger = logger.WithValues("deploymentNamespace", deploymentNamespace, "deploymentName", deploymentName)
-	present = false
-	ready = false
-	depl := &appsv1.Deployment{}
-	err = c.Get(ctx, types.NamespacedName{Namespace: deploymentNamespace, Name: deploymentName}, depl)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogDebug).Info("deployment not found")
-			err = nil
-			return
-		}
-		return
-	}
-
-	present = true
-
-	if depl.Status.ReadyReplicas != *depl.Spec.Replicas {
-		logger.V(logs.LogDebug).Info("Not all replicas are ready for deployment")
-		return
-	}
-
-	ready = true
-	return
-}
-
 func updateClusterConfiguration(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName string,
 	clusterFeatureOwnerRef *metav1.OwnerReference,
 	featureID configv1alpha1.FeatureID,
-	deployed []configv1alpha1.Resource) error {
+	policyDeployed []configv1alpha1.Resource,
+	chartDeployed []configv1alpha1.Chart) error {
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Get ClusterConfiguration for CAPI Cluster
@@ -516,7 +446,12 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		isPresent := false
 		for i := range clusterConfiguration.Status.ClusterFeatureResources[index].Features {
 			if clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].FeatureID == featureID {
-				clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].Resources = deployed
+				if policyDeployed != nil {
+					clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].Resources = policyDeployed
+				}
+				if chartDeployed != nil {
+					clusterConfiguration.Status.ClusterFeatureResources[index].Features[i].Charts = chartDeployed
+				}
 				isPresent = true
 				break
 			}
@@ -527,7 +462,7 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 				clusterConfiguration.Status.ClusterFeatureResources[index].Features = make([]configv1alpha1.Feature, 0)
 			}
 			clusterConfiguration.Status.ClusterFeatureResources[index].Features = append(clusterConfiguration.Status.ClusterFeatureResources[index].Features,
-				configv1alpha1.Feature{FeatureID: featureID, Resources: deployed},
+				configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
 			)
 		}
 

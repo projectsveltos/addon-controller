@@ -152,13 +152,9 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("Reconciliation of deleted ClusterSummary removes finalizer only when all features are removed", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
-			Replicas: 1,
-		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoving},
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoving},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
 		now := metav1.NewTime(time.Now())
@@ -189,7 +185,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Name: clusterSummary.Name,
 		}
 
-		// Since FeatureKyverno is still marked to be removed, reconciliation won't
+		// Since FeatureHelm is still marked to be removed, reconciliation won't
 		// remove finalizer
 
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
@@ -203,11 +199,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		// Mark all features as removed
 		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureKyverno, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureGatekeeper, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeaturePrometheus, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureContour, Status: configv1alpha1.FeatureStatusRemoved},
 		}
 
 		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -303,13 +296,10 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 
-		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(serviceMonitorFrontend, randomString()))
+		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
-		referencingClusterSummary.Spec.ClusterFeatureSpec.KyvernoConfiguration = &configv1alpha1.KyvernoConfiguration{
-			Replicas: 1,
-			PolicyRefs: []corev1.ObjectReference{
-				{Namespace: namespace, Name: configMap.Name},
-			},
+		referencingClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
+			{Namespace: namespace, Name: configMap.Name},
 		}
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())

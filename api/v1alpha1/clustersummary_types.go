@@ -32,24 +32,15 @@ const (
 	ClusterSummaryKind = "ClusterSummary"
 )
 
-// +kubebuilder:validation:Enum:=Kyverno;Resources;Prometheus;Gatekeeper;Contour
+// +kubebuilder:validation:Enum:=Resources;Helm
 type FeatureID string
 
 const (
-	// FeatureKyverno is the identifier for Kyverno feature
-	FeatureKyverno = FeatureID("Kyverno")
-
-	// FeatureGatekeeper is the identifier for Gatekeeper feature
-	FeatureGatekeeper = FeatureID("Gatekeeper")
-
 	// FeatureResources is the identifier for generic Resources feature
 	FeatureResources = FeatureID("Resources")
 
-	// FeaturePrometheus is the identifier for Prometheus feature
-	FeaturePrometheus = FeatureID("Prometheus")
-
-	// FeatureContour is the identifier for Contour feature
-	FeatureContour = FeatureID("Contour")
+	// FeatureHelm is the identifier for Helm feature
+	FeatureHelm = FeatureID("Helm")
 )
 
 // +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;Removing;Removed

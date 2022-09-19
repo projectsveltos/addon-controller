@@ -17,7 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"encoding/json"
+
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -80,6 +83,10 @@ type HelmChart struct {
 	// +kubebuilder:validation:MinLength=1
 	ReleaseNamespace string `json:"releaseNamespace"`
 
+	// Values holds the values for this Helm release.
+	// +optional
+	Values *apiextensionsv1.JSON `json:"values,omitempty"`
+
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install
 	// +optional
@@ -98,7 +105,7 @@ type ClusterFeatureSpec struct {
 	// - Continuous means first time a workload cluster matches the ClusterFeature,
 	// features will be deployed in such a cluster. Any subsequent feature configuration
 	// change will be applied into the matching workload clusters.
-	// +kubebuilder:default:=OneTime
+	// +kubebuilder:default:=Continuous
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
@@ -143,4 +150,16 @@ type ClusterFeatureList struct {
 // nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterFeature{}, &ClusterFeatureList{})
+}
+
+// GetValues unmarshals the raw values to a map[string]interface{} and returns
+// the result.
+func (in *HelmChart) GetValues() (map[string]interface{}, error) {
+	var values map[string]interface{}
+	if in.Values != nil {
+		if err := json.Unmarshal(in.Values.Raw, &values); err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
 }

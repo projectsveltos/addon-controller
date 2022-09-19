@@ -119,7 +119,7 @@ func main() {
 		Deployer:             d,
 		ReferenceMap:         make(map[string]*controllers.Set),
 		ClusterSummaryMap:    make(map[string]*controllers.Set),
-		Mux:                  sync.Mutex{},
+		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)

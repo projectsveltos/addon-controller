@@ -27,12 +27,14 @@ import (
 	"github.com/gdexlab/go-render/render"
 	"helm.sh/helm/v3/pkg/release"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
@@ -107,6 +109,204 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldUpgrade(currentRelease, requestChart)).To(BeTrue())
+	})
+
+	It("UpdateStatusForReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
+		calicoChart := &configv1alpha1.HelmChart{
+			RepositoryURL:    "https://projectcalico.docs.tigera.io/charts",
+			RepositoryName:   "projectcalico",
+			ChartName:        "projectcalico/tigera-operator",
+			ChartVersion:     "v3.24.1",
+			ReleaseName:      "calico",
+			ReleaseNamespace: "calico",
+			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+		}
+
+		kyvernoSummary := configv1alpha1.HelmChartSummary{
+			ReleaseName:      "kyverno",
+			ReleaseNamespace: "kyverno",
+			Status:           configv1alpha1.HelChartStatusManaging,
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: randomString(),
+				ClusterName:      randomString(),
+				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+					HelmCharts: []configv1alpha1.HelmChart{*calicoChart},
+				},
+			},
+			// List a helm chart non referenced anymore as managed
+			Status: configv1alpha1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+					kyvernoSummary,
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(conflict).To(BeFalse())
+
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
+		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(2))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(calicoChart.ReleaseName))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(calicoChart.ReleaseNamespace))
+
+		// UpdateStatusForReferencedHelmReleases adds status for referenced releases and does not remove any
+		// existing entry for non existing releases.
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].Status).To(Equal(kyvernoSummary.Status))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseName).To(Equal(kyvernoSummary.ReleaseName))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace).To(Equal(kyvernoSummary.ReleaseNamespace))
+	})
+
+	It("UpdateStatusForNonReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
+		contourChart := &configv1alpha1.HelmChart{
+			RepositoryURL:    "https://charts.bitnami.com/bitnami",
+			RepositoryName:   "bitnami/contour",
+			ChartName:        "bitnami/contour",
+			ChartVersion:     "9.1.2",
+			ReleaseName:      "contour-latest",
+			ReleaseNamespace: "contour",
+			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+		}
+
+		kyvernoSummary := configv1alpha1.HelmChartSummary{
+			ReleaseName:      "kyverno",
+			ReleaseNamespace: "kyverno",
+			Status:           configv1alpha1.HelChartStatusManaging,
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: randomString(),
+				ClusterName:      randomString(),
+				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+					HelmCharts: []configv1alpha1.HelmChart{*contourChart},
+				},
+			},
+			// List a helm chart non referenced anymore as managed
+			Status: configv1alpha1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+					kyvernoSummary,
+					{
+						ReleaseName:      contourChart.ReleaseName,
+						ReleaseNamespace: contourChart.ReleaseNamespace,
+						Status:           configv1alpha1.HelChartStatusManaging,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		err = controllers.UpdateStatusForNonReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		Expect(err).To(BeNil())
+
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
+		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(1))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(contourChart.ReleaseName))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(contourChart.ReleaseNamespace))
+	})
+
+	It("updateChartsInClusterConfiguration updates ClusterConfiguration with deployed helm releases", func() {
+		chartDeployed := []configv1alpha1.Chart{
+			{
+				RepoURL:      "https://charts.bitnami.com/bitnami",
+				ChartName:    "bitnami/contour",
+				ChartVersion: "9.1.2",
+				Namespace:    "projectcontour",
+			},
+		}
+
+		clusterFeatureName := randomString()
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind:       configv1alpha1.ClusterFeatureKind,
+						Name:       clusterFeatureName,
+						APIVersion: "config.projectsveltos.io/v1alpha1",
+					},
+				},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: randomString(),
+				ClusterName:      randomString(),
+			},
+		}
+
+		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+			Status: configv1alpha1.ClusterConfigurationStatus{
+				ClusterFeatureResources: []configv1alpha1.ClusterFeatureResource{
+					{ClusterFeatureName: clusterFeatureName},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterConfiguration,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
+			chartDeployed, klogr.New())).To(Succeed())
+
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
+			currentClusterConfiguration)).To(Succeed())
+
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(Equal(clusterFeatureName))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].FeatureID).To(Equal(configv1alpha1.FeatureHelm))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].RepoURL).To(Equal(chartDeployed[0].RepoURL))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartName).To(Equal(chartDeployed[0].ChartName))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartVersion).To(Equal(chartDeployed[0].ChartVersion))
 	})
 })
 

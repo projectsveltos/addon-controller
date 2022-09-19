@@ -85,7 +85,7 @@ var _ = Describe("Feature", Serial, func() {
 			currentNamespace := &corev1.Namespace{}
 			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
 			return apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
+		}, timeout/2, pollingInterval).Should(BeTrue())
 
 		Byf("Setting Cluster as unpaused")
 		setClusterPausedField(false)

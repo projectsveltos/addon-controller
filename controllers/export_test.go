@@ -45,6 +45,7 @@ var (
 	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
 	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
 	IsPaused                       = (*ClusterSummaryReconciler).isPaused
+	ShouldReconcile                = (*ClusterSummaryReconciler).shouldReconcile
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
@@ -72,10 +73,13 @@ var (
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 
-	HelmHash        = helmHash
-	ShouldInstall   = shouldInstall
-	ShouldUninstall = shouldUninstall
-	ShouldUpgrade   = shouldUpgrade
+	HelmHash                                 = helmHash
+	ShouldInstall                            = shouldInstall
+	ShouldUninstall                          = shouldUninstall
+	ShouldUpgrade                            = shouldUpgrade
+	UpdateChartsInClusterConfiguration       = updateChartsInClusterConfiguration
+	UpdateStatusForReferencedHelmReleases    = updateStatusForReferencedHelmReleases
+	UpdateStatusForNonReferencedHelmReleases = updateStatusForNonReferencedHelmReleases
 )
 
 type (

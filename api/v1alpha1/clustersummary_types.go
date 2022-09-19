@@ -99,6 +99,39 @@ type FeatureSummary struct {
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
 }
 
+// HelChartStatus specifies whether ClusterSummary is successfully managing
+// an helm chart or not
+//+kubebuilder:validation:Enum:=Managing;Conflict
+type HelChartStatus string
+
+const (
+	// HelChartStatusManaging indicates helm chart is successfully being managed
+	HelChartStatusManaging = HelChartStatus("Managing")
+
+	// HelChartStatusConflict indicates there is a conflict with another
+	// ClusterSummary to manage the helm chart
+	HelChartStatusConflict = HelChartStatus("Conflict")
+)
+
+type HelmChartSummary struct {
+	// ReleaseName is the chart release
+	// +kubebuilder:validation:MinLength=1
+	ReleaseName string `json:"releaseName"`
+
+	// ReleaseNamespace is the namespace release will be installed
+	// +kubebuilder:validation:MinLength=1
+	ReleaseNamespace string `json:"releaseNamespace"`
+
+	// Status indicates whether ClusterSummary can manage the helm
+	// chart or there is a conflict
+	Status HelChartStatus `json:"status"`
+
+	// Status indicates whether ClusterSummary can manage the helm
+	// chart or there is a conflict
+	// +optional
+	ConflictMessage string `json:"conflictMessage,omitempty"`
+}
+
 // ClusterSummarySpec defines the desired state of ClusterSummary
 type ClusterSummarySpec struct {
 	// ClusterNamespace is the namespace of the workload Cluster this
@@ -120,6 +153,12 @@ type ClusterSummaryStatus struct {
 	// +listType=atomic
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
+
+	// HelmReleaseSummaries reports the status of each helm chart
+	// directly managed by ClusterFeature.
+	// +listType=atomic
+	// +optional
+	HelmReleaseSummaries []HelmChartSummary `json:"helmReleaseSummaries,omitempty"`
 }
 
 //+kubebuilder:object:root=true

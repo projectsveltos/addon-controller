@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gdexlab/go-render/render"
@@ -34,6 +35,7 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
@@ -45,9 +47,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
@@ -56,6 +60,8 @@ var (
 	settings          = cli.New()
 	defaultUploadPath = "/tmp/charts"
 	chartExtension    = "tgz"
+	repoLock          sync.Mutex
+	repoAdded         map[string]bool
 )
 
 const (
@@ -78,6 +84,11 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
 	// Get ClusterSummary that requested this
 	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
 	if err != nil {
@@ -97,42 +108,30 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
+	var conflict bool
+	// Before any helm release, managed by this ClusterSummary, is deployed, update ClusterSummary
+	// Status. Order is important. Before deploying any managed helm release, we need to successfully
+	// update ClusterSummary Status. If pod is restarted, it needs to rebuild internal state keeping
+	// track of which ClusterSummary was managing which helm release.
+	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
+	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
+	// only after helm release is successfully undeployed.
+	conflict, err = updateStatusForReferencedHelmReleases(ctx, c, clusterSummary)
+	if err != nil {
+		return err
+	}
+
 	chartDeployed := make([]configv1alpha1.Chart, 0)
 	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		if !chartManager.CanManageChart(clusterSummary, currentChart) {
+			// error is reported above, in updateHelmChartStatus.
+			continue
+		}
+
 		var currentRelease *releaseInfo
-
-		currentRelease, err = getReleaseInfo(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseName,
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseNamespace,
-			kubeconfig, logger)
-		// If error is ErrReleaseNotFound move forward
-		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
-			return err
-		}
-
-		if shouldInstall(currentRelease, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]) {
-			err = doInstallRelease(ctx, remoteClient, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i],
-				kubeconfig, logger)
-			if err != nil {
-				return err
-			}
-		} else if shouldUpgrade(currentRelease, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]) {
-			err = doUpgradeRelease(ctx, remoteClient, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i],
-				kubeconfig, logger)
-			if err != nil {
-				return err
-			}
-		} else if shouldUninstall(currentRelease, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]) {
-			err = doUninstallRelease(&clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i], kubeconfig, logger)
-			if err != nil {
-				return err
-			}
-		}
-
-		currentRelease, err = getReleaseInfo(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseName,
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseNamespace,
-			kubeconfig, logger)
-		// If error is ErrReleaseNotFound move forward
-		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		currentRelease, err = handleChart(ctx, currentChart, remoteClient, kubeconfig, logger)
+		if err != nil {
 			return err
 		}
 
@@ -141,7 +140,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 				currentRelease.Name, currentRelease.ChartVersion, currentRelease.Status))
 			if currentRelease.Status == release.StatusDeployed.String() {
 				chartDeployed = append(chartDeployed, configv1alpha1.Chart{
-					RepoURL:         clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].RepositoryURL,
+					RepoURL:         currentChart.RepositoryURL,
 					Namespace:       currentRelease.Namespace,
 					ChartName:       currentRelease.Name,
 					ChartVersion:    currentRelease.ChartVersion,
@@ -152,7 +151,74 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		}
 	}
 
-	return updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
+	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
+	// anymore, such helm release has been successfully remove at this point. So
+	err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	// First get the helm releases currently managed and uninstall all the ones
+	// not referenced anymore.
+	// Only if this operation succeeds, removes all stale helm release registration
+	// for this clusterSummary.
+	err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
+	if err != nil {
+		return err
+	}
+	chartManager.RemoveStaleRegistrations(clusterSummary)
+
+	err = updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
+	if err != nil {
+		return err
+	}
+
+	if conflict {
+		return fmt.Errorf("conflict managing one or more helm charts")
+	}
+
+	return nil
+}
+
+func handleChart(ctx context.Context, currentChart *configv1alpha1.HelmChart,
+	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*releaseInfo, error) {
+
+	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
+		currentChart.ReleaseNamespace,
+		kubeconfig, logger)
+	// If error is ErrReleaseNotFound move forward
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return nil, err
+	}
+
+	if shouldInstall(currentRelease, currentChart) {
+		err = doInstallRelease(ctx, remoteClient, currentChart,
+			kubeconfig, logger)
+		if err != nil {
+			return nil, err
+		}
+	} else if shouldUpgrade(currentRelease, currentChart) {
+		err = doUpgradeRelease(ctx, remoteClient, currentChart,
+			kubeconfig, logger)
+		if err != nil {
+			return nil, err
+		}
+	} else if shouldUninstall(currentRelease, currentChart) {
+		err = doUninstallRelease(currentChart, kubeconfig, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	currentRelease, err = getReleaseInfo(currentChart.ReleaseName,
+		currentChart.ReleaseNamespace,
+		kubeconfig, logger)
+	// If error is ErrReleaseNotFound move forward
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return nil, err
+	}
+
+	return currentRelease, nil
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
@@ -183,19 +249,28 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	defer os.Remove(kubeconfig)
 
 	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ChartName,
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].RepositoryURL,
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].RepositoryName))
+			currentChart.ChartName,
+			currentChart.RepositoryURL,
+			currentChart.RepositoryName))
 
-		err = uninstallRelease(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseName,
-			clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i].ReleaseNamespace, kubeconfig, logger)
+		err = uninstallRelease(currentChart.ReleaseName,
+			currentChart.ReleaseNamespace, kubeconfig, logger)
 		if err != nil {
 			if !errors.Is(err, driver.ErrReleaseNotFound) {
 				return err
 			}
 		}
 	}
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	chartManager.RemoveStaleRegistrations(clusterSummary)
+
 	return nil
 }
 
@@ -226,6 +301,21 @@ func getHelmRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectR
 // RepoAdd adds repo with given name and url
 func repoAdd(settings *cli.EnvSettings, name, url string, logger logr.Logger) error {
 	logger = logger.WithValues("repo", url)
+
+	repoInfo := fmt.Sprintf("%s:%s", url, name)
+
+	repoLock.Lock()
+	defer repoLock.Unlock()
+
+	if repoAdded == nil {
+		repoAdded = make(map[string]bool)
+	}
+
+	if _, ok := repoAdded[repoInfo]; ok {
+		logger.V(logs.LogDebug).Info("repo already added")
+		return nil
+	}
+
 	logger.V(logs.LogDebug).Info("adding repo")
 
 	// Ensure the file directory exists as it is required for file locking
@@ -279,11 +369,32 @@ func repoAdd(settings *cli.EnvSettings, name, url string, logger logr.Logger) er
 	}
 
 	logger.V(logs.LogDebug).Info("adding repo done")
+	repoAdded[repoInfo] = true
+
+	return nil
+}
+
+// repoUpdate updates repo
+func repoUpdate(settings *cli.EnvSettings, name, url string, logger logr.Logger) error {
+	logger = logger.WithValues("repo", url)
+	logger.V(logs.LogDebug).Info("updating repo")
+
+	cfg := &repo.Entry{Name: name, URL: url}
+	r, err := repo.NewChartRepository(cfg, getter.All(settings))
+	if err != nil {
+		return err
+	}
+
+	_, err = r.DownloadIndexFile()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
-	logger logr.Logger) error {
+	values map[string]interface{}, logger logr.Logger) error {
 
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace, "chart",
 		chartName, "chartVersion", chartVersion)
@@ -349,8 +460,7 @@ func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, ch
 		}
 	}
 
-	vals := map[string]interface{}{}
-	_, err = installObject.Run(chartRequested, vals)
+	_, err = installObject.Run(chartRequested, values)
 	if err != nil {
 		return err
 	}
@@ -380,7 +490,7 @@ func uninstallRelease(releaseName, releaseNamespace, kubeconfig string, logger l
 
 func upgradeRelease(settings *cli.EnvSettings,
 	releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
-	logger logr.Logger) error {
+	values map[string]interface{}, logger logr.Logger) error {
 
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace, "chart",
 		chartName, "chartVersion", chartVersion)
@@ -426,7 +536,8 @@ func upgradeRelease(settings *cli.EnvSettings,
 	hisClient.Max = 1
 	_, err = hisClient.Run(releaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = installRelease(settings, releaseName, releaseNamespace, chartName, chartVersion, kubeconfig, logger)
+		err = installRelease(settings, releaseName, releaseNamespace, chartName, chartVersion,
+			kubeconfig, values, logger)
 		if err != nil {
 			return err
 		}
@@ -581,13 +692,25 @@ func doInstallRelease(ctx context.Context, remoteClient client.Client, requested
 		return err
 	}
 
-	// TODO: do we need repo update here???
+	err = repoUpdate(settings, requestedChart.RepositoryName,
+		requestedChart.RepositoryURL, logger)
+	if err != nil {
+		return err
+	}
+
+	var values chartutil.Values
+	values, err = requestedChart.GetValues()
+	if err != nil {
+		return err
+	}
 
 	err = installRelease(settings, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace,
 		requestedChart.ChartName,
 		requestedChart.ChartVersion,
-		kubeconfig, logger)
+		kubeconfig,
+		values,
+		logger)
 	if err != nil {
 		return err
 	}
@@ -625,11 +748,25 @@ func doUpgradeRelease(ctx context.Context, remoteClient client.Client, requested
 		return err
 	}
 
+	err = repoUpdate(settings, requestedChart.RepositoryName,
+		requestedChart.RepositoryURL, logger)
+	if err != nil {
+		return err
+	}
+
+	var values map[string]interface{}
+	values, err = requestedChart.GetValues()
+	if err != nil {
+		return err
+	}
+
 	err = upgradeRelease(settings, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace,
 		requestedChart.ChartName,
 		requestedChart.ChartVersion,
-		kubeconfig, logger)
+		kubeconfig,
+		values,
+		logger)
 	if err != nil {
 		return err
 	}
@@ -649,4 +786,160 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 
 	return updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterFeatureOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
+}
+
+// undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
+func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kubeconfig string, logger logr.Logger) error {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	managedHelmReleases := chartManager.GetManagedHelmReleases(clusterSummary)
+
+	// Build map of current referenced helm charts
+	currentlyReferencedReleases := make(map[string]bool)
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		currentlyReferencedReleases[chartManager.GetReleaseKey(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
+	}
+
+	for i := range managedHelmReleases {
+		releaseKey := chartManager.GetReleaseKey(managedHelmReleases[i].Namespace, managedHelmReleases[i].Name)
+		if _, ok := currentlyReferencedReleases[releaseKey]; !ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("helm release %s (namespace %s) used to be managed but not referenced anymore",
+				managedHelmReleases[i].Name, managedHelmReleases[i].Namespace))
+			if err := uninstallRelease(managedHelmReleases[i].Name, managedHelmReleases[i].Namespace,
+				kubeconfig, logger); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// updateStatusForReferencedHelmReleases considers helm releases ClusterSummary currently
+// references. For each of those helm releases, adds an entry in ClusterSummary.Status reporting
+// whether such helm release is managed by this ClusterSummary or not.
+// This method also returns:
+// - an error if any occurs
+// - whether there is at least one helm release ClusterSummary is referencing, but currently not
+// allowed to manage.
+func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+
+	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) == 0 &&
+		len(clusterSummary.Status.HelmReleaseSummaries) == 0 {
+		// Nothing to do
+		return false, nil
+	}
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return false, nil
+	}
+
+	helmInfo := func(releaseNamespace, releaseName string) string {
+		return fmt.Sprintf("%s/%s", releaseNamespace, releaseName)
+	}
+
+	currentlyReferenced := make(map[string]bool)
+
+	conflict := false
+
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err = c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+		if err != nil {
+			return err
+		}
+
+		helmReleaseSummaries := make([]configv1alpha1.HelmChartSummary, len(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts))
+		for i := range currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+			currentChart := &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+			if chartManager.CanManageChart(currentClusterSummary, currentChart) {
+				helmReleaseSummaries[i] = configv1alpha1.HelmChartSummary{
+					ReleaseName:      currentChart.ReleaseName,
+					ReleaseNamespace: currentChart.ReleaseNamespace,
+					Status:           configv1alpha1.HelChartStatusManaging,
+				}
+				currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
+			} else {
+				var managerName string
+				managerName, err = chartManager.GetManagerForChart(currentClusterSummary.Spec.ClusterNamespace,
+					currentClusterSummary.Spec.ClusterName, currentChart)
+				if err != nil {
+					return err
+				}
+				helmReleaseSummaries[i] = configv1alpha1.HelmChartSummary{
+					ReleaseName:      currentChart.ReleaseName,
+					ReleaseNamespace: currentChart.ReleaseNamespace,
+					Status:           configv1alpha1.HelChartStatusConflict,
+					ConflictMessage:  fmt.Sprintf("ClusterSummary %s managing it", managerName),
+				}
+				conflict = true
+			}
+		}
+
+		// If there is any helm release which:
+		// - was managed by this ClusterSummary
+		// - is not referenced anymore by this ClusterSummary
+		// still leave an entry in ClusterSummary.Status
+		for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+			summary := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+			if summary.Status == configv1alpha1.HelChartStatusManaging {
+				if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; !ok {
+					helmReleaseSummaries = append(helmReleaseSummaries, *summary)
+				}
+			}
+		}
+
+		currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
+
+		return c.Status().Update(ctx, currentClusterSummary)
+	})
+	return conflict, err
+}
+
+// updateStatusForNonReferencedHelmReleases walks ClusterSummary.Status entries.
+// Removes any entry pointing to a helm release currently not referenced by ClusterSummary.
+func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary) error {
+
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	err := c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+	if err != nil {
+		return err
+	}
+
+	helmInfo := func(releaseNamespace, releaseName string) string {
+		return fmt.Sprintf("%s/%s", releaseNamespace, releaseName)
+	}
+
+	currentlyReferenced := make(map[string]bool)
+
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
+	}
+
+	helmReleaseSummaries := make([]configv1alpha1.HelmChartSummary, 0)
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
+			helmReleaseSummaries = append(helmReleaseSummaries, *summary)
+		}
+	}
+
+	if len(helmReleaseSummaries) == len(clusterSummary.Status.HelmReleaseSummaries) {
+		// Nothing has changed
+		return nil
+	}
+
+	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
+
+	return c.Status().Update(ctx, currentClusterSummary)
 }

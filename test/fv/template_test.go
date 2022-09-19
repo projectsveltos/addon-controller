@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -51,8 +52,17 @@ var _ = Describe("Template", func() {
 	)
 
 	It("Deploy a template correctly", Label("FV"), func() {
+		configMapNs := randomString()
+		Byf("Create configMap's namespace %s", configMapNs)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNs,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+
 		Byf("Add configMap containing a template policy. Policy has annotation to indicate it is a template")
-		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), templatePolicy)
+		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), templatePolicy)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

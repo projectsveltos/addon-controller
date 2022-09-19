@@ -155,7 +155,7 @@ CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
 TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
-NUM_NODES ?= 3
+NUM_NODES ?= 4
 
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.

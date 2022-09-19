@@ -72,40 +72,14 @@ var (
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 
-	DeployKyvernoInWorklaodCluster = deployKyvernoInWorklaodCluster
-	IsKyvernoReady                 = isKyvernoReady
-	KyvernoHash                    = kyvernoHash
-	GetKyvernoRefs                 = getKyvernoRefs
-	DeployKyverno                  = deployKyverno
+	HelmHash        = helmHash
+	ShouldInstall   = shouldInstall
+	ShouldUninstall = shouldUninstall
+	ShouldUpgrade   = shouldUpgrade
+)
 
-	DeployPrometheusOperator                  = deployPrometheusOperator
-	DeployPrometheusOperatorInWorklaodCluster = deployPrometheusOperatorInWorklaodCluster
-	IsPrometheusOperatorReady                 = isPrometheusOperatorReady
-	DeployKubeStateMetricsInWorklaodCluster   = deployKubeStateMetricsInWorklaodCluster
-	IsKubeStateMetricsReady                   = isKubeStateMetricsReady
-	DeployKubePrometheusInWorklaodCluster     = deployKubePrometheusInWorklaodCluster
-	DeployPrometheus                          = deployPrometheus
-	PrometheusHash                            = prometheusHash
-	GetPrometheusRefs                         = getPrometheusRefs
-	GetPrometheusInstance                     = getPrometheusInstance
-	AddStorageConfig                          = addStorageConfig
-
-	DeployGatekeeperInWorklaodCluster = deployGatekeeperInWorklaodCluster
-	IsGatekeeperReady                 = isGatekeeperReady
-	DeployGatekeeper                  = deployGatekeeper
-	GatekeeperHash                    = gatekeeperHash
-	ApplyAuditOptions                 = applyAuditOptions
-
-	IsContourGatewayReady                 = isContourGatewayReady
-	IsContourReady                        = isContourReady
-	DeployContourGateway                  = deployContourGateway
-	DeployRegularContour                  = deployRegularContour
-	DeployContour                         = deployContour
-	ContourHash                           = contourHash
-	DeployContourGatewayInWorklaodCluster = deployContourGatewayInWorklaodCluster
-	DeployContourInWorklaodCluster        = deployContourInWorklaodCluster
-	ShouldInstallContourGateway           = shouldInstallContourGateway
-	ShouldInstallContour                  = shouldInstallContour
+type (
+	ReleaseInfo = releaseInfo
 )
 
 var (

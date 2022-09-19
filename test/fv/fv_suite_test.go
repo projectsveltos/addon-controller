@@ -26,10 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/TwinProduction/go-color"
-	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
-	opav1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -89,9 +86,6 @@ var _ = BeforeSuite(func() {
 	Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
 	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
 	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
-	Expect(kyvernoapi.AddToScheme(scheme)).To(Succeed())
-	Expect(monitoringv1.AddToScheme(scheme)).To(Succeed())
-	Expect(opav1.AddToScheme(scheme)).To(Succeed())
 	Expect(gatewayapi.AddToScheme(scheme)).To(Succeed())
 
 	var err error

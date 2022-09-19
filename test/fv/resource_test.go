@@ -106,7 +106,7 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: "configmap-updater", namespace: "", group: "rbac.authorization.k8s.io"},
 		}
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies)
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		By("Updating ConfigMap to reference new ClusterRole")
 		currentConfigMap := &corev1.ConfigMap{}
@@ -133,7 +133,7 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: "configmap-all", namespace: "", group: "rbac.authorization.k8s.io"},
 		}
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies)
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())

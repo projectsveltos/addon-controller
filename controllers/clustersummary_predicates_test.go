@@ -87,7 +87,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 
 	It("Update returns false when Data has not changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
-		configMap = createConfigMapWithPolicy("default", configMap.Name, fmt.Sprintf(addLabelPolicyStr, randomString()))
+		configMap = createConfigMapWithPolicy("default", configMap.Name, fmt.Sprintf(viewClusterRole, randomString()))
 
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{

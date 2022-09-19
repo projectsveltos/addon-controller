@@ -51,6 +51,31 @@ type Resource struct {
 	Owner corev1.ObjectReference `json:"owner"`
 }
 
+type Chart struct {
+	// RepoURL URL of the repo containing the helm chart deployed
+	// in the CAPI Cluster.
+	// +kubebuilder:validation:MinLength=1
+	RepoURL string `json:"repoURL"`
+
+	// ChartName of the chart deployed in the CAPI Cluster.
+	// +kubebuilder:validation:MinLength=1
+	ChartName string `json:"chartName"`
+
+	// Namespace where chart is deployed in the CAPI Cluster.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// ChartVersion is the version of the helm chart deployed in the CAPI Cluster.
+	ChartVersion string `json:"chartVersion"`
+
+	// AppVersion is the version of the app deployed in the CAPI Cluster.
+	// +optional
+	AppVersion string `json:"appVersion,omitempty"`
+
+	// LastAppliedTime identifies when this resource was last applied to the cluster.
+	LastAppliedTime *metav1.Time `json:"lastAppliedTime"`
+}
+
 type Feature struct {
 	// FeatureID is an indentifier of the feature whose status is reported
 	FeatureID FeatureID `json:"featureID"`
@@ -58,6 +83,10 @@ type Feature struct {
 	// Resources is a list of resources deployed in the CAPI Cluster.
 	// +optional
 	Resources []Resource `json:"resources,omitempty"`
+
+	// Charts is a list of helm charts deployed in the CAPI Cluster.
+	// +optional
+	Charts []Chart `json:"charts,omitempty"`
 }
 
 // ClusterFeatureResource keeps info on all of the resources deployed in this CAPI Cluster

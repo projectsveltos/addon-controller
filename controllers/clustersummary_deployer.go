@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -148,51 +147,16 @@ func genericDeploy(ctx context.Context, c client.Client,
 	// Feature specific code (featureHandler.deploy is invoked)
 	// Code common to all features
 
-	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
+	// Before any per feature specific code
 
+	// Invoking per feature specific code
+	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
 	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger)
 	if err != nil {
 		return err
 	}
 
-	var remoteRestConfig *rest.Config
-	remoteRestConfig, err = getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
-	if err != nil {
-		return err
-	}
-
-	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
-	refs := featureHandler.getRefs(clusterSummary)
-
-	var configMaps []corev1.ConfigMap
-	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
-	if err != nil {
-		return err
-	}
-
-	var deployed []configv1alpha1.Resource
-	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureID(featureID),
-		configMaps, clusterSummary, logger)
-	if err != nil {
-		return err
-	}
-
-	for i := range deployed {
-		key := getPolicyInfo(&deployed[i])
-		currentPolicies[key] = deployed[i]
-	}
-
-	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureID(featureID)), currentPolicies)
-	if err != nil {
-		return err
-	}
+	// After any per feature specific code
 
 	return nil
 }
@@ -264,11 +228,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	// Feature specific code (featureHandler.undeploy is invoked)
 	// Code common to all features
 
-	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	if err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary); err != nil {
-		return err
-	}
+	// Before any per feature specific code
 
 	// Get CAPI Cluster
 	cluster := &clusterv1.Cluster{}
@@ -280,37 +240,13 @@ func genericUndeploy(ctx context.Context, c client.Client,
 		return err
 	}
 
+	// Invoking per feature specific code
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
 	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger); err != nil {
 		return err
 	}
 
-	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	clusterRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return err
-	}
-
-	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureID(featureID)), map[string]configv1alpha1.Resource{})
-	if err != nil {
-		return err
-	}
-
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
-	if err != nil {
-		return err
-	}
-
-	err = updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterFeatureOwnerRef, configv1alpha1.FeatureID(featureID), nil)
-	if err != nil {
-		return err
-	}
+	// After any per feature specific code
 
 	return nil
 }

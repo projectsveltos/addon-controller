@@ -43,266 +43,52 @@ spec:
                     description: ClusterSelector identifies ClusterAPI clusters to
                       associate to.
                     type: string
-                  contourConfiguration:
-                    description: ContourConfiguration contains the Contour configuration.
-                      If not nil, contour will be deployed in the workload cluster
-                    properties:
-                      installationMode:
-                        default: Contour
-                        description: InstallationMode indicates what type of resources
-                          will be deployed in a CAPI Cluster.
-                        enum:
-                        - Contour
-                        - Gateway
-                        type: string
-                      policyRefs:
-                        description: 'PolicyRef references ConfigMaps containing the
-                          Contour policies that need to be deployed in the workload
-                          cluster. This includes: - ContourConfiguration, ContourDeployment,
-                          HTTPProxy, GatewayClass, Gateway, HTTPRoute, etc. -  Any
-                          other configuration needed for Contour'
-                        items:
-                          description: 'ObjectReference contains enough information
-                            to let you inspect or modify the referred object. ---
-                            New uses of this type are discouraged because of difficulty
-                            describing its usage when embedded in APIs. 1. Ignored
-                            fields.  It includes many fields which are not generally
-                            honored.  For instance, ResourceVersion and FieldPath
-                            are both very rarely valid in actual usage. 2. Invalid
-                            usage help.  It is impossible to add specific help for
-                            individual usage.  In most embedded usages, there are
-                            particular restrictions like, "must refer only to types
-                            A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded. 3. Inconsistent
-                            validation.  Because the usages are different, the validation
-                            rules are different by usage, which makes it hard for
-                            users to predict what will happen. 4. The fields are both
-                            imprecise and overly precise.  Kind is not a precise mapping
-                            to a URL. This can produce ambiguity during interpretation
-                            and require a REST mapping.  In most cases, the dependency
-                            is on the group,resource tuple and the version of the
-                            actual struct is irrelevant. 5. We cannot easily change
-                            it.  Because this type is embedded in many locations,
-                            updates to this type will affect numerous schemas.  Don''t
-                            make new APIs embed an underspecified API type they do
-                            not control. Instead of using this type, create a locally
-                            provided and used type that is well-focused on your reference.
-                            For example, ServiceReferences for admission registration:
-                            https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
-                            .'
-                          properties:
-                            apiVersion:
-                              description: API version of the referent.
-                              type: string
-                            fieldPath:
-                              description: 'If referring to a piece of an object instead
-                                of an entire object, this string should contain a
-                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                                For example, if the object reference is to a container
-                                within a pod, this would take on a value like: "spec.containers{name}"
-                                (where "name" refers to the name of the container
-                                that triggered the event) or if no container name
-                                is specified "spec.containers[2]" (container with
-                                index 2 in this pod). This syntax is chosen only to
-                                have some well-defined way of referencing a part of
-                                an object. TODO: this design is not final and this
-                                field is subject to change in the future.'
-                              type: string
-                            kind:
-                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-                              type: string
-                            name:
-                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
-                              type: string
-                            namespace:
-                              description: 'Namespace of the referent. More info:
-                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
-                              type: string
-                            resourceVersion:
-                              description: 'Specific resourceVersion to which this
-                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
-                              type: string
-                            uid:
-                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
-                              type: string
-                          type: object
-                        type: array
-                    type: object
-                  gatekeeperConfiguration:
-                    description: GatekeeperConfiguration contains the Gatekeeper configuration.
-                      If not nil, Gatekeeper will be deployed in the workload cluster
-                      along with, if any, specified Gatekeeper policies.
-                    properties:
-                      auditChunkSize:
-                        default: 500
-                        description: AuditChunkSize is the Kubernetes API chunking
-                          List results when retrieving cluster resources using discovery
-                          client
-                        type: integer
-                      auditFromCache:
-                        default: false
-                        description: AuditFromCache, if set to true, pull resources
-                          from OPA cache when auditing. Note that this requires replication
-                          of Kubernetes resources into OPA before they can be evaluated
-                          against the enforced policies
-                        type: boolean
-                      auditInterval:
-                        default: 60
-                        description: AuditInterval is the audit interval time. Disable
-                          audit interval by setting 0
-                        type: integer
-                      policyRefs:
-                        description: PolicyRef references ConfigMaps containing the
-                          Gatekeeper policies that need to be deployed in the workload
-                          cluster. This includes and it is not limited to contrainttemplates,
-                          configs, etc.
-                        items:
-                          description: 'ObjectReference contains enough information
-                            to let you inspect or modify the referred object. ---
-                            New uses of this type are discouraged because of difficulty
-                            describing its usage when embedded in APIs. 1. Ignored
-                            fields.  It includes many fields which are not generally
-                            honored.  For instance, ResourceVersion and FieldPath
-                            are both very rarely valid in actual usage. 2. Invalid
-                            usage help.  It is impossible to add specific help for
-                            individual usage.  In most embedded usages, there are
-                            particular restrictions like, "must refer only to types
-                            A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded. 3. Inconsistent
-                            validation.  Because the usages are different, the validation
-                            rules are different by usage, which makes it hard for
-                            users to predict what will happen. 4. The fields are both
-                            imprecise and overly precise.  Kind is not a precise mapping
-                            to a URL. This can produce ambiguity during interpretation
-                            and require a REST mapping.  In most cases, the dependency
-                            is on the group,resource tuple and the version of the
-                            actual struct is irrelevant. 5. We cannot easily change
-                            it.  Because this type is embedded in many locations,
-                            updates to this type will affect numerous schemas.  Don''t
-                            make new APIs embed an underspecified API type they do
-                            not control. Instead of using this type, create a locally
-                            provided and used type that is well-focused on your reference.
-                            For example, ServiceReferences for admission registration:
-                            https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
-                            .'
-                          properties:
-                            apiVersion:
-                              description: API version of the referent.
-                              type: string
-                            fieldPath:
-                              description: 'If referring to a piece of an object instead
-                                of an entire object, this string should contain a
-                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                                For example, if the object reference is to a container
-                                within a pod, this would take on a value like: "spec.containers{name}"
-                                (where "name" refers to the name of the container
-                                that triggered the event) or if no container name
-                                is specified "spec.containers[2]" (container with
-                                index 2 in this pod). This syntax is chosen only to
-                                have some well-defined way of referencing a part of
-                                an object. TODO: this design is not final and this
-                                field is subject to change in the future.'
-                              type: string
-                            kind:
-                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-                              type: string
-                            name:
-                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
-                              type: string
-                            namespace:
-                              description: 'Namespace of the referent. More info:
-                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
-                              type: string
-                            resourceVersion:
-                              description: 'Specific resourceVersion to which this
-                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
-                              type: string
-                            uid:
-                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
-                              type: string
-                          type: object
-                        type: array
-                    type: object
-                  kyvernoConfiguration:
-                    description: KyvernoConfiguration contains the Kyverno configuration.
-                      If not nil, Kyverno will be deployed in the workload cluster
-                      along with, if any, specified Kyverno policies.
-                    properties:
-                      policyRefs:
-                        description: PolicyRef references ConfigMaps containing the
-                          Kyverno policies that need to be deployed in the workload
-                          cluster.
-                        items:
-                          description: 'ObjectReference contains enough information
-                            to let you inspect or modify the referred object. ---
-                            New uses of this type are discouraged because of difficulty
-                            describing its usage when embedded in APIs. 1. Ignored
-                            fields.  It includes many fields which are not generally
-                            honored.  For instance, ResourceVersion and FieldPath
-                            are both very rarely valid in actual usage. 2. Invalid
-                            usage help.  It is impossible to add specific help for
-                            individual usage.  In most embedded usages, there are
-                            particular restrictions like, "must refer only to types
-                            A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded. 3. Inconsistent
-                            validation.  Because the usages are different, the validation
-                            rules are different by usage, which makes it hard for
-                            users to predict what will happen. 4. The fields are both
-                            imprecise and overly precise.  Kind is not a precise mapping
-                            to a URL. This can produce ambiguity during interpretation
-                            and require a REST mapping.  In most cases, the dependency
-                            is on the group,resource tuple and the version of the
-                            actual struct is irrelevant. 5. We cannot easily change
-                            it.  Because this type is embedded in many locations,
-                            updates to this type will affect numerous schemas.  Don''t
-                            make new APIs embed an underspecified API type they do
-                            not control. Instead of using this type, create a locally
-                            provided and used type that is well-focused on your reference.
-                            For example, ServiceReferences for admission registration:
-                            https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
-                            .'
-                          properties:
-                            apiVersion:
-                              description: API version of the referent.
-                              type: string
-                            fieldPath:
-                              description: 'If referring to a piece of an object instead
-                                of an entire object, this string should contain a
-                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                                For example, if the object reference is to a container
-                                within a pod, this would take on a value like: "spec.containers{name}"
-                                (where "name" refers to the name of the container
-                                that triggered the event) or if no container name
-                                is specified "spec.containers[2]" (container with
-                                index 2 in this pod). This syntax is chosen only to
-                                have some well-defined way of referencing a part of
-                                an object. TODO: this design is not final and this
-                                field is subject to change in the future.'
-                              type: string
-                            kind:
-                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-                              type: string
-                            name:
-                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
-                              type: string
-                            namespace:
-                              description: 'Namespace of the referent. More info:
-                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
-                              type: string
-                            resourceVersion:
-                              description: 'Specific resourceVersion to which this
-                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
-                              type: string
-                            uid:
-                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
-                              type: string
-                          type: object
-                        type: array
-                      replicas:
-                        default: 1
-                        description: Replicas is the number of kyverno replicas required
-                        type: integer
-                    type: object
+                  helmCharts:
+                    description: Helm charts
+                    items:
+                      properties:
+                        chartName:
+                          description: ChartName is the chart name
+                          minLength: 1
+                          type: string
+                        chartVersion:
+                          description: ChartVersion is the chart version
+                          minLength: 1
+                          type: string
+                        helmChartAction:
+                          default: Install
+                          description: HelmChartAction is the action that will be
+                            taken on the helm chart
+                          enum:
+                          - Install
+                          - Uninstall
+                          type: string
+                        releaseName:
+                          description: ReleaseName is the chart release
+                          minLength: 1
+                          type: string
+                        releaseNamespace:
+                          description: ReleaseNamespace is the namespace release will
+                            be installed
+                          minLength: 1
+                          type: string
+                        repositoryName:
+                          description: RepositoryName is the name helm chart repository
+                          minLength: 1
+                          type: string
+                        repositoryURL:
+                          description: RepositoryURL is the URL helm chart repository
+                          minLength: 1
+                          type: string
+                      required:
+                      - chartName
+                      - chartVersion
+                      - releaseName
+                      - releaseNamespace
+                      - repositoryName
+                      - repositoryURL
+                      type: object
+                    type: array
                   policyRefs:
                     description: PolicyRefs references all the ConfigMaps containing
                       kubernetes resources that need to be deployed in the matching
@@ -370,108 +156,6 @@ spec:
                           type: string
                       type: object
                     type: array
-                  prometheusConfiguration:
-                    description: PrometheusConfiguration contains the Prometheus configuration.
-                      If not nil, at the very least Prometheus operator will be deployed
-                      in the workload cluster
-                    properties:
-                      installationMode:
-                        default: Custom
-                        description: InstallationMode indicates what type of resources
-                          will be deployed in a CAPI Cluster.
-                        enum:
-                        - KubeStateMetrics
-                        - KubePrometheus
-                        - Custom
-                        type: string
-                      policyRefs:
-                        description: 'PolicyRef references ConfigMaps containing the
-                          Prometheus operator policies that need to be deployed in
-                          the workload cluster. This includes: - Prometheus, Alertmanager,
-                          ThanosRuler, ServiceMonitor, PodMonitor, Probe, PrometheusRule,
-                          AlertmanagerConfig CRD instances; -  Any other configuration
-                          needed for prometheus (like storageclass configuration)'
-                        items:
-                          description: 'ObjectReference contains enough information
-                            to let you inspect or modify the referred object. ---
-                            New uses of this type are discouraged because of difficulty
-                            describing its usage when embedded in APIs. 1. Ignored
-                            fields.  It includes many fields which are not generally
-                            honored.  For instance, ResourceVersion and FieldPath
-                            are both very rarely valid in actual usage. 2. Invalid
-                            usage help.  It is impossible to add specific help for
-                            individual usage.  In most embedded usages, there are
-                            particular restrictions like, "must refer only to types
-                            A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded. 3. Inconsistent
-                            validation.  Because the usages are different, the validation
-                            rules are different by usage, which makes it hard for
-                            users to predict what will happen. 4. The fields are both
-                            imprecise and overly precise.  Kind is not a precise mapping
-                            to a URL. This can produce ambiguity during interpretation
-                            and require a REST mapping.  In most cases, the dependency
-                            is on the group,resource tuple and the version of the
-                            actual struct is irrelevant. 5. We cannot easily change
-                            it.  Because this type is embedded in many locations,
-                            updates to this type will affect numerous schemas.  Don''t
-                            make new APIs embed an underspecified API type they do
-                            not control. Instead of using this type, create a locally
-                            provided and used type that is well-focused on your reference.
-                            For example, ServiceReferences for admission registration:
-                            https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
-                            .'
-                          properties:
-                            apiVersion:
-                              description: API version of the referent.
-                              type: string
-                            fieldPath:
-                              description: 'If referring to a piece of an object instead
-                                of an entire object, this string should contain a
-                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                                For example, if the object reference is to a container
-                                within a pod, this would take on a value like: "spec.containers{name}"
-                                (where "name" refers to the name of the container
-                                that triggered the event) or if no container name
-                                is specified "spec.containers[2]" (container with
-                                index 2 in this pod). This syntax is chosen only to
-                                have some well-defined way of referencing a part of
-                                an object. TODO: this design is not final and this
-                                field is subject to change in the future.'
-                              type: string
-                            kind:
-                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-                              type: string
-                            name:
-                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
-                              type: string
-                            namespace:
-                              description: 'Namespace of the referent. More info:
-                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
-                              type: string
-                            resourceVersion:
-                              description: 'Specific resourceVersion to which this
-                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
-                              type: string
-                            uid:
-                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
-                              type: string
-                          type: object
-                        type: array
-                      storageClassName:
-                        description: storageClassName is the name of the StorageClass
-                          Prometheus will use to claim storage.
-                        type: string
-                      storageQuantity:
-                        anyOf:
-                        - type: integer
-                        - type: string
-                        description: StorageQuantity indicates the amount of storage
-                          Prometheus will request from storageclass if defined. (40Gi
-                          for instance) If not defined and StorageClassName is defined,
-                          40Gi will be used.
-                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                        x-kubernetes-int-or-string: true
-                    type: object
                   syncMode:
                     default: OneTime
                     description: SyncMode specifies how features are synced in a matching
@@ -530,11 +214,8 @@ spec:
                       description: FeatureID is an indentifier of the feature whose
                         status is reported
                       enum:
-                      - Kyverno
                       - Resources
-                      - Prometheus
-                      - Gatekeeper
-                      - Contour
+                      - Helm
                       type: string
                     hash:
                       description: Hash represents of a unique value for a feature

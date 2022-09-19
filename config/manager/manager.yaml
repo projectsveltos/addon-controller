@@ -68,5 +68,11 @@ spec:
           requests:
             cpu: 500m
             memory: 128Mi
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp            
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - emptyDir: {}
+        name: tmp

@@ -25,9 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/go-logr/logr"
-	kyvernoapi "github.com/kyverno/kyverno/api/kyverno/v1"
-	opav1 "github.com/open-policy-agent/frameworks/constraint/pkg/apis/templates/v1"
-	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,173 +50,9 @@ const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
 	clusterFeatureNamePrefix  = "cluster-feature"
-
-	customResourceDefinitionCRD = "CustomResourceDefinition"
 )
 
 const (
-	addLabelPolicyStr = `apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: %s
-  annotations:
-    policies.kyverno.io/title: Add Labels
-    policies.kyverno.io/category: Sample
-    policies.kyverno.io/severity: medium
-    policies.kyverno.io/subject: Label
-    policies.kyverno.io/description: >-
-      Labels are used as an important source of metadata describing objects in various ways
-      or triggering other functionality. Labels are also a very basic concept and should be
-      used throughout Kubernetes. This policy performs a simple mutation which adds a label
-      foo=bar to Pods, Services, ConfigMaps, and Secrets.
-spec:
-  rules:
-  - name: add-labels
-    match:
-      resources:
-        annotations:
-          imageregistry: "https://hub.docker.com/"
-        kinds:
-        - Pod
-    mutate:
-      patchStrategicMerge:
-        metadata:
-          labels:
-            foo: bar`
-
-	allowLabelChangeStr = `apiVersion: kyverno.io/v1
-kind: ClusterPolicy
-metadata:
-  name: %s
-  annotations:
-    pod-policies.kyverno.io/autogen-controllers: none
-    policies.kyverno.io/title: Allowed Label Changes
-    policies.kyverno.io/category: Other
-    policies.kyverno.io/severity: medium
-    kyverno.io/kyverno-version: 1.6.0
-    policies.kyverno.io/minversion: 1.6.0
-    kyverno.io/kubernetes-version: "1.23"
-    policies.kyverno.io/subject: Pod,Label
-    policies.kyverno.io/description: >-
-      In some cases, operations teams need a type of limited access to
-      change resources during troubleshooting or outage mitigation.
-      This policy demonstrates how to prevent modification to labels
-      except one with the key breakglass. Changing, adding, or deleting
-      any other labels is denied.
-spec:
-  validationFailureAction: enforce
-  background: false
-  rules:
-  - name: safe-label
-    match:
-      any:
-      - resources:
-        kinds:
-        - Pod
-        - Deployment
-        - StatefulSet
-        - DaemonSet
-        - Job
-        - CronJob
-    preconditions:
-      all:
-      - key: "{{ request.operation }}"
-        operator: Equals
-        value: UPDATE
-    validate:
-      message: "The only label that may be removed or changed is breakglass."
-      deny:
-        conditions:
-          any:
-            - key: "{{ request.object.metadata.labels || '{}' |  merge(@, {breakglass:null}) }}"
-              operator: NotEquals
-              value: "{{ request.oldObject.metadata.labels || '{}' |  merge(@, {breakglass:null}) }}"`
-
-	checkSa = `apiVersion: kyverno.io/v1
-kind: Policy
-metadata:
-  name: %s
-  namespace: default
-  annotations:
-    policies.kyverno.io/title: Check ServiceAccount
-    policies.kyverno.io/category: Sample
-    policies.kyverno.io/subject: Pod,ServiceAccount
-    kyverno.io/kyverno-version: 1.5.2
-    kyverno.io/kubernetes-version: "1.21"
-    policies.kyverno.io/description: >-
-      ServiceAccounts with privileges to create Pods may be able to do so and name
-      a ServiceAccount other than the one used to create it. This policy checks the
-      Pod, if created by a ServiceAccount, and ensures the serviceAccountName field
-      matches the actual ServiceAccount.      
-spec:
-  validationFailureAction: audit
-  background: false
-  rules:
-    - name: check-sa
-      match:
-        resources:
-          kinds:
-          - Pod
-      preconditions:
-        all:
-        - key: "{{serviceAccountName}}"
-          operator: Equals
-          value: "*?"
-      validate:
-        message: "The ServiceAccount used to create this Pod is confined to using the same account when running the Pod."
-        pattern:
-          spec:
-            serviceAccountName: "{{serviceAccountName}}"`
-
-	serviceMonitorFrontend = `apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: %s
-  labels:
-    team: frontend
-spec:
-  selector:
-    matchLabels:
-      app: example-app
-  endpoints:
-  - port: web`
-
-	serviceMonitorKubeMtrics = `apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  labels:
-    app.kubernetes.io/component: exporter
-    app.kubernetes.io/name: kube-state-metrics
-    app.kubernetes.io/part-of: kube-prometheus
-    app.kubernetes.io/version: 2.5.0
-  name: %s
-  namespace: monitoring
-spec:
-  endpoints:
-  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-    honorLabels: true
-    interval: 30s
-    port: https-main
-    relabelings:
-    - action: labeldrop
-      regex: (pod|service|endpoint|namespace)
-    scheme: https
-    scrapeTimeout: 30s
-    tlsConfig:
-      insecureSkipVerify: true
-  - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-    interval: 30s
-    port: https-self
-    scheme: https
-    tlsConfig:
-      insecureSkipVerify: true
-  jobLabel: app.kubernetes.io/name
-  selector:
-    matchLabels:
-      app.kubernetes.io/component: exporter
-      app.kubernetes.io/name: kube-state-metrics
-      app.kubernetes.io/part-of: kube-prometheus`
-
 	viewClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -237,6 +70,31 @@ rules:
 - apiGroups: [""] # "" indicates the core API group
   resources: ["pods"]
   verbs: ["get", "watch", "list", "create", "delete", "update"]`
+
+	editClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: %s
+rules:
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clustersummaries/status
+  verbs:
+  - get
+`
 )
 
 var (
@@ -259,16 +117,7 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := clientgoscheme.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := kyvernoapi.AddToScheme(s); err != nil {
-		return nil, err
-	}
-	if err := opav1.AddToScheme(s); err != nil {
-		return nil, err
-	}
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
-		return nil, err
-	}
-	if err := monitoringv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := gatewayapi.AddToScheme(s); err != nil {
@@ -388,9 +237,9 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 	})
 
 	It("getUnstructured returns proper object", func() {
-		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(addLabelPolicyStr, randomString())))
+		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
-		Expect(policy.GetKind()).To(Equal("ClusterPolicy"))
+		Expect(policy.GetKind()).To(Equal("ClusterRole"))
 	})
 
 	It("getSecretData returns an error when cluster does not exist", func() {
@@ -502,9 +351,9 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 	})
 
 	It("addOwnerReference adds an OwnerReference to an object. removeOwnerReference removes it", func() {
-		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(addLabelPolicyStr, randomString())))
+		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
-		Expect(policy.GetKind()).To(Equal("ClusterPolicy"))
+		Expect(policy.GetKind()).To(Equal("ClusterRole"))
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 

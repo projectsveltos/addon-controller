@@ -687,29 +687,32 @@ func (r *ClusterFeatureReconciler) updateClusterConfigurationOwnerReferences(ctx
 func (r *ClusterFeatureReconciler) updateClusterConfigurationClusterFeatureResources(ctx context.Context,
 	clusterFeature *configv1alpha1.ClusterFeature, clusterConfiguration *configv1alpha1.ClusterConfiguration) error {
 
-	currentClusterConfiguration, err := getClusterConfiguration(ctx, r.Client,
-		clusterConfiguration.Namespace, clusterConfiguration.Name)
-	if err != nil {
-		return err
-	}
-
-	for i := range currentClusterConfiguration.Status.ClusterFeatureResources {
-		if currentClusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeature.Name {
-			return nil
-		}
-	}
-
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterConfiguration, err = getClusterConfiguration(ctx, r.Client,
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration, err := getClusterConfiguration(ctx, r.Client,
 			clusterConfiguration.Namespace, clusterConfiguration.Name)
 		if err != nil {
 			return err
 		}
 
-		currentClusterConfiguration.Status.ClusterFeatureResources = append(currentClusterConfiguration.Status.ClusterFeatureResources,
-			configv1alpha1.ClusterFeatureResource{ClusterFeatureName: clusterFeature.Name})
+		for i := range currentClusterConfiguration.Status.ClusterFeatureResources {
+			if currentClusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeature.Name {
+				return nil
+			}
+		}
 
-		return r.Status().Update(ctx, currentClusterConfiguration)
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			currentClusterConfiguration, err = getClusterConfiguration(ctx, r.Client,
+				clusterConfiguration.Namespace, clusterConfiguration.Name)
+			if err != nil {
+				return err
+			}
+
+			currentClusterConfiguration.Status.ClusterFeatureResources = append(currentClusterConfiguration.Status.ClusterFeatureResources,
+				configv1alpha1.ClusterFeatureResource{ClusterFeatureName: clusterFeature.Name})
+
+			return r.Status().Update(ctx, currentClusterConfiguration)
+		})
+		return err
 	})
 	return err
 }

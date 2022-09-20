@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -73,8 +74,17 @@ var _ = Describe("Feature", func() {
 
 		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
+		configMapNs := randomString()
+		Byf("Create configMap's namespace %s", configMapNs)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNs,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+
 		Byf("Create a configMap with a ClusterRole")
-		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), updateClusterRole)
+		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), updateClusterRole)
 
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 

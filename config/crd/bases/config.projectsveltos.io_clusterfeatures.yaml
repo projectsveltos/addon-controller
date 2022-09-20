@@ -76,6 +76,9 @@ spec:
                       description: RepositoryURL is the URL helm chart repository
                       minLength: 1
                       type: string
+                    values:
+                      description: Values holds the values for this Helm release.
+                      x-kubernetes-preserve-unknown-fields: true
                   required:
                   - chartName
                   - chartVersion
@@ -150,7 +153,7 @@ spec:
                   type: object
                 type: array
               syncMode:
-                default: OneTime
+                default: Continuous
                 description: SyncMode specifies how features are synced in a matching
                   workload cluster. - OneTime means, first time a workload cluster
                   matches the ClusterFeature, features will be deployed in such cluster.

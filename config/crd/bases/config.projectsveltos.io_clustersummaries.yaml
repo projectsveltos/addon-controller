@@ -80,6 +80,9 @@ spec:
                           description: RepositoryURL is the URL helm chart repository
                           minLength: 1
                           type: string
+                        values:
+                          description: Values holds the values for this Helm release.
+                          x-kubernetes-preserve-unknown-fields: true
                       required:
                       - chartName
                       - chartVersion
@@ -157,7 +160,7 @@ spec:
                       type: object
                     type: array
                   syncMode:
-                    default: OneTime
+                    default: Continuous
                     description: SyncMode specifies how features are synced in a matching
                       workload cluster. - OneTime means, first time a workload cluster
                       matches the ClusterFeature, features will be deployed in such
@@ -238,6 +241,38 @@ spec:
                       type: string
                   required:
                   - featureID
+                  - status
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              helmReleaseSummaries:
+                description: HelmReleaseSummaries reports the status of each helm
+                  chart directly managed by ClusterFeature.
+                items:
+                  properties:
+                    conflictMessage:
+                      description: Status indicates whether ClusterSummary can manage
+                        the helm chart or there is a conflict
+                      type: string
+                    releaseName:
+                      description: ReleaseName is the chart release
+                      minLength: 1
+                      type: string
+                    releaseNamespace:
+                      description: ReleaseNamespace is the namespace release will
+                        be installed
+                      minLength: 1
+                      type: string
+                    status:
+                      description: Status indicates whether ClusterSummary can manage
+                        the helm chart or there is a conflict
+                      enum:
+                      - Managing
+                      - Conflict
+                      type: string
+                  required:
+                  - releaseName
+                  - releaseNamespace
                   - status
                   type: object
                 type: array

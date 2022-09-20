@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
@@ -63,7 +64,7 @@ type ClusterSummaryReconciler struct {
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
-	Mux                  sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	PolicyMux            sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	ReferenceMap         map[string]*Set // key: Referenced object  name; value: set of all ClusterSummaries referencing the resource
 	// Refenced object name is: <kind>-<namespace>-<name> or <kind>-<name>
 	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of referenced resources
@@ -195,6 +196,10 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		}
 	}
 
+	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
+		return reconcile.Result{}, err
+	}
+
 	logger.Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
@@ -215,7 +220,16 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
-	r.updatesMaps(clusterSummaryScope)
+	if !r.shouldReconcile(clusterSummaryScope, logger) {
+		logger.Info("ClusterSummary does not need a reconciliation")
+		return reconcile.Result{}, nil
+	}
+
+	r.updatePolicyMaps(clusterSummaryScope, logger)
+
+	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -365,11 +379,36 @@ func (r *ClusterSummaryReconciler) undeployHelm(ctx context.Context, clusterSumm
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.ClusterSummaryScope) {
+func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, r.Client)
+	if err != nil {
+		return err
+	}
+
+	if !clusterSummaryScope.ClusterSummary.DeletionTimestamp.IsZero() {
+		logger.V(logs.LogDebug).Info("remove clustersummary with helm chart manager")
+		chartManager.RemoveAllRegistrations(clusterSummaryScope.ClusterSummary)
+	} else {
+		logger.V(logs.LogDebug).Info("register clustersummary with helm chart manager")
+		chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
+	}
+
+	return nil
+}
+
+func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeOneTime {
+		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
+		return
+	}
+
+	logger.V(logs.LogDebug).Info("update policy map")
 	currentReferences := r.getCurrentReferences(clusterSummaryScope)
 
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
 
 	// Get list of References not referenced anymore by ClusterSummary
 	var toBeRemoved []string
@@ -390,6 +429,33 @@ func (r *ClusterSummaryReconciler) updatesMaps(clusterSummaryScope *scope.Cluste
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
 	r.ClusterSummaryMap[clusterSummaryScope.Name()] = currentReferences
+}
+
+// shouldReconcile returns true if a reconciliation is needed.
+// When syncMode is set to one time, if features are marked as provisioned, no reconciliation is needed.
+func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeContinuous {
+		logger.V(logs.LogDebug).Info("Mode set to continuous. Reconciliation is needed.")
+		return true
+	}
+
+	if len(clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs) != 0 {
+		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureResources) {
+			logger.V(logs.LogDebug).Info("Mode set to one time. Resources not deployed yet. Reconciliation is needed.")
+			return true
+		}
+	}
+
+	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) != 0 {
+		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureHelm) {
+			logger.V(logs.LogDebug).Info("Mode set to one time. Helm Charts not deployed yet. Reconciliation is needed.")
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {

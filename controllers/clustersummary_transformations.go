@@ -47,8 +47,8 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForConfigMap(
 
 	logger.V(logs.LogDebug).Info("reacting to configMap change")
 
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
 
 	key := getEntryKey(ConfigMap, configMap.Namespace, configMap.Name)
 	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())

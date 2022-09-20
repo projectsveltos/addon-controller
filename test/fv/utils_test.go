@@ -254,7 +254,7 @@ func verifyClusterFeatureMatches(clusterFeature *configv1alpha1.ClusterFeature) 
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-// createConfigMapWithPolicy creates a configMap with passed in policies
+// createConfigMapWithPolicy creates a configMap with passed in policies.
 func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

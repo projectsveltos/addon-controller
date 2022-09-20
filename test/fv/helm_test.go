@@ -152,6 +152,45 @@ var _ = Describe("Helm", func() {
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
+		Byf("Changing ClusterFeature to not require nginx anymore")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    "https://kyverno.github.io/kyverno/",
+				RepositoryName:   "kyverno",
+				ChartName:        "kyverno/kyverno",
+				ChartVersion:     "v2.5.3",
+				ReleaseName:      "kyverno-latest",
+				ReleaseNamespace: "kyverno",
+				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+			},
+		}
+		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+
+		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+
+		Byf("Verifying Kyverno deployment is still present in the workload cluster")
+		Eventually(func() error {
+			depl := &appsv1.Deployment{}
+			return workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-latest"}, depl)
+		}, timeout, pollingInterval).Should(BeNil())
+
+		Byf("Verifying nginx deployment is removed from workload cluster")
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "nginx", Name: "nginx-latest-nginx-ingress"}, depl)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		charts = []configv1alpha1.Chart{
+			{ChartName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
+		}
+
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+
 		deleteClusterFeature(clusterFeature)
 
 		Byf("Verifying Kyverno deployment is removed from workload cluster")
@@ -159,14 +198,6 @@ var _ = Describe("Helm", func() {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-latest"}, depl)
-			return apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Byf("Verifying nginx deployment is removed from workload cluster")
-		Eventually(func() bool {
-			depl := &appsv1.Deployment{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "nginx", Name: "nginx-latest-nginx-ingress"}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

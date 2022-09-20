@@ -96,7 +96,7 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		Deployer:          dep,
 		ReferenceMap:      make(map[string]*controllers.Set),
 		ClusterSummaryMap: make(map[string]*controllers.Set),
-		Mux:               sync.Mutex{},
+		PolicyMux:         sync.Mutex{},
 	}
 }
 

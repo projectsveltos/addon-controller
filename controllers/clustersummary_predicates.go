@@ -68,6 +68,46 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 	}
 }
 
+// SecretPredicates predicates for Secrets. ClusterSummaryReconciler watches Secret events
+// and react to those by reconciling itself based on following predicates
+func SecretPredicates(logger logr.Logger) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newSecret := e.ObjectNew.(*corev1.Secret)
+			oldSecret := e.ObjectOld.(*corev1.Secret)
+			log := logger.WithValues("predicate", "updateEvent",
+				"secret", newSecret.Name,
+			)
+
+			if oldSecret == nil {
+				log.V(logs.LogVerbose).Info("Old Secret is nil. Reconcile ClusterSummaries.")
+				return true
+			}
+
+			if !reflect.DeepEqual(oldSecret.Data, newSecret.Data) {
+				log.V(logs.LogVerbose).Info(
+					"Secret Data changed. Will attempt to reconcile associated ClusterSummaries.",
+				)
+				return true
+			}
+
+			// otherwise, return false
+			log.V(logs.LogVerbose).Info(
+				"Secret did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")
+			return false
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			return CreateFuncTrue(e, logger)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return DeleteFuncTrue(e, logger)
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return GenericFuncFalse(e, logger)
+		},
+	}
+}
+
 var (
 	CreateFuncTrue = func(e event.CreateEvent, logger logr.Logger) bool {
 		log := logger.WithValues("predicate", "createEvent",

@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"unicode/utf8"
 
@@ -83,7 +84,7 @@ func waitForObject(ctx context.Context, c client.Client, obj client.Object) erro
 	return nil
 }
 
-// createConfigMapWithPolicy creates a configMap with Data containing base64 encoded policies
+// createConfigMapWithPolicy creates a configMap with Data policies
 func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -101,7 +102,28 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 		}
 	}
 
+	Expect(addTypeInformationToObject(scheme, cm)).To(Succeed())
+
 	return cm
+}
+
+// createSecretWithPolicy creates a Secret with Data containing base64 encoded policies
+func createSecretWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      configMapName,
+		},
+		Data: map[string][]byte{},
+	}
+	for i := range policyStrs {
+		key := fmt.Sprintf("policy%d.yaml", i)
+		secret.Data[key] = []byte(base64.StdEncoding.EncodeToString([]byte(policyStrs[i])))
+	}
+
+	Expect(addTypeInformationToObject(scheme, secret)).To(Succeed())
+
+	return secret
 }
 
 // updateConfigMapWithPolicy updates a configMap with passed in policies

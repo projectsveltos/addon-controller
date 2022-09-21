@@ -43,7 +43,6 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/storage/driver"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -294,7 +293,7 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	return h.Sum(nil), nil
 }
 
-func getHelmRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
+func getHelmRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
 	return nil
 }
 

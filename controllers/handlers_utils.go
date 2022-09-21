@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -68,8 +69,6 @@ func createNamespace(ctx context.Context, clusterClient client.Client, namespace
 }
 
 // deployContentOfConfigMap deploys policies contained in a ConfigMap.
-// ConfigMap.Data might have one or more keys. Each key might contain a single policy
-// or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
@@ -77,7 +76,44 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) ([]configv1alpha1.Resource, error) {
 
-	referencedPolicies, err := collectContentOfConfigMap(ctx, clusterSummary, configMap, logger)
+	l := logger.WithValues(string(configv1alpha1.ConfigMapReferencedResourceKind),
+		fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
+	return deployContent(ctx, remoteConfig, remoteClient, configMap, configMap.Data, clusterSummary, l)
+}
+
+// deployContentOfSecret deploys policies contained in a Secret.
+// Returns an error if one occurred. Otherwise it returns a slice containing the name of
+// the policies deployed in the form of kind.group:namespace:name for namespaced policies
+// and kind.group::name for cluster wide policies.
+func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+	secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) ([]configv1alpha1.Resource, error) {
+
+	l := logger.WithValues(string(configv1alpha1.SecretReferencedResourceKind),
+		fmt.Sprintf("%s/%s", secret.Namespace, secret.Name))
+	data := make(map[string]string)
+	var err error
+	for key, value := range secret.Data {
+		data[key], err = decode(value)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return deployContent(ctx, remoteConfig, remoteClient, secret, data, clusterSummary, l)
+}
+
+// deployContent deploys policies contained in a ConfigMap/Secret.
+// data might have one or more keys. Each key might contain a single policy
+// or multiple policies separated by '---'
+// Returns an error if one occurred. Otherwise it returns a slice containing the name of
+// the policies deployed in the form of kind.group:namespace:name for namespaced policies
+// and kind.group::name for cluster wide policies.
+func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) ([]configv1alpha1.Resource, error) {
+
+	referencedPolicies, err := collectContent(ctx, clusterSummary, data, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +121,9 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 	policies := make([]configv1alpha1.Resource, 0)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
-		addLabel(policy, ConfigLabelName, configMap.Name)
-		addLabel(policy, ConfigLabelNamespace, configMap.Namespace)
+		addLabel(policy, ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
+		addLabel(policy, ReferenceLabelName, referencedObject.GetName())
+		addLabel(policy, ReferenceLabelNamespace, referencedObject.GetNamespace())
 		name := getPolicyName(policy.GetName(), clusterSummary)
 		policy.SetName(name)
 
@@ -103,7 +140,8 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 		if err != nil {
 			return nil, err
 		}
-		err = preprareObjectForUpdate(ctx, dr, policy, configMap.Namespace, configMap.Name)
+		policy, err = preprareObjectForUpdate(ctx, dr, policy,
+			referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName())
 		if err != nil {
 			return nil, err
 		}
@@ -130,9 +168,9 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 			Group:           policy.GetObjectKind().GroupVersionKind().Group,
 			LastAppliedTime: &metav1.Time{Time: time.Now()},
 			Owner: corev1.ObjectReference{
-				Namespace: configMap.Namespace,
-				Name:      configMap.Name,
-				Kind:      configMap.Kind,
+				Namespace: referencedObject.GetNamespace(),
+				Name:      referencedObject.GetName(),
+				Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
 			},
 		})
 	}
@@ -140,22 +178,21 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 	return policies, nil
 }
 
-// collectContentOfConfigMap collect policies contained in a ConfigMap.
-// ConfigMap.Data might have one or more keys. Each key might contain a single policy
+// collectContent collect policies contained in a ConfigMap/Secret.
+// ConfigMap/Secret Data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
-func collectContentOfConfigMap(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	configMap *corev1.ConfigMap, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	data map[string]string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 
 	policies := make([]*unstructured.Unstructured, 0)
 
-	l := logger.WithValues("configMap", fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
-	for k := range configMap.Data {
-		elements := strings.Split(configMap.Data[k], separator)
+	for k := range data {
+		elements := strings.Split(data[k], separator)
 		for i := range elements {
 			policy, err := getUnstructured([]byte(elements[i]))
 			if err != nil {
-				l.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 				return nil, err
 			}
 
@@ -172,13 +209,13 @@ func collectContentOfConfigMap(ctx context.Context, clusterSummary *configv1alph
 
 				policy, err = getUnstructured([]byte(instance))
 				if err != nil {
-					l.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+					logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 					return nil, err
 				}
 			}
 
 			if policy == nil {
-				l.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 				return nil, fmt.Errorf("failed to get policy from Data %.100s", elements[i])
 			}
 
@@ -243,32 +280,43 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterSummaryNa
 	return clusterSummary, clusterClient, nil
 }
 
-// collectConfigMaps collects all referenced configMaps in control cluster
-func collectConfigMaps(ctx context.Context, controlClusterClient client.Client,
-	references []corev1.ObjectReference, logger logr.Logger) ([]corev1.ConfigMap, error) {
+// collectReferencedObjects collects all referenced configMaps/secrets in control cluster
+func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client,
+	references []configv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
 
-	configMaps := make([]corev1.ConfigMap, 0)
+	objects := make([]client.Object, 0)
 	for i := range references {
+		var err error
+		var object client.Object
 		reference := &references[i]
-		configMap := &corev1.ConfigMap{}
-		if err := controlClusterClient.Get(ctx,
-			types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configMap); err != nil {
+		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+			configMap := &corev1.ConfigMap{}
+			err = controlClusterClient.Get(ctx,
+				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configMap)
+			object = configMap
+		} else {
+			secret := &corev1.Secret{}
+			err = controlClusterClient.Get(ctx,
+				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
+			object = secret
+		}
+		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("configMap %s/%s does not exist yet",
-					reference.Namespace, reference.Name))
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
+					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}
 			return nil, err
 		}
-		configMaps = append(configMaps, *configMap)
+		objects = append(objects, object)
 	}
 
-	return configMaps, nil
+	return objects, nil
 }
 
-// deployConfigMaps deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
-func deployConfigMaps(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	featureID configv1alpha1.FeatureID, configMaps []corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
+// deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
+func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
+	featureID configv1alpha1.FeatureID, referencedObject []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) ([]configv1alpha1.Resource, error) {
 
 	deployed := make([]configv1alpha1.Resource, 0)
@@ -278,16 +326,23 @@ func deployConfigMaps(ctx context.Context, c client.Client, remoteConfig *rest.C
 		return nil, err
 	}
 
-	for i := range configMaps {
-		configMap := &configMaps[i]
-		l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
-		l.V(logs.LogDebug).Info("deploying ConfigMap content")
+	for i := range referencedObject {
 		var tmpDeployed []configv1alpha1.Resource
-		tmpDeployed, err = deployContentOfConfigMap(ctx, remoteConfig, remoteClient, configMap, clusterSummary, l)
+		if referencedObject[i].GetObjectKind().GroupVersionKind().Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+			configMap := referencedObject[i].(*corev1.ConfigMap)
+			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
+			l.V(logs.LogDebug).Info("deploying ConfigMap content")
+			tmpDeployed, err = deployContentOfConfigMap(ctx, remoteConfig, remoteClient, configMap, clusterSummary, l)
+		} else {
+			secret := referencedObject[i].(*corev1.Secret)
+			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
+			l.V(logs.LogDebug).Info("deploying Secret content")
+			tmpDeployed, err = deployContentOfSecret(ctx, remoteConfig, remoteClient, secret, clusterSummary, l)
+		}
+
 		if err != nil {
 			return nil, err
 		}
-
 		deployed = append(deployed, tmpDeployed...)
 	}
 
@@ -308,13 +363,15 @@ func deployConfigMaps(ctx context.Context, c client.Client, remoteConfig *rest.C
 func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clusterClient client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary,
 	deployedGVKs []schema.GroupVersionKind,
-	currentPolicies map[string]configv1alpha1.Resource) error {
+	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) error {
 
 	// Do not use due to metav1.Selector limitation
 	// labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{ClusterSummaryLabelName: clusterSummary.Name}}
 	// listOptions := metav1.ListOptions{
 	//	LabelSelector: labelSelector.String(),
 	// }
+
+	logger.V(logs.LogDebug).Info("removing stale resources")
 
 	dc := discovery.NewDiscoveryClientForConfigOrDie(clusterConfig)
 	groupResources, err := restmapper.GetAPIGroupResources(dc)
@@ -349,12 +406,14 @@ func undeployStaleResources(ctx context.Context, clusterConfig *rest.Config, clu
 
 		for j := range list.Items {
 			r := list.Items[j]
-			// Verify if this policy was deployed because of a clustersummary (ConfigLabelName
+			logger.V(logs.LogVerbose).Info("considering %s/%s", r.GetNamespace(), r.GetName())
+			// Verify if this policy was deployed because of a clustersummary (ReferenceLabelName
 			// is present as label in such a case).
-			if !hasLabel(&r, ConfigLabelName, "") {
+			if !hasLabel(&r, ReferenceLabelName, "") {
 				continue
 			}
 
+			logger.V(logs.LogVerbose).Info("remove owner reference %s/%s", r.GetNamespace(), r.GetName())
 			removeOwnerReference(&r, clusterSummary)
 
 			if len(r.GetOwnerReferences()) != 0 {
@@ -472,4 +531,13 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 	})
 
 	return err
+}
+
+func decode(encoded []byte) (string, error) {
+	decoded, err := base64.StdEncoding.DecodeString(string(encoded))
+	if err != nil {
+		return "", err
+	}
+
+	return string(decoded), nil
 }

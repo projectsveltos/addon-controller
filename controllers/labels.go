@@ -21,23 +21,28 @@ import (
 )
 
 const (
-	// clusterSummaryLabelName is added to each policy deployed by a ClusterSummary
+	// ClusterSummaryLabelName is added to each policy deployed by a ClusterSummary
 	// instance to a CAPI Cluster
 	ClusterSummaryLabelName = "projectsveltos.io/cluster-summary-name"
 
-	// clusterFeatureLabelName is added to all ClusterSummary instances created
+	// ClusterFeatureLabelName is added to all ClusterSummary instances created
 	// by a ClusterFeature instance
 	ClusterFeatureLabelName = "projectsveltos.io/cluster-feature-name"
 
-	// configLabelName is added to each policy deployed by a ClusterSummary
-	// instance to a CAPI Cluster. Indicates the name of the ConfigMap
+	// ReferenceLabelKind is added to each policy deployed by a ClusterSummary
+	// instance to a CAPI Cluster. Indicates the Kind (ConfigMap or Secret)
 	// containing the policy.
-	ConfigLabelName = "projectsveltos.io/config-map-name"
+	ReferenceLabelKind = "projectsveltos.io/reference-kind"
 
-	// configLabelNamespace is added to each policy deployed by a ClusterSummary
-	// instance to a CAPI Cluster. Indicates the namespace of the ConfigMap
+	// ReferenceLabelName is added to each policy deployed by a ClusterSummary
+	// instance to a CAPI Cluster. Indicates the name of the ConfigMap/Secret
 	// containing the policy.
-	ConfigLabelNamespace = "projectsveltos.io/config-map-namespace"
+	ReferenceLabelName = "projectsveltos.io/reference-name"
+
+	// ReferenceLabelNamespace is added to each policy deployed by a ClusterSummary
+	// instance to a CAPI Cluster. Indicates the namespace of the ConfigMap/Secret
+	// containing the policy.
+	ReferenceLabelNamespace = "projectsveltos.io/reference-namespace"
 
 	// clusterLabelNamespace is the label set on ClusterSummary instances created
 	// by a ClusterFeature instance for a given cluster

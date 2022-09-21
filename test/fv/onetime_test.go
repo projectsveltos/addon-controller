@@ -48,7 +48,7 @@ metadata:
 	env: prod`
 )
 
-var _ = Describe("SyncMode one time", Serial, func() {
+var _ = Describe("SyncMode one time", func() {
 	const (
 		namePrefix = "one-time"
 	)
@@ -73,8 +73,12 @@ var _ = Describe("SyncMode one time", Serial, func() {
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
-			{Kind: configMap.Kind, Namespace: configMap.Namespace, Name: configMap.Name},
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+			},
 		}
 		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
 
@@ -127,7 +131,7 @@ var _ = Describe("SyncMode one time", Serial, func() {
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		// Since SyncMode is OneTime ClusterFeature's changes are not propagated to already existing ClusterSummary.

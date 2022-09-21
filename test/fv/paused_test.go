@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -68,8 +67,12 @@ var _ = Describe("Feature", Serial, func() {
 		Byf("Update ClusterFeature %s to reference ConfigMap %s/%s", clusterFeature.Name, configMap.Namespace, configMap.Name)
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
-			{Kind: configMap.Kind, Namespace: configMap.Namespace, Name: configMap.Name},
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
@@ -101,15 +104,15 @@ var _ = Describe("Feature", Serial, func() {
 
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying proper role is removed in the workload cluster")
+		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {
-			currentClusterRole := &rbacv1.ClusterRole{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
+			currentNamespace := &corev1.Namespace{}
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

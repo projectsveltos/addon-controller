@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"unicode/utf8"
@@ -275,6 +276,23 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 	return cm
 }
 
+// createSecretWithPolicy creates a Secret with Data containing base64 encoded policies
+func createSecretWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      configMapName,
+		},
+		Data: map[string][]byte{},
+	}
+	for i := range policyStrs {
+		key := fmt.Sprintf("policy%d.yaml", i)
+		secret.Data[key] = []byte(base64.StdEncoding.EncodeToString([]byte(policyStrs[i])))
+	}
+
+	return secret
+}
+
 // updateConfigMapWithPolicy updates a configMap with passed in policies
 func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *corev1.ConfigMap {
 	for i := range policyStrs {
@@ -299,6 +317,7 @@ type policy struct {
 func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterName string,
 	featureID configv1alpha1.FeatureID, expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) {
 
+	Byf("Verifying ClusterConfiguration %s/%s", clusterNamespace, clusterName)
 	Eventually(func() bool {
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		err := k8sClient.Get(context.TODO(),

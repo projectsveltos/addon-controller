@@ -18,6 +18,8 @@ package fv_test
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -57,6 +59,19 @@ rules:
   resources: ["configmaps"]
   resourceNames: ["my-configmap"]
   verbs: ["*"]`
+
+	demoPod = `apiVersion: v1
+kind: Pod
+metadata:
+  name: %s
+  namespace: default
+  labels:
+    environment: production
+    app: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.14.2`
 )
 
 var _ = Describe("Feature", func() {
@@ -85,14 +100,34 @@ var _ = Describe("Feature", func() {
 
 		Byf("Create a configMap with a ClusterRole")
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), updateClusterRole)
-
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+		currentConfigMap := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+
+		podName := "demo" + randomString()
+		Byf("Create a secret with a Pod")
+		secret := createSecretWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(demoPod, podName))
+		Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
+		currentSecret := &corev1.Secret{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
 
 		Byf("Update ClusterFeature %s to reference ConfigMap %s/%s", clusterFeature.Name, configMap.Namespace, configMap.Name)
+		Byf("Update ClusterFeature %s to reference Secret %s/%s", clusterFeature.Name, secret.Namespace, secret.Name)
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
-			{Kind: configMap.Kind, Namespace: configMap.Namespace, Name: configMap.Name},
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+			},
+			{
+				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Namespace: secret.Namespace,
+				Name:      secret.Name,
+			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
@@ -109,17 +144,24 @@ var _ = Describe("Feature", func() {
 			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
 		}, timeout, pollingInterval).Should(BeNil())
 
+		Byf("Verifying proper Pod is created in the workload cluster")
+		Eventually(func() error {
+			currentPod := &corev1.Pod{}
+			return workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: podName}, currentPod)
+		}, timeout, pollingInterval).Should(BeNil())
+
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureResources, configv1alpha1.FeatureStatusProvisioned)
 
 		policies := []policy{
 			{kind: "ClusterRole", name: "configmap-updater", namespace: "", group: "rbac.authorization.k8s.io"},
+			{kind: "Pod", name: podName, namespace: "default", group: ""},
 		}
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		By("Updating ConfigMap to reference new ClusterRole")
-		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, allClusterRole)
@@ -141,21 +183,61 @@ var _ = Describe("Feature", func() {
 
 		policies = []policy{
 			{kind: "ClusterRole", name: "configmap-all", namespace: "", group: "rbac.authorization.k8s.io"},
+			{kind: "Pod", name: podName, namespace: "default", group: ""},
 		}
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
-		Byf("Changing clusterfeature to not reference configmap anymore")
+		By("Updating Secret to reference new Pod")
+		newPodName := "prod" + randomString()
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
+		currentSecret.Data["policy0.yaml"] = []byte(base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(demoPod, newPodName))))
+		Expect(k8sClient.Update(context.TODO(), currentSecret)).To(Succeed())
+
+		Byf("Verifying new Pod is deployed in the workload cluster")
+		Eventually(func() error {
+			currentPod := &corev1.Pod{}
+			return workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: newPodName}, currentPod)
+		}, timeout, pollingInterval).Should(BeNil())
+
+		Byf("Verifying old clusterrole is removed from the workload cluster")
+		Eventually(func() bool {
+			currentPod := &corev1.Pod{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: podName}, currentPod)
+			return err != nil &&
+				apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		policies = []policy{
+			{kind: "ClusterRole", name: "configmap-all", namespace: "", group: "rbac.authorization.k8s.io"},
+			{kind: "Pod", name: newPodName, namespace: "default", group: ""},
+		}
+		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+
+		Byf("Changing clusterfeature to not reference configmap/secret anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying proper role is removed in the workload cluster")
+		Byf("Verifying proper ClusterRole is removed in the workload cluster")
 		Eventually(func() bool {
 			currentClusterRole := &rbacv1.ClusterRole{}
 			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
+			return err != nil &&
+				apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying proper Pod is removed in the workload cluster")
+		Eventually(func() bool {
+			currentPod := &corev1.Pod{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: newPodName}, currentPod)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

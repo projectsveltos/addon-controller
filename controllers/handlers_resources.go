@@ -49,18 +49,20 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	logger = logger.WithValues("clustersummary", clusterSummary.Name)
+
 	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
 	refs := featureHandler.getRefs(clusterSummary)
 
-	var configMaps []corev1.ConfigMap
-	configMaps, err = collectConfigMaps(ctx, c, refs, logger)
+	var referencedObjects []client.Object
+	referencedObjects, err = collectReferencedObjects(ctx, c, refs, logger)
 	if err != nil {
 		return err
 	}
 
 	var deployed []configv1alpha1.Resource
-	deployed, err = deployConfigMaps(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
-		configMaps, clusterSummary, logger)
+	deployed, err = deployReferencedObjects(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
+		referencedObjects, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -71,7 +73,7 @@ func deployResources(ctx context.Context, c client.Client,
 	}
 
 	err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies)
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies, logger)
 	if err != nil {
 		return err
 	}
@@ -91,6 +93,8 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	logger = logger.WithValues("clustersummary", clusterSummary.Name)
+
 	clusterClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
@@ -102,7 +106,8 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	err = undeployStaleResources(ctx, clusterRestConfig, clusterClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), map[string]configv1alpha1.Resource{})
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
@@ -130,26 +135,36 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i]
-		configmap := &corev1.ConfigMap{}
-		err := c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
+		var err error
+		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+			configmap := &corev1.ConfigMap{}
+			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
+			if err == nil {
+				config += render.AsCode(configmap.Data)
+			}
+		} else {
+			secret := &corev1.Secret{}
+			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
+			if err == nil {
+				config += render.AsCode(secret.Data)
+			}
+		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.Info(fmt.Sprintf("configMap %s/%s does not exist yet",
-					reference.Namespace, reference.Name))
+				logger.Info(fmt.Sprintf("%s %s/%s does not exist yet",
+					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}
-			logger.Error(err, fmt.Sprintf("failed to get configMap %s/%s",
-				reference.Namespace, reference.Name))
+			logger.Error(err, fmt.Sprintf("failed to get %s %s/%s",
+				reference.Kind, reference.Namespace, reference.Name))
 			return nil, err
 		}
-
-		config += render.AsCode(configmap.Data)
 	}
 
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
 
-func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference {
+func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
 	return clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs
 }

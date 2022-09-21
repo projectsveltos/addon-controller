@@ -41,7 +41,7 @@ import (
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
-type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []corev1.ObjectReference
+type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef
 
 type feature struct {
 	id          configv1alpha1.FeatureID
@@ -372,20 +372,36 @@ func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *
 
 func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, featureID configv1alpha1.FeatureID,
-	references []corev1.ObjectReference, logger logr.Logger) error {
+	references []configv1alpha1.PolicyRef, logger logr.Logger) error {
 
-	// Collect  all referenced configMaps.
-	configMaps, err := collectConfigMaps(ctx, r.Client, references, logger)
+	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
+	// Collect  all referenced configMaps/secrets.
+	referencedObjects, err := collectReferencedObjects(ctx, r.Client, references, logger)
 	if err != nil {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps. Err: %v", err))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps/secrets. Err: %v", err))
 		return err
 	}
 
-	// Collect all policies present in each referenced configmap.
+	// Collect all policies present in each referenced object.
 	referencedPolicies := make([]*unstructured.Unstructured, 0)
-	for i := range configMaps {
-		cm := &configMaps[i]
-		policies, err := collectContentOfConfigMap(ctx, clusterSummaryScope.ClusterSummary, cm, logger)
+	for i := range referencedObjects {
+		var data map[string]string
+
+		kind := referencedObjects[i].GetObjectKind().GroupVersionKind().Kind
+		if kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+			cm := referencedObjects[i].(*corev1.ConfigMap)
+			data = cm.Data
+		} else {
+			secret := referencedObjects[i].(*corev1.Secret)
+			data = make(map[string]string)
+			for key, value := range secret.Data {
+				data[key], err = decode(value)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		policies, err := collectContent(ctx, clusterSummaryScope.ClusterSummary, data, logger)
 		if err != nil {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect content of configMap. Err: %v", err))
 			return err

@@ -34,6 +34,32 @@ const (
 
 type Selector string
 
+// ReferencedResourceKind is a string representation of allowed kind of resources
+// that can be referenced in a ClusterFeature
+type ReferencedResourceKind string
+
+// Define the ReferencedResourceKind constants.
+const (
+	SecretReferencedResourceKind    ReferencedResourceKind = "Secret"
+	ConfigMapReferencedResourceKind ReferencedResourceKind = "ConfigMap"
+)
+
+// PolicyRef specifies a resource containing one or more policy
+// to deploy in matching CAPI Clusters.
+type PolicyRef struct {
+	// Namespace of the referenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Namespace string `json:"namespace"`
+
+	// Name of the rreferenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the resource. Supported kinds are: Secrets and ConfigMaps.
+	// +kubebuilder:validation:Enum=Secret;ConfigMap
+	Kind string `json:"kind"`
+}
+
 // SyncMode specifies how features are synced in a workload cluster.
 //+kubebuilder:validation:Enum:=OneTime;Continuous
 type SyncMode string
@@ -112,7 +138,7 @@ type ClusterFeatureSpec struct {
 	// PolicyRefs references all the ConfigMaps containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional
-	PolicyRefs []corev1.ObjectReference `json:"policyRefs,omitempty"`
+	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
 
 	// Helm charts
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`

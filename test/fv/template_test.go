@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -68,8 +67,12 @@ var _ = Describe("Template", func() {
 		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMap.Namespace, Name: configMap.Name},
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+			},
 		}
 
 		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
@@ -104,15 +107,16 @@ var _ = Describe("Template", func() {
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{}
+		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
 
 		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying proper role is removed in the workload cluster")
+		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {
-			currentClusterRole := &rbacv1.ClusterRole{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "configmap-updater"}, currentClusterRole)
+			cm := &corev1.ConfigMap{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: "template"}, cm)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

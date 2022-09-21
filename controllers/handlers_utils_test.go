@@ -191,7 +191,25 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
 	})
 
-	It("deployContentOfConfigMap deploys all policies contained in a ConfigMap", func() {
+	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {
+		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
+		depl := fmt.Sprintf(deplTemplate, namespace)
+
+		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
+
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+
+		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
+
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		policies, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client,
+			secret, clusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(policies)).To(Equal(3))
+	})
+
+	It("deployContentOfConfigMap deploys all policies contained in a Secret", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)
 
@@ -218,9 +236,9 @@ var _ = Describe("HandlersUtils", func() {
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMapNs, Name: configMap1.Name},
-			{Namespace: configMapNs, Name: configMap2.Name},
+		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -238,8 +256,9 @@ var _ = Describe("HandlersUtils", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterRoleName1,
 				Labels: map[string]string{
-					controllers.ConfigLabelNamespace: configMap1.Namespace,
-					controllers.ConfigLabelName:      configMap1.Name,
+					controllers.ReferenceLabelKind:      configMap1.Kind,
+					controllers.ReferenceLabelNamespace: configMap1.Namespace,
+					controllers.ReferenceLabelName:      configMap1.Name,
 				},
 			},
 		}
@@ -250,8 +269,9 @@ var _ = Describe("HandlersUtils", func() {
 				Name:      clusterRoleName2,
 				Namespace: "default",
 				Labels: map[string]string{
-					controllers.ConfigLabelNamespace: configMap2.Namespace,
-					controllers.ConfigLabelName:      configMap2.Name,
+					controllers.ReferenceLabelKind:      configMap2.Kind,
+					controllers.ReferenceLabelNamespace: configMap2.Namespace,
+					controllers.ReferenceLabelName:      configMap2.Name,
 				},
 			},
 		}
@@ -298,7 +318,7 @@ var _ = Describe("HandlersUtils", func() {
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
 		err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
-			deployedGKVs, currentClusterRoles)
+			deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Consistently loop so testEnv Cache is synced
@@ -322,7 +342,7 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
 		err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
-			deployedGKVs, currentClusterRoles)
+			deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced

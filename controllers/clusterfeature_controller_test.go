@@ -409,9 +409,11 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterName:      matchingCluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					SyncMode: configv1alpha1.SyncModeOneTime,
-					PolicyRefs: []corev1.ObjectReference{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
-							Name: "c-" + randomString(),
+							Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+							Namespace: "c-" + randomString(),
+							Name:      "c-" + randomString(),
 						},
 					},
 				},
@@ -420,12 +422,16 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
-				Name: "b-" + randomString(),
+				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Namespace: "b-" + randomString(),
+				Name:      "b-" + randomString(),
 			},
 			{
-				Name: "d-" + randomString(),
+				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Namespace: "d-" + randomString(),
+				Name:      "d-" + randomString(),
 			},
 		}
 
@@ -468,12 +474,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 	It("UpdateClusterSummary does not update ClusterSummary when ClusterFeature syncmode set to one time", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "c-" + randomString(),
 				Name:      "d-" + randomString(),
 			},
@@ -500,8 +508,9 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
@@ -541,12 +550,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 	It("DeleteClusterSummary removes ClusterSummary for non-matching cluster", func() {
 		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "c-" + randomString(),
 				Name:      "d-" + randomString(),
 			},
@@ -719,8 +730,9 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				Name:      matchingCluster.Name,
 			},
 		}
-		clusterFeature.Spec.PolicyRefs = []corev1.ObjectReference{
+		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "x-" + randomString(),
 				Name:      "y-" + randomString(),
 			},
@@ -737,9 +749,11 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				ClusterName:      matchingCluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
 					SyncMode: configv1alpha1.SyncModeContinuous,
-					PolicyRefs: []corev1.ObjectReference{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
-							Name: "c-" + randomString(),
+							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Namespace: "c-" + randomString(),
+							Name:      "c-" + randomString(),
 						},
 					},
 				},

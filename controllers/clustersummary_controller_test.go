@@ -146,8 +146,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioning},
@@ -223,8 +223,8 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
@@ -402,8 +402,12 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					PolicyRefs: []corev1.ObjectReference{
-						{Namespace: configMap.Namespace, Name: configMap.Name},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: configMap.Namespace,
+							Name:      configMap.Name,
+							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+						},
 					},
 					SyncMode: configv1alpha1.SyncModeContinuous,
 				},
@@ -418,8 +422,12 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					PolicyRefs: []corev1.ObjectReference{
-						{Namespace: configMap.Namespace, Name: configMap.Name + randomString()},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: configMap.Namespace,
+							Name:      configMap.Name + randomString(),
+							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+						},
 					},
 					SyncMode: configv1alpha1.SyncModeContinuous,
 				},
@@ -452,9 +460,17 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
+		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
-		referencingClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: namespace, Name: configMap.Name},
+
+		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
+			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
+		referencingClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: namespace,
+				Name:      configMap.Name,
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
@@ -470,14 +486,18 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
+		// Reconcile so it is tracked that referencingClusterSummary is referencing configMap
+		By(fmt.Sprintf("Reconciling ClusterSummary %s", clusterSummaryName))
 		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterSummaryName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
 		// Eventual loop so testEnv Cache is synced
+		By(fmt.Sprintf("Verifying that a change in ConfigMap %s/%s causes ClusterSummary %s reconciliation",
+			configMap.Namespace, configMap.Name, referencingClusterSummary.Name))
 		Eventually(func() bool {
-			clusterSummaryList := controllers.RequeueClusterSummaryForConfigMap(clusterSummaryReconciler, configMap)
+			clusterSummaryList := controllers.RequeueClusterSummaryForReference(clusterSummaryReconciler, configMap)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
 			for i := range clusterSummaryList {
 				if clusterSummaryList[i] == result {

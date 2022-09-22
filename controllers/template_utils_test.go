@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -286,11 +287,15 @@ var _ = Describe("Template Utils", func() {
 
 		By("Instantiate a policy that requires a string as substitution value")
 		By("Using a policy template  cidr:  \"{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}\"")
-		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
-			clusterSummary, installation, klogr.New())
-		Expect(err).To(BeNil())
-		Expect(policy).ToNot(ContainSubstring("{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}"))
-		Expect(policy).To(ContainSubstring(podCird))
+		Eventually(func() bool {
+			policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
+				clusterSummary, installation, klogr.New())
+			if err != nil {
+				return false
+			}
+			return !strings.Contains(policy, "{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}") &&
+				strings.Contains(policy, podCird)
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("InstantiateTemplate instantiates a policy template (map field)", func() {
@@ -315,10 +320,10 @@ var _ = Describe("Template Utils", func() {
 				Name: cluster.Name,
 			},
 			Spec: configv1alpha1.ClusterFeatureSpec{
-				PolicyRefs: []corev1.ObjectReference{
-					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
-					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
-					{Kind: "ConfigMap", Name: randomString(), Namespace: randomString()},
+				PolicyRefs: []configv1alpha1.PolicyRef{
+					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
+					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
+					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
 				},
 			},
 		}

@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/gdexlab/go-render/render"
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -94,8 +93,8 @@ var _ = Describe("HandlersResource", func() {
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMap.Namespace, Name: configMap.Name},
+		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -129,8 +128,9 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ConfigLabelName:      randomString(),
-					controllers.ConfigLabelNamespace: randomString(),
+					controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+					controllers.ReferenceLabelName:      randomString(),
+					controllers.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}
@@ -146,8 +146,9 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					controllers.ConfigLabelName:      randomString(),
-					controllers.ConfigLabelNamespace: randomString(),
+					controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+					controllers.ReferenceLabelName:      randomString(),
+					controllers.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}
@@ -245,10 +246,10 @@ var _ = Describe("Hash methods", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					PolicyRefs: []corev1.ObjectReference{
-						{Namespace: configMap1.Namespace, Name: configMap1.Name},
-						{Namespace: configMap2.Namespace, Name: configMap2.Name},
-						{Namespace: randomString(), Name: randomString()},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+						{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 					},
 				},
 			},

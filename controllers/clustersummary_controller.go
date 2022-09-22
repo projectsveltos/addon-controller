@@ -70,19 +70,19 @@ type ClusterSummaryReconciler struct {
 	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of referenced resources
 
 	// Reason for the two maps:
-	// ClusterSummary references ConfigMaps containing policies to be deployed in a CAPI Cluster.
-	// When a ConfigMap changes, all the ClusterSummaries referencing it need to be reconciled.
-	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps. When a ConfigMap spec changes,
+	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a CAPI Cluster.
+	// When a ConfigMap/Secret changes, all the ClusterSummaries referencing it need to be reconciled.
+	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps/Secrets. When a ConfigMap/Secret spec changes,
 	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
-	// (given a ConfigMap, return all the ClusterSummary referencing such ConfigMap).
+	// (given a ConfigMap/Secret, return all the ClusterSummary referencing such ConfigMap/Secret).
 	// In the MapFunc, if the list ClusterSummaries operation failed, we would be unable to retry or re-enqueue the ClusterSummaries
 	// referencing the ConfigMap that changed.
 	// Instead the approach taken is following:
 	// - when a ClusterSummary is reconciled, update the ReferenceMap;
-	// - in the MapFunc, given the ConfigMap that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
+	// - in the MapFunc, given the ConfigMap/Secret that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
 	// using the ReferenceMap);
-	// - if a ClusterSummary is referencing a ConfigMap but its reconciliation is still queued, when ConfigMap changes, ReferenceMap
-	// won't have such ClusterSummary. This is not a problem as ClusterSummary reconciliation is already queued and will happen.
+	// - if a ClusterSummary is referencing a ConfigMap/Secret but its reconciliation is still queued, when ConfigMap/Secret changes,
+	// ReferenceMap won't have such ClusterSummary. This is not a problem as ClusterSummary reconciliation is already queued and will happen.
 	//
 	// The ClusterSummaryMap is used to update ReferenceMap. Consider following scenarios to understand the need:
 	// 1. ClusterSummary A references ConfigMaps 1 and 2. When reconciled, ReferenceMap will have 1 => A and 2 => A;
@@ -272,9 +272,18 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	return c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForConfigMap),
+	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
 		ConfigMapPredicates(klogr.New().WithValues("predicate", "configmappredicate")),
+	); err != nil {
+		return err
+	}
+
+	// When Secret changes, according to SecretPredicates,
+	// one or more ClusterSummaries need to be reconciled.
+	return c.Watch(&source.Kind{Type: &corev1.Secret{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
+		SecretPredicates(klogr.New().WithValues("predicate", "secretpredicate")),
 	)
 }
 
@@ -461,9 +470,10 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
 	currentReferences := &Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
-		cmNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
-		cmName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
-		currentReferences.insert(getEntryKey(ConfigMap, cmNamespace, cmName))
+		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
+		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
+		currentReferences.insert(getEntryKey(clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Kind,
+			referencedNamespace, referencedName))
 	}
 	return currentReferences
 }

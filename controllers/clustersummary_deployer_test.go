@@ -9,7 +9,6 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/klogr"
@@ -199,8 +198,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy("default", randomString(), render.AsCode(clusterRole))
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMap.Namespace, Name: configMap.Name},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -248,8 +251,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMap.Namespace, Name: configMap.Name},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -276,8 +283,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		// Change clusterRole so the configuration that now needs to be deployed does not match the hash in ClusterSummary Status anymore
 		updateConfigMapWithPolicy(configMap, fmt.Sprintf(modifyClusterRole, clusterRoleName))
-		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
-		configMap = createConfigMapWithPolicy(configMap.Namespace, configMap.Name, fmt.Sprintf(modifyClusterRole, randomString()))
 		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
@@ -310,8 +315,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		configMap := createConfigMapWithPolicy(namespace, render.AsCode(clusterRole))
 
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMap.Namespace, Name: configMap.Name},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: configMap.Namespace,
+				Name:      configMap.Name,
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -380,8 +389,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -412,8 +425,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
@@ -442,8 +455,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeatures returns an error if deploying is in progress", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
@@ -476,9 +489,9 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: configMapNs, Name: configMap1.Name},
-			{Namespace: configMapNs, Name: configMap2.Name},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
@@ -507,8 +520,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString()},
+		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()

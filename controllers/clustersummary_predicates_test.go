@@ -17,6 +17,7 @@ limitations under the License.
 package controllers_test
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -103,6 +104,81 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		}
 
 		result := configMapPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+})
+
+var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
+	var logger logr.Logger
+	var secret *corev1.Secret
+
+	BeforeEach(func() {
+		logger = klogr.New()
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+	})
+
+	It("Create returns true", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		e := event.CreateEvent{
+			Object: secret,
+		}
+
+		result := secretPredicate.Create(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Delete returns true", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		e := event.DeleteEvent{
+			Object: secret,
+		}
+
+		result := secretPredicate.Delete(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns true when data has changed", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+		str := base64.StdEncoding.EncodeToString([]byte("password"))
+		secret.Data = map[string][]byte{"change": []byte(str)}
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: secret.Name,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns false when Data has not changed", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   secret.Name,
+				Labels: map[string]string{"env": "testing"},
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
 })

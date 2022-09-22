@@ -33,29 +33,40 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
-func (r *ClusterSummaryReconciler) requeueClusterSummaryForConfigMap(
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	o client.Object,
 ) []reconcile.Request {
 
-	configMap := o.(*corev1.ConfigMap)
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForConfigMap",
-		"configMap",
-		configMap.Name,
+		"reference",
+		o.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to configMap change")
+	logger.V(logs.LogDebug).Info("reacting to configMap/secret change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
 
-	key := getEntryKey(ConfigMap, configMap.Namespace, configMap.Name)
+	// Following is needed as o.GetObjectKind().GroupVersionKind().Kind is not set
+	var key string
+	switch o.(type) {
+	case *corev1.ConfigMap:
+		key = getEntryKey(string(configv1alpha1.ConfigMapReferencedResourceKind), o.GetNamespace(), o.GetName())
+	case *corev1.Secret:
+		key = getEntryKey(string(configv1alpha1.SecretReferencedResourceKind), o.GetNamespace(), o.GetName())
+	default:
+		key = getEntryKey(o.GetObjectKind().GroupVersionKind().Kind, o.GetNamespace(), o.GetName())
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("referenced key: %s", key))
+
 	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())
 
 	consumers := r.getReferenceMapForEntry(key).items()
-
 	for i := range consumers {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeue consumer: %s", consumers[i]))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i],

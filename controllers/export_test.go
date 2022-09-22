@@ -48,7 +48,7 @@ var (
 	ShouldReconcile                = (*ClusterSummaryReconciler).shouldReconcile
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
-	RequeueClusterSummaryForConfigMap = (*ClusterSummaryReconciler).requeueClusterSummaryForConfigMap
+	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
 	RequeueClusterSummaryForCluster   = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
 )
 
@@ -65,6 +65,7 @@ var (
 	CreateNamespace              = createNamespace
 	GetEntryKey                  = getEntryKey
 	DeployContentOfConfigMap     = deployContentOfConfigMap
+	DeployContentOfSecret        = deployContentOfSecret
 	GetPolicyName                = getPolicyName
 	GetPolicyInfo                = getPolicyInfo
 	UndeployStaleResources       = undeployStaleResources

@@ -53,19 +53,6 @@ const (
 	kubeconfigSecretNamePostfix = "-kubeconfig"
 )
 
-type ReferencedKinds int64
-
-const (
-	ConfigMap ReferencedKinds = iota
-)
-
-func (s ReferencedKinds) String() string {
-	if s == ConfigMap {
-		return "configmap"
-	}
-	return "unknown"
-}
-
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
@@ -315,48 +302,63 @@ func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstr
 }
 
 // preprareObjectForUpdate finds if object currently exists. If object exists:
-// - verifies this object was created by same ConfigMap. Returns an error otherwise.
+// - verifies this object was created by same ConfigMap/Secret. Returns an error otherwise.
 // This is needed to prevent misconfigurations. An example would be when different
 // ConfigMaps are referenced by ClusterFeature(s) and contain same policy namespace/name
 // (content might be different) and are about to be deployed in the same CAPI Cluster;
 // - gets ResourceVersion and set for object, so that object can be applied overridding
 // any content but status
 func preprareObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
-	object *unstructured.Unstructured, configMapNamespace, configMapName string) error {
+	object *unstructured.Unstructured, referenceKind, referenceNamespace, referenceName string) (*unstructured.Unstructured, error) {
 
 	if object == nil {
-		return fmt.Errorf("object is nil")
+		return nil, fmt.Errorf("object is nil")
 	}
 
 	currentObject, err := dr.Get(ctx, object.GetName(), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil
+			return object, nil
 		}
-		return err
+		return nil, err
 	}
 
 	if labels := object.GetLabels(); labels != nil {
-		namespace, namespaceOk := labels[ConfigLabelNamespace]
-		name, nameOk := labels[ConfigLabelName]
+		kind, kindOk := labels[ReferenceLabelKind]
+		namespace, namespaceOk := labels[ReferenceLabelNamespace]
+		name, nameOk := labels[ReferenceLabelName]
 
+		if kindOk {
+			if kind != referenceKind {
+				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
+					object.GetKind(), object.GetName(), kind, namespace, name)
+			}
+		}
 		if namespaceOk {
-			if namespace != configMapNamespace {
-				return fmt.Errorf("policy (kind: %s) %s is currently deployed by ConfigMap: %s/%s",
-					object.GetKind(), object.GetName(), namespace, name)
+			if namespace != referenceNamespace {
+				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
+					object.GetKind(), object.GetName(), kind, namespace, name)
 			}
 		}
 		if nameOk {
-			if name != configMapName {
-				return fmt.Errorf("policy (kind: %s) %s is currently deployed by ConfigMap: %s/%s",
-					object.GetKind(), object.GetName(), namespace, name)
+			if name != referenceName {
+				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
+					object.GetKind(), object.GetName(), kind, namespace, name)
 			}
 		}
 	}
 
-	object.SetResourceVersion(currentObject.GetResourceVersion())
+	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil
+	forceConflict := true
+	options := metav1.PatchOptions{
+		FieldManager: "application/apply-patch",
+		Force:        &forceConflict,
+	}
+	return dr.Patch(ctx, currentObject.GetName(), types.ApplyPatchType, data, options)
 }
 
 // addOwnerReference adds clusterSummary as an object's OwnerReference.
@@ -416,9 +418,9 @@ func removeOwnerReference(object *unstructured.Unstructured, clusterSummary *con
 	object.SetOwnerReferences(onwerReferences)
 }
 
-func getEntryKey(resourceKind ReferencedKinds, resourceNamespace, resourceName string) string {
+func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	if resourceNamespace != "" {
-		return fmt.Sprintf("%s-%s-%s", resourceKind.String(), resourceNamespace, resourceName)
+		return fmt.Sprintf("%s-%s-%s", resourceKind, resourceNamespace, resourceName)
 	}
-	return fmt.Sprintf("%s-%s", resourceKind.String(), resourceName)
+	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
 }

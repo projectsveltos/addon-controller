@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.1.3
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb
 	k8s.io/client-go v0.24.2
-	sigs.k8s.io/cluster-api v1.2.1
+	sigs.k8s.io/cluster-api v1.2.2
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20211110210527-619e6b92dab9
 	sigs.k8s.io/controller-tools v0.8.0
 	sigs.k8s.io/kind v0.14.0

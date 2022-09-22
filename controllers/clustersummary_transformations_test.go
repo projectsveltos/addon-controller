@@ -40,13 +40,15 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		namespace = "map-function" + randomString()
 	})
 
-	It("RequeueClusterSummaryForConfigMap returns matching ClusterSummary", func() {
+	It("RequeueClusterSummaryForReference returns matching ClusterSummary", func() {
 		configMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
 		}
+
+		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -56,8 +58,12 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					PolicyRefs: []corev1.ObjectReference{
-						{Namespace: configMap.Namespace, Name: configMap.Name},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: configMap.Namespace,
+							Name:      configMap.Name,
+							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+						},
 					},
 				},
 			},
@@ -71,8 +77,12 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					PolicyRefs: []corev1.ObjectReference{
-						{Namespace: configMap.Namespace, Name: randomString()},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: configMap.Namespace,
+							Name:      randomString(),
+							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+						},
 					},
 				},
 			},
@@ -96,17 +106,17 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 
 		set := controllers.Set{}
 		controllers.Insert(&set, clusterSummary0.Name)
-		key := controllers.GetEntryKey(controllers.ConfigMap, configMap.Namespace, configMap.Name)
+		key := controllers.GetEntryKey(string(configv1alpha1.ConfigMapReferencedResourceKind), configMap.Namespace, configMap.Name)
 		reconciler.ReferenceMap[key] = &set
 
-		requests := controllers.RequeueClusterSummaryForConfigMap(reconciler, configMap)
+		requests := controllers.RequeueClusterSummaryForReference(reconciler, configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
 		controllers.Insert(&set, clusterSummary1.Name)
 		reconciler.ReferenceMap[key] = &set
 
-		requests = controllers.RequeueClusterSummaryForConfigMap(reconciler, configMap)
+		requests = controllers.RequeueClusterSummaryForReference(reconciler, configMap)
 		Expect(requests).To(HaveLen(2))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary0.Name}}))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary1.Name}}))

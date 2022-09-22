@@ -20,7 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	// nolint: gosec // CAPI secret postfix
+	//nolint: gosec // CAPI secret postfix
 	kubeconfigSecretNamePostfix = "-kubeconfig"
 )
 
@@ -239,10 +239,10 @@ func getSecretData(ctx context.Context, logger logr.Logger, c client.Client,
 
 // createKubeconfig creates a temporary file with the Kubeconfig to access CAPI cluster
 func createKubeconfig(logger logr.Logger, kubeconfigContent []byte) (string, error) {
-	tmpfile, err := ioutil.TempFile("", "kubeconfig")
+	tmpfile, err := os.CreateTemp("", "kubeconfig")
 	if err != nil {
 		logger.Error(err, "failed to create temporary file")
-		return "", errors.Wrap(err, "ioutil.TempFile")
+		return "", errors.Wrap(err, "os.CreateTemp")
 	}
 	defer tmpfile.Close()
 

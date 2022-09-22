@@ -61,7 +61,7 @@ type PolicyRef struct {
 }
 
 // SyncMode specifies how features are synced in a workload cluster.
-//+kubebuilder:validation:Enum:=OneTime;Continuous
+// +kubebuilder:validation:Enum:=OneTime;Continuous
 type SyncMode string
 
 const (
@@ -73,7 +73,7 @@ const (
 )
 
 // HelmChartAction specifies action on an helm chart
-//+kubebuilder:validation:Enum:=Install;Uninstall
+// +kubebuilder:validation:Enum:=Install;Uninstall
 type HelmChartAction string
 
 const (
@@ -173,7 +173,6 @@ type ClusterFeatureList struct {
 	Items           []ClusterFeature `json:"items"`
 }
 
-// nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterFeature{}, &ClusterFeatureList{})
 }

@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.24.1
+KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.25.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -110,8 +110,11 @@ $(KUBECTL):
 	chmod +x $@
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTEST) $(GOIMPORTS) $(GINKGO) \
-	$(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
+tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTEST) $(GOIMPORTS) $(GINKGO) $(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
+
+.PHONY: clean
+clean: ## Remove all built tools
+	rm -rf $(TOOLS_BIN_DIR)/*
 
 ##@ Development
 
@@ -147,7 +150,7 @@ endif
 # K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
 # this default value is used
 ifndef K8S_VERSION
-K8S_VERSION := v1.24.2
+K8S_VERSION := v1.25.2
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
@@ -191,7 +194,7 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
 
 	@echo "install calico on workload cluster"
-	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://docs.projectcalico.org/v3.21/manifests/calico.yaml
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.24.1/manifests/calico.yaml
 
 	@echo wait for calico pod
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
@@ -208,9 +211,9 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 # Please wait one hour or get a personal API token and assign it to the GITHUB_TOKEN environment variable
 #
 # add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
-# It requires control cluster to exist
+# It requires control cluster to exist. So first "make create-control-cluster" then run this target.
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
-	KUBERNETES_VERSION=v1.24.2 SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
+	KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
   		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
 

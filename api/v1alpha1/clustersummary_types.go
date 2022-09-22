@@ -101,7 +101,7 @@ type FeatureSummary struct {
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing
 // an helm chart or not
-//+kubebuilder:validation:Enum:=Managing;Conflict
+// +kubebuilder:validation:Enum:=Managing;Conflict
 type HelChartStatus string
 
 const (
@@ -183,7 +183,6 @@ type ClusterSummaryList struct {
 	Items           []ClusterSummary `json:"items"`
 }
 
-// nolint: gochecknoinits // forced pattern, can't workaround
 func init() {
 	SchemeBuilder.Register(&ClusterSummary{}, &ClusterSummaryList{})
 }

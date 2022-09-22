@@ -14,8 +14,8 @@ limitations under the License.
 package external
 
 import (
-	"strings"
-
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
@@ -39,7 +39,7 @@ func generateTestMachineAPICRD(kind, pluralKind string) *apiextensionsv1.CustomR
 			Group: clusterAPIGroup,
 			Scope: apiextensionsv1.NamespaceScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:   strings.Title(kind),
+				Kind:   cases.Title(language.English).String(kind),
 				Plural: pluralKind,
 			},
 			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{

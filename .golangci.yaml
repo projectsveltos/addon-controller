@@ -116,7 +116,6 @@ linters:
     - bidichk
     - containedctx
     - bodyclose
-    - deadcode
     - depguard
     - dogsled
     - dupl
@@ -128,7 +127,6 @@ linters:
     - exportloopref
     - forbidigo
     - funlen
-    - gochecknoinits
     - goconst
     - gocritic
     - gocyclo
@@ -141,7 +139,6 @@ linters:
     - gosimple
     - govet
     - grouper
-    - ifshort
     - ineffassign
     - lll
     - misspell
@@ -152,16 +149,11 @@ linters:
     - nosprintfhostport
     - predeclared
     - revive
-    - rowserrcheck
-    - sqlclosecheck
     - staticcheck
-    - structcheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
-    - wastedassign
     - whitespace
 
   # don't enable:

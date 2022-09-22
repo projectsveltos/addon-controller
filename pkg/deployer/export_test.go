@@ -17,8 +17,10 @@ limitations under the License.
 package deployer
 
 var (
-	GetFromKey      = getFromKey
-	RemoveFromSlice = removeFromSlice
+	GetClusterFromKey               = getClusterFromKey
+	GetApplicatantAndFeatureFromKey = getApplicatantAndFeatureFromKey
+	GetIsCleanupFromKey             = getIsCleanupFromKey
+	RemoveFromSlice                 = removeFromSlice
 
 	StoreResult      = storeResult
 	GetRequestStatus = getRequestStatus

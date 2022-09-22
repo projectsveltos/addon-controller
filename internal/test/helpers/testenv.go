@@ -34,10 +34,9 @@ var (
 	root string
 )
 
-// nolint: gochecknoinits // test
 func init() {
 	// Get the root of the current file to use in CRD paths.
-	// nolint: dogsled // test
+	//nolint: dogsled // test
 	_, filename, _, _ := goruntime.Caller(0)
 	root = path.Join(path.Dir(filename), "..", "..", "..")
 }

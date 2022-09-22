@@ -152,7 +152,7 @@ var _ = Describe("Feature", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatus(clusterSummary.Name, configv1alpha1.FeatureResources, configv1alpha1.FeatureStatusProvisioned)
+		verifyFeatureStatusIsProvisioned(clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		policies := []policy{
 			{kind: "ClusterRole", name: "configmap-updater", namespace: "", group: "rbac.authorization.k8s.io"},

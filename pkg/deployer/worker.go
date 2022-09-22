@@ -93,13 +93,10 @@ func GetKey(clusterNamespace, clusterName, applicant, featureID string, cleanup 
 	return clusterNamespace + separator + clusterName + separator + applicant + separator + featureID + separator + strconv.FormatBool(cleanup)
 }
 
-// getFromKey given a unique request key, returns:
+// getClusterFromKey given a unique request key, returns:
 // - clusterNamespace and clusterName which are the namespace/name of the CAPI
 // cluster where feature needs to be deployed;
-// - featureID is a unique identifier for the feature that needs to be deployed;
-// - cleanup indicates whether this key is for a feature to be deployed or removed
-// nolint: gocritic // getkey and getfromkey are symmetric
-func getFromKey(key string) (namespace, name, applicant, featureID string, cleanup bool, err error) {
+func getClusterFromKey(key string) (namespace, name string, err error) {
 	info := strings.Split(key, separator)
 	const length = 5
 	if len(info) != length {
@@ -108,8 +105,31 @@ func getFromKey(key string) (namespace, name, applicant, featureID string, clean
 	}
 	namespace = info[0]
 	name = info[1]
+	return
+}
+
+// getApplicatantAndFeatureFromKey given a unique request key, returns:
+// - featureID is a unique identifier for the feature that needs to be deployed;
+func getApplicatantAndFeatureFromKey(key string) (applicant, featureID string, err error) {
+	info := strings.Split(key, separator)
+	const length = 5
+	if len(info) != length {
+		err = fmt.Errorf("key: %s is malformed", key)
+		return
+	}
 	applicant = info[2]
 	featureID = info[3]
+	return
+}
+
+// getIsCleanupFromKey returns true if the request was for cleanup
+func getIsCleanupFromKey(key string) (cleanup bool, err error) {
+	info := strings.Split(key, separator)
+	const length = 5
+	if len(info) != length {
+		err = fmt.Errorf("key: %s is malformed", key)
+		return
+	}
 	cleanup, err = strconv.ParseBool(info[4])
 	return
 }
@@ -123,7 +143,10 @@ func processRequests(ctx context.Context, d *deployer, i int, logger logr.Logger
 	for {
 		if params != nil {
 			l := logger.WithValues("key", params.key)
-			ns, name, applicant, featureID, cleanup, err := getFromKey(params.key)
+			// Get error only from getIsCleanupFromKey as same key is always used
+			ns, name, _ := getClusterFromKey(params.key)
+			applicant, featureID, _ := getApplicatantAndFeatureFromKey(params.key)
+			cleanup, err := getIsCleanupFromKey(params.key)
 			l.Info(fmt.Sprintf("worker: %d processing request. cleanup: %t", id, cleanup))
 			if err != nil {
 				storeResult(d, params.key, err, params.handler, logger)

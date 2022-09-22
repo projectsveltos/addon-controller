@@ -32,6 +32,7 @@ spec:
         matchResources:
           controlPlane: true
     description: Sets the imageRepository used for the KubeadmControlPlane.
+    enabledIf: '{{ ne .imageRepository "" }}'
     name: imageRepository
   - definitions:
     - jsonPatches:
@@ -178,10 +179,10 @@ spec:
     required: true
     schema:
       openAPIV3Schema:
-        default: k8s.gcr.io
+        default: ""
         description: imageRepository sets the container registry to pull images from.
-          If empty, `k8s.gcr.io` will be used by default.
-        example: k8s.gcr.io
+          If empty, nothing will be set and the from of kubeadm will be used.
+        example: registry.k8s.io
         type: string
   - name: etcdImageTag
     required: true
@@ -338,7 +339,7 @@ spec:
       replicas: 1
     variables:
     - name: imageRepository
-      value: k8s.gcr.io
+      value: ""
     - name: etcdImageTag
       value: ""
     - name: coreDNSImageTag
@@ -349,7 +350,7 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.24.2
+    version: v1.25.2
     workers:
       machineDeployments:
       - class: default-worker

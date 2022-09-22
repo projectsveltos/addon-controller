@@ -103,8 +103,7 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	return client.New(restConfig, client.Options{Scheme: scheme})
 }
 
-// nolint: unparam // keep status as args. It will be handy to verify failure scenarios
-func verifyFeatureStatus(clusterSummaryName string, featureID configv1alpha1.FeatureID, status configv1alpha1.FeatureStatus) {
+func verifyFeatureStatusIsProvisioned(clusterSummaryName string, featureID configv1alpha1.FeatureID) {
 	Eventually(func() bool {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
@@ -113,7 +112,7 @@ func verifyFeatureStatus(clusterSummaryName string, featureID configv1alpha1.Fea
 		}
 		for i := range currentClusterSummary.Status.FeatureSummaries {
 			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID &&
-				currentClusterSummary.Status.FeatureSummaries[i].Status == status {
+				currentClusterSummary.Status.FeatureSummaries[i].Status == configv1alpha1.FeatureStatusProvisioned {
 
 				return true
 			}

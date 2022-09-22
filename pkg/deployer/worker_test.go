@@ -50,7 +50,7 @@ func doNothingHandler(ctx context.Context, c client.Client,
 }
 
 var _ = Describe("Worker", func() {
-	It("getKey and getFromKey return correct values", func() {
+	It("getKey and all get FromKey return correct values", func() {
 		ns := namespacePrefix + randomString()
 		name := namespacePrefix + randomString()
 		applicant := randomString()
@@ -58,7 +58,11 @@ var _ = Describe("Worker", func() {
 		cleanup := true
 		key := deployer.GetKey(ns, name, applicant, featureID, cleanup)
 
-		outNs, outName, outApplicant, outFeatureID, outCleanup, err := deployer.GetFromKey(key)
+		outNs, outName, err := deployer.GetClusterFromKey(key)
+		Expect(err).To(BeNil())
+		outApplicant, outFeatureID, err := deployer.GetApplicatantAndFeatureFromKey(key)
+		Expect(err).To(BeNil())
+		outCleanup, err := deployer.GetIsCleanupFromKey(key)
 		Expect(err).To(BeNil())
 		Expect(outNs).To(Equal(ns))
 		Expect(outName).To(Equal(name))
@@ -67,7 +71,7 @@ var _ = Describe("Worker", func() {
 		Expect(outCleanup).To(Equal(cleanup))
 	})
 
-	It("getKey and getFromKey return correct values (applicant is empty)", func() {
+	It("getKey and get FromKey return correct values (applicant is empty)", func() {
 		ns := namespacePrefix + randomString()
 		name := namespacePrefix + randomString()
 		applicant := ""
@@ -75,7 +79,11 @@ var _ = Describe("Worker", func() {
 		cleanup := false
 		key := deployer.GetKey(ns, name, applicant, featureID, false)
 
-		outNs, outName, outApplicant, outFeatureID, outCleanup, err := deployer.GetFromKey(key)
+		outNs, outName, err := deployer.GetClusterFromKey(key)
+		Expect(err).To(BeNil())
+		outApplicant, outFeatureID, err := deployer.GetApplicatantAndFeatureFromKey(key)
+		Expect(err).To(BeNil())
+		outCleanup, err := deployer.GetIsCleanupFromKey(key)
 		Expect(err).To(BeNil())
 		Expect(outNs).To(Equal(ns))
 		Expect(outName).To(Equal(name))

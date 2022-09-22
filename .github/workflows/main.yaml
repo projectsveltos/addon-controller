@@ -1,0 +1,56 @@
+name: main
+on:
+  workflow_dispatch:
+  push:
+    branches:
+    - 'master'
+  pull_request:
+    types: opened
+
+
+jobs:
+  build-static-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+    - name: Build
+      run: make build
+    - name: FMT
+      run: make fmt
+    - name: VET
+      run: make vet
+    - name: LINT
+      run: make lint
+      env:
+        LINT: true
+  build-ut:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+    - name: ut
+      run: make test
+      env:
+        UT: true
+  FV:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+    - name: fv
+      run: make create-test fv
+      env:
+        FV: true

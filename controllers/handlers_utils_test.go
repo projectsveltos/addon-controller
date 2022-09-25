@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +28,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -117,10 +120,11 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Namespace, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
+				Name:      clusterSummaryName,
+				Namespace: cluster.Namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -129,6 +133,10 @@ var _ = Describe("HandlersUtils", func() {
 		}
 
 		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+
+		// Get ClusterSummary so OwnerReference is set
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -169,10 +177,24 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CreateNamespace(context.TODO(), c, namespace)).To(BeNil())
+		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
+	})
+
+	It("createNamespace does not namespace in DryRun mode", func() {
+		initObjects := []client.Object{}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
+
+		currentNs := &corev1.Namespace{}
+		err := c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)
+		Expect(err).ToNot(BeNil())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
 	It("createNamespace returns no error if namespace already exists", func() {
@@ -185,10 +207,72 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CreateNamespace(context.TODO(), c, namespace)).To(BeNil())
+		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
+	})
+
+	It("deployContent in DryRun mode returns policies which will be created, updated and have conflicts", func() {
+		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
+		depl := fmt.Sprintf(deplTemplate, namespace)
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+
+		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+
+		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		created, updated, conflict, err := controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(created)).To(Equal(2))
+		Expect(len(updated)).To(Equal(0))
+		Expect(len(conflict)).To(Equal(0))
+
+		// Create services
+		elements := strings.Split(services, "---")
+		for i := range elements {
+			var policy *unstructured.Unstructured
+			policy, err = controllers.GetUnstructured([]byte(elements[i]))
+			Expect(err).To(BeNil())
+			Expect(testEnv.Client.Create(context.TODO(), policy))
+			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
+		}
+
+		created, updated, conflict, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(created)).To(Equal(0))
+		Expect(len(updated)).To(Equal(2))
+		Expect(len(conflict)).To(Equal(0))
+
+		// Mark services as owned by a different secret
+		elements = strings.Split(services, "---")
+		for i := range elements {
+			var policy *unstructured.Unstructured
+			policy, err = controllers.GetUnstructured([]byte(elements[i]))
+			Expect(err).To(BeNil())
+			currentService := &corev1.Service{}
+			Expect(testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: policy.GetNamespace(), Name: policy.GetName()}, currentService)).To(Succeed())
+			currentService.Labels = map[string]string{
+				controllers.ReferenceLabelKind:      "Secret",
+				controllers.ReferenceLabelName:      randomString(),
+				controllers.ReferenceLabelNamespace: randomString(),
+			}
+			Expect(testEnv.Client.Update(context.TODO(), currentService)).To(Succeed())
+		}
+
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			created, updated, conflict, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+				secret, map[string]string{"service": services}, clusterSummary, klogr.New())
+			return err == nil &&
+				len(created) == 0 && len(updated) == 0 && len(conflict) == 2
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {
@@ -203,10 +287,10 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		policies, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client,
+		created, updated, _, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
 			secret, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(3))
+		Expect(len(created) + len(updated)).To(Equal(3))
 	})
 
 	It("deployContentOfConfigMap deploys all policies contained in a Secret", func() {
@@ -221,10 +305,77 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		policies, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client,
+		created, updated, _, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
 			configMap, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(3))
+		Expect(len(created) + len(updated)).To(Equal(3))
+	})
+
+	It("undeployStaleResources does not remove resources in dryRun mode", func() {
+		// Set ClusterSummary to be DryRun
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		// Add list of GroupVersionKind this ClusterSummary has deployed in the CAPI Cluster
+		// because of the PolicyRefs feature. This is used by UndeployStaleResources.
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return err
+			}
+			currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+				{
+					FeatureID: configv1alpha1.FeatureResources,
+					Status:    configv1alpha1.FeatureStatusProvisioned,
+					DeployedGroupVersionKind: []string{
+						"ClusterRole.v1.rbac.authorization.k8s.io",
+					},
+				},
+			}
+			return testEnv.Status().Update(context.TODO(), currentClusterSummary)
+		})
+		Expect(err).To(BeNil())
+
+		configMapNs := randomString()
+		viewClusterRoleName := randomString()
+		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, viewClusterRoleName))
+
+		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
+		// of this ClusterSummary (owner is ClusterFeature owning the ClusterSummary)
+		clusterRole, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
+		Expect(err).To(BeNil())
+		clusterRole.SetLabels(map[string]string{
+			controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			controllers.ReferenceLabelName:      configMap.Name,
+			controllers.ReferenceLabelNamespace: configMap.Namespace,
+		})
+		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
+			{Kind: configv1alpha1.ClusterFeatureKind, Name: clusterFeature.Name,
+				UID: clusterFeature.UID, APIVersion: "config.projectsveltos.io/v1beta1"},
+		})
+		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1alpha1.FeatureResources)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+
+		// Because ClusterSummary is not referencing any ConfigMap/Resource and because test created a ClusterRole
+		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
+		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
+		undeploy, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			currentClusterSummary, deployedGKVs, nil, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(undeploy)).To(Equal(1))
+
+		// Verify clusterRole is still present
+		currentClusterRole := &rbacv1.ClusterRole{}
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterRole.GetName()}, currentClusterRole)).To(BeNil())
 	})
 
 	It(`undeployStaleResources removes all policies created by ClusterSummary due to ConfigMaps not referenced anymore`, func() {
@@ -235,7 +386,9 @@ var _ = Describe("HandlersUtils", func() {
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, editClusterRoleName))
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
@@ -244,7 +397,9 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Wait for cache to be updated
 		Eventually(func() bool {
-			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
 			return err == nil &&
 				currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs != nil
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -293,8 +448,13 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole2)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole2)).To(Succeed())
 
-		addOwnerReference(context.TODO(), testEnv.Client, clusterRole1, currentClusterSummary)
-		addOwnerReference(context.TODO(), testEnv.Client, clusterRole2, currentClusterSummary)
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterFeature.Name},
+			currentClusterFeature)).To(Succeed())
+
+		addOwnerReference(context.TODO(), testEnv.Client, clusterRole1, currentClusterFeature)
+		addOwnerReference(context.TODO(), testEnv.Client, clusterRole2, currentClusterFeature)
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole1)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole2)).To(Succeed())
@@ -317,8 +477,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(deployedGKVs).ToNot(BeEmpty())
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
-		err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
-			deployedGKVs, currentClusterRoles, klogr.New())
+		_, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Consistently loop so testEnv Cache is synced
@@ -341,8 +501,8 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource1))
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
-		err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, currentClusterSummary,
-			deployedGKVs, currentClusterRoles, klogr.New())
+		_, err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced

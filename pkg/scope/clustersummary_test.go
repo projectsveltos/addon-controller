@@ -322,7 +322,9 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope.Close(context.TODO())).To(Succeed())
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.FeatureSummaries)).To(Equal(1))
 	})
@@ -398,5 +400,71 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).To(Equal(now))
+	})
+
+	It("IsContinuousSync returns true when mode is Continuous", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+
+		params := scope.ClusterSummaryScopeParams{
+			Client:         c,
+			ClusterFeature: clusterFeature,
+			ClusterSummary: clusterSummary,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterSummaryScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		Expect(scope.IsContinuousSync()).To(BeTrue())
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(scope.IsContinuousSync()).To(BeFalse())
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		Expect(scope.IsContinuousSync()).To(BeFalse())
+	})
+
+	It("IsOneTimeSync returns true when mode is OneTime", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+
+		params := scope.ClusterSummaryScopeParams{
+			Client:         c,
+			ClusterFeature: clusterFeature,
+			ClusterSummary: clusterSummary,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterSummaryScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		Expect(scope.IsOneTimeSync()).To(BeTrue())
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(scope.IsOneTimeSync()).To(BeFalse())
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(scope.IsOneTimeSync()).To(BeFalse())
+	})
+
+	It("IsDryRunSync returns true when mode is DryRun", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+
+		params := scope.ClusterSummaryScopeParams{
+			Client:         c,
+			ClusterFeature: clusterFeature,
+			ClusterSummary: clusterSummary,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterSummaryScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		Expect(scope.IsDryRunSync()).To(BeTrue())
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(scope.IsDryRunSync()).To(BeFalse())
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		Expect(scope.IsDryRunSync()).To(BeFalse())
 	})
 })

@@ -46,10 +46,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		}
 
 		clusterName = randomString()
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
+				Name:      clusterSummaryName,
+				Namespace: namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,

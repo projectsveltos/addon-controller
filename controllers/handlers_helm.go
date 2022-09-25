@@ -66,30 +66,26 @@ var (
 const (
 	writeFilePermission = 0644
 	lockTimeout         = 30
+	notInstalledMessage = "Not installed yet and action is uninstall"
 )
 
 type releaseInfo struct {
-	Name         string      `json:"name"`
-	Namespace    string      `json:"namespace"`
-	Revision     string      `json:"revision"`
-	Updated      metav1.Time `json:"updated"`
-	Status       string      `json:"status"`
-	Chart        string      `json:"chart"`
-	ChartVersion string      `json:"chart_version"`
-	AppVersion   string      `json:"app_version"`
+	ReleaseName      string      `json:"releaseName"`
+	ReleaseNamespace string      `json:"releaseNamespace"`
+	Revision         string      `json:"revision"`
+	Updated          metav1.Time `json:"updated"`
+	Status           string      `json:"status"`
+	Chart            string      `json:"chart"`
+	ChartVersion     string      `json:"chart_version"`
+	AppVersion       string      `json:"app_version"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
 	logger logr.Logger) error {
 
-	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
-	if err != nil {
-		return err
-	}
-
 	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, applicant, c, logger)
+	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, clusterNamespace, applicant, c, logger)
 	if err != nil {
 		return err
 	}
@@ -107,117 +103,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
-	var conflict bool
-	// Before any helm release, managed by this ClusterSummary, is deployed, update ClusterSummary
-	// Status. Order is important. Before deploying any managed helm release, we need to successfully
-	// update ClusterSummary Status. If pod is restarted, it needs to rebuild internal state keeping
-	// track of which ClusterSummary was managing which helm release.
-	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
-	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
-	// only after helm release is successfully undeployed.
-	conflict, err = updateStatusForReferencedHelmReleases(ctx, c, clusterSummary)
-	if err != nil {
-		return err
-	}
-
-	chartDeployed := make([]configv1alpha1.Chart, 0)
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
-		if !chartManager.CanManageChart(clusterSummary, currentChart) {
-			// error is reported above, in updateHelmChartStatus.
-			continue
-		}
-
-		var currentRelease *releaseInfo
-		currentRelease, err = handleChart(ctx, currentChart, remoteClient, kubeconfig, logger)
-		if err != nil {
-			return err
-		}
-
-		if currentRelease != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("chart %s (version %s) status: %s",
-				currentRelease.Name, currentRelease.ChartVersion, currentRelease.Status))
-			if currentRelease.Status == release.StatusDeployed.String() {
-				chartDeployed = append(chartDeployed, configv1alpha1.Chart{
-					RepoURL:         currentChart.RepositoryURL,
-					Namespace:       currentRelease.Namespace,
-					ChartName:       currentRelease.Name,
-					ChartVersion:    currentRelease.ChartVersion,
-					AppVersion:      currentRelease.AppVersion,
-					LastAppliedTime: &currentRelease.Updated,
-				})
-			}
-		}
-	}
-
-	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
-	// anymore, such helm release has been successfully remove at this point. So
-	err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
-	if err != nil {
-		return err
-	}
-
-	// First get the helm releases currently managed and uninstall all the ones
-	// not referenced anymore.
-	// Only if this operation succeeds, removes all stale helm release registration
-	// for this clusterSummary.
-	err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
-	if err != nil {
-		return err
-	}
-	chartManager.RemoveStaleRegistrations(clusterSummary)
-
-	err = updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
-	if err != nil {
-		return err
-	}
-
-	if conflict {
-		return fmt.Errorf("conflict managing one or more helm charts")
-	}
-
-	return nil
-}
-
-func handleChart(ctx context.Context, currentChart *configv1alpha1.HelmChart,
-	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*releaseInfo, error) {
-
-	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
-		currentChart.ReleaseNamespace,
-		kubeconfig, logger)
-	// If error is ErrReleaseNotFound move forward
-	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
-		return nil, err
-	}
-
-	if shouldInstall(currentRelease, currentChart) {
-		err = doInstallRelease(ctx, remoteClient, currentChart,
-			kubeconfig, logger)
-		if err != nil {
-			return nil, err
-		}
-	} else if shouldUpgrade(currentRelease, currentChart) {
-		err = doUpgradeRelease(ctx, remoteClient, currentChart,
-			kubeconfig, logger)
-		if err != nil {
-			return nil, err
-		}
-	} else if shouldUninstall(currentRelease, currentChart) {
-		err = doUninstallRelease(currentChart, kubeconfig, logger)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	currentRelease, err = getReleaseInfo(currentChart.ReleaseName,
-		currentChart.ReleaseNamespace,
-		kubeconfig, logger)
-	// If error is ErrReleaseNotFound move forward
-	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
-		return nil, err
-	}
-
-	return currentRelease, nil
+	return handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, logger)
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
@@ -226,7 +112,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1alpha1.ClusterSummary{}
-	err := c.Get(ctx, types.NamespacedName{Name: applicant}, clusterSummary)
+	err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -247,30 +133,72 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
-			currentChart.ChartName,
-			currentChart.RepositoryURL,
-			currentChart.RepositoryName))
-
-		err = uninstallRelease(currentChart.ReleaseName,
-			currentChart.ReleaseNamespace, kubeconfig, logger)
-		if err != nil {
-			if !errors.Is(err, driver.ErrReleaseNotFound) {
-				return err
-			}
-		}
-	}
-
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
 		return err
 	}
 
-	chartManager.RemoveStaleRegistrations(clusterSummary)
+	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		if chartManager.CanManageChart(clusterSummary, currentChart) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
+				currentChart.ChartName,
+				currentChart.RepositoryURL,
+				currentChart.RepositoryName))
 
-	return nil
+			err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+			if err != nil {
+				if !errors.Is(err, driver.ErrReleaseNotFound) {
+					return err
+				}
+			}
+
+			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
+				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+				Action: string(configv1alpha1.UninstallHelmAction),
+			})
+		} else {
+			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
+				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+				Action: string(configv1alpha1.NoHelmAction), Message: "Currently managed by another ClusterFeature",
+			})
+		}
+	}
+
+	// First get the helm releases currently managed and uninstall all the ones
+	// not referenced anymore. Only if this operation succeeds, removes all stale
+	// helm release registration for this clusterSummary.
+	var undeployedReports []configv1alpha1.ReleaseReport
+	undeployedReports, err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
+	if err != nil {
+		return err
+	}
+	releaseReports = append(releaseReports, undeployedReports...)
+
+	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	if err != nil {
+		return err
+	}
+	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterFeatureOwnerRef,
+		configv1alpha1.FeatureResources, nil, []configv1alpha1.Chart{})
+	if err != nil {
+		return err
+	}
+
+	err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
+	if err != nil {
+		return err
+	}
+
+	// In dry-run mode nothing gets deployed/undeployed. So if this instance used to manage
+	// an helm release and it is now not referencing anymore, do not unsubscribe.
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+		chartManager.RemoveStaleRegistrations(clusterSummary)
+		return nil
+	}
+
+	return fmt.Errorf("mode is DryRun. Nothing is reconciled")
 }
 
 func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -297,10 +225,215 @@ func getHelmRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1
 	return nil
 }
 
+func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	c, remoteClient client.Client, kubeconfig string, logger logr.Logger) error {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	// Before any helm release, managed by this ClusterSummary, is deployed, update ClusterSummary
+	// Status. Order is important. If pod is restarted, it needs to rebuild internal state keeping
+	// track of which ClusterSummary was managing which helm release.
+	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
+	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
+	// only after helm release is successfully undeployed.
+	conflict, err := updateStatusForReferencedHelmReleases(ctx, c, clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
+	chartDeployed := make([]configv1alpha1.Chart, 0)
+	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		if !chartManager.CanManageChart(clusterSummary, currentChart) {
+			var report *configv1alpha1.ReleaseReport
+			report, err = createReportForUnmanagedHelmRelease(ctx, c, clusterSummary, currentChart)
+			if err != nil {
+				return err
+			} else {
+				releaseReports = append(releaseReports, *report)
+			}
+			// error is reported above, in updateHelmChartStatus.
+			continue
+		}
+
+		var report *configv1alpha1.ReleaseReport
+		var currentRelease *releaseInfo
+		currentRelease, report, err = handleChart(ctx, clusterSummary, currentChart, remoteClient, kubeconfig, logger)
+		if err != nil {
+			return err
+		}
+		releaseReports = append(releaseReports, *report)
+
+		if currentRelease != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) status: %s",
+				currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion, currentRelease.Status))
+			if currentRelease.Status == release.StatusDeployed.String() {
+				chartDeployed = append(chartDeployed, configv1alpha1.Chart{
+					RepoURL:         currentChart.RepositoryURL,
+					Namespace:       currentRelease.ReleaseNamespace,
+					ChartName:       currentRelease.ReleaseName,
+					ChartVersion:    currentRelease.ChartVersion,
+					AppVersion:      currentRelease.AppVersion,
+					LastAppliedTime: &currentRelease.Updated,
+				})
+			}
+		}
+	}
+
+	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
+	// anymore, such helm release has been successfully remove at this point. So
+	err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	// First get the helm releases currently managed and uninstall all the ones
+	// not referenced anymore. Only if this operation succeeds, removes all stale
+	// helm release registration for this clusterSummary.
+	var undeployedReports []configv1alpha1.ReleaseReport
+	undeployedReports, err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
+	if err != nil {
+		return err
+	}
+	releaseReports = append(releaseReports, undeployedReports...)
+
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+		chartManager.RemoveStaleRegistrations(clusterSummary)
+	}
+
+	err = updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
+	if err != nil {
+		return err
+	}
+
+	if conflict {
+		return fmt.Errorf("conflict managing one or more helm charts")
+	}
+
+	err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
+	if err != nil {
+		return err
+	}
+
+	// In DryRun mode always return an error.
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
+	}
+	return nil
+}
+
+func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary, currentChart *configv1alpha1.HelmChart,
+	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
+
+	var report *configv1alpha1.ReleaseReport
+	logger.V(logs.LogDebug).Info("install helm release")
+	err := doInstallRelease(ctx, clusterSummary, remoteClient, currentChart,
+		kubeconfig, logger)
+	if err != nil {
+		return nil, err
+	}
+	report = &configv1alpha1.ReleaseReport{
+		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.InstallHelmAction),
+	}
+	return report, nil
+}
+
+func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary, currentChart *configv1alpha1.HelmChart,
+	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
+
+	var report *configv1alpha1.ReleaseReport
+	logger.V(logs.LogDebug).Info("upgrade helm release")
+	err := doUpgradeRelease(ctx, clusterSummary, remoteClient, currentChart,
+		kubeconfig, logger)
+	if err != nil {
+		return nil, err
+	}
+	report = &configv1alpha1.ReleaseReport{
+		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.UpgradeHelmAction),
+	}
+	return report, nil
+}
+
+func handleUninstall(clusterSummary *configv1alpha1.ClusterSummary, currentChart *configv1alpha1.HelmChart,
+	kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
+
+	var report *configv1alpha1.ReleaseReport
+	logger.V(logs.LogDebug).Info("uniinstall helm release")
+	err := doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+	if err != nil {
+		return nil, err
+	}
+	report = &configv1alpha1.ReleaseReport{
+		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+		Action: string(configv1alpha1.UninstallHelmAction),
+	}
+	return report, nil
+}
+
+func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary, currentChart *configv1alpha1.HelmChart,
+	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1alpha1.ReleaseReport, error) {
+
+	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
+		currentChart.ReleaseNamespace, kubeconfig, logger)
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return nil, nil, err
+	}
+	var report *configv1alpha1.ReleaseReport
+
+	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName", currentChart.ReleaseName)
+
+	if shouldInstall(currentRelease, currentChart) {
+		report, err = handleInstall(ctx, clusterSummary, currentChart, remoteClient, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if shouldUpgrade(currentRelease, currentChart) {
+		report, err = handleUpgrade(ctx, clusterSummary, currentChart, remoteClient, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if shouldUninstall(currentRelease, currentChart) {
+		report, err = handleUninstall(clusterSummary, currentChart, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		report.ChartVersion = currentRelease.ChartVersion
+	} else if currentRelease == nil {
+		logger.V(logs.LogDebug).Info("no action for helm release")
+		report = &configv1alpha1.ReleaseReport{
+			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+			ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
+		}
+		report.Message = notInstalledMessage
+	} else {
+		logger.V(logs.LogDebug).Info("no action for helm release")
+		report = &configv1alpha1.ReleaseReport{
+			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+			ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
+		}
+		report.Message = "Already managing this helm release and specified version already installed"
+	}
+
+	currentRelease, err = getReleaseInfo(currentChart.ReleaseName,
+		currentChart.ReleaseNamespace, kubeconfig, logger)
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return nil, nil, err
+	}
+
+	return currentRelease, report, nil
+}
+
 // RepoAdd adds repo with given name and url
 func repoAdd(settings *cli.EnvSettings, name, url string, logger logr.Logger) error {
 	logger = logger.WithValues("repo", url)
 
+	settings.Debug = true
 	repoInfo := fmt.Sprintf("%s:%s", url, name)
 
 	repoLock.Lock()
@@ -378,6 +511,7 @@ func repoUpdate(settings *cli.EnvSettings, name, url string, logger logr.Logger)
 	logger = logger.WithValues("repo", url)
 	logger.V(logs.LogDebug).Info("updating repo")
 
+	settings.Debug = true
 	cfg := &repo.Entry{Name: name, URL: url}
 	r, err := repo.NewChartRepository(cfg, getter.All(settings))
 	if err != nil {
@@ -392,13 +526,22 @@ func repoUpdate(settings *cli.EnvSettings, name, url string, logger logr.Logger)
 	return nil
 }
 
-func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
+// installRelease installs helm release in the CAPI cluster.
+// No action in DryRun mode.
+func installRelease(clusterSummary *configv1alpha1.ClusterSummary,
+	settings *cli.EnvSettings, releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
 	values map[string]interface{}, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
 
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace, "chart",
 		chartName, "chartVersion", chartVersion)
 	logger.V(logs.LogDebug).Info("installing release")
 
+	settings.Debug = true
 	if chartName == "" {
 		return fmt.Errorf("chart name can not be empty")
 	}
@@ -411,6 +554,7 @@ func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, ch
 
 	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, logger)
 	if err != nil {
+		logger.V(logs.LogDebug).Info("actionConfigInit failed")
 		return err
 	}
 
@@ -421,11 +565,13 @@ func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, ch
 
 	cp, err := installObject.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
+		logger.V(logs.LogDebug).Info("LocateChart failed")
 		return err
 	}
 
 	chartRequested, err := loader.Load(cp)
 	if err != nil {
+		logger.V(logs.LogDebug).Info("Load failed")
 		return err
 	}
 
@@ -468,10 +614,20 @@ func installRelease(settings *cli.EnvSettings, releaseName, releaseNamespace, ch
 	return nil
 }
 
-func uninstallRelease(releaseName, releaseNamespace, kubeconfig string, logger logr.Logger) error {
+// uninstallRelease removes helm release from a CAPI Cluster.
+// No action in DryRun mode.
+func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
+	releaseName, releaseNamespace, kubeconfig string, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace)
 	logger.V(logs.LogDebug).Info("uninstalling release")
 
+	settings.Debug = true
 	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, logger)
 	if err != nil {
 		return err
@@ -487,14 +643,22 @@ func uninstallRelease(releaseName, releaseNamespace, kubeconfig string, logger l
 	return nil
 }
 
-func upgradeRelease(settings *cli.EnvSettings,
+// upgradeRelease upgrades helm release in CAPI cluster.
+// No action in DryRun mode.
+func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings,
 	releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
 	values map[string]interface{}, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
 
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace, "chart",
 		chartName, "chartVersion", chartVersion)
 	logger.V(logs.LogDebug).Info("upgrading release")
 
+	settings.Debug = true
 	if chartName == "" {
 		return fmt.Errorf("chart name can not be empty")
 	}
@@ -535,7 +699,7 @@ func upgradeRelease(settings *cli.EnvSettings,
 	hisClient.Max = 1
 	_, err = hisClient.Run(releaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = installRelease(settings, releaseName, releaseNamespace, chartName, chartVersion,
+		err = installRelease(clusterSummary, settings, releaseName, releaseNamespace, chartName, chartVersion,
 			kubeconfig, values, logger)
 		if err != nil {
 			return err
@@ -600,13 +764,13 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, logger log
 		return nil, err
 	}
 	element := &releaseInfo{
-		Name:         results.Name,
-		Namespace:    results.Namespace,
-		Revision:     strconv.Itoa(results.Version),
-		Status:       results.Info.Status.String(),
-		Chart:        results.Chart.Metadata.Name,
-		ChartVersion: results.Chart.Metadata.Version,
-		AppVersion:   results.Chart.AppVersion(),
+		ReleaseName:      results.Name,
+		ReleaseNamespace: results.Namespace,
+		Revision:         strconv.Itoa(results.Version),
+		Status:           results.Info.Status.String(),
+		Chart:            results.Chart.Metadata.Name,
+		ChartVersion:     results.Chart.Metadata.Version,
+		AppVersion:       results.Chart.AppVersion(),
 	}
 
 	var t metav1.Time
@@ -670,8 +834,16 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1alpha1
 	return true
 }
 
-func doInstallRelease(ctx context.Context, remoteClient client.Client, requestedChart *configv1alpha1.HelmChart,
+// doInstallRelease installs helm release in the CAPI Cluster.
+// No action in DryRun mode.
+func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	remoteClient client.Client, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Installing chart %s from repo %s %s)",
 		requestedChart.ChartName,
@@ -679,7 +851,7 @@ func doInstallRelease(ctx context.Context, remoteClient client.Client, requested
 		requestedChart.RepositoryName))
 
 	// If release namespace does not exist, create it
-	err := createNamespace(ctx, remoteClient,
+	err := createNamespace(ctx, remoteClient, clusterSummary,
 		requestedChart.ReleaseNamespace)
 	if err != nil {
 		return err
@@ -703,13 +875,10 @@ func doInstallRelease(ctx context.Context, remoteClient client.Client, requested
 		return err
 	}
 
-	err = installRelease(settings, requestedChart.ReleaseName,
-		requestedChart.ReleaseNamespace,
-		requestedChart.ChartName,
-		requestedChart.ChartVersion,
-		kubeconfig,
-		values,
-		logger)
+	err = installRelease(clusterSummary, settings, requestedChart.ReleaseName,
+		requestedChart.ReleaseNamespace, requestedChart.ChartName,
+		requestedChart.ChartVersion, kubeconfig,
+		values, logger)
 	if err != nil {
 		return err
 	}
@@ -717,17 +886,35 @@ func doInstallRelease(ctx context.Context, remoteClient client.Client, requested
 	return nil
 }
 
-func doUninstallRelease(requestedChart *configv1alpha1.HelmChart, kubeconfig string, logger logr.Logger) error {
+// doUninstallRelease uninstalls helm release from the CAPI Cluster.
+// No action in DryRun mode.
+func doUninstallRelease(clusterSummary *configv1alpha1.ClusterSummary, requestedChart *configv1alpha1.HelmChart,
+	kubeconfig string, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
 		requestedChart.ChartName,
 		requestedChart.RepositoryURL,
 		requestedChart.RepositoryName))
 
-	return uninstallRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace, kubeconfig, logger)
+	return uninstallRelease(clusterSummary, requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+		kubeconfig, logger)
 }
 
-func doUpgradeRelease(ctx context.Context, remoteClient client.Client, requestedChart *configv1alpha1.HelmChart,
+// doUpgradeRelease upgrades helm release in the CAPI Cluster.
+// No action in DryRun mode.
+func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	remoteClient client.Client, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Upgrading chart %s from repo %s %s)",
 		requestedChart.ChartName,
@@ -735,7 +922,7 @@ func doUpgradeRelease(ctx context.Context, remoteClient client.Client, requested
 		requestedChart.RepositoryName))
 
 	// If release namespace does not exist, create it
-	err := createNamespace(ctx, remoteClient,
+	err := createNamespace(ctx, remoteClient, clusterSummary,
 		requestedChart.ReleaseNamespace)
 	if err != nil {
 		return err
@@ -759,13 +946,10 @@ func doUpgradeRelease(ctx context.Context, remoteClient client.Client, requested
 		return err
 	}
 
-	err = upgradeRelease(settings, requestedChart.ReleaseName,
-		requestedChart.ReleaseNamespace,
-		requestedChart.ChartName,
-		requestedChart.ChartVersion,
-		kubeconfig,
-		values,
-		logger)
+	err = upgradeRelease(clusterSummary, settings, requestedChart.ReleaseName,
+		requestedChart.ReleaseNamespace, requestedChart.ChartName,
+		requestedChart.ChartVersion, kubeconfig,
+		values, logger)
 	if err != nil {
 		return err
 	}
@@ -774,8 +958,14 @@ func doUpgradeRelease(ctx context.Context, remoteClient client.Client, requested
 }
 
 // updateChartsInClusterConfiguration updates deployed chart info on ClusterConfiguration
+// No action in DryRun mode.
 func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	chartDeployed []configv1alpha1.Chart, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d", len(chartDeployed)))
 	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
@@ -783,17 +973,16 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 		return err
 	}
 
-	return updateClusterConfiguration(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterFeatureOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
+	return updateClusterConfiguration(ctx, c, clusterSummary, clusterFeatureOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
 }
 
 // undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
 func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	kubeconfig string, logger logr.Logger) error {
+	kubeconfig string, logger logr.Logger) ([]configv1alpha1.ReleaseReport, error) {
 
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	managedHelmReleases := chartManager.GetManagedHelmReleases(clusterSummary)
@@ -805,19 +994,25 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 		currentlyReferencedReleases[chartManager.GetReleaseKey(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
 	}
 
+	reports := make([]configv1alpha1.ReleaseReport, 0)
+
 	for i := range managedHelmReleases {
 		releaseKey := chartManager.GetReleaseKey(managedHelmReleases[i].Namespace, managedHelmReleases[i].Name)
 		if _, ok := currentlyReferencedReleases[releaseKey]; !ok {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("helm release %s (namespace %s) used to be managed but not referenced anymore",
 				managedHelmReleases[i].Name, managedHelmReleases[i].Namespace))
-			if err := uninstallRelease(managedHelmReleases[i].Name, managedHelmReleases[i].Namespace,
+			if err := uninstallRelease(clusterSummary, managedHelmReleases[i].Name, managedHelmReleases[i].Namespace,
 				kubeconfig, logger); err != nil {
-				return err
+				return nil, err
 			}
+			reports = append(reports, configv1alpha1.ReleaseReport{
+				ReleaseNamespace: managedHelmReleases[i].Namespace, ReleaseName: managedHelmReleases[i].Name,
+				Action: string(configv1alpha1.UninstallHelmAction),
+			})
 		}
 	}
 
-	return nil
+	return reports, nil
 }
 
 // updateStatusForReferencedHelmReleases considers helm releases ClusterSummary currently
@@ -827,8 +1022,14 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 // - an error if any occurs
 // - whether there is at least one helm release ClusterSummary is referencing, but currently not
 // allowed to manage.
+// No action in DryRun mode.
 func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return false, nil
+	}
 
 	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) == 0 &&
 		len(clusterSummary.Status.HelmReleaseSummaries) == 0 {
@@ -851,7 +1052,8 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		err = c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+		err = c.Get(ctx,
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 		if err != nil {
 			return err
 		}
@@ -905,11 +1107,18 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 // updateStatusForNonReferencedHelmReleases walks ClusterSummary.Status entries.
 // Removes any entry pointing to a helm release currently not referenced by ClusterSummary.
+// No action in DryRun mode.
 func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) error {
 
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
 	currentClusterSummary := &configv1alpha1.ClusterSummary{}
-	err := c.Get(ctx, types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 	if err != nil {
 		return err
 	}
@@ -941,4 +1150,62 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
 
 	return c.Status().Update(ctx, currentClusterSummary)
+}
+
+// createReportForUnmanagedHelmRelease creates ReleaseReport for an un-managed (by this instance) helm release
+func createReportForUnmanagedHelmRelease(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	currentChart *configv1alpha1.HelmChart) (*configv1alpha1.ReleaseReport, error) {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	report := &configv1alpha1.ReleaseReport{
+		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
+	}
+	if manager, err := chartManager.GetManagerForChart(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, currentChart); err == nil {
+		report.Message = fmt.Sprintf("Cannot manage it. Currently managed by %s", manager)
+	} else if currentChart.HelmChartAction == configv1alpha1.HelmChartActionInstall {
+		report.Action = string(configv1alpha1.InstallHelmAction)
+	} else {
+		report.Message = notInstalledMessage
+	}
+
+	return report, nil
+}
+
+// updateClusterReportWithHelmReports updates ClusterReport Status with HelmReports.
+// This is no-op unless mode is DryRun.
+func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary,
+	releaseReports []configv1alpha1.ReleaseReport) error {
+
+	// This is no-op unless in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
+	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	clusterReportName := getClusterReportName(clusterFeatureOwnerRef.Name, clusterSummary.Spec.ClusterName)
+
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		clusterReport := &configv1alpha1.ClusterReport{}
+		err = c.Get(ctx,
+			types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, clusterReport)
+		if err != nil {
+			return err
+		}
+
+		clusterReport.Status.ReleaseReports = releaseReports
+		return c.Status().Update(ctx, clusterReport)
+	})
+
+	return err
 }

@@ -162,7 +162,7 @@ type ClusterSummaryStatus struct {
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:resource:path=clustersummaries,scope=Cluster
+//+kubebuilder:resource:path=clustersummaries,scope=Namespaced
 //+kubebuilder:subresource:status
 
 // ClusterSummary is the Schema for the clustersummaries API

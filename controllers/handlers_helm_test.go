@@ -26,6 +26,7 @@ import (
 
 	"github.com/gdexlab/go-render/render"
 	"helm.sh/helm/v3/pkg/release"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
@@ -39,6 +40,40 @@ import (
 )
 
 var _ = Describe("HandlersHelm", func() {
+	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterSummary *configv1alpha1.ClusterSummary
+
+	BeforeEach(func() {
+		clusterNamespace := randomString()
+
+		clusterFeature = &configv1alpha1.ClusterFeature{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterFeatureNamePrefix + randomString(),
+			},
+			Spec: configv1alpha1.ClusterFeatureSpec{
+				ClusterSelector: selector,
+			},
+		}
+
+		clusterSummary = &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind:       configv1alpha1.ClusterFeatureKind,
+						Name:       clusterFeature.Name,
+						APIVersion: "config.projectsveltos.io/v1alpha1",
+					},
+				},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      randomString(),
+			},
+		}
+	})
+
 	It("shouldInstall returns false when requested version does not match installed version", func() {
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       release.StatusDeployed.String(),
@@ -128,22 +163,14 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace: randomString(),
-				ClusterName:      randomString(),
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					HelmCharts: []configv1alpha1.HelmChart{*calicoChart},
-				},
-			},
-			// List a helm chart non referenced anymore as managed
-			Status: configv1alpha1.ClusterSummaryStatus{
-				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
-					kyvernoSummary,
-				},
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			HelmCharts: []configv1alpha1.HelmChart{*calicoChart},
+		}
+
+		// List a helm chart non referenced anymore as managed
+		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+				kyvernoSummary,
 			},
 		}
 
@@ -163,7 +190,9 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(conflict).To(BeFalse())
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(2))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
@@ -175,6 +204,46 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].Status).To(Equal(kyvernoSummary.Status))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseName).To(Equal(kyvernoSummary.ReleaseName))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace).To(Equal(kyvernoSummary.ReleaseNamespace))
+	})
+
+	It("updateStatusForReferencedHelmReleases is no-op in DryRun mode", func() {
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			HelmCharts: []configv1alpha1.HelmChart{
+				{RepositoryURL: randomString(), RepositoryName: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+					ReleaseName: randomString(), ReleaseNamespace: randomString()},
+			},
+			SyncMode: configv1alpha1.SyncModeDryRun,
+		}
+
+		// List an helm chart non referenced anymore as managed
+		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+				{ReleaseName: randomString(), ReleaseNamespace: randomString(), Status: configv1alpha1.HelChartStatusManaging},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(conflict).To(BeFalse())
+
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+
+		// Cause we are in DryRun mode, clusterSummary Status has not changed
+		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(1))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(
+			Equal(clusterSummary.Status.HelmReleaseSummaries[0].ReleaseName))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(
+			Equal(clusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(
+			Equal(clusterSummary.Status.HelmReleaseSummaries[0].Status))
 	})
 
 	It("UpdateStatusForNonReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
@@ -194,26 +263,17 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace: randomString(),
-				ClusterName:      randomString(),
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
-					HelmCharts: []configv1alpha1.HelmChart{*contourChart},
-				},
-			},
-			// List a helm chart non referenced anymore as managed
-			Status: configv1alpha1.ClusterSummaryStatus{
-				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
-					kyvernoSummary,
-					{
-						ReleaseName:      contourChart.ReleaseName,
-						ReleaseNamespace: contourChart.ReleaseNamespace,
-						Status:           configv1alpha1.HelChartStatusManaging,
-					},
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			HelmCharts: []configv1alpha1.HelmChart{*contourChart},
+		}
+		// List a helm chart non referenced anymore as managed
+		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+				kyvernoSummary,
+				{
+					ReleaseName:      contourChart.ReleaseName,
+					ReleaseNamespace: contourChart.ReleaseNamespace,
+					Status:           configv1alpha1.HelChartStatusManaging,
 				},
 			},
 		}
@@ -233,7 +293,9 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(err).To(BeNil())
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(1))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
@@ -251,25 +313,6 @@ var _ = Describe("HandlersHelm", func() {
 			},
 		}
 
-		clusterFeatureName := randomString()
-
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						Kind:       configv1alpha1.ClusterFeatureKind,
-						Name:       clusterFeatureName,
-						APIVersion: "config.projectsveltos.io/v1alpha1",
-					},
-				},
-			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterNamespace: randomString(),
-				ClusterName:      randomString(),
-			},
-		}
-
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummary.Spec.ClusterName,
@@ -277,7 +320,7 @@ var _ = Describe("HandlersHelm", func() {
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
 				ClusterFeatureResources: []configv1alpha1.ClusterFeatureResource{
-					{ClusterFeatureName: clusterFeatureName},
+					{ClusterFeatureName: clusterFeature.Name},
 				},
 			},
 		}
@@ -298,7 +341,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(Equal(clusterFeatureName))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(Equal(clusterFeature.Name))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features)).To(Equal(1))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].FeatureID).To(Equal(configv1alpha1.FeatureHelm))
@@ -307,6 +350,187 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].RepoURL).To(Equal(chartDeployed[0].RepoURL))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartName).To(Equal(chartDeployed[0].ChartName))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartVersion).To(Equal(chartDeployed[0].ChartVersion))
+	})
+
+	It("createReportForUnmanagedHelmRelease ", func() {
+		helmChart := &configv1alpha1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1alpha1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			SyncMode:   configv1alpha1.SyncModeDryRun,
+			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary, helmChart)
+		Expect(err).To(BeNil())
+		Expect(report).ToNot(BeNil())
+		Expect(report.Action).To(Equal(string(configv1alpha1.InstallHelmAction)))
+		Expect(report.ReleaseName).To(Equal(helmChart.ReleaseName))
+		Expect(report.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
+	})
+
+	It("updateClusterReportWithHelmReports updates ClusterReports with HelmReports", func() {
+		helmChart := &configv1alpha1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1alpha1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			SyncMode:   configv1alpha1.SyncModeDryRun,
+			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
+		}
+
+		clusterReport := &configv1alpha1.ClusterReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      controllers.GetClusterReportName(clusterFeature.Name, clusterSummary.Spec.ClusterName),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+			Spec: configv1alpha1.ClusterReportSpec{
+				ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+				ClusterName:      clusterSummary.Spec.ClusterName,
+			},
+			Status: configv1alpha1.ClusterReportStatus{
+				ResourceReports: []configv1alpha1.ResourceReport{
+					{
+						Action:   string(configv1alpha1.CreateResourceAction),
+						Resource: configv1alpha1.Resource{Name: randomString(), Kind: randomString()}},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterReport,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		releaseReports := []configv1alpha1.ReleaseReport{
+			{ReleaseName: helmChart.ReleaseName, ReleaseNamespace: helmChart.ReleaseNamespace, Action: string(configv1alpha1.HelmChartActionInstall)},
+		}
+		err := controllers.UpdateClusterReportWithHelmReports(context.TODO(), c, clusterSummary, releaseReports)
+		Expect(err).To(BeNil())
+
+		currentClusterReport := &configv1alpha1.ClusterReport{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Name: clusterReport.Name, Namespace: clusterReport.Namespace}, currentClusterReport)).To(Succeed())
+		Expect(currentClusterReport.Status.ResourceReports).ToNot(BeNil())
+		Expect(len(currentClusterReport.Status.ResourceReports)).To(Equal(1))
+		Expect(reflect.DeepEqual(currentClusterReport.Status.ResourceReports, clusterReport.Status.ResourceReports)).To(BeTrue())
+		Expect(currentClusterReport.Status.ReleaseReports).To(ContainElement(releaseReports[0]))
+	})
+
+	It("handleCharts in DryRun mode updates ClusterReport", func() {
+		helmChartInstall := &configv1alpha1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1alpha1.HelmChartActionInstall,
+		}
+
+		helmChartUninstall := &configv1alpha1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1alpha1.HelmChartActionUninstall,
+		}
+
+		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+			SyncMode: configv1alpha1.SyncModeDryRun,
+			HelmCharts: []configv1alpha1.HelmChart{
+				*helmChartInstall, *helmChartUninstall,
+			},
+		}
+
+		clusterReport := &configv1alpha1.ClusterReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      controllers.GetClusterReportName(clusterFeature.Name, clusterSummary.Spec.ClusterName),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+			Spec: configv1alpha1.ClusterReportSpec{
+				ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+				ClusterName:      clusterSummary.Spec.ClusterName,
+			},
+		}
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterSummary.Namespace,
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+		clusterSummary.OwnerReferences = []metav1.OwnerReference{
+			{
+				Kind:       configv1alpha1.ClusterFeatureKind,
+				Name:       clusterFeature.Name,
+				APIVersion: "config.projectsveltos.io/v1alpha1",
+				UID:        clusterFeature.UID,
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterReport)).To(Succeed())
+
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
+
+		kubeconfig, err := controllers.CreateKubeconfig(klogr.New(), testEnv.Kubeconfig)
+		Expect(err).To(BeNil())
+
+		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
+		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
+		// such release has never been installed.
+		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, nil, kubeconfig, klogr.New())
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("mode is DryRun. Nothing is reconciled"))
+
+		currentClusterReport := &configv1alpha1.ClusterReport{}
+		Eventually(func() bool {
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: clusterReport.Name, Namespace: clusterReport.Namespace}, currentClusterReport)
+			if err != nil {
+				return false
+			}
+			return len(currentClusterReport.Status.ReleaseReports) == 2
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterReport.Name, Namespace: clusterReport.Namespace}, currentClusterReport)).To(Succeed())
+
+		// Verify action for helmChartInstall is Install
+		found := false
+		for i := range currentClusterReport.Status.ReleaseReports {
+			report := &currentClusterReport.Status.ReleaseReports[i]
+			if report.ReleaseName == helmChartInstall.ReleaseName {
+				Expect(report.Action).To(Equal(string(configv1alpha1.InstallHelmAction)))
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
+
+		// Verify action for helmChartUninstall is no action
+		found = false
+		for i := range currentClusterReport.Status.ReleaseReports {
+			report := &currentClusterReport.Status.ReleaseReports[i]
+			if report.ReleaseName == helmChartUninstall.ReleaseName {
+				Expect(report.Action).To(Equal(string(configv1alpha1.NoHelmAction)))
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
 	})
 })
 

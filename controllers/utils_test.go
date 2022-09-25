@@ -163,10 +163,11 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Namespace, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
+				Name:      clusterSummaryName,
+				Namespace: cluster.Namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -355,16 +356,16 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(err).To(BeNil())
 		Expect(policy.GetKind()).To(Equal("ClusterRole"))
 
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
 
-		controllers.AddOwnerReference(policy, clusterSummary)
+		controllers.AddOwnerReference(policy, clusterFeature)
 
 		Expect(policy.GetOwnerReferences()).ToNot(BeNil())
 		Expect(len(policy.GetOwnerReferences())).To(Equal(1))
-		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterSummaryKind))
-		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterSummary.Name))
+		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterFeatureKind))
+		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterFeature.Name))
 
-		controllers.RemoveOwnerReference(policy, clusterSummary)
+		controllers.RemoveOwnerReference(policy, clusterFeature)
 		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })

@@ -106,3 +106,13 @@ func (s *ClusterFeatureScope) SetMatchingClusterRefs(matchingClusters []corev1.O
 func (s *ClusterFeatureScope) IsContinuousSync() bool {
 	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeContinuous
 }
+
+// IsOneTimeSync returns true if ClusterFeature sync mod is set to one time
+func (s *ClusterFeatureScope) IsOneTimeSync() bool {
+	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeOneTime
+}
+
+// IsDryRunSync returns true if ClusterFeature sync mod is set to dryRun
+func (s *ClusterFeatureScope) IsDryRunSync() bool {
+	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeDryRun
+}

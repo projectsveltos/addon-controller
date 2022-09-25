@@ -39,6 +39,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
 	fakedeployer "github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer/fake"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
@@ -73,10 +74,11 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, namespace, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
+				Name:      clusterSummaryName,
+				Namespace: namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -85,6 +87,10 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+
+		// Get ClusterSummary so OwnerReference is set
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 	})
 
 	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {
@@ -100,8 +106,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -136,12 +142,70 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, klogr.New())).To(BeTrue())
+	})
+
+	It("updateChartMap updates chartMap always but in DryRun mode", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		Expect(controllers.UpdateChartMap(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(Succeed())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		Expect(manager.CanManageChart(clusterSummary, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeTrue())
+
+		// set mode to dryRun
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		// Add an extra helm chart
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts = append(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+			configv1alpha1.HelmChart{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()})
+		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		// Verify chart registrations have not changed
+		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeTrue())
+		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1])).To(BeFalse())
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
@@ -173,8 +237,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -210,8 +274,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -251,8 +315,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -274,13 +338,14 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
 		clusterSummaryName := client.ObjectKey{
-			Name: clusterSummary.Name,
+			Name:      clusterSummary.Name,
+			Namespace: clusterSummary.Namespace,
 		}
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterSummaryName,
@@ -296,6 +361,61 @@ var _ = Describe("ClustersummaryController", func() {
 				configv1alpha1.ClusterSummaryFinalizer,
 			),
 		).Should(BeTrue())
+	})
+
+	It("shouldRedeploy returns true in DryRun mode", func() {
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
+		}
+		initObjects := []client.Object{
+			clusterFeature,
+			clusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          deployer,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
+
+		// In SyncMode DryRun even if config is same (input for ShouldRedeploy) result is redeploy
+		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeTrue())
+
+		clusterSummaryName := client.ObjectKey{
+			Name:      clusterSummary.Name,
+			Namespace: clusterSummary.Namespace,
+		}
+
+		// Update SyncMode to Continuous
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		clusterSummaryScope.ClusterSummary = currentClusterSummary
+		// In SyncMode != DryRun and if config is same (input for ShouldRedeploy) result is do not redeploy
+		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeFalse())
 	})
 
 	It("Reconciliation of deleted ClusterSummary removes finalizer only when all features are removed", func() {
@@ -316,20 +436,19 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		addOwnerReference(context.TODO(), c, clusterSummary, clusterFeature)
-
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
 		clusterSummaryName := client.ObjectKey{
-			Name: clusterSummary.Name,
+			Name:      clusterSummary.Name,
+			Namespace: clusterSummary.Namespace,
 		}
 
 		// Since FeatureHelm is still marked to be removed, reconciliation won't
@@ -364,9 +483,122 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
+
+	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterFeature are deleted", func() {
+		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		controllerutil.AddFinalizer(clusterFeature, configv1alpha1.ClusterFeatureFinalizer)
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterFeature,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          deployer,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		// ClusterSummary not marked for deletion. So cannot remove finalizer
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+
+		// Mark ClusterSummary for deletion
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+		clusterSummaryScope.ClusterSummary = clusterSummary
+
+		// ClusterFeature is not marked for deletion. So cannot remove finalizer
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+
+		// Mark ClusterFeature for deletion
+		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		Expect(c.Delete(context.TODO(), currentClusterFeature)).To(Succeed())
+
+		clusterSummaryScope.ClusterFeature = currentClusterFeature
+
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+	})
+
+	It("canRemoveFinalizer in not DryRun returns true when ClusterSummary is deleted and features removed", func() {
+		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
+		}
+
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterFeature,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          deployer,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+
+		// Mark ClusterSummary for deletion
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+		clusterSummaryScope.ClusterSummary = clusterSummary
+
+		clusterSummaryScope.ClusterSummary = clusterSummary
+
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+
+		// Mark all features as removed
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
+		}
+
+		clusterSummaryScope.ClusterSummary = clusterSummary
+
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+	})
+
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
+	var clusterFeature *configv1alpha1.ClusterFeature
 	var referencingClusterSummary *configv1alpha1.ClusterSummary
 	var nonReferencingClusterSummary *configv1alpha1.ClusterSummary
 	var configMap *corev1.ConfigMap
@@ -387,6 +619,12 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		namespace = "reconcile" + randomString()
 
+		clusterFeature = &configv1alpha1.ClusterFeature{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
@@ -396,7 +634,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		referencingClusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name:      randomString(),
+				Namespace: namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -416,7 +655,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		nonReferencingClusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name:      randomString(),
+				Namespace: namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -454,6 +694,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
+		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
@@ -474,12 +715,15 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterFeature)
 
+		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
-			Name: referencingClusterSummary.Name,
+			Name:      referencingClusterSummary.Name,
+			Namespace: referencingClusterSummary.Namespace,
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
@@ -498,7 +742,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			configMap.Namespace, configMap.Name, referencingClusterSummary.Name))
 		Eventually(func() bool {
 			clusterSummaryList := controllers.RequeueClusterSummaryForReference(clusterSummaryReconciler, configMap)
-			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
+			result := reconcile.Request{NamespacedName: types.NamespacedName{
+				Namespace: referencingClusterSummary.Namespace, Name: referencingClusterSummary.Name}}
 			for i := range clusterSummaryList {
 				if clusterSummaryList[i] == result {
 					return true
@@ -517,19 +762,23 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
-
+		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterFeature)
+
+		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
-			Name: referencingClusterSummary.Name,
+			Name:      referencingClusterSummary.Name,
+			Namespace: referencingClusterSummary.Namespace,
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
@@ -544,7 +793,12 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
-			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: referencingClusterSummary.Name}}
+			result := reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: referencingClusterSummary.Namespace,
+					Name:      referencingClusterSummary.Name,
+				},
+			}
 			for i := range clusterSummaryList {
 				if clusterSummaryList[i] == result {
 					return true

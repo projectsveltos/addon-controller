@@ -91,6 +91,11 @@ func (s *ClusterSummaryScope) Name() string {
 	return s.ClusterSummary.Name
 }
 
+// Namespace returns the ClusterSummary namespace.
+func (s *ClusterSummaryScope) Namespace() string {
+	return s.ClusterSummary.Namespace
+}
+
 func (s *ClusterSummaryScope) initializeFeatureStatusSummary() {
 	if s.ClusterSummary.Status.FeatureSummaries == nil {
 		s.ClusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
@@ -233,4 +238,19 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 			LastAppliedTime: lastAppliedTime,
 		},
 	)
+}
+
+// IsContinuousSync returns true if ClusterFeature is set to keep updating workload cluster
+func (s *ClusterSummaryScope) IsContinuousSync() bool {
+	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeContinuous
+}
+
+// IsOneTimeSync returns true if ClusterFeature sync mod is set to one time
+func (s *ClusterSummaryScope) IsOneTimeSync() bool {
+	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeOneTime
+}
+
+// IsDryRunSync returns true if ClusterFeature sync mod is set to dryRun
+func (s *ClusterSummaryScope) IsDryRunSync() bool {
+	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun
 }

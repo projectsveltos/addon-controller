@@ -269,7 +269,7 @@ func prepareForDeployment(clusterFeature *configv1alpha1.ClusterFeature,
 
 	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	Expect(testEnv.Client.Get(context.TODO(),
-		types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
 	By("Set ClusterSummary OwnerReference")
 	addOwnerReference(context.TODO(), testEnv.Client, currentClusterSummary, currentClusterFeature)

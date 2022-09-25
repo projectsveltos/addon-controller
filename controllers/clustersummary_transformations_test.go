@@ -99,21 +99,22 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			ReferenceMap:      make(map[string]*controllers.Set),
-			ClusterSummaryMap: make(map[string]*controllers.Set),
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
 		set := controllers.Set{}
-		controllers.Insert(&set, clusterSummary0.Name)
-		key := controllers.GetEntryKey(string(configv1alpha1.ConfigMapReferencedResourceKind), configMap.Namespace, configMap.Name)
+		key := configv1alpha1.PolicyRef{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
+
+		controllers.Insert(&set, &configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests := controllers.RequeueClusterSummaryForReference(reconciler, configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
-		controllers.Insert(&set, clusterSummary1.Name)
+		controllers.Insert(&set, &configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests = controllers.RequeueClusterSummaryForReference(reconciler, configMap)

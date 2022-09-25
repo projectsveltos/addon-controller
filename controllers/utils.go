@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"os"
 
@@ -41,7 +40,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubectl/pkg/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -52,6 +50,14 @@ const (
 	//nolint: gosec // CAPI secret postfix
 	kubeconfigSecretNamePostfix = "-kubeconfig"
 )
+
+type conflictError struct {
+	message string
+}
+
+func (e *conflictError) Error() string {
+	return e.message
+}
 
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
@@ -71,11 +77,9 @@ func InitScheme() (*runtime.Scheme, error) {
 // CAPI cluster Namespace/Name.
 // This method does not guarantee that name is not already in use. Caller of this method needs
 // to handle that scenario
-func GetClusterSummaryName(clusterFeatureName, clusterNamespace, clusterName string) string {
+func GetClusterSummaryName(clusterFeatureName, clusterName string) string {
 	// generate random name.
-	const length = 5
-	sha := sha256.Sum256([]byte(clusterNamespace + clusterName + util.RandomString(length)))
-	return fmt.Sprintf("%s-%x", clusterFeatureName, sha[:10])
+	return fmt.Sprintf("%s-%s", clusterFeatureName, clusterName)
 }
 
 // getClusterSummary returns the ClusterSummary instance created by a specific ClusterFeature for a specific
@@ -84,6 +88,7 @@ func getClusterSummary(ctx context.Context, c client.Client,
 	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
+		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
 			ClusterFeatureLabelName: clusterFeatureName,
 			ClusterLabelNamespace:   clusterNamespace,
@@ -162,6 +167,7 @@ func getKubernetesRestConfig(ctx context.Context, logger logr.Logger, c client.C
 	if err != nil {
 		return nil, err
 	}
+	defer os.Remove(kubeconfig)
 
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
@@ -301,72 +307,64 @@ func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstr
 	return dr, nil
 }
 
-// preprareObjectForUpdate finds if object currently exists. If object exists:
+// validateObjectForUpdate finds if object currently exists. If object exists:
 // - verifies this object was created by same ConfigMap/Secret. Returns an error otherwise.
 // This is needed to prevent misconfigurations. An example would be when different
 // ConfigMaps are referenced by ClusterFeature(s) and contain same policy namespace/name
 // (content might be different) and are about to be deployed in the same CAPI Cluster;
-// - gets ResourceVersion and set for object, so that object can be applied overridding
-// any content but status
-func preprareObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
-	object *unstructured.Unstructured, referenceKind, referenceNamespace, referenceName string) (*unstructured.Unstructured, error) {
+// Return an error if validation fails. Return also true if object currently exists. False otherwise.
+func validateObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
+	object *unstructured.Unstructured, referenceKind, referenceNamespace, referenceName string) (bool, error) {
 
 	if object == nil {
-		return nil, fmt.Errorf("object is nil")
+		return false, nil
 	}
 
 	currentObject, err := dr.Get(ctx, object.GetName(), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return object, nil
+			return false, nil
 		}
-		return nil, err
+		return false, err
 	}
 
-	if labels := object.GetLabels(); labels != nil {
+	if labels := currentObject.GetLabels(); labels != nil {
 		kind, kindOk := labels[ReferenceLabelKind]
 		namespace, namespaceOk := labels[ReferenceLabelNamespace]
 		name, nameOk := labels[ReferenceLabelName]
 
 		if kindOk {
 			if kind != referenceKind {
-				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
-					object.GetKind(), object.GetName(), kind, namespace, name)
+				return true, &conflictError{
+					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
+						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 		if namespaceOk {
 			if namespace != referenceNamespace {
-				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
-					object.GetKind(), object.GetName(), kind, namespace, name)
+				return true, &conflictError{
+					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
+						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 		if nameOk {
 			if name != referenceName {
-				return nil, fmt.Errorf("policy (kind: %s) %s is currently deployed by %s: %s/%s",
-					object.GetKind(), object.GetName(), kind, namespace, name)
+				return true, &conflictError{
+					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
+						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 	}
 
-	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
-	if err != nil {
-		return nil, err
-	}
-
-	forceConflict := true
-	options := metav1.PatchOptions{
-		FieldManager: "application/apply-patch",
-		Force:        &forceConflict,
-	}
-	return dr.Patch(ctx, currentObject.GetName(), types.ApplyPatchType, data, options)
+	return true, nil
 }
 
-// addOwnerReference adds clusterSummary as an object's OwnerReference.
+// addOwnerReference adds clusterFeature as an object's OwnerReference.
 // OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
 // reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
 // because of different ClusterSummary. When cleaning up, a policy can be removed only if no more ClusterSummary
 // are listed as OwnerReferences.
-func addOwnerReference(object *unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary) {
+func addOwnerReference(object *unstructured.Unstructured, clusterFeature *configv1alpha1.ClusterFeature) {
 	onwerReferences := object.GetOwnerReferences()
 	if onwerReferences == nil {
 		onwerReferences = make([]metav1.OwnerReference, 0)
@@ -374,8 +372,8 @@ func addOwnerReference(object *unstructured.Unstructured, clusterSummary *config
 
 	for i := range onwerReferences {
 		ref := &onwerReferences[i]
-		if ref.Kind == clusterSummary.Kind &&
-			ref.Name == clusterSummary.Name {
+		if ref.Kind == clusterFeature.Kind &&
+			ref.Name == clusterFeature.Name {
 
 			return
 		}
@@ -383,22 +381,22 @@ func addOwnerReference(object *unstructured.Unstructured, clusterSummary *config
 
 	onwerReferences = append(onwerReferences,
 		metav1.OwnerReference{
-			APIVersion: clusterSummary.APIVersion,
-			Kind:       clusterSummary.Kind,
-			Name:       clusterSummary.Name,
-			UID:        clusterSummary.UID,
+			APIVersion: clusterFeature.APIVersion,
+			Kind:       clusterFeature.Kind,
+			Name:       clusterFeature.Name,
+			UID:        clusterFeature.UID,
 		},
 	)
 
 	object.SetOwnerReferences(onwerReferences)
 }
 
-// removeOwnerReference removes clusterSummary as an OwnerReference from object.
+// removeOwnerReference removes clusterFeature as an OwnerReference from object.
 // OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
 // reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
-// because of different ClusterSummary. When cleaning up, a policy can be removed only if no more ClusterSummary
+// because of different ClusterFeatures. When cleaning up, a policy can be removed only if no more ClusterFeatures
 // are listed as OwnerReferences.
-func removeOwnerReference(object *unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary) {
+func removeOwnerReference(object *unstructured.Unstructured, clusterfeature *configv1alpha1.ClusterFeature) {
 	onwerReferences := object.GetOwnerReferences()
 	if onwerReferences == nil {
 		return
@@ -406,8 +404,8 @@ func removeOwnerReference(object *unstructured.Unstructured, clusterSummary *con
 
 	for i := range onwerReferences {
 		ref := &onwerReferences[i]
-		if ref.Kind == clusterSummary.Kind &&
-			ref.Name == clusterSummary.Name {
+		if ref.Kind == clusterfeature.Kind &&
+			ref.Name == clusterfeature.Name {
 
 			onwerReferences[i] = onwerReferences[len(onwerReferences)-1]
 			onwerReferences = onwerReferences[:len(onwerReferences)-1]
@@ -418,9 +416,29 @@ func removeOwnerReference(object *unstructured.Unstructured, clusterSummary *con
 	object.SetOwnerReferences(onwerReferences)
 }
 
+// isOnlyhOwnerReference returns true if clusterfeature is the only ownerreference for object
+func isOnlyhOwnerReference(object *unstructured.Unstructured, clusterfeature *configv1alpha1.ClusterFeature) bool {
+	onwerReferences := object.GetOwnerReferences()
+	if onwerReferences == nil {
+		return false
+	}
+
+	if len(onwerReferences) != 1 {
+		return false
+	}
+
+	ref := &onwerReferences[0]
+	return ref.Kind == clusterfeature.Kind &&
+		ref.Name == clusterfeature.Name
+}
+
 func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	if resourceNamespace != "" {
 		return fmt.Sprintf("%s-%s-%s", resourceKind, resourceNamespace, resourceName)
 	}
 	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
+}
+
+func getClusterReportName(clusterFeatureName, clusterName string) string {
+	return clusterFeatureName + "--" + clusterName
 }

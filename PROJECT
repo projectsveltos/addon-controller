@@ -36,4 +36,12 @@ resources:
   kind: SubstitutionRule
   path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterReport
+  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  version: v1alpha1
 version: "3"

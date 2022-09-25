@@ -50,26 +50,39 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	defer r.PolicyMux.Unlock()
 
 	// Following is needed as o.GetObjectKind().GroupVersionKind().Kind is not set
-	var key string
+	var key configv1alpha1.PolicyRef
 	switch o.(type) {
 	case *corev1.ConfigMap:
-		key = getEntryKey(string(configv1alpha1.ConfigMapReferencedResourceKind), o.GetNamespace(), o.GetName())
+		key = configv1alpha1.PolicyRef{
+			Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			Namespace: o.GetNamespace(),
+			Name:      o.GetName(),
+		}
 	case *corev1.Secret:
-		key = getEntryKey(string(configv1alpha1.SecretReferencedResourceKind), o.GetNamespace(), o.GetName())
+		key = configv1alpha1.PolicyRef{
+			Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+			Namespace: o.GetNamespace(),
+			Name:      o.GetName(),
+		}
 	default:
-		key = getEntryKey(o.GetObjectKind().GroupVersionKind().Kind, o.GetNamespace(), o.GetName())
+		key = configv1alpha1.PolicyRef{
+			Kind:      o.GetObjectKind().GroupVersionKind().Kind,
+			Namespace: o.GetNamespace(),
+			Name:      o.GetName(),
+		}
 	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("referenced key: %s", key))
 
-	requests := make([]ctrl.Request, r.getReferenceMapForEntry(key).len())
+	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).len())
 
-	consumers := r.getReferenceMapForEntry(key).items()
+	consumers := r.getReferenceMapForEntry(&key).items()
 	for i := range consumers {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeue consumer: %s", consumers[i]))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i],
+				Name:      consumers[i].Name,
+				Namespace: consumers[i].Namespace,
 			},
 		}
 	}

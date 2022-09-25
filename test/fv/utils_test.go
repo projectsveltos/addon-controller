@@ -103,10 +103,12 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	return client.New(restConfig, client.Options{Scheme: scheme})
 }
 
-func verifyFeatureStatusIsProvisioned(clusterSummaryName string, featureID configv1alpha1.FeatureID) {
+func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryName string, featureID configv1alpha1.FeatureID) {
 	Eventually(func() bool {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
+			currentClusterSummary)
 		if err != nil {
 			return false
 		}
@@ -142,9 +144,11 @@ func deleteClusterFeature(clusterFeature *configv1alpha1.ClusterFeature) {
 	}
 	Eventually(func() bool {
 		for i := range clusterSummaryList.Items {
+			clusterSummaryNamespace := clusterSummaryList.Items[i].Namespace
 			clusterSummaryName := clusterSummaryList.Items[i].Name
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSummaryName}, currentClusterSummary)
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, currentClusterSummary)
 			if err == nil || !apierrors.IsNotFound(err) {
 				return false
 			}
@@ -169,6 +173,7 @@ func getClusterSummary(ctx context.Context,
 	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
+		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
 			controllers.ClusterFeatureLabelName: clusterFeatureName,
 			controllers.ClusterLabelNamespace:   clusterNamespace,
@@ -217,21 +222,32 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 	Expect(ref.Name).To(Equal(clusterFeature.Name))
 
 	Byf("Verifying ClusterSummary configuration")
-	Eventually(func() bool {
+	Eventually(func() error {
 		var currentClusterSummary *configv1alpha1.ClusterSummary
 		currentClusterSummary, err = getClusterSummary(context.TODO(),
 			clusterFeature.Name, clusterNamespace, clusterName)
 		if err != nil {
-			return false
+			return err
 		}
 
-		return reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
-			clusterFeature.Spec.HelmCharts) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
-				clusterFeature.Spec.PolicyRefs) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) &&
-			reflect.DeepEqual(currentClusterSummary.Spec.ClusterName, clusterName)
-	}, timeout, pollingInterval).Should(BeTrue())
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+			clusterFeature.Spec.HelmCharts) {
+
+			return fmt.Errorf("helmCharts do not match")
+		}
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
+			clusterFeature.Spec.PolicyRefs) {
+
+			return fmt.Errorf("policyRefs do not match")
+		}
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) {
+			return fmt.Errorf("clusterNamespace does not match")
+		}
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterName, clusterName) {
+			return fmt.Errorf("clusterName does not match")
+		}
+		return nil
+	}, timeout, pollingInterval).Should(BeNil())
 
 	clusterSummary, err = getClusterSummary(context.TODO(),
 		clusterFeature.Name, clusterNamespace, clusterName)

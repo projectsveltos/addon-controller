@@ -102,7 +102,7 @@ var _ = Describe("Template", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for resources", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		Byf("Changing clusterfeature to not reference configmap anymore")
 		currentClusterFeature := &configv1alpha1.ClusterFeature{}

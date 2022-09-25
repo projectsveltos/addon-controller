@@ -1,0 +1,24 @@
+# permissions for end users to edit clusterreports.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterreport-editor-role
+rules:
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterreports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterreports/status
+  verbs:
+  - get

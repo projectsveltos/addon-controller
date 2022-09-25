@@ -81,29 +81,31 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 		reconciler := &controllers.ClusterFeatureReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			ClusterMap:        make(map[string]*controllers.Set),
-			ClusterFeatureMap: make(map[string]*controllers.Set),
-			ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		By("Setting ClusterFeatureReconciler internal structures")
-		reconciler.ClusterFeatures[matchingClusterFeature.Name] = matchingClusterFeature.Spec.ClusterSelector
-		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
+		matchingInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterFeatureKind, Name: matchingClusterFeature.Name}
+		reconciler.ClusterFeatures[matchingInfo] = matchingClusterFeature.Spec.ClusterSelector
+		nonMatchingInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterFeatureKind, Name: nonMatchingClusterFeature.Name}
+		reconciler.ClusterFeatures[nonMatchingInfo] = nonMatchingClusterFeature.Spec.ClusterSelector
 
 		// ClusterMap contains, per ClusterName, list of ClusterFeatures matching it.
 		clusterFeatureSet := &controllers.Set{}
-		controllers.Insert(clusterFeatureSet, matchingClusterFeature.Name)
-		clusterName := cluster.Namespace + "/" + cluster.Name
-		reconciler.ClusterMap[clusterName] = clusterFeatureSet
+		controllers.Insert(clusterFeatureSet, &matchingInfo)
+		clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+		reconciler.ClusterMap[clusterInfo] = clusterFeatureSet
 
 		// ClusterFeatureMap contains, per ClusterFeature, list of matched Clusters.
 		clusterSet1 := &controllers.Set{}
-		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = clusterSet1
+		reconciler.ClusterFeatureMap[nonMatchingInfo] = clusterSet1
 
 		clusterSet2 := &controllers.Set{}
-		controllers.Insert(clusterSet2, clusterName)
-		reconciler.ClusterFeatureMap[matchingClusterFeature.Name] = clusterSet2
+		controllers.Insert(clusterSet2, &clusterInfo)
+		reconciler.ClusterFeatureMap[matchingInfo] = clusterSet2
 
 		By("Expect only matchingClusterFeature to be requeued")
 		requests := controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
@@ -114,13 +116,13 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 		nonMatchingClusterFeature.Spec.ClusterSelector = matchingClusterFeature.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
 
-		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
+		reconciler.ClusterFeatures[nonMatchingInfo] = nonMatchingClusterFeature.Spec.ClusterSelector
 
-		controllers.Insert(clusterSet1, clusterName)
-		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = clusterSet1
+		controllers.Insert(clusterSet1, &clusterInfo)
+		reconciler.ClusterFeatureMap[nonMatchingInfo] = clusterSet1
 
-		controllers.Insert(clusterFeatureSet, nonMatchingClusterFeature.Name)
-		reconciler.ClusterMap[clusterName] = clusterFeatureSet
+		controllers.Insert(clusterFeatureSet, &nonMatchingInfo)
+		reconciler.ClusterMap[clusterInfo] = clusterFeatureSet
 
 		requests = controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
 		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
@@ -135,12 +137,12 @@ var _ = Describe("ClusterFeatureReconciler map functions", func() {
 		Expect(c.Update(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
 
 		emptySet := &controllers.Set{}
-		reconciler.ClusterFeatureMap[matchingClusterFeature.Name] = emptySet
-		reconciler.ClusterFeatureMap[nonMatchingClusterFeature.Name] = emptySet
-		reconciler.ClusterMap[clusterName] = emptySet
+		reconciler.ClusterFeatureMap[matchingInfo] = emptySet
+		reconciler.ClusterFeatureMap[nonMatchingInfo] = emptySet
+		reconciler.ClusterMap[clusterInfo] = emptySet
 
-		reconciler.ClusterFeatures[matchingClusterFeature.Name] = matchingClusterFeature.Spec.ClusterSelector
-		reconciler.ClusterFeatures[nonMatchingClusterFeature.Name] = nonMatchingClusterFeature.Spec.ClusterSelector
+		reconciler.ClusterFeatures[matchingInfo] = matchingClusterFeature.Spec.ClusterSelector
+		reconciler.ClusterFeatures[nonMatchingInfo] = nonMatchingClusterFeature.Spec.ClusterSelector
 
 		requests = controllers.RequeueClusterFeatureForCluster(reconciler, cluster)
 		Expect(requests).To(HaveLen(0))

@@ -51,6 +51,6 @@ jobs:
       with:
         go-version: 1.19
     - name: fv
-      run: make create-test fv
+      run: make create-cluster fv
       env:
         FV: true

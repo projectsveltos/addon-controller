@@ -132,7 +132,7 @@ var _ = Describe("DryRun", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		charts := []configv1alpha1.Chart{
-			{ChartName: "mysql", ChartVersion: "9.3.3", Namespace: "mysql"},
+			{ReleaseName: "mysql", ChartVersion: "9.3.3", Namespace: "mysql"},
 		}
 
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,

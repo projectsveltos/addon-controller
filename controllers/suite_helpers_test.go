@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -274,24 +275,35 @@ func prepareForDeployment(clusterFeature *configv1alpha1.ClusterFeature,
 	By("Set ClusterSummary OwnerReference")
 	addOwnerReference(context.TODO(), testEnv.Client, currentClusterSummary, currentClusterFeature)
 
-	currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
-	Expect(testEnv.Client.Get(context.TODO(),
-		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)).To(Succeed())
-	By("Set ClusterConfiguration OwnerReference")
-	addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterFeature)
-
 	Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-	Expect(testEnv.Client.Get(context.TODO(),
-		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)).To(Succeed())
-	currentClusterConfiguration.Status.ClusterFeatureResources = []configv1alpha1.ClusterFeatureResource{
-		{
-			ClusterFeatureName: clusterFeature.Name,
-			Features:           make([]configv1alpha1.Feature, 0),
-		},
-	}
-	Expect(testEnv.Status().Update(ctx, currentClusterConfiguration)).To(Succeed())
+	// This method is invoked by different tests in parallel, all touching same clusterConfiguration.
+	// So add this logic in a Retry
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		err := testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)
+		if err != nil {
+			return err
+		}
+		By("Set ClusterConfiguration OwnerReference")
+		addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterFeature)
+
+		err = testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)
+		if err != nil {
+			return err
+		}
+		currentClusterConfiguration.Status.ClusterFeatureResources = []configv1alpha1.ClusterFeatureResource{
+			{
+				ClusterFeatureName: clusterFeature.Name,
+				Features:           make([]configv1alpha1.Feature, 0),
+			},
+		}
+		return testEnv.Status().Update(ctx, currentClusterConfiguration)
+	})
+	Expect(err).To(BeNil())
 
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())

@@ -94,8 +94,8 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts := []configv1alpha1.Chart{
-			{ChartName: "kyverno-latest", ChartVersion: "v2.5.0", Namespace: "kyverno"},
-			{ChartName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.0", Namespace: "kyverno"},
+			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
@@ -145,8 +145,8 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts = []configv1alpha1.Chart{
-			{ChartName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
-			{ChartName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
+			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
@@ -185,7 +185,7 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1alpha1.Chart{
-			{ChartName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,

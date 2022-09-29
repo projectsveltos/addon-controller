@@ -399,10 +399,10 @@ func verifyClusterConfigurationPolicies(deployedFeatures []configv1alpha1.Featur
 	for i := range expectedCharts {
 		chart := expectedCharts[i]
 		found := false
-		By(fmt.Sprintf("Verifying %s %s %s", chart.ChartName, chart.ChartVersion, chart.Namespace))
+		By(fmt.Sprintf("Verifying %s %s %s", chart.ReleaseName, chart.ChartVersion, chart.Namespace))
 		for j := range deployedFeatures[index].Charts {
 			c := deployedFeatures[index].Charts[j]
-			if c.ChartName == chart.ChartName &&
+			if c.ReleaseName == chart.ReleaseName &&
 				c.ChartVersion == chart.ChartVersion &&
 				c.Namespace == chart.Namespace {
 

@@ -275,7 +275,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 				chartDeployed = append(chartDeployed, configv1alpha1.Chart{
 					RepoURL:         currentChart.RepositoryURL,
 					Namespace:       currentRelease.ReleaseNamespace,
-					ChartName:       currentRelease.ReleaseName,
+					ReleaseName:     currentRelease.ReleaseName,
 					ChartVersion:    currentRelease.ChartVersion,
 					AppVersion:      currentRelease.AppVersion,
 					LastAppliedTime: &currentRelease.Updated,

@@ -58,11 +58,6 @@ spec:
                                   description: AppVersion is the version of the app
                                     deployed in the CAPI Cluster.
                                   type: string
-                                chartName:
-                                  description: ChartName of the chart deployed in
-                                    the CAPI Cluster.
-                                  minLength: 1
-                                  type: string
                                 chartVersion:
                                   description: ChartVersion is the version of the
                                     helm chart deployed in the CAPI Cluster.
@@ -76,15 +71,20 @@ spec:
                                   description: Namespace where chart is deployed in
                                     the CAPI Cluster.
                                   type: string
+                                releaseName:
+                                  description: ReleaseName name of the release deployed
+                                    in the CAPI Cluster.
+                                  minLength: 1
+                                  type: string
                                 repoURL:
                                   description: RepoURL URL of the repo containing
                                     the helm chart deployed in the CAPI Cluster.
                                   minLength: 1
                                   type: string
                               required:
-                              - chartName
                               - chartVersion
                               - lastAppliedTime
+                              - releaseName
                               - repoURL
                               type: object
                             type: array

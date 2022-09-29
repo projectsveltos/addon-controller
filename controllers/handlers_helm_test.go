@@ -307,7 +307,7 @@ var _ = Describe("HandlersHelm", func() {
 		chartDeployed := []configv1alpha1.Chart{
 			{
 				RepoURL:      "https://charts.bitnami.com/bitnami",
-				ChartName:    "bitnami/contour",
+				ReleaseName:  "contour-latest",
 				ChartVersion: "9.1.2",
 				Namespace:    "projectcontour",
 			},
@@ -341,15 +341,20 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(Equal(clusterFeature.Name))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(
+			Equal(clusterFeature.Name))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].FeatureID).To(Equal(configv1alpha1.FeatureHelm))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].FeatureID).To(
+			Equal(configv1alpha1.FeatureHelm))
 		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].RepoURL).To(Equal(chartDeployed[0].RepoURL))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartName).To(Equal(chartDeployed[0].ChartName))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartVersion).To(Equal(chartDeployed[0].ChartVersion))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].RepoURL).To(
+			Equal(chartDeployed[0].RepoURL))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ReleaseName).To(
+			Equal(chartDeployed[0].ReleaseName))
+		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartVersion).To(
+			Equal(chartDeployed[0].ChartVersion))
 	})
 
 	It("createReportForUnmanagedHelmRelease ", func() {

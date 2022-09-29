@@ -58,9 +58,9 @@ type Chart struct {
 	// +kubebuilder:validation:MinLength=1
 	RepoURL string `json:"repoURL"`
 
-	// ChartName of the chart deployed in the CAPI Cluster.
+	// ReleaseName name of the release deployed in the CAPI Cluster.
 	// +kubebuilder:validation:MinLength=1
-	ChartName string `json:"chartName"`
+	ReleaseName string `json:"releaseName"`
 
 	// Namespace where chart is deployed in the CAPI Cluster.
 	// +optional

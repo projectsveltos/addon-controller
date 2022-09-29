@@ -13,7 +13,7 @@ spec:
     listKind: ClusterSummaryList
     plural: clustersummaries
     singular: clustersummary
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
@@ -134,6 +134,7 @@ spec:
                     enum:
                     - OneTime
                     - Continuous
+                    - DryRun
                     type: string
                 required:
                 - clusterSelector

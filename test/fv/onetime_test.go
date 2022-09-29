@@ -98,7 +98,7 @@ var _ = Describe("SyncMode one time", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		policies := []policy{
 			{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},

@@ -129,6 +129,7 @@ spec:
                 enum:
                 - OneTime
                 - Continuous
+                - DryRun
                 type: string
             required:
             - clusterSelector

@@ -100,6 +100,25 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
+  - clusterreports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterreports/status
+  verbs:
+  - get
+  - list
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
   - clustersummaries
   verbs:
   - create

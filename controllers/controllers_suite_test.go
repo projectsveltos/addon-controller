@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
@@ -94,8 +95,8 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		Client:            c,
 		Scheme:            scheme,
 		Deployer:          dep,
-		ReferenceMap:      make(map[string]*controllers.Set),
-		ClusterSummaryMap: make(map[string]*controllers.Set),
+		ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
 		PolicyMux:         sync.Mutex{},
 	}
 }
@@ -104,9 +105,9 @@ func getClusterFeatureReconciler(c client.Client) *controllers.ClusterFeatureRec
 	return &controllers.ClusterFeatureReconciler{
 		Client:            c,
 		Scheme:            scheme,
-		ClusterMap:        make(map[string]*controllers.Set),
-		ClusterFeatureMap: make(map[string]*controllers.Set),
-		ClusterFeatures:   make(map[string]configv1alpha1.Selector),
+		ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:               sync.Mutex{},
 	}
 }

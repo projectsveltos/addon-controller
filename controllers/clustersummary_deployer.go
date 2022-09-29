@@ -84,10 +84,8 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 			currentHash, hash))
 	}
 
-	deployed := r.isFeatureDeployed(clusterSummaryScope, f.id)
-	if deployed && isConfigSame {
-		// feature is deployed and nothing has changed. Nothing to do.
-		logger.V(logs.LogDebug).Info("feature is deployed and hash has not changed")
+	if !r.shouldRedeploy(clusterSummaryScope, f, isConfigSame, logger) {
+		logger.V(logs.LogDebug).Info("no need to redeploy")
 		return nil
 	}
 
@@ -422,4 +420,23 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 	// update status with list of GroupVersionKinds deployed in a CAPI Cluster
 	clusterSummaryScope.SetDeployedGroupVersionKind(featureID, gvks)
 	return nil
+}
+
+// shouldRedeploy returns true if this feature requires to be redeployed.
+func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.ClusterSummaryScope, f feature,
+	isConfigSame bool, logger logr.Logger) bool {
+
+	if clusterSummaryScope.IsDryRunSync() {
+		logger.V(logs.LogDebug).Info("dry run mode. Always redeploy.")
+		return true
+	}
+
+	deployed := r.isFeatureDeployed(clusterSummaryScope, f.id)
+	if deployed && isConfigSame {
+		// feature is deployed and nothing has changed. Nothing to do.
+		logger.V(logs.LogDebug).Info("feature is deployed and hash has not changed")
+		return false
+	}
+
+	return true
 }

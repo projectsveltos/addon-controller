@@ -173,7 +173,6 @@ spec:
                               required:
                               - group
                               - kind
-                              - lastAppliedTime
                               - name
                               - owner
                               type: object

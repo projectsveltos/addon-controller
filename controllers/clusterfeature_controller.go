@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -50,10 +51,14 @@ type ClusterFeatureReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
-	Mux                  sync.Mutex                         // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	ClusterMap           map[string]*Set                    // key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
-	ClusterFeatureMap    map[string]*Set                    // key: ClusterFeature name; value: set of CAPI Clusters matched
-	ClusterFeatures      map[string]configv1alpha1.Selector // key: ClusterFeature name; value ClusterFeature Selector
+	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	Mux sync.Mutex
+	// key: CAPI Cluster namespace/name; value: set of all ClusterFeatures matching the Cluster
+	ClusterMap map[configv1alpha1.PolicyRef]*Set
+	// key: ClusterFeature; value: set of CAPI Clusters matched
+	ClusterFeatureMap map[configv1alpha1.PolicyRef]*Set
+	// key: ClusterFeature; value ClusterFeature Selector
+	ClusterFeatures map[configv1alpha1.PolicyRef]configv1alpha1.Selector
 
 	// Reason for the two maps:
 	// ClusterFeature, via ClusterSelector, matches CAPI Clusters based on Cluster labels.
@@ -84,7 +89,8 @@ type ClusterFeatureReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterfeatures/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;update;create;delete
-//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;create;watch
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports,verbs=get;list;update;create;watch;delete
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;create;watch;delete
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
@@ -165,6 +171,11 @@ func (r *ClusterFeatureReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
+	if err := r.cleanClusterReports(ctx, clusterFeatureScope.ClusterFeature); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterReports")
+		return reconcile.Result{}, err
+	}
+
 	if !r.canRemoveFinalizer(ctx, clusterFeatureScope) {
 		logger.V(logs.LogInfo).Info("Cannot remove finalizer yet")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
@@ -204,6 +215,11 @@ func (r *ClusterFeatureReconciler) reconcileNormal(
 	// For each matching CAPI Cluster, create/update corresponding ClusterConfiguration
 	if err := r.updateClusterConfigurations(ctx, clusterFeatureScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterConfigurations")
+		return reconcile.Result{}, err
+	}
+	// For each matching CAPI Cluster, create or delete corresponding ClusterReport if needed
+	if err := r.updateClusterReports(ctx, clusterFeatureScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to update ClusterReports")
 		return reconcile.Result{}, err
 	}
 	// For each matching CAPI Cluster, create/update corresponding ClusterSummary
@@ -304,6 +320,100 @@ func (r *ClusterFeatureReconciler) getMatchingClusters(ctx context.Context, clus
 	return matching, nil
 }
 
+// updateClusterReports for each CAPI Cluster currently matching ClusterFeature:
+// - if syncMode is DryRun, creates corresponding ClusterReport if one does not exist already;
+// - if syncMode is DryRun, deletes ClusterReports for any CAPI Cluster not matching anymore;
+// - if syncMode is not DryRun, deletes ClusterReports created by this ClusterFeature instance
+func (r *ClusterFeatureReconciler) updateClusterReports(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
+	if clusterFeatureScope.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeDryRun {
+		err := r.createClusterReports(ctx, clusterFeatureScope.ClusterFeature)
+		if err != nil {
+			clusterFeatureScope.Logger.Error(err, "failed to create ClusterReports")
+			return err
+		}
+	} else {
+		// delete all ClusterReports created by this ClusterFeature instance
+		err := r.cleanClusterReports(ctx, clusterFeatureScope.ClusterFeature)
+		if err != nil {
+			clusterFeatureScope.Logger.Error(err, "failed to create ClusterReports")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// createClusterReports creates a ClusterReport for each matching Cluster
+func (r *ClusterFeatureReconciler) createClusterReports(ctx context.Context, clusterFeature *configv1alpha1.ClusterFeature) error {
+	for i := range clusterFeature.Status.MatchingClusterRefs {
+		cluster := clusterFeature.Status.MatchingClusterRefs[i]
+
+		// Create ClusterConfiguration if not already existing.
+		err := r.createClusterReport(ctx, clusterFeature, &cluster)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createClusterReport creates ClusterReport given a CAPI Cluster.
+// If already existing, return nil
+func (r *ClusterFeatureReconciler) createClusterReport(ctx context.Context, clusterFeature *configv1alpha1.ClusterFeature,
+	cluster *corev1.ObjectReference) error {
+
+	clusterReport := &configv1alpha1.ClusterReport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      getClusterReportName(clusterFeature.Name, cluster.Name),
+			Labels: map[string]string{
+				ClusterFeatureLabelName: clusterFeature.Name,
+			},
+		},
+		Spec: configv1alpha1.ClusterReportSpec{
+			ClusterNamespace: cluster.Namespace,
+			ClusterName:      cluster.Name,
+		},
+	}
+
+	err := r.Create(ctx, clusterReport)
+	if err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
+	}
+
+	return err
+}
+
+// cleanClusterReports deletes ClusterReports created by this ClusterFeature instance.
+func (r *ClusterFeatureReconciler) cleanClusterReports(ctx context.Context,
+	clusterFeature *configv1alpha1.ClusterFeature) error {
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			ClusterFeatureLabelName: clusterFeature.Name,
+		},
+	}
+
+	clusterReportList := &configv1alpha1.ClusterReportList{}
+	err := r.List(ctx, clusterReportList, listOptions...)
+	if err != nil {
+		return err
+	}
+
+	for i := range clusterReportList.Items {
+		err = r.Delete(ctx, &clusterReportList.Items[i])
+		if err != nil {
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // updateClusterSummaries for each CAPI Cluster currently matching ClusterFeature:
 // - creates corresponding ClusterSummary if one does not exist already
 // - updates (eventually) corresponding ClusterSummary if one already exists
@@ -381,11 +491,17 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterFeatureScope.ClusterFeature) {
 			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName)]; !ok {
-				if err := r.deleteClusterSummary(ctx, clusterFeatureScope, cs); err != nil {
-					clusterFeatureScope.Logger.Error(err, "failed to update ClusterSummary for cluster %s/%s",
-						cs.Namespace, cs.Name)
+				err := r.deleteClusterSummary(ctx, cs)
+				if err != nil {
+					clusterFeatureScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
+						cs.Namespace, cs.Name))
 					return err
 				}
+			}
+			// update SyncMode
+			err := r.updateClusterSummarySyncMode(ctx, clusterFeatureScope.ClusterFeature, cs)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -399,10 +515,6 @@ func (r *ClusterFeatureReconciler) cleanClusterSummaries(ctx context.Context, cl
 // -if no more OwnerReferences are left, delete ClusterConfigurations
 func (r *ClusterFeatureReconciler) cleanClusterConfigurations(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope) error {
 	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
-
-	if !r.allClusterSummariesGone(ctx, clusterFeatureScope) {
-		return fmt.Errorf("not all ClusterSummaries owned by ClusterFeature are gone. Wait")
-	}
 
 	matchingClusterMap := make(map[string]bool)
 
@@ -516,11 +628,12 @@ func (r *ClusterFeatureReconciler) cleanClusterConfigurationClusterFeatureResour
 func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Namespace, cluster.Name)
+	clusterSummaryName := GetClusterSummaryName(clusterFeatureScope.Name(), cluster.Name)
 
 	clusterSummary := &configv1alpha1.ClusterSummary{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterSummaryName,
+			Name:      clusterSummaryName,
+			Namespace: cluster.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: clusterFeatureScope.ClusterFeature.APIVersion,
@@ -551,7 +664,7 @@ func (r *ClusterFeatureReconciler) createClusterSummary(ctx context.Context, clu
 func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clusterFeatureScope *scope.ClusterFeatureScope,
 	cluster *corev1.ObjectReference) error {
 
-	if !clusterFeatureScope.IsContinuousSync() {
+	if clusterFeatureScope.IsOneTimeSync() {
 		return nil
 	}
 
@@ -573,10 +686,22 @@ func (r *ClusterFeatureReconciler) updateClusterSummary(ctx context.Context, clu
 
 // deleteClusterSummary deletes ClusterSummary given a ClusterFeature and a matching CAPI Cluster
 func (r *ClusterFeatureReconciler) deleteClusterSummary(ctx context.Context,
-	clusterFeatureScope *scope.ClusterFeatureScope,
 	clusterSummary *configv1alpha1.ClusterSummary) error {
 
 	return r.Delete(ctx, clusterSummary)
+}
+
+func (r *ClusterFeatureReconciler) updateClusterSummarySyncMode(ctx context.Context,
+	clusterFeature *configv1alpha1.ClusterFeature, clusterSummary *configv1alpha1.ClusterSummary) error {
+
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+		currentClusterSummary)
+	if err != nil {
+		return err
+	}
+	currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = clusterFeature.Spec.SyncMode
+	return r.Update(ctx, currentClusterSummary)
 }
 
 // updateClusterConfigurations for each CAPI Cluster currently matching ClusterFeature:
@@ -767,42 +892,43 @@ func (r *ClusterFeatureReconciler) updatesMaps(clusterFeatureScope *scope.Cluste
 	currentClusters := &Set{}
 	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
 		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
-		clusterName := cluster.Namespace + "/" + cluster.Name
-		currentClusters.insert(clusterName)
+		clusterInfo := &configv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
+		currentClusters.insert(clusterInfo)
 	}
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
+	clusterFeatureInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterFeatureKind, Name: clusterFeatureScope.Name()}
 	// Get list of Clusters not matched anymore by ClusterFeature
-	var toBeRemoved []string
-	if v, ok := r.ClusterFeatureMap[clusterFeatureScope.Name()]; ok {
+	var toBeRemoved []configv1alpha1.PolicyRef
+	if v, ok := r.ClusterFeatureMap[clusterFeatureInfo]; ok {
 		toBeRemoved = v.difference(currentClusters)
 	}
 
 	// For each currently matching Cluster, add ClusterFeature as consumer
 	for i := range clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs {
 		cluster := clusterFeatureScope.ClusterFeature.Status.MatchingClusterRefs[i]
-		clusterName := cluster.Namespace + "/" + cluster.Name
-		r.getClusterMapForEntry(clusterName).insert(clusterFeatureScope.Name())
+		clusterInfo := &configv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
+		r.getClusterMapForEntry(clusterInfo).insert(&clusterFeatureInfo)
 	}
 
 	// For each Cluster not matched anymore, remove ClusterFeature as consumer
 	for i := range toBeRemoved {
 		clusterName := toBeRemoved[i]
-		r.getClusterMapForEntry(clusterName).erase(clusterFeatureScope.Name())
+		r.getClusterMapForEntry(&clusterName).erase(&clusterFeatureInfo)
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
-	r.ClusterFeatureMap[clusterFeatureScope.Name()] = currentClusters
-	r.ClusterFeatures[clusterFeatureScope.Name()] = clusterFeatureScope.ClusterFeature.Spec.ClusterSelector
+	r.ClusterFeatureMap[clusterFeatureInfo] = currentClusters
+	r.ClusterFeatures[clusterFeatureInfo] = clusterFeatureScope.ClusterFeature.Spec.ClusterSelector
 }
 
-func (r *ClusterFeatureReconciler) getClusterMapForEntry(entry string) *Set {
-	s := r.ClusterMap[entry]
+func (r *ClusterFeatureReconciler) getClusterMapForEntry(entry *configv1alpha1.PolicyRef) *Set {
+	s := r.ClusterMap[*entry]
 	if s == nil {
 		s = &Set{}
-		r.ClusterMap[entry] = s
+		r.ClusterMap[*entry] = s
 	}
 	return s
 }

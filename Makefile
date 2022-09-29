@@ -158,7 +158,7 @@ CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
 TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
-NUM_NODES ?= 4
+NUM_NODES ?= 5
 
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
@@ -201,8 +201,8 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 
 .PHONY: delete-cluster
 delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
-	$(KUBECTL) delete cluster $(WORKLOAD_CLUSTER_NAME) --wait=true --ignore-not-found=true 
 	$(KIND) delete cluster --name $(CONTROL_CLUSTER_NAME)
+	$(KIND) delete cluster --name $(WORKLOAD_CLUSTER_NAME)
 
 ### fv helpers
 

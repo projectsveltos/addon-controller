@@ -128,6 +128,11 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha
 // Any helm release, not referenced anymore by clusterSummary, for which clusterSummary is currently
 // registered is considered stale and removed.
 func (m *instance) RemoveStaleRegistrations(clusterSummary *configv1alpha1.ClusterSummary) {
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return
+	}
+
 	m.cleanRegistrations(clusterSummary, false)
 }
 

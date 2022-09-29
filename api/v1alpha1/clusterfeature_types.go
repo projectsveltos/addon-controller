@@ -60,8 +60,12 @@ type PolicyRef struct {
 	Kind string `json:"kind"`
 }
 
+func (r PolicyRef) String() string {
+	return r.Kind + "-" + r.Namespace + "-" + r.Name
+}
+
 // SyncMode specifies how features are synced in a workload cluster.
-// +kubebuilder:validation:Enum:=OneTime;Continuous
+// +kubebuilder:validation:Enum:=OneTime;Continuous;DryRun
 type SyncMode string
 
 const (
@@ -70,6 +74,10 @@ const (
 
 	// SyncModeContinuous indicates feature sync should continuously happen
 	SyncModeContinuous = SyncMode("Continuous")
+
+	// SyncModeDryRun indicates feature sync should continuously happen
+	// no feature will be updated in the CAPI Cluster though.
+	SyncModeDryRun = SyncMode("DryRun")
 )
 
 // HelmChartAction specifies action on an helm chart

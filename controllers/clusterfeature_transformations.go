@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
@@ -46,16 +47,16 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterName := cluster.Namespace + "/" + cluster.Name
+	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
 
 	// Get all ClusterFeature previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterName).len())
-	consumers := r.getClusterMapForEntry(clusterName).items()
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
+	consumers := r.getClusterMapForEntry(&clusterInfo).items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i],
+				Name: consumers[i].Name,
 			},
 		}
 	}
@@ -68,7 +69,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
-					Name: k,
+					Name: k.Name,
 				},
 			})
 		}
@@ -100,16 +101,16 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterName := machine.Namespace + "/" + clusterLabelName
+	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
 
 	// Get all ClusterFeature previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterName).len())
-	consumers := r.getClusterMapForEntry(clusterName).items()
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
+	consumers := r.getClusterMapForEntry(&clusterInfo).items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i],
+				Name: consumers[i].Name,
 			},
 		}
 	}

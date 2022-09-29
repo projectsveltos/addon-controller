@@ -26,6 +26,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
@@ -103,9 +104,9 @@ func main() {
 	if err = (&controllers.ClusterFeatureReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
-		ClusterMap:           make(map[string]*controllers.Set),
-		ClusterFeatureMap:    make(map[string]*controllers.Set),
-		ClusterFeatures:      make(map[string]configv1alpha1.Selector),
+		ClusterMap:           make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterFeatureMap:    make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterFeatures:      make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
@@ -117,8 +118,8 @@ func main() {
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		Deployer:             d,
-		ReferenceMap:         make(map[string]*controllers.Set),
-		ClusterSummaryMap:    make(map[string]*controllers.Set),
+		ReferenceMap:         make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterSummaryMap:    make(map[types.NamespacedName]*controllers.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {

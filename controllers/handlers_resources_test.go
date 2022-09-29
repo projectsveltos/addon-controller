@@ -69,10 +69,11 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Namespace, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryName,
+				Name:      clusterSummaryName,
+				Namespace: cluster.Namespace,
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -81,6 +82,10 @@ var _ = Describe("HandlersResource", func() {
 		}
 
 		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+
+		// Get ClusterSummary so OwnerReference is set
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -92,7 +97,8 @@ var _ = Describe("HandlersResource", func() {
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
@@ -101,7 +107,7 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, configMap)).To(Succeed())
 
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -119,7 +125,7 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)).To(Succeed())
 		Expect(currentClusterRole.OwnerReferences).ToNot(BeNil())
 		Expect(len(currentClusterRole.OwnerReferences)).To(Equal(1))
-		Expect(util.IsOwnedByObject(currentClusterRole, clusterSummary)).To(BeTrue())
+		Expect(util.IsOwnedByObject(currentClusterRole, clusterFeature)).To(BeTrue())
 	})
 
 	It("unDeployResources removes all ClusterRole and Role created by a ClusterSummary", func() {
@@ -159,11 +165,13 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Create(context.TODO(), role1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole0)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterRole0)).To(Succeed())
-		addOwnerReference(ctx, testEnv.Client, role0, clusterSummary)
-		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterSummary)
+		addOwnerReference(ctx, testEnv.Client, role0, clusterFeature)
+		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterFeature)
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureResources,
@@ -178,7 +186,9 @@ var _ = Describe("HandlersResource", func() {
 
 		// Wait for cache to be updated
 		Eventually(func() bool {
-			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterSummary.Name}, currentClusterSummary)
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
 			return err == nil &&
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())

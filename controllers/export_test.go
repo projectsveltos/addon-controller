@@ -16,11 +16,6 @@ limitations under the License.
 
 package controllers
 
-import (
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
-)
-
 var (
 	GetMatchingClusters          = (*ClusterFeatureReconciler).getMatchingClusters
 	UpdateClusterSummaries       = (*ClusterFeatureReconciler).updateClusterSummaries
@@ -31,6 +26,9 @@ var (
 	IsClusterReadyToBeConfigured = (*ClusterFeatureReconciler).isClusterReadyToBeConfigured
 	UpdateClusterConfiguration   = (*ClusterFeatureReconciler).updateClusterConfiguration
 	CleanClusterConfiguration    = (*ClusterFeatureReconciler).cleanClusterConfiguration
+	CleanClusterReports          = (*ClusterFeatureReconciler).cleanClusterReports
+	UpdateClusterReports         = (*ClusterFeatureReconciler).updateClusterReports
+	UpdateClusterSummarySyncMode = (*ClusterFeatureReconciler).updateClusterSummarySyncMode
 
 	RequeueClusterFeatureForCluster = (*ClusterFeatureReconciler).requeueClusterFeatureForCluster
 	RequeueClusterFeatureForMachine = (*ClusterFeatureReconciler).requeueClusterFeatureForMachine
@@ -46,6 +44,9 @@ var (
 	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
 	IsPaused                       = (*ClusterSummaryReconciler).isPaused
 	ShouldReconcile                = (*ClusterSummaryReconciler).shouldReconcile
+	UpdateChartMap                 = (*ClusterSummaryReconciler).updateChartMap
+	ShouldRedeploy                 = (*ClusterSummaryReconciler).shouldRedeploy
+	CanRemoveFinalizer             = (*ClusterSummaryReconciler).canRemoveFinalizer
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
@@ -66,6 +67,7 @@ var (
 	GetEntryKey                  = getEntryKey
 	DeployContentOfConfigMap     = deployContentOfConfigMap
 	DeployContentOfSecret        = deployContentOfSecret
+	DeployContent                = deployContent
 	GetPolicyName                = getPolicyName
 	GetPolicyInfo                = getPolicyInfo
 	UndeployStaleResources       = undeployStaleResources
@@ -81,6 +83,9 @@ var (
 	UpdateChartsInClusterConfiguration       = updateChartsInClusterConfiguration
 	UpdateStatusForReferencedHelmReleases    = updateStatusForReferencedHelmReleases
 	UpdateStatusForNonReferencedHelmReleases = updateStatusForNonReferencedHelmReleases
+	CreateReportForUnmanagedHelmRelease      = createReportForUnmanagedHelmRelease
+	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
+	HandleCharts                             = handleCharts
 )
 
 type (
@@ -109,13 +114,7 @@ var (
 	Has    = (*Set).has
 )
 
-func GetFeature(featureID configv1alpha1.FeatureID, getHash getCurrentHash,
-	deploy deployer.RequestHandler, getRefs getPolicyRefs) *feature {
-
-	return &feature{
-		id:          featureID,
-		currentHash: getHash,
-		deploy:      deploy,
-		getRefs:     getRefs,
-	}
-}
+var (
+	GetClusterReportName = getClusterReportName
+	CreateKubeconfig     = createKubeconfig
+)

@@ -64,10 +64,9 @@ type ClusterSummaryReconciler struct {
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
-	PolicyMux            sync.Mutex      // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	ReferenceMap         map[string]*Set // key: Referenced object  name; value: set of all ClusterSummaries referencing the resource
-	// Refenced object name is: <kind>-<namespace>-<name> or <kind>-<name>
-	ClusterSummaryMap map[string]*Set // key: ClusterSummary name; value: set of referenced resources
+	PolicyMux            sync.Mutex                        // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	ReferenceMap         map[configv1alpha1.PolicyRef]*Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
+	ClusterSummaryMap    map[types.NamespacedName]*Set     // key: ClusterSummary namespace/name; value: set of referenced resources
 
 	// Reason for the two maps:
 	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a CAPI Cluster.
@@ -98,8 +97,10 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=substitutionrules,verbs=get;list;watch
-//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;update;delete
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations/status,verbs=get;list;update
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports,verbs=get;list;watch
+//+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports/status,verbs=get;list;update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 
@@ -130,6 +131,11 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			"Failed to get owner clusterFeature for %s",
 			req.NamespacedName,
 		)
+	}
+	if clusterFeature == nil {
+		logger.Error(err, "Failed to get owner clusterFeature")
+		return reconcile.Result{}, fmt.Errorf("failed to get owner clusterFeature for %s",
+			req.NamespacedName)
 	}
 
 	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
@@ -182,8 +188,17 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		return reconcile.Result{}, nil
 	}
 
-	if err := r.undeploy(ctx, clusterSummaryScope, logger); err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+	err = r.undeploy(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		// In DryRun mode it is expected to always get an error back
+		if !clusterSummaryScope.IsDryRunSync() {
+			logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+	}
+
+	if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
+		logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
@@ -196,7 +211,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		}
 	}
 
-	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
+	if err := r.deleteChartMap(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -227,10 +242,6 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	r.updatePolicyMaps(clusterSummaryScope, logger)
 
-	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
-	}
-
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		return reconcile.Result{}, err
@@ -238,6 +249,10 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	if paused {
 		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
 		return reconcile.Result{}, nil
+	}
+
+	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
@@ -391,18 +406,48 @@ func (r *ClusterSummaryReconciler) undeployHelm(ctx context.Context, clusterSumm
 func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) error {
 
+	// When in DryRun mode, ClusterSummary won't update (install/upgrade/uninstall) any helm chart.
+	// So it does not update helm chart registration. Whatever registrations it had, are still there (if it was
+	// managing an helm chart, that information still holds as dryrun means change nothing).
+	// Let's say currently no ClusterFeature is managing an helm chart, if we allowed a ClusterSummary in DryRun to
+	// register then:
+	// 1) this ClusterSummary would be elected as manager
+	// 2) ClusterSummary is in DryRun mode so it actually won't deploy anything
+	// 3) If another ClusterFeature in not DryRun mode tried to manage same helm chart, it would not be allowed.
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, r.Client)
 	if err != nil {
 		return err
 	}
 
-	if !clusterSummaryScope.ClusterSummary.DeletionTimestamp.IsZero() {
-		logger.V(logs.LogDebug).Info("remove clustersummary with helm chart manager")
-		chartManager.RemoveAllRegistrations(clusterSummaryScope.ClusterSummary)
-	} else {
-		logger.V(logs.LogDebug).Info("register clustersummary with helm chart manager")
-		chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
+	// First try to be elected manager. Only if that succeeds, manage an helm chart.
+	logger.V(logs.LogDebug).Info("register clustersummary with helm chart manager")
+	chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
+
+	// Registration for helm chart not referenced anymore, are cleaned only after such helm
+	// chart are removed from CAPI Cluster. That is done as part of deployHelmCharts and
+	// undeployHelmCharts (RemoveStaleRegistrations).
+	// That is because we need to make sure managed helm charts are successfully uninstalled
+	// before any registration with chartManager is cleared.
+
+	return nil
+}
+
+// deleteChartMap removes any registration with chartManager.
+// Call it only when ClusterSummary is ready to be deleted (finalizer is removed)
+func (r *ClusterSummaryReconciler) deleteChartMap(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, r.Client)
+	if err != nil {
+		return err
 	}
+
+	logger.V(logs.LogDebug).Info("remove clustersummary with helm chart manager")
+	chartManager.RemoveAllRegistrations(clusterSummaryScope.ClusterSummary)
 
 	return nil
 }
@@ -420,24 +465,37 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 	defer r.PolicyMux.Unlock()
 
 	// Get list of References not referenced anymore by ClusterSummary
-	var toBeRemoved []string
-	if v, ok := r.ClusterSummaryMap[clusterSummaryScope.Name()]; ok {
+	var toBeRemoved []configv1alpha1.PolicyRef
+	clusterSummaryName := types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()}
+	if v, ok := r.ClusterSummaryMap[clusterSummaryName]; ok {
 		toBeRemoved = v.difference(currentReferences)
 	}
 
 	// For each currently referenced instance, add ClusterSummary as consumer
 	for referencedResource := range currentReferences.data {
-		r.getReferenceMapForEntry(referencedResource).insert(clusterSummaryScope.Name())
+		r.getReferenceMapForEntry(&referencedResource).insert(
+			&configv1alpha1.PolicyRef{
+				Kind:      configv1alpha1.ClusterSummaryKind,
+				Namespace: clusterSummaryScope.Namespace(),
+				Name:      clusterSummaryScope.Name(),
+			},
+		)
 	}
 
 	// For each resource not reference anymore, remove ClusterSummary as consumer
 	for i := range toBeRemoved {
 		referencedResource := toBeRemoved[i]
-		r.getReferenceMapForEntry(referencedResource).erase(clusterSummaryScope.Name())
+		r.getReferenceMapForEntry(&referencedResource).erase(
+			&configv1alpha1.PolicyRef{
+				Kind:      configv1alpha1.ClusterSummaryKind,
+				Namespace: clusterSummaryScope.Namespace(),
+				Name:      clusterSummaryScope.Name(),
+			},
+		)
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
-	r.ClusterSummaryMap[clusterSummaryScope.Name()] = currentReferences
+	r.ClusterSummaryMap[clusterSummaryName] = currentReferences
 }
 
 // shouldReconcile returns true if a reconciliation is needed.
@@ -447,6 +505,11 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 
 	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeContinuous {
 		logger.V(logs.LogDebug).Info("Mode set to continuous. Reconciliation is needed.")
+		return true
+	}
+
+	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		logger.V(logs.LogDebug).Info("Mode set to dryRun. Reconciliation is needed.")
 		return true
 	}
 
@@ -472,17 +535,20 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
-		currentReferences.insert(getEntryKey(clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Kind,
-			referencedNamespace, referencedName))
+		currentReferences.insert(&configv1alpha1.PolicyRef{
+			Kind:      clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Kind,
+			Namespace: referencedNamespace,
+			Name:      referencedName,
+		})
 	}
 	return currentReferences
 }
 
-func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry string) *Set {
-	s := r.ReferenceMap[entry]
+func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *configv1alpha1.PolicyRef) *Set {
+	s := r.ReferenceMap[*entry]
 	if s == nil {
 		s = &Set{}
-		r.ReferenceMap[entry] = s
+		r.ReferenceMap[*entry] = s
 	}
 	return s
 }
@@ -500,4 +566,48 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 
 	// If CAPI Cluster is paused (Spec.Paused) or ClusterSummary has Paused annotation
 	return annotations.IsPaused(cluster, clusterSummary), nil
+}
+
+// canRemoveFinalizer returns true if finalizer can be removed.
+// A ClusterSummary in DryRun mode can be removed if deleted and ClusterFeature is also marked for deletion.
+// A ClusterSummary in not DryRun mode can be removed if deleted and all features are undeployed.
+func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
+
+	if clusterSummaryScope.ClusterSummary.DeletionTimestamp.IsZero() {
+		logger.V(logs.LogDebug).Info("ClusterSummary not marked for deletion")
+		return false
+	}
+
+	if clusterSummaryScope.IsDryRunSync() {
+		logger.V(logs.LogInfo).Info("DryRun mode. Can only be deleted if ClusterFeature is marked for deletion.")
+		// A ClusterSummary in DryRun mode can only be removed if also ClusterFeature is marked
+		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
+		// ClusterFeature is moved away from DryRun mode.
+		clusterFeature, err := getClusterFeatureOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterFeature %v", err))
+			return false
+		}
+
+		if clusterFeature == nil {
+			logger.V(logs.LogInfo).Info("failed to get ClusterFeature")
+			return false
+		}
+
+		if !clusterFeature.DeletionTimestamp.IsZero() {
+			return true
+		}
+		logger.V(logs.LogInfo).Info("ClusterFeature not marked for deletion")
+		return false
+	}
+
+	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
+		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
+		if fs.Status != configv1alpha1.FeatureStatusRemoved {
+			logger.Info("Not all features marked as removed")
+			return false
+		}
+	}
+	return true
 }

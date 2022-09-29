@@ -16,32 +16,36 @@ limitations under the License.
 
 package controllers
 
+import (
+	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+)
+
 type Set struct {
-	data map[string]bool
+	data map[configv1alpha1.PolicyRef]bool
 }
 
 func (s *Set) init() {
 	if s.data == nil {
-		s.data = make(map[string]bool, 0)
+		s.data = make(map[configv1alpha1.PolicyRef]bool, 0)
 	}
 }
 
 // insert adds entry to set
-func (s *Set) insert(entry string) {
+func (s *Set) insert(entry *configv1alpha1.PolicyRef) {
 	s.init()
-	s.data[entry] = true
+	s.data[*entry] = true
 }
 
 // erase removes entry from set
-func (s *Set) erase(entry string) {
+func (s *Set) erase(entry *configv1alpha1.PolicyRef) {
 	s.init()
-	delete(s.data, entry)
+	delete(s.data, *entry)
 }
 
 // has returns true if entry is currently part of set
-func (s *Set) has(entry string) bool {
+func (s *Set) has(entry *configv1alpha1.PolicyRef) bool {
 	s.init()
-	_, ok := s.data[entry]
+	_, ok := s.data[*entry]
 	return ok
 }
 
@@ -51,8 +55,8 @@ func (s *Set) len() int {
 }
 
 // items returns a slice with all elements currently in set
-func (s *Set) items() []string {
-	keys := make([]string, s.len())
+func (s *Set) items() []configv1alpha1.PolicyRef {
+	keys := make([]configv1alpha1.PolicyRef, s.len())
 
 	i := 0
 	for k := range s.data {
@@ -64,10 +68,10 @@ func (s *Set) items() []string {
 }
 
 // difference returns all elements which are in s but not in b
-func (s *Set) difference(b *Set) []string {
-	results := make([]string, 0)
+func (s *Set) difference(b *Set) []configv1alpha1.PolicyRef {
+	results := make([]configv1alpha1.PolicyRef, 0)
 	for entry := range s.data {
-		if !b.has(entry) {
+		if !b.has(&entry) {
 			results = append(results, entry)
 		}
 	}

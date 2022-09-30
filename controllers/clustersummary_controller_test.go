@@ -119,6 +119,30 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
 	})
 
+	It("isPaused returns false when Cluster does not exist", func() {
+		clusterSummary.Annotations = map[string]string{
+			"cluster.x-k8s.io/paused": "ok",
+		}
+
+		initObjects := []client.Object{
+			clusterFeature,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
+	})
+
 	It("shouldReconcile returns true when mode is Continuous", func() {
 		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
 
@@ -493,6 +517,7 @@ var _ = Describe("ClustersummaryController", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterFeature,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -551,6 +576,7 @@ var _ = Describe("ClustersummaryController", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterFeature,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -595,6 +621,53 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
 	})
 
+	It("canRemoveFinalizer returns true when Cluster is gone", func() {
+		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+
+		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
+		}
+
+		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterFeature,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          deployer,
+			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		// Since ClusterSummary is not yet marked for deletion, finalizer cannot be removed
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+
+		// Mark ClusterSummary for deletion
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+		clusterSummaryScope.ClusterSummary = clusterSummary
+
+		// Because CAPI cluster does not exist and ClusterSummary is marked for deletion, finalizer can be removed
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+	})
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {

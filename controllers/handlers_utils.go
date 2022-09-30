@@ -252,6 +252,10 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	for k := range data {
 		elements := strings.Split(data[k], separator)
 		for i := range elements {
+			if elements[i] == "" {
+				continue
+			}
+
 			policy, err := getUnstructured([]byte(elements[i]))
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))

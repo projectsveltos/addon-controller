@@ -561,6 +561,9 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	err := r.Client.Get(ctx,
 		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
 		return false, err
 	}
 
@@ -574,8 +577,23 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
 
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
 	if clusterSummaryScope.ClusterSummary.DeletionTimestamp.IsZero() {
 		logger.V(logs.LogDebug).Info("ClusterSummary not marked for deletion")
+		return false
+	}
+
+	// If CAPI cluster is gone, finalizer can be removed
+	cluster := &clusterv1.Cluster{}
+	err := r.Client.Get(ctx,
+		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.",
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+			return true
+		}
 		return false
 	}
 

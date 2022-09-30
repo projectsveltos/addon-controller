@@ -87,8 +87,8 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
-			return false
+				"Cluster deleted.  Will attempt to reconcile associated ClusterFeatures.")
+			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
 			log := logger.WithValues("predicate", "genericEvent",

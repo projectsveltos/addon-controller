@@ -68,7 +68,7 @@ var _ = Describe("ClusterFeature Predicates: ClusterPredicates", func() {
 		result := clusterPredicate.Create(e)
 		Expect(result).To(BeFalse())
 	})
-	It("Delete does not reprocess ", func() {
+	It("Delete does reprocess ", func() {
 		clusterPredicate := controllers.ClusterPredicates(logger)
 
 		e := event.DeleteEvent{
@@ -76,7 +76,7 @@ var _ = Describe("ClusterFeature Predicates: ClusterPredicates", func() {
 		}
 
 		result := clusterPredicate.Delete(e)
-		Expect(result).To(BeFalse())
+		Expect(result).To(BeTrue())
 	})
 	It("Update reprocesses when v1Cluster paused changes from true to false", func() {
 		clusterPredicate := controllers.ClusterPredicates(logger)

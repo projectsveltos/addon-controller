@@ -24,7 +24,7 @@ import (
 
 var _ = Describe("ClustersummaryDeployer", func() {
 	var logger logr.Logger
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var namespace string
 	var clusterName string
@@ -36,17 +36,17 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		logger = klogr.New()
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
 		clusterName = randomString()
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -57,7 +57,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 				ClusterName:      clusterName,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, namespace, clusterName)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, namespace, clusterName)
 	})
 
 	It("isFeatureDeployed returns false when feature is not deployed", func() {
@@ -70,14 +70,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources)).To(BeFalse())
 	})
@@ -92,14 +92,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureHelm)).To(BeTrue())
 	})
@@ -116,14 +116,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources)
 		Expect(currentHash).To(BeNil())
@@ -141,14 +141,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources)
 		Expect(reflect.DeepEqual(currentHash, hash)).To(BeTrue())
@@ -157,14 +157,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("updateFeatureStatus updates ClusterSummary Status FeatureSummary", func() {
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		hash := []byte(randomString())
 		status := configv1alpha1.FeatureStatusFailed
@@ -199,7 +199,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy("default", randomString(), render.AsCode(clusterRole))
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -210,12 +210,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			configMap,
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
@@ -252,7 +252,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -263,12 +263,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			configMap,
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
@@ -316,7 +316,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		configMap := createConfigMapWithPolicy(namespace, render.AsCode(clusterRole))
 
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -327,12 +327,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			configMap,
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
@@ -355,12 +355,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("undeployFeature when feature is removed, does nothing", func() {
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
@@ -390,7 +390,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -400,12 +400,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
@@ -426,18 +426,18 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -456,18 +456,18 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeatures returns an error if deploying is in progress", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -490,14 +490,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 			configMap1,
 			configMap2,
 		}
@@ -507,10 +507,10 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.UpdateDeployedGroupVersionKind(reconciler, context.TODO(), clusterSummaryScope,
-			configv1alpha1.FeatureResources, clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
+			configv1alpha1.FeatureResources, clusterSummary.Spec.ClusterProfileSpec.PolicyRefs,
 			logger)).To(Succeed())
 
 		cs := clusterSummaryScope.ClusterSummary
@@ -521,16 +521,16 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterFeature, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
-		expectedLength := len(clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs)
+		expectedLength := len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
 		Expect(controllers.Len(set)).To(Equal(expectedLength))
 	})
 })
@@ -568,13 +568,13 @@ var _ = Describe("Convert result", func() {
 })
 
 func getClusterSummaryScope(c client.Client, logger logr.Logger,
-	clusterFeature *configv1alpha1.ClusterFeature, clusterSummary *configv1alpha1.ClusterSummary,
+	clusterProfile *configv1alpha1.ClusterProfile, clusterSummary *configv1alpha1.ClusterSummary,
 ) *scope.ClusterSummaryScope {
 
 	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 		Client:         c,
 		Logger:         logger,
-		ClusterFeature: clusterFeature,
+		ClusterProfile: clusterProfile,
 		ClusterSummary: clusterSummary,
 		ControllerName: "clustersummary",
 	})

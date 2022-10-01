@@ -95,7 +95,7 @@ spec:
 
 var _ = Describe("HandlersUtils", func() {
 	var clusterSummary *configv1alpha1.ClusterSummary
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var namespace string
 
 	BeforeEach(func() {
@@ -111,16 +111,16 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -132,7 +132,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
@@ -140,7 +140,7 @@ var _ = Describe("HandlersUtils", func() {
 	})
 
 	AfterEach(func() {
-		deleteResources(namespace, clusterFeature, clusterSummary)
+		deleteResources(namespace, clusterProfile, clusterSummary)
 	})
 
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {
@@ -188,7 +188,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
@@ -217,7 +217,7 @@ var _ = Describe("HandlersUtils", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
@@ -317,7 +317,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Add list of GroupVersionKind this ClusterSummary has deployed in the CAPI Cluster
@@ -347,7 +347,7 @@ var _ = Describe("HandlersUtils", func() {
 		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, viewClusterRoleName))
 
 		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
-		// of this ClusterSummary (owner is ClusterFeature owning the ClusterSummary)
+		// of this ClusterSummary (owner is ClusterProfile owning the ClusterSummary)
 		clusterRole, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
@@ -356,8 +356,8 @@ var _ = Describe("HandlersUtils", func() {
 			controllers.ReferenceLabelNamespace: configMap.Namespace,
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
-			{Kind: configv1alpha1.ClusterFeatureKind, Name: clusterFeature.Name,
-				UID: clusterFeature.UID, APIVersion: "config.projectsveltos.io/v1beta1"},
+			{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfile.Name,
+				UID: clusterProfile.UID, APIVersion: "config.projectsveltos.io/v1beta1"},
 		})
 		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
@@ -389,7 +389,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
@@ -401,7 +401,7 @@ var _ = Describe("HandlersUtils", func() {
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 				currentClusterSummary)
 			return err == nil &&
-				currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs != nil
+				currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), currentClusterSummary)).To(Succeed())
@@ -448,13 +448,13 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole2)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole2)).To(Succeed())
 
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{Name: clusterFeature.Name},
-			currentClusterFeature)).To(Succeed())
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
 
-		addOwnerReference(context.TODO(), testEnv.Client, clusterRole1, currentClusterFeature)
-		addOwnerReference(context.TODO(), testEnv.Client, clusterRole2, currentClusterFeature)
+		addOwnerReference(context.TODO(), testEnv.Client, clusterRole1, currentClusterProfile)
+		addOwnerReference(context.TODO(), testEnv.Client, clusterRole2, currentClusterProfile)
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole1)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole2)).To(Succeed())
@@ -497,7 +497,7 @@ var _ = Describe("HandlersUtils", func() {
 				types.NamespacedName{Name: clusterRoleName2}, currentClusterRole)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = nil
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = nil
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource1))
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 

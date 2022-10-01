@@ -49,7 +49,7 @@ const (
 const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
-	clusterFeatureNamePrefix  = "cluster-feature"
+	clusterProfileNamePrefix  = "cluster-feature"
 )
 
 const (
@@ -126,9 +126,9 @@ func setupScheme() (*runtime.Scheme, error) {
 	return s, nil
 }
 
-var _ = Describe("getClusterFeatureOwner ", func() {
+var _ = Describe("getClusterProfileOwner ", func() {
 	var logger logr.Logger
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
@@ -154,16 +154,16 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -174,56 +174,56 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 				ClusterName:      cluster.Name,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
 	})
 
-	It("getClusterFeatureOwner returns ClusterFeature owner", func() {
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
+	It("getClusterProfileOwner returns ClusterProfile owner", func() {
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 
 		clusterName := randomString()
 		clusterSummary.OwnerReferences = []metav1.OwnerReference{
 			{
-				Kind:       clusterFeature.Kind,
-				Name:       clusterFeature.Name,
-				APIVersion: clusterFeature.APIVersion,
+				Kind:       clusterProfile.Kind,
+				Name:       clusterProfile.Name,
+				APIVersion: clusterProfile.APIVersion,
 			},
 		}
 
 		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
 			ClusterNamespace:   namespace,
 			ClusterName:        clusterName,
-			ClusterFeatureSpec: clusterFeature.Spec,
+			ClusterProfileSpec: clusterProfile.Spec,
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		owner, err := controllers.GetClusterFeatureOwner(context.TODO(), c, clusterSummary)
+		owner, err := controllers.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).ToNot(BeNil())
-		Expect(owner.Name).To(Equal(clusterFeature.Name))
+		Expect(owner.Name).To(Equal(clusterProfile.Name))
 	})
 
-	It("getClusterFeatureOwner returns nil when ClusterFeature does not exist", func() {
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
+	It("getClusterProfileOwner returns nil when ClusterProfile does not exist", func() {
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 
 		clusterName := randomString()
 		clusterSummary.OwnerReferences = []metav1.OwnerReference{
 			{
-				Kind:       clusterFeature.Kind,
-				Name:       clusterFeature.Name,
-				APIVersion: clusterFeature.APIVersion,
+				Kind:       clusterProfile.Kind,
+				Name:       clusterProfile.Name,
+				APIVersion: clusterProfile.APIVersion,
 			},
 		}
 
 		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
 			ClusterNamespace:   namespace,
 			ClusterName:        clusterName,
-			ClusterFeatureSpec: clusterFeature.Spec,
+			ClusterProfileSpec: clusterProfile.Spec,
 		}
 
 		initObjects := []client.Object{
@@ -232,7 +232,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		owner, err := controllers.GetClusterFeatureOwner(context.TODO(), c, clusterSummary)
+		owner, err := controllers.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).To(BeNil())
 	})
@@ -245,7 +245,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 	It("getSecretData returns an error when cluster does not exist", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 		}
 
@@ -258,7 +258,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 
 	It("getSecretData returns an error when secret does not exist", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			cluster,
 			clusterSummary,
 		}
@@ -283,7 +283,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			cluster,
 			clusterSummary,
 			&secret,
@@ -304,7 +304,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		}
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 
 		secret := &corev1.Secret{
@@ -326,7 +326,7 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(wcClient).ToNot(BeNil())
 	})
 
-	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterFeature for a CAPI Cluster", func() {
+	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "cs" + randomString(),
@@ -338,14 +338,14 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			clusterSummary0,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterFeature.Name, cluster.Namespace, cluster.Name)
+		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterProfile.Name, cluster.Namespace, cluster.Name)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
@@ -356,16 +356,16 @@ var _ = Describe("getClusterFeatureOwner ", func() {
 		Expect(err).To(BeNil())
 		Expect(policy.GetKind()).To(Equal("ClusterRole"))
 
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 
-		controllers.AddOwnerReference(policy, clusterFeature)
+		controllers.AddOwnerReference(policy, clusterProfile)
 
 		Expect(policy.GetOwnerReferences()).ToNot(BeNil())
 		Expect(len(policy.GetOwnerReferences())).To(Equal(1))
-		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterFeatureKind))
-		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterFeature.Name))
+		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterProfileKind))
+		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterProfile.Name))
 
-		controllers.RemoveOwnerReference(policy, clusterFeature)
+		controllers.RemoveOwnerReference(policy, clusterProfile)
 		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })

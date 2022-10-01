@@ -50,7 +50,7 @@ func Byf(format string, a ...interface{}) {
 	By(fmt.Sprintf(format, a...)) // ignore_by_check
 }
 
-func getClusterfeature(namePrefix string, clusterLabels map[string]string) *configv1alpha1.ClusterFeature {
+func getClusterprofile(namePrefix string, clusterLabels map[string]string) *configv1alpha1.ClusterProfile {
 	selector := ""
 	for k := range clusterLabels {
 		if selector != "" {
@@ -58,22 +58,22 @@ func getClusterfeature(namePrefix string, clusterLabels map[string]string) *conf
 		}
 		selector += fmt.Sprintf("%s=%s", k, clusterLabels[k])
 	}
-	clusterFeature := &configv1alpha1.ClusterFeature{
+	clusterProfile := &configv1alpha1.ClusterProfile{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namePrefix + randomString(),
 		},
-		Spec: configv1alpha1.ClusterFeatureSpec{
+		Spec: configv1alpha1.ClusterProfileSpec{
 			ClusterSelector: configv1alpha1.Selector(selector),
 		},
 	}
 
-	return clusterFeature
+	return clusterProfile
 }
 
-func getClusterSummaryOwnerReference(clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterFeature, error) {
+func getClusterSummaryOwnerReference(clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterProfile, error) {
 	Byf("Checking clusterSummary %s owner reference is set", clusterSummary.Name)
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != configv1alpha1.ClusterFeatureKind {
+		if ref.Kind != configv1alpha1.ClusterProfileKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -81,9 +81,9 @@ func getClusterSummaryOwnerReference(clusterSummary *configv1alpha1.ClusterSumma
 			return nil, errors.WithStack(err)
 		}
 		if gv.Group == configv1alpha1.GroupVersion.Group {
-			clusterFeature := &configv1alpha1.ClusterFeature{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: ref.Name}, clusterFeature)
-			return clusterFeature, err
+			clusterProfile := &configv1alpha1.ClusterProfile{}
+			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: ref.Name}, clusterProfile)
+			return clusterProfile, err
 		}
 	}
 	return nil, nil
@@ -123,21 +123,21 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-// deleteClusterFeature deletes ClusterFeature and verifies all ClusterSummaries created by this ClusterFeature
+// deleteClusterProfile deletes ClusterProfile and verifies all ClusterSummaries created by this ClusterProfile
 // instances are also gone
-func deleteClusterFeature(clusterFeature *configv1alpha1.ClusterFeature) {
+func deleteClusterProfile(clusterProfile *configv1alpha1.ClusterProfile) {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			controllers.ClusterFeatureLabelName: clusterFeature.Name,
+			controllers.ClusterProfileLabelName: clusterProfile.Name,
 		},
 	}
 	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
 	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
 
-	Byf("Deleting the ClusterFeature %s", clusterFeature.Name)
-	currentClusterFeature := &configv1alpha1.ClusterFeature{}
-	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(BeNil())
-	Expect(k8sClient.Delete(context.TODO(), currentClusterFeature)).To(Succeed())
+	Byf("Deleting the ClusterProfile %s", clusterProfile.Name)
+	currentClusterProfile := &configv1alpha1.ClusterProfile{}
+	Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(BeNil())
+	Expect(k8sClient.Delete(context.TODO(), currentClusterProfile)).To(Succeed())
 
 	for i := range clusterSummaryList.Items {
 		Byf("Verifying ClusterSummary %s are gone", clusterSummaryList.Items[i].Name)
@@ -156,10 +156,10 @@ func deleteClusterFeature(clusterFeature *configv1alpha1.ClusterFeature) {
 		return true
 	}, timeout, pollingInterval).Should(BeTrue())
 
-	Byf("Verifying ClusterFeature %s is gone", clusterFeature.Name)
+	Byf("Verifying ClusterProfile %s is gone", clusterProfile.Name)
 
 	Eventually(func() bool {
-		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 		return apierrors.IsNotFound(err)
 	}, timeout, pollingInterval).Should(BeTrue())
 }
@@ -170,12 +170,12 @@ func randomString() string {
 }
 
 func getClusterSummary(ctx context.Context,
-	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
+	clusterProfileName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
-			controllers.ClusterFeatureLabelName: clusterFeatureName,
+			controllers.ClusterProfileLabelName: clusterProfileName,
 			controllers.ClusterLabelNamespace:   clusterNamespace,
 			controllers.ClusterLabelName:        clusterName,
 		},
@@ -193,25 +193,25 @@ func getClusterSummary(ctx context.Context,
 
 	if len(clusterSummaryList.Items) != 1 {
 		return nil, fmt.Errorf("more than one clustersummary found for cluster %s/%s created by %s",
-			clusterNamespace, clusterName, clusterFeatureName)
+			clusterNamespace, clusterName, clusterProfileName)
 	}
 
 	return &clusterSummaryList.Items[0], nil
 }
 
-func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
+func verifyClusterSummary(clusterProfile *configv1alpha1.ClusterProfile,
 	clusterNamespace, clusterName string) *configv1alpha1.ClusterSummary {
 
 	Byf("Verifying ClusterSummary is created")
 	Eventually(func() bool {
 		clusterSummary, err := getClusterSummary(context.TODO(),
-			clusterFeature.Name, clusterNamespace, clusterName)
+			clusterProfile.Name, clusterNamespace, clusterName)
 		return err == nil &&
 			clusterSummary != nil
 	}, timeout, pollingInterval).Should(BeTrue())
 
 	clusterSummary, err := getClusterSummary(context.TODO(),
-		clusterFeature.Name, clusterNamespace, clusterName)
+		clusterProfile.Name, clusterNamespace, clusterName)
 	Expect(err).To(BeNil())
 	Expect(clusterSummary).ToNot(BeNil())
 
@@ -219,24 +219,24 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 	ref, err := getClusterSummaryOwnerReference(clusterSummary)
 	Expect(err).To(BeNil())
 	Expect(ref).ToNot(BeNil())
-	Expect(ref.Name).To(Equal(clusterFeature.Name))
+	Expect(ref.Name).To(Equal(clusterProfile.Name))
 
 	Byf("Verifying ClusterSummary configuration")
 	Eventually(func() error {
 		var currentClusterSummary *configv1alpha1.ClusterSummary
 		currentClusterSummary, err = getClusterSummary(context.TODO(),
-			clusterFeature.Name, clusterNamespace, clusterName)
+			clusterProfile.Name, clusterNamespace, clusterName)
 		if err != nil {
 			return err
 		}
 
-		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
-			clusterFeature.Spec.HelmCharts) {
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
+			clusterProfile.Spec.HelmCharts) {
 
 			return fmt.Errorf("helmCharts do not match")
 		}
-		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs,
-			clusterFeature.Spec.PolicyRefs) {
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs,
+			clusterProfile.Spec.PolicyRefs) {
 
 			return fmt.Errorf("policyRefs do not match")
 		}
@@ -250,23 +250,23 @@ func verifyClusterSummary(clusterFeature *configv1alpha1.ClusterFeature,
 	}, timeout, pollingInterval).Should(BeNil())
 
 	clusterSummary, err = getClusterSummary(context.TODO(),
-		clusterFeature.Name, clusterNamespace, clusterName)
+		clusterProfile.Name, clusterNamespace, clusterName)
 	Expect(err).To(BeNil())
 	Expect(clusterSummary).ToNot(BeNil())
 
 	return clusterSummary
 }
 
-func verifyClusterFeatureMatches(clusterFeature *configv1alpha1.ClusterFeature) {
-	Byf("Verifying Cluster %s/%s is a match for ClusterFeature %s",
-		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterFeature.Name)
+func verifyClusterProfileMatches(clusterProfile *configv1alpha1.ClusterProfile) {
+	Byf("Verifying Cluster %s/%s is a match for ClusterProfile %s",
+		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterProfile.Name)
 	Eventually(func() bool {
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 		return err == nil &&
-			len(currentClusterFeature.Status.MatchingClusterRefs) == 1 &&
-			currentClusterFeature.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
-			currentClusterFeature.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
+			len(currentClusterProfile.Status.MatchingClusterRefs) == 1 &&
+			currentClusterProfile.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
+			currentClusterProfile.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -329,7 +329,7 @@ type policy struct {
 	group     string
 }
 
-func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterName string,
+func verifyClusterConfiguration(clusterProfileName, clusterNamespace, clusterName string,
 	featureID configv1alpha1.FeatureID, expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) {
 
 	Byf("Verifying ClusterConfiguration %s/%s", clusterNamespace, clusterName)
@@ -340,21 +340,21 @@ func verifyClusterConfiguration(clusterFeatureName, clusterNamespace, clusterNam
 		if err != nil {
 			return false
 		}
-		if currentClusterConfiguration.Status.ClusterFeatureResources == nil {
+		if currentClusterConfiguration.Status.ClusterProfileResources == nil {
 			return false
 		}
-		return verifyClusterConfigurationEntryForClusterFeature(currentClusterConfiguration, clusterFeatureName,
+		return verifyClusterConfigurationEntryForClusterProfile(currentClusterConfiguration, clusterProfileName,
 			featureID, expectedPolicies, expectedCharts)
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
-func verifyClusterConfigurationEntryForClusterFeature(clusterConfiguration *configv1alpha1.ClusterConfiguration,
-	clusterFeatureName string, featureID configv1alpha1.FeatureID,
+func verifyClusterConfigurationEntryForClusterProfile(clusterConfiguration *configv1alpha1.ClusterConfiguration,
+	clusterProfileName string, featureID configv1alpha1.FeatureID,
 	expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) bool {
 
-	for i := range clusterConfiguration.Status.ClusterFeatureResources {
-		if clusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeatureName {
-			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterFeatureResources[i].Features, featureID,
+	for i := range clusterConfiguration.Status.ClusterProfileResources {
+		if clusterConfiguration.Status.ClusterProfileResources[i].ClusterProfileName == clusterProfileName {
+			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterProfileResources[i].Features, featureID,
 				expectedPolicies, expectedCharts)
 		}
 	}

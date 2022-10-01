@@ -42,7 +42,7 @@ import (
 )
 
 var _ = Describe("HandlersResource", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
@@ -60,16 +60,16 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -81,7 +81,7 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
@@ -89,7 +89,7 @@ var _ = Describe("HandlersResource", func() {
 	})
 
 	AfterEach(func() {
-		deleteResources(namespace, clusterFeature, clusterSummary)
+		deleteResources(namespace, clusterProfile, clusterSummary)
 	})
 
 	It("DeployResources creates referenced ClusterRole", func() {
@@ -99,7 +99,7 @@ var _ = Describe("HandlersResource", func() {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -107,7 +107,7 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, configMap)).To(Succeed())
 
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -125,7 +125,7 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)).To(Succeed())
 		Expect(currentClusterRole.OwnerReferences).ToNot(BeNil())
 		Expect(len(currentClusterRole.OwnerReferences)).To(Equal(1))
-		Expect(util.IsOwnedByObject(currentClusterRole, clusterFeature)).To(BeTrue())
+		Expect(util.IsOwnedByObject(currentClusterRole, clusterProfile)).To(BeTrue())
 	})
 
 	It("unDeployResources removes all ClusterRole and Role created by a ClusterSummary", func() {
@@ -165,8 +165,8 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Client.Create(context.TODO(), role1)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole0)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterRole0)).To(Succeed())
-		addOwnerReference(ctx, testEnv.Client, role0, clusterFeature)
-		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterFeature)
+		addOwnerReference(ctx, testEnv.Client, role0, clusterProfile)
+		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterProfile)
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
@@ -255,7 +255,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},

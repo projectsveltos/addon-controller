@@ -146,12 +146,12 @@ func randomString() string {
 	return util.RandomString(length)
 }
 
-func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterFeatureName, clusterNamespace, clusterName string) {
+func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileName, clusterNamespace, clusterName string) {
 	labels := clusterSummary.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	labels[controllers.ClusterFeatureLabelName] = clusterFeatureName
+	labels[controllers.ClusterProfileLabelName] = clusterProfileName
 	labels[controllers.ClusterLabelNamespace] = clusterNamespace
 	labels[controllers.ClusterLabelName] = clusterName
 
@@ -159,12 +159,12 @@ func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, cl
 }
 
 // deleteResources deletes following resources:
-// - clusterFeature
+// - clusterProfile
 // - clusterSummary
 // - all clusterConfigurations in namespace
 // - namespace
 func deleteResources(namespace string,
-	clusterFeature *configv1alpha1.ClusterFeature,
+	clusterProfile *configv1alpha1.ClusterProfile,
 	clusterSummary *configv1alpha1.ClusterSummary) {
 
 	ns := &corev1.Namespace{}
@@ -191,7 +191,7 @@ func deleteResources(namespace string,
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
-	err = testEnv.Client.Delete(context.TODO(), clusterFeature)
+	err = testEnv.Client.Delete(context.TODO(), clusterProfile)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
@@ -220,16 +220,16 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error
 // prepareForDeployment creates following:
 // - CAPI cluster (and its namespace)
 // - secret containing kubeconfig to access CAPI Cluster
-// - clusterFeature/clusterSummary/clusterConfiguration
-// - adds ClusterFeature as OwnerReference for both ClusterSummary and ClusterConfiguration
-func prepareForDeployment(clusterFeature *configv1alpha1.ClusterFeature,
+// - clusterProfile/clusterSummary/clusterConfiguration
+// - adds ClusterProfile as OwnerReference for both ClusterSummary and ClusterConfiguration
+func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	clusterSummary *configv1alpha1.ClusterSummary,
 	cluster *clusterv1.Cluster) {
 
 	By("Add proper labels to ClusterSummary")
-	addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, cluster.Namespace, cluster.Name)
+	addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
 
-	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterFeature)).To(Succeed())
+	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 	By("Create the secret with cluster kubeconfig")
@@ -260,20 +260,20 @@ func prepareForDeployment(clusterFeature *configv1alpha1.ClusterFeature,
 	Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 	Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 	Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+	Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-	Expect(waitForObject(context.TODO(), testEnv.Client, clusterFeature)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-	currentClusterFeature := &configv1alpha1.ClusterFeature{}
+	currentClusterProfile := &configv1alpha1.ClusterProfile{}
 	Expect(testEnv.Client.Get(context.TODO(),
-		types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	Expect(testEnv.Client.Get(context.TODO(),
 		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
 	By("Set ClusterSummary OwnerReference")
-	addOwnerReference(context.TODO(), testEnv.Client, currentClusterSummary, currentClusterFeature)
+	addOwnerReference(context.TODO(), testEnv.Client, currentClusterSummary, currentClusterProfile)
 
 	Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
@@ -288,16 +288,16 @@ func prepareForDeployment(clusterFeature *configv1alpha1.ClusterFeature,
 			return err
 		}
 		By("Set ClusterConfiguration OwnerReference")
-		addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterFeature)
+		addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterProfile)
 
 		err = testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)
 		if err != nil {
 			return err
 		}
-		currentClusterConfiguration.Status.ClusterFeatureResources = []configv1alpha1.ClusterFeatureResource{
+		currentClusterConfiguration.Status.ClusterProfileResources = []configv1alpha1.ClusterProfileResource{
 			{
-				ClusterFeatureName: clusterFeature.Name,
+				ClusterProfileName: clusterProfile.Name,
 				Features:           make([]configv1alpha1.Feature, 0),
 			},
 		}

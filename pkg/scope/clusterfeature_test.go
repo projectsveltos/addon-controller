@@ -33,54 +33,54 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
 )
 
-const clusterFeatureNamePrefix = "scope-"
+const clusterProfileNamePrefix = "scope-"
 
-var _ = Describe("ClusterFeatureScope", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+var _ = Describe("ClusterProfileScope", func() {
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var c client.Client
 
 	BeforeEach(func() {
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
 		}
 		scheme := setupScheme()
-		initObjects := []client.Object{clusterFeature}
+		initObjects := []client.Object{clusterProfile}
 		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 	})
 
-	It("Return nil,error if ClusterFeature is not specified", func() {
-		params := scope.ClusterFeatureScopeParams{
+	It("Return nil,error if ClusterProfile is not specified", func() {
+		params := scope.ClusterProfileScopeParams{
 			Client: c,
 			Logger: klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).To(HaveOccurred())
 		Expect(scope).To(BeNil())
 	})
 
 	It("Return nil,error if client is not specified", func() {
-		params := scope.ClusterFeatureScopeParams{
-			ClusterFeature: clusterFeature,
+		params := scope.ClusterProfileScopeParams{
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).To(HaveOccurred())
 		Expect(scope).To(BeNil())
 	})
 
 	It("IsContinuousSync returns false when SyncMode is OneTime", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		params := scope.ClusterFeatureScopeParams{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
@@ -88,57 +88,57 @@ var _ = Describe("ClusterFeatureScope", func() {
 	})
 
 	It("IsContinuousSync returns true when SyncMode is Continuous", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		params := scope.ClusterFeatureScopeParams{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
 		Expect(scope.IsContinuousSync()).To(BeTrue())
 	})
 
-	It("Name returns ClusterFeature Name", func() {
-		params := scope.ClusterFeatureScopeParams{
+	It("Name returns ClusterProfile Name", func() {
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		Expect(scope.Name()).To(Equal(clusterFeature.Name))
+		Expect(scope.Name()).To(Equal(clusterProfile.Name))
 	})
 
-	It("GetSelector returns ClusterFeature ClusterSelector", func() {
-		clusterFeature.Spec.ClusterSelector = configv1alpha1.Selector("zone=east")
-		params := scope.ClusterFeatureScopeParams{
+	It("GetSelector returns ClusterProfile ClusterSelector", func() {
+		clusterProfile.Spec.ClusterSelector = configv1alpha1.Selector("zone=east")
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		Expect(scope.GetSelector()).To(Equal(string(clusterFeature.Spec.ClusterSelector)))
+		Expect(scope.GetSelector()).To(Equal(string(clusterProfile.Spec.ClusterSelector)))
 	})
 
-	It("SetMatchingClusters sets ClusterFeature.Status.MatchingCluster", func() {
-		params := scope.ClusterFeatureScopeParams{
+	It("SetMatchingClusters sets ClusterProfile.Status.MatchingCluster", func() {
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
@@ -149,92 +149,92 @@ var _ = Describe("ClusterFeatureScope", func() {
 			},
 		}
 		scope.SetMatchingClusterRefs(matchingClusters)
-		Expect(reflect.DeepEqual(clusterFeature.Status.MatchingClusterRefs, matchingClusters)).To(BeTrue())
+		Expect(reflect.DeepEqual(clusterProfile.Status.MatchingClusterRefs, matchingClusters)).To(BeTrue())
 	})
 
-	It("Close updates ClusterFeature", func() {
-		params := scope.ClusterFeatureScopeParams{
+	It("Close updates ClusterProfile", func() {
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		clusterFeature.Labels = map[string]string{"clusters": "hr"}
+		clusterProfile.Labels = map[string]string{"clusters": "hr"}
 		Expect(scope.Close(context.TODO())).To(Succeed())
 
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		Expect(currentClusterFeature.Labels).ToNot(BeNil())
-		Expect(len(currentClusterFeature.Labels)).To(Equal(1))
-		v, ok := currentClusterFeature.Labels["clusters"]
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		Expect(currentClusterProfile.Labels).ToNot(BeNil())
+		Expect(len(currentClusterProfile.Labels)).To(Equal(1))
+		v, ok := currentClusterProfile.Labels["clusters"]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal("hr"))
 	})
 
 	It("IsContinuousSync returns true when mode is Continuous", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
-		params := scope.ClusterFeatureScopeParams{
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
 		Expect(scope.IsContinuousSync()).To(BeTrue())
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(scope.IsContinuousSync()).To(BeFalse())
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		Expect(scope.IsContinuousSync()).To(BeFalse())
 	})
 
 	It("IsOneTimeSync returns true when mode is OneTime", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 
-		params := scope.ClusterFeatureScopeParams{
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
 		Expect(scope.IsOneTimeSync()).To(BeTrue())
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(scope.IsOneTimeSync()).To(BeFalse())
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(scope.IsOneTimeSync()).To(BeFalse())
 	})
 
 	It("IsDryRunSync returns true when mode is DryRun", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 
-		params := scope.ClusterFeatureScopeParams{
+		params := scope.ClusterProfileScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			Logger:         klogr.New(),
 		}
 
-		scope, err := scope.NewClusterFeatureScope(params)
+		scope, err := scope.NewClusterProfileScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
 		Expect(scope.IsDryRunSync()).To(BeTrue())
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(scope.IsDryRunSync()).To(BeFalse())
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		Expect(scope.IsDryRunSync()).To(BeFalse())
 	})
 })

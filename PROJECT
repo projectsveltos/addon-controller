@@ -9,7 +9,7 @@ resources:
   controller: true
   domain: projectsveltos.io
   group: config
-  kind: ClusterFeature
+  kind: ClusterProfile
   path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
   version: v1alpha1
 - api:

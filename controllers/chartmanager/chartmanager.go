@@ -27,11 +27,11 @@ import (
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 )
 
-// Multiple ClusterFeatures can:
+// Multiple ClusterProfiles can:
 // - match same CAPI Clusters
 // - reference same set of Helm Chart(s)/Version(s)
 // Above is a misconfiguration/conflict that needs to be detected.
-// Only one ClusterSummary (there is one ClusterSummary for each pair ClusterFeature/CAPI Cluster) can manage an helm
+// Only one ClusterSummary (there is one ClusterSummary for each pair ClusterProfile/CAPI Cluster) can manage an helm
 // version.
 // Following client is used to solve such scenarios. One ClusterSummary will get the manager role for a given helm version
 // in a given CAPI Cluster. All other ClusterSummaries will report a conflict that requires admin intervention to be resolved.
@@ -52,13 +52,13 @@ type instance struct {
 	// When ClusterSummary managing a release in a CAPI Cluster is deleted or stops managing that release, the next
 	// ClusterSummary in line will become the new manager.
 	// That is achieved as part of ClusterSummaryReconciler. Such reconciler watches for ClusterSummary changes, when
-	// a ClusterSummary.Spec.ClusterFeatureSpec.HelmCharts changes, requeues all ClusterSummaries currently registered
+	// a ClusterSummary.Spec.ClusterProfileSpec.HelmCharts changes, requeues all ClusterSummaries currently registered
 	// for at least one helm chart.
 	//
 	// Such map is also used in following scenario to detect helm charts which used to be managed by a ClusterSummary
 	// but are not referenced by ClusterSummary anymore:
-	// - ClusterFeatureSpec is listing an Helm chart to be deployed => this helm release is provisioned in the CAPI Cluster;
-	// - without asking for helm chart to be released, the Helm chart is removed from the ClusterFeatureSpec;
+	// - ClusterProfileSpec is listing an Helm chart to be deployed => this helm release is provisioned in the CAPI Cluster;
+	// - without asking for helm chart to be released, the Helm chart is removed from the ClusterProfileSpec;
 	// - helm chart needs to be withdrawn if no other ClusterSummary is trying to manage it.
 	perClusterChartMap map[string]map[string][]string
 }
@@ -103,7 +103,7 @@ func GetChartManagerInstance(ctx context.Context, c client.Client) (*instance, e
 // Only first ClusterSummary registering for a given Helm release in a given CAPI Cluster is given
 // the manager role.
 func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha1.ClusterSummary) {
-	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) == 0 {
+	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 {
 		// Nothing to do
 		return
 	}
@@ -114,8 +114,8 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
 		m.addClusterEntry(clusterKey)
 		m.addReleaseEntry(clusterKey, releaseKey)
@@ -129,7 +129,7 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha
 // registered is considered stale and removed.
 func (m *instance) RemoveStaleRegistrations(clusterSummary *configv1alpha1.ClusterSummary) {
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return
 	}
 
@@ -150,8 +150,8 @@ func (m *instance) cleanRegistrations(clusterSummary *configv1alpha1.ClusterSumm
 
 	currentReferencedReleases := make(map[string]bool)
 	if !removeAll {
-		for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
 			currentReferencedReleases[releaseKey] = true
 		}

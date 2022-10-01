@@ -29,7 +29,7 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
 )
 
-var _ = Describe("ClusterFeature Predicates: ClusterPredicates", func() {
+var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 	var logger logr.Logger
 	var cluster *clusterv1.Cluster
 
@@ -164,7 +164,7 @@ var _ = Describe("ClusterFeature Predicates: ClusterPredicates", func() {
 	})
 })
 
-var _ = Describe("ClusterFeature Predicates: MachinePredicates", func() {
+var _ = Describe("ClusterProfile Predicates: MachinePredicates", func() {
 	var logger logr.Logger
 	var machine *clusterv1.Machine
 

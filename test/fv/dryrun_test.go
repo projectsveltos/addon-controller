@@ -86,31 +86,31 @@ var _ = Describe("DryRun", func() {
 		kongSAConfigMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), kongServiceAccount)
 		Expect(k8sClient.Create(context.TODO(), kongSAConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterFeature in Continuous syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Byf("Create a ClusterProfile in Continuous syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(clusterFeature)
+		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Update ClusterFeature %s to reference ConfigMap with Kong ServiceAccount %s/%s",
-			clusterFeature.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Update ClusterProfile %s to reference ConfigMap with Kong ServiceAccount %s/%s",
+			clusterProfile.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: kongSAConfigMap.Namespace,
 				Name:      kongSAConfigMap.Name,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		Byf("Update ClusterFeature %s to deploy mysql helm chart", clusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Update ClusterProfile %s to deploy mysql helm chart", clusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -121,9 +121,9 @@ var _ = Describe("DryRun", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
@@ -135,39 +135,39 @@ var _ = Describe("DryRun", func() {
 			{ReleaseName: "mysql", ChartVersion: "9.3.3", Namespace: "mysql"},
 		}
 
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
 		policies := []policy{
 			{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
 		}
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		Byf("Create a configMap with kong Role")
 		kongRoleConfigMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), kongRole)
 		Expect(k8sClient.Create(context.TODO(), kongRoleConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterFeature in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		dryRunClusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		dryRunClusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		Expect(k8sClient.Create(context.TODO(), dryRunClusterFeature)).To(Succeed())
+		Byf("Create a ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		dryRunClusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		dryRunClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		Expect(k8sClient.Create(context.TODO(), dryRunClusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(dryRunClusterFeature)
+		verifyClusterProfileMatches(dryRunClusterProfile)
 
-		verifyClusterSummary(dryRunClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(dryRunClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Update ClusterFeature %s to reference configMaps with Kong's configuration", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Update ClusterProfile %s to reference configMaps with Kong's configuration", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongSAConfigMap.Name},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		Byf("Update ClusterFeature %s to reference some helm charts", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Update ClusterProfile %s to reference some helm charts", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -196,12 +196,12 @@ var _ = Describe("DryRun", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionUninstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		dryRunClusterSummary := verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		dryRunClusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Verifying ClusterReport for helm reports")
-		clusterReportName := fmt.Sprintf("%s--%s", dryRunClusterFeature.Name, dryRunClusterSummary.Spec.ClusterName)
+		clusterReportName := fmt.Sprintf("%s--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
 			err := k8sClient.Get(context.TODO(),
@@ -209,21 +209,21 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// Another ClusterFeature is managing mysql release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
+			// Another ClusterProfile is managing mysql release
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
 			if err != nil {
 				return err
 			}
 			// If not in DryRun, it would install redis release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.InstallHelmAction))
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.InstallHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is Uninstall and not installed yet so no action
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.NoHelmAction))
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.NoHelmAction))
 			if err != nil {
 				return err
 			}
@@ -244,7 +244,7 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// Another ClusterFeature is managing this. This ClusterFeature is also referencing same ConfigMap. So Action is Update
+			// Another ClusterProfile is managing this. This ClusterProfile is also referencing same ConfigMap. So Action is Update
 			// as changing SyncMode will cause reconciliation and so a patch of this resource.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
 				"ServiceAccount", "", string(configv1alpha1.UpdateResourceAction))
@@ -254,13 +254,13 @@ var _ = Describe("DryRun", func() {
 			return nil
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Delete ClusterFeature %s", clusterFeature.Name)
-		deleteClusterFeature(clusterFeature)
+		Byf("Delete ClusterProfile %s", clusterProfile.Name)
+		deleteClusterProfile(clusterProfile)
 
-		Byf("Changing syncMode to Continuous and HelmCharts (all install) for ClusterFeature %s", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Changing syncMode to Continuous and HelmCharts (all install) for ClusterProfile %s", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -289,9 +289,9 @@ var _ = Describe("DryRun", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
@@ -299,13 +299,13 @@ var _ = Describe("DryRun", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureResources)
 
-		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterFeature %s", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 		}
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -334,9 +334,9 @@ var _ = Describe("DryRun", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionUninstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Verifying ClusterReport")
 		Eventually(func() error {
@@ -346,21 +346,21 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// ClusterFeature is managing mysql release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
+			// ClusterProfile is managing mysql release
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
 			if err != nil {
 				return err
 			}
-			// ClusterFeature is managing mysql release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.NoHelmAction))
+			// ClusterProfile is managing mysql release
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.NoHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is installed and action is Uninstall
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
@@ -391,13 +391,13 @@ var _ = Describe("DryRun", func() {
 			return nil
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Changing clusterSelector for ClusterFeature %s so to not match any CAPI cluster", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		Byf("Changing clusterSelector for ClusterProfile %s so to not match any CAPI cluster", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		selector := "bar=foo"
-		currentClusterFeature.Spec.ClusterSelector = configv1alpha1.Selector(selector)
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		currentClusterProfile.Spec.ClusterSelector = configv1alpha1.Selector(selector)
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		// Since ClusterFeature is in DryRun mode, ClusterSummary should be marked as deleted but not removed
+		// Since ClusterProfile is in DryRun mode, ClusterSummary should be marked as deleted but not removed
 		// In DryRun mode ClusterReport still needs to be updated.
 
 		// First wait for clusterSummary to be marked for deletion
@@ -430,21 +430,21 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// ClusterFeature is managing mysql release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+			// ClusterProfile is managing mysql release
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
-			// ClusterFeature is managing mysql release
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+			// ClusterProfile is managing mysql release
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is installed and action is Uninstall
-			err = verifyReleaseReport(currentClusterReport, currentClusterFeature.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterFeature.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
@@ -475,15 +475,15 @@ var _ = Describe("DryRun", func() {
 			return nil
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Changing syncMode to Continuous for ClusterFeature %s", dryRunClusterFeature.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature))
+		Byf("Changing syncMode to Continuous for ClusterProfile %s", dryRunClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile))
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Delete ClusterFeature %s", dryRunClusterFeature.Name)
-		deleteClusterFeature(dryRunClusterFeature)
+		Byf("Delete ClusterProfile %s", dryRunClusterProfile.Name)
+		deleteClusterProfile(dryRunClusterProfile)
 	})
 })
 

@@ -122,19 +122,19 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	// Fetch the ClusterFeature.
-	clusterFeature, err := getClusterFeatureOwner(ctx, r.Client, clusterSummary)
+	// Fetch the ClusterProfile.
+	clusterProfile, err := getClusterProfileOwner(ctx, r.Client, clusterSummary)
 	if err != nil {
-		logger.Error(err, "Failed to get owner clusterFeature")
+		logger.Error(err, "Failed to get owner clusterProfile")
 		return reconcile.Result{}, errors.Wrapf(
 			err,
-			"Failed to get owner clusterFeature for %s",
+			"Failed to get owner clusterProfile for %s",
 			req.NamespacedName,
 		)
 	}
-	if clusterFeature == nil {
-		logger.Error(err, "Failed to get owner clusterFeature")
-		return reconcile.Result{}, fmt.Errorf("failed to get owner clusterFeature for %s",
+	if clusterProfile == nil {
+		logger.Error(err, "Failed to get owner clusterProfile")
+		return reconcile.Result{}, fmt.Errorf("failed to get owner clusterProfile for %s",
 			req.NamespacedName)
 	}
 
@@ -142,14 +142,14 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Client:         r.Client,
 		Logger:         logger,
 		ClusterSummary: clusterSummary,
-		ClusterFeature: clusterFeature,
-		ControllerName: "clusterfeature",
+		ClusterProfile: clusterProfile,
+		ControllerName: "clusterprofile",
 	})
 	if err != nil {
-		logger.Error(err, "Failed to create clusterFeatureScope")
+		logger.Error(err, "Failed to create clusterProfileScope")
 		return reconcile.Result{}, errors.Wrapf(
 			err,
-			"unable to create clusterfeature scope for %s",
+			"unable to create clusterprofile scope for %s",
 			req.NamespacedName,
 		)
 	}
@@ -305,7 +305,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
 	// If the SveltosCluster doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-	// Register the finalizer immediately to avoid orphaning clusterfeature resources on delete
+	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := clusterSummaryScope.PatchObject(ctx); err != nil {
 		clusterSummaryScope.Error(err, "Failed to add finalizer")
 		return errors.Wrapf(
@@ -337,7 +337,7 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 }
 
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs == nil {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs == nil {
 		logger.V(logs.LogDebug).Info("no policy configuration")
 		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
@@ -351,7 +351,7 @@ func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterS
 }
 
 func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.HelmCharts == nil {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		logger.V(logs.LogDebug).Info("no helm configuration")
 		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("no helm status. Do not reconcile this")
@@ -409,12 +409,12 @@ func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSu
 	// When in DryRun mode, ClusterSummary won't update (install/upgrade/uninstall) any helm chart.
 	// So it does not update helm chart registration. Whatever registrations it had, are still there (if it was
 	// managing an helm chart, that information still holds as dryrun means change nothing).
-	// Let's say currently no ClusterFeature is managing an helm chart, if we allowed a ClusterSummary in DryRun to
+	// Let's say currently no ClusterProfile is managing an helm chart, if we allowed a ClusterSummary in DryRun to
 	// register then:
 	// 1) this ClusterSummary would be elected as manager
 	// 2) ClusterSummary is in DryRun mode so it actually won't deploy anything
-	// 3) If another ClusterFeature in not DryRun mode tried to manage same helm chart, it would not be allowed.
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	// 3) If another ClusterProfile in not DryRun mode tried to manage same helm chart, it would not be allowed.
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -453,7 +453,7 @@ func (r *ClusterSummaryReconciler) deleteChartMap(ctx context.Context, clusterSu
 }
 
 func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeOneTime {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime {
 		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
 		return
 	}
@@ -503,24 +503,24 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeContinuous {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous {
 		logger.V(logs.LogDebug).Info("Mode set to continuous. Reconciliation is needed.")
 		return true
 	}
 
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		logger.V(logs.LogDebug).Info("Mode set to dryRun. Reconciliation is needed.")
 		return true
 	}
 
-	if len(clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs) != 0 {
+	if len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
 		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
-	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) != 0 {
+	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
 		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Helm Charts not deployed yet. Reconciliation is needed.")
 			return true
@@ -532,11 +532,11 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
 	currentReferences := &Set{}
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
-		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Namespace
-		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Name
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
+		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
+		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name
 		currentReferences.insert(&configv1alpha1.PolicyRef{
-			Kind:      clusterSummaryScope.ClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i].Kind,
+			Kind:      clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
 			Namespace: referencedNamespace,
 			Name:      referencedName,
 		})
@@ -572,7 +572,7 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 }
 
 // canRemoveFinalizer returns true if finalizer can be removed.
-// A ClusterSummary in DryRun mode can be removed if deleted and ClusterFeature is also marked for deletion.
+// A ClusterSummary in DryRun mode can be removed if deleted and ClusterProfile is also marked for deletion.
 // A ClusterSummary in not DryRun mode can be removed if deleted and all features are undeployed.
 func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
@@ -598,25 +598,25 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 	}
 
 	if clusterSummaryScope.IsDryRunSync() {
-		logger.V(logs.LogInfo).Info("DryRun mode. Can only be deleted if ClusterFeature is marked for deletion.")
-		// A ClusterSummary in DryRun mode can only be removed if also ClusterFeature is marked
+		logger.V(logs.LogInfo).Info("DryRun mode. Can only be deleted if ClusterProfile is marked for deletion.")
+		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
-		// ClusterFeature is moved away from DryRun mode.
-		clusterFeature, err := getClusterFeatureOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		// ClusterProfile is moved away from DryRun mode.
+		clusterProfile, err := getClusterProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterFeature %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile %v", err))
 			return false
 		}
 
-		if clusterFeature == nil {
-			logger.V(logs.LogInfo).Info("failed to get ClusterFeature")
+		if clusterProfile == nil {
+			logger.V(logs.LogInfo).Info("failed to get ClusterProfile")
 			return false
 		}
 
-		if !clusterFeature.DeletionTimestamp.IsZero() {
+		if !clusterProfile.DeletionTimestamp.IsZero() {
 			return true
 		}
-		logger.V(logs.LogInfo).Info("ClusterFeature not marked for deletion")
+		logger.V(logs.LogInfo).Info("ClusterProfile not marked for deletion")
 		return false
 	}
 

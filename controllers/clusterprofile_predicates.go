@@ -27,7 +27,7 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
-// ClusterPredicates predicates for v1Cluster. ClusterFeatureReconciler watches v1Cluster events
+// ClusterPredicates predicates for v1Cluster. ClusterProfileReconciler watches v1Cluster events
 // and react to those by reconciling itself based on following predicates
 func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
@@ -40,27 +40,27 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if oldCluster == nil {
-				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile ClusterFeature")
+				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile ClusterProfile")
 				return true
 			}
 
 			// return true if Cluster.Spec.Paused has changed from true to false
 			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated ClusterFeatures.")
+					"Cluster was unpaused. Will attempt to reconcile associated ClusterProfiles.")
 				return true
 			}
 
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
-					"Cluster labels changed. Will attempt to reconcile associated ClusterFeatures.",
+					"Cluster labels changed. Will attempt to reconcile associated ClusterProfiles.",
 				)
 				return true
 			}
 
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -73,12 +73,12 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// Only need to trigger a reconcile if the Cluster.Spec.Paused is false
 			if !cluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster is not paused.  Will attempt to reconcile associated ClusterFeatures.",
+					"Cluster is not paused.  Will attempt to reconcile associated ClusterProfiles.",
 				)
 				return true
 			}
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -87,7 +87,7 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster deleted.  Will attempt to reconcile associated ClusterFeatures.")
+				"Cluster deleted.  Will attempt to reconcile associated ClusterProfiles.")
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -96,13 +96,13 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 	}
 }
 
-// MachinePredicates predicates for v1Machine. ClusterFeatureReconciler watches v1Machine events
+// MachinePredicates predicates for v1Machine. ClusterProfileReconciler watches v1Machine events
 // and react to those by reconciling itself based on following predicates
 func MachinePredicates(logger logr.Logger) predicate.Funcs {
 	return predicate.Funcs{
@@ -119,20 +119,20 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 			}
 
 			if oldMachine == nil {
-				log.V(logs.LogVerbose).Info("Old Machine is nil. Reconcile ClusterFeature")
+				log.V(logs.LogVerbose).Info("Old Machine is nil. Reconcile ClusterProfile")
 				return true
 			}
 
 			// return true if Machine.Status.Phase has changed from not running to running
 			if oldMachine.Status.GetTypedPhase() != newMachine.Status.GetTypedPhase() {
 				log.V(logs.LogVerbose).Info(
-					"Machine was not in Running Phase. Will attempt to reconcile associated ClusterFeatures.")
+					"Machine was not in Running Phase. Will attempt to reconcile associated ClusterProfiles.")
 				return true
 			}
 
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -148,7 +148,7 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 			}
 
 			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -157,7 +157,7 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 				"machine", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -166,7 +166,7 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 				"machine", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterFeatures.")
+				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},
 	}

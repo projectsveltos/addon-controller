@@ -37,12 +37,12 @@ spec:
             description: ClusterConfigurationStatus defines the observed state of
               ClusterConfiguration
             properties:
-              clusterFeatureResources:
-                description: ClusterFeatureResources is the list of resources currently
-                  deployed in a CAPI Cluster due to ClusterFeatures
+              clusterProfileResources:
+                description: ClusterProfileResources is the list of resources currently
+                  deployed in a CAPI Cluster due to ClusterProfiles
                 items:
-                  description: ClusterFeatureResource keeps info on all of the resources
-                    deployed in this CAPI Cluster due to a given ClusterFeature
+                  description: ClusterProfileResource keeps info on all of the resources
+                    deployed in this CAPI Cluster due to a given ClusterProfile
                   properties:
                     Features:
                       description: Features contains the list of policies deployed
@@ -181,12 +181,12 @@ spec:
                         - featureID
                         type: object
                       type: array
-                    clusterFeatureName:
-                      description: ClusterFeatureName is the name of the ClusterFeature
+                    clusterProfileName:
+                      description: ClusterProfileName is the name of the ClusterProfile
                         matching the CAPI Cluster.
                       type: string
                   required:
-                  - clusterFeatureName
+                  - clusterProfileName
                   type: object
                 type: array
             type: object

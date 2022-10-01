@@ -62,8 +62,8 @@ metadata:
   labels:
     "{{ Cluster:/metadata/labels }}"`
 
-	templateClusterFeature = `apiVersion: v1alpha1
-kind: ClusterFeature
+	templateClusterProfile = `apiVersion: v1alpha1
+kind: ClusterProfile
 metadata:
   name: set-list
 spec:
@@ -73,7 +73,7 @@ spec:
 
 var _ = Describe("Template Utils", func() {
 	var cluster *clusterv1.Cluster
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var substituitionRule *configv1alpha1.SubstitutionRule
 	var namespace string
@@ -92,16 +92,16 @@ var _ = Describe("Template Utils", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -125,7 +125,7 @@ var _ = Describe("Template Utils", func() {
 			},
 		}
 
-		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
@@ -133,7 +133,7 @@ var _ = Describe("Template Utils", func() {
 	})
 
 	AfterEach(func() {
-		deleteResources(namespace, clusterFeature, clusterSummary)
+		deleteResources(namespace, clusterProfile, clusterSummary)
 	})
 
 	It("isTemplate returns true when PolicyTemplate annotation is set", func() {
@@ -316,15 +316,15 @@ var _ = Describe("Template Utils", func() {
 	})
 
 	It("InstantiateTemplate instantiates a policy template (slice field)", func() {
-		By("Creating a ClusterFeature with same name as Cluster")
+		By("Creating a ClusterProfile with same name as Cluster")
 		// When instantiating later on, cf.Spec.PolicyRef will be the value of instantiation
-		// Name of following clusterFeature is set to Cluster.Name and it is what
+		// Name of following clusterProfile is set to Cluster.Name and it is what
 		// cfSubstituitionRule expect it.
-		cf := &configv1alpha1.ClusterFeature{
+		cf := &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: cluster.Name,
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				PolicyRefs: []configv1alpha1.PolicyRef{
 					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
 					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
@@ -341,7 +341,7 @@ var _ = Describe("Template Utils", func() {
 				Name: "get-cluster-feature",
 			},
 			Spec: configv1alpha1.SubstitutionRuleSpec{
-				Kind:       "ClusterFeature",
+				Kind:       "ClusterProfile",
 				APIVersion: "config.projectsveltos.io/v1alpha1",
 				Name:       "Cluster:/metadata/name",
 			},
@@ -351,16 +351,16 @@ var _ = Describe("Template Utils", func() {
 
 		By("Instantiate a policy that requires a slice as substitution value")
 		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
-			clusterSummary, templateClusterFeature, klogr.New())
+			clusterSummary, templateClusterProfile, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(policy).ToNot(ContainSubstring("{{ get-cluster-feature:/spec/policyRefs }}"))
 		u, err := controllers.GetUnstructured([]byte(policy))
 		Expect(err).To(BeNil())
 
-		// Convert unstructured to ClusterFeature
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), currentClusterFeature)).To(Succeed())
-		Expect(len(currentClusterFeature.Spec.PolicyRefs)).ToNot(BeZero())
-		Expect(len(currentClusterFeature.Spec.PolicyRefs)).To(Equal(len(cf.Spec.PolicyRefs)))
+		// Convert unstructured to ClusterProfile
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), currentClusterProfile)).To(Succeed())
+		Expect(len(currentClusterProfile.Spec.PolicyRefs)).ToNot(BeZero())
+		Expect(len(currentClusterProfile.Spec.PolicyRefs)).To(Equal(len(cf.Spec.PolicyRefs)))
 	})
 })

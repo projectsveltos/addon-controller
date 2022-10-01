@@ -90,11 +90,11 @@ type Feature struct {
 	Charts []Chart `json:"charts,omitempty"`
 }
 
-// ClusterFeatureResource keeps info on all of the resources deployed in this CAPI Cluster
-// due to a given ClusterFeature
-type ClusterFeatureResource struct {
-	// ClusterFeatureName is the name of the ClusterFeature matching the CAPI Cluster.
-	ClusterFeatureName string `json:"clusterFeatureName"`
+// ClusterProfileResource keeps info on all of the resources deployed in this CAPI Cluster
+// due to a given ClusterProfile
+type ClusterProfileResource struct {
+	// ClusterProfileName is the name of the ClusterProfile matching the CAPI Cluster.
+	ClusterProfileName string `json:"clusterProfileName"`
 
 	// Features contains the list of policies deployed in the CAPI Cluster because
 	// of a given feature
@@ -104,10 +104,10 @@ type ClusterFeatureResource struct {
 
 // ClusterConfigurationStatus defines the observed state of ClusterConfiguration
 type ClusterConfigurationStatus struct {
-	// ClusterFeatureResources is the list of resources currently deployed in a CAPI Cluster due
-	// to ClusterFeatures
+	// ClusterProfileResources is the list of resources currently deployed in a CAPI Cluster due
+	// to ClusterProfiles
 	// +optional
-	ClusterFeatureResources []ClusterFeatureResource `json:"clusterFeatureResources,omitempty"`
+	ClusterProfileResources []ClusterProfileResource `json:"clusterProfileResources,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -135,15 +135,15 @@ func init() {
 	SchemeBuilder.Register(&ClusterConfiguration{}, &ClusterConfigurationList{})
 }
 
-// GetClusterConfigurationSectionIndex returns Status.ClusterFeatureResources index for given ClusterFeature.
+// GetClusterConfigurationSectionIndex returns Status.ClusterProfileResources index for given ClusterProfile.
 // If not found, returns an error
-func GetClusterConfigurationSectionIndex(clusterConfiguration *ClusterConfiguration, clusterFeatureName string) (int, error) {
-	for i := range clusterConfiguration.Status.ClusterFeatureResources {
-		if clusterConfiguration.Status.ClusterFeatureResources[i].ClusterFeatureName == clusterFeatureName {
+func GetClusterConfigurationSectionIndex(clusterConfiguration *ClusterConfiguration, clusterProfileName string) (int, error) {
+	for i := range clusterConfiguration.Status.ClusterProfileResources {
+		if clusterConfiguration.Status.ClusterProfileResources[i].ClusterProfileName == clusterProfileName {
 			return i, nil
 		}
 	}
 
-	return -1, fmt.Errorf("section for ClusterFeature %s not present in clusterConfiguration %s/%s",
-		clusterFeatureName, clusterConfiguration.Namespace, clusterConfiguration.Name)
+	return -1, fmt.Errorf("section for ClusterProfile %s not present in clusterConfiguration %s/%s",
+		clusterProfileName, clusterConfiguration.Namespace, clusterConfiguration.Name)
 }

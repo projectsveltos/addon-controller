@@ -1,7 +1,7 @@
 apiVersion: config.projectsveltos.io/v1alpha1
-kind: ClusterFeature
+kind: ClusterProfile
 metadata:
-  name: clusterfeature-sample
+  name: clusterprofile-sample
 spec:
   clusterSelector: env=fv
   syncMode: Continuous

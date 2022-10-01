@@ -25,17 +25,17 @@ import (
 )
 
 const (
-	// ClusterFeatureFinalizer allows ClusterFeatureReconciler to clean up resources associated with
-	// ClusterFeature before removing it from the apiserver.
-	ClusterFeatureFinalizer = "clusterfeaturefinalizer.projectsveltos.io"
+	// ClusterProfileFinalizer allows ClusterProfileReconciler to clean up resources associated with
+	// ClusterProfile before removing it from the apiserver.
+	ClusterProfileFinalizer = "clusterprofilefinalizer.projectsveltos.io"
 
-	ClusterFeatureKind = "ClusterFeature"
+	ClusterProfileKind = "ClusterProfile"
 )
 
 type Selector string
 
 // ReferencedResourceKind is a string representation of allowed kind of resources
-// that can be referenced in a ClusterFeature
+// that can be referenced in a ClusterProfile
 type ReferencedResourceKind string
 
 // Define the ReferencedResourceKind constants.
@@ -127,16 +127,16 @@ type HelmChart struct {
 	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
 }
 
-// ClusterFeatureSpec defines the desired state of ClusterFeature
-type ClusterFeatureSpec struct {
+// ClusterProfileSpec defines the desired state of ClusterProfile
+type ClusterProfileSpec struct {
 	// ClusterSelector identifies ClusterAPI clusters to associate to.
 	ClusterSelector Selector `json:"clusterSelector"`
 
 	// SyncMode specifies how features are synced in a matching workload cluster.
-	// - OneTime means, first time a workload cluster matches the ClusterFeature,
+	// - OneTime means, first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such cluster. Any subsequent feature configuration
 	// change won't be applied into the matching workload clusters;
-	// - Continuous means first time a workload cluster matches the ClusterFeature,
+	// - Continuous means first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such a cluster. Any subsequent feature configuration
 	// change will be applied into the matching workload clusters.
 	// +kubebuilder:default:=Continuous
@@ -152,37 +152,37 @@ type ClusterFeatureSpec struct {
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`
 }
 
-// ClusterFeatureStatus defines the observed state of ClusterFeature
-type ClusterFeatureStatus struct {
+// ClusterProfileStatus defines the observed state of ClusterProfile
+type ClusterProfileStatus struct {
 	// MatchingClusterRefs reference all the cluster-api Cluster currently matching
-	// ClusterFeature ClusterSelector
+	// ClusterProfile ClusterSelector
 	MatchingClusterRefs []corev1.ObjectReference `json:"matchinClusters,omitempty"`
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:resource:path=clusterfeatures,scope=Cluster
+//+kubebuilder:resource:path=clusterprofiles,scope=Cluster
 //+kubebuilder:subresource:status
 
-// ClusterFeature is the Schema for the clusterfeatures API
-type ClusterFeature struct {
+// ClusterProfile is the Schema for the clusterprofiles API
+type ClusterProfile struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ClusterFeatureSpec   `json:"spec,omitempty"`
-	Status ClusterFeatureStatus `json:"status,omitempty"`
+	Spec   ClusterProfileSpec   `json:"spec,omitempty"`
+	Status ClusterProfileStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// ClusterFeatureList contains a list of ClusterFeature
-type ClusterFeatureList struct {
+// ClusterProfileList contains a list of ClusterProfile
+type ClusterProfileList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ClusterFeature `json:"items"`
+	Items           []ClusterProfile `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterFeature{}, &ClusterFeatureList{})
+	SchemeBuilder.Register(&ClusterProfile{}, &ClusterProfileList{})
 }
 
 // GetValues unmarshals the raw values to a map[string]interface{} and returns

@@ -53,7 +53,7 @@ var _ = Describe("SyncMode one time", func() {
 		namePrefix = "one-time"
 	)
 
-	It("ClusterFeature with SyncMode oneTime. Policies are deployed only once", Label("FV"), func() {
+	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once", Label("FV"), func() {
 		oneTimeNamespaceName := randomString()
 
 		configMapNs := randomString()
@@ -70,21 +70,21 @@ var _ = Describe("SyncMode one time", func() {
 
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
-		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},
 		}
-		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(clusterFeature)
+		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -103,7 +103,7 @@ var _ = Describe("SyncMode one time", func() {
 		policies := []policy{
 			{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
 		}
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		By("Updating content of policy in ConfigMap")
@@ -128,21 +128,21 @@ var _ = Describe("SyncMode one time", func() {
 			return !ok
 		}, timeout/2, pollingInterval).Should(BeTrue())
 
-		Byf("Changing clusterfeature to not reference configmap anymore")
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Byf("Changing clusterprofile to not reference configmap anymore")
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		// Since SyncMode is OneTime ClusterFeature's changes are not propagated to already existing ClusterSummary.
+		// Since SyncMode is OneTime ClusterProfile's changes are not propagated to already existing ClusterSummary.
 		Byf("Verifying ClusterSummary still references the ConfigMap")
 		currentClusterSummary, err := getClusterSummary(context.TODO(),
-			clusterFeature.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		Expect(err).To(BeNil())
-		Expect(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs).ToNot(BeNil())
-		Expect(len(currentClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs)).To(Equal(1))
+		Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).ToNot(BeNil())
+		Expect(len(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs)).To(Equal(1))
 
-		deleteClusterFeature(clusterFeature)
+		deleteClusterProfile(clusterProfile)
 
 		Byf("Verifying Namespace is removed in the workload cluster")
 		Eventually(func() bool {

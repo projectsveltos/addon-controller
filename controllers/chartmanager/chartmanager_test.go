@@ -53,7 +53,7 @@ var _ = Describe("Chart manager", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: randomString(),
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
 							RepositoryURL:    "https://kyverno.github.io/kyverno/",
@@ -97,8 +97,8 @@ var _ = Describe("Chart manager", func() {
 
 			manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-			for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-				chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+			for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+				chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 				By(fmt.Sprintf("Verifying ClusterSummary %s manages helm release %s/%s",
 					clusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
 				Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
@@ -121,8 +121,8 @@ var _ = Describe("Chart manager", func() {
 		manager.RegisterClusterSummaryForCharts(tmpClusterSummary)
 		defer removeSubscriptions(c, tmpClusterSummary)
 
-		for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			By(fmt.Sprintf("Verifying ClusterSummary %s does not manage helm release %s/%s",
 				tmpClusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
 			Expect(manager.CanManageChart(tmpClusterSummary, chart)).To(BeFalse())
@@ -135,18 +135,18 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			By(fmt.Sprintf("Verifying ClusterSummary %s manages helm release %s/%s",
 				clusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
 			Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = nil
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = nil
 		manager.RemoveStaleRegistrations(clusterSummary)
 
-		for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			By(fmt.Sprintf("Verifying ClusterSummary %s does not manage helm release %s/%s",
 				clusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
 			Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
@@ -176,7 +176,7 @@ var _ = Describe("Chart manager", func() {
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 		}
 
-		tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+		tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
 			prometheusChart)
 
 		manager.RegisterClusterSummaryForCharts(tmpClusterSummary)
@@ -190,8 +190,8 @@ var _ = Describe("Chart manager", func() {
 
 		Expect(manager.CanManageChart(tmpClusterSummary, &prometheusChart)).To(BeTrue())
 
-		for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			chart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			By(fmt.Sprintf("Verifying ClusterSummary %s does not manage helm release %s/%s",
 				tmpClusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
 			Expect(manager.CanManageChart(tmpClusterSummary, chart)).To(BeFalse())
@@ -228,7 +228,7 @@ var _ = Describe("Chart manager", func() {
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 		}
 
-		tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+		tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
 			prometheusChart)
 		manager.RegisterClusterSummaryForCharts(tmpClusterSummary)
 		defer removeSubscriptions(c, tmpClusterSummary)
@@ -273,19 +273,19 @@ var _ = Describe("Chart manager", func() {
 		})
 
 	It("rebuildRegistrations rebuilds helm chart registrations", func() {
-		Expect(len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts)).Should(BeNumerically(">=", 2))
+		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)).Should(BeNumerically(">=", 2))
 
 		// Mark clusterSummary as manager for one release
 		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
 			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
 				{
-					ReleaseName:      clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0].ReleaseName,
-					ReleaseNamespace: clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0].ReleaseNamespace,
+					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseName,
+					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseNamespace,
 					Status:           configv1alpha1.HelChartStatusManaging,
 				},
 				{
-					ReleaseName:      clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1].ReleaseName,
-					ReleaseNamespace: clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1].ReleaseNamespace,
+					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseName,
+					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseNamespace,
 					Status:           configv1alpha1.HelChartStatusConflict,
 				},
 			},
@@ -301,13 +301,13 @@ var _ = Describe("Chart manager", func() {
 			Status: configv1alpha1.ClusterSummaryStatus{
 				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
 					{
-						ReleaseName:      clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0].ReleaseName,
-						ReleaseNamespace: clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0].ReleaseNamespace,
+						ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseName,
+						ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseNamespace,
 						Status:           configv1alpha1.HelChartStatusConflict,
 					},
 					{
-						ReleaseName:      clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1].ReleaseName,
-						ReleaseNamespace: clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1].ReleaseNamespace,
+						ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseName,
+						ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseNamespace,
 						Status:           configv1alpha1.HelChartStatusManaging,
 					},
 				},
@@ -323,14 +323,14 @@ var _ = Describe("Chart manager", func() {
 		Expect(err).To(BeNil())
 
 		Expect(manager.CanManageChart(clusterSummary,
-			&clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeTrue())
+			&clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
 		Expect(manager.CanManageChart(tmpClusterSummary,
-			&tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeFalse())
+			&tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeFalse())
 
 		Expect(manager.CanManageChart(clusterSummary,
-			&clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1])).To(BeFalse())
+			&clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeFalse())
 		Expect(manager.CanManageChart(tmpClusterSummary,
-			&tmpClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1])).To(BeTrue())
+			&tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeTrue())
 	})
 })
 
@@ -338,7 +338,7 @@ func removeSubscriptions(c client.Client, clusterSummary *configv1alpha1.Cluster
 	manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 	Expect(err).To(BeNil())
 
-	clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = nil
+	clusterSummary.Spec.ClusterProfileSpec.HelmCharts = nil
 	manager.RemoveStaleRegistrations(clusterSummary)
 }
 

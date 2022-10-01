@@ -40,14 +40,14 @@ const (
 )
 
 var _ = Describe("ClusterSummaryScope", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var c client.Client
 
 	BeforeEach(func() {
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
 		}
 
@@ -58,7 +58,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		scheme := setupScheme()
-		initObjects := []client.Object{clusterFeature, clusterSummary}
+		initObjects := []client.Object{clusterProfile, clusterSummary}
 		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 	})
@@ -67,7 +67,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         klogr.New(),
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -77,7 +77,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 	It("Return nil,error if client is not specified", func() {
 		params := scope.ClusterSummaryScopeParams{
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -90,7 +90,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("Name returns ClusterSummary Name", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -105,7 +105,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -126,7 +126,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFailureMessage updates ClusterSummary Status FeatureSummary when not nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -158,7 +158,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFailureMessage updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -179,7 +179,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary when not nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -210,7 +210,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFeatureStatus overriddes ClusterSummary Status FeatureSummary when not nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -234,7 +234,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -254,7 +254,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFailureReason updates ClusterSummary Status FeatureSummary when not nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -286,7 +286,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetFailureReason updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -307,7 +307,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("Close updates ClusterSummary", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -332,7 +332,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetDeployedGroupVersionKind updates featureSummary with  deployed GroupVersionKinds", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -357,7 +357,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("SetLastAppliedTime updates featureSummary with time (entry not existing yet)", func() {
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -383,7 +383,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -403,11 +403,11 @@ var _ = Describe("ClusterSummaryScope", func() {
 	})
 
 	It("IsContinuousSync returns true when mode is Continuous", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -418,18 +418,18 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		Expect(scope.IsContinuousSync()).To(BeTrue())
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(scope.IsContinuousSync()).To(BeFalse())
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 		Expect(scope.IsContinuousSync()).To(BeFalse())
 	})
 
 	It("IsOneTimeSync returns true when mode is OneTime", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -440,18 +440,18 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		Expect(scope.IsOneTimeSync()).To(BeTrue())
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(scope.IsOneTimeSync()).To(BeFalse())
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(scope.IsOneTimeSync()).To(BeFalse())
 	})
 
 	It("IsDryRunSync returns true when mode is DryRun", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 
 		params := scope.ClusterSummaryScopeParams{
 			Client:         c,
-			ClusterFeature: clusterFeature,
+			ClusterProfile: clusterProfile,
 			ClusterSummary: clusterSummary,
 			Logger:         klogr.New(),
 		}
@@ -462,9 +462,9 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		Expect(scope.IsDryRunSync()).To(BeTrue())
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(scope.IsDryRunSync()).To(BeFalse())
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 		Expect(scope.IsDryRunSync()).To(BeFalse())
 	})
 })

@@ -45,9 +45,9 @@ import (
 
 const selector = configv1alpha1.Selector("env=qa,zone=west")
 
-var _ = Describe("ClusterFeature: Reconciler", func() {
+var _ = Describe("ClusterProfile: Reconciler", func() {
 	var logger logr.Logger
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var matchingCluster *clusterv1.Cluster
 	var nonMatchingCluster *clusterv1.Cluster
 	var namespace string
@@ -77,11 +77,11 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
@@ -89,40 +89,40 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 	It("Adds finalizer", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureName := client.ObjectKey{
-			Name: clusterFeature.Name,
+		clusterProfileName := client.ObjectKey{
+			Name: clusterProfile.Name,
 		}
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterFeatureName,
+			NamespacedName: clusterProfileName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(
 			controllerutil.ContainsFinalizer(
-				currentClusterFeature,
-				configv1alpha1.ClusterFeatureFinalizer,
+				currentClusterProfile,
+				configv1alpha1.ClusterProfileFinalizer,
 			),
 		).Should(BeTrue())
 	})
 
-	It("UpdateClusterConfiguration idempotently adds ClusterFeature as OwnerReference and in Status.ClusterFeatureResources", func() {
+	It("UpdateClusterConfiguration idempotently adds ClusterProfile as OwnerReference and in Status.ClusterProfileResources", func() {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -137,49 +137,49 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			ns,
 			clusterConfiguration,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
 		clusterRef := corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name}
-		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterFeatureScope, &clusterRef)).To(Succeed())
+		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterProfileScope, &clusterRef)).To(Succeed())
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(currentClusterConfiguration.OwnerReferences[0].Name).To(Equal(clusterFeature.Name))
+		Expect(currentClusterConfiguration.OwnerReferences[0].Name).To(Equal(clusterProfile.Name))
 
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
 
-		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterFeatureScope, &clusterRef)).To(Succeed())
+		Expect(controllers.UpdateClusterConfiguration(reconciler, context.TODO(), clusterProfileScope, &clusterRef)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
 	})
 
-	It("CleanClusterConfiguration idempotently removes ClusterFeature as OwnerReference and from Status.ClusterFeatureResources", func() {
+	It("CleanClusterConfiguration idempotently removes ClusterProfile as OwnerReference and from Status.ClusterProfileResources", func() {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -187,14 +187,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			ns,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		// Preprare clusterConfiguration with Status section. OwnerReference
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
@@ -203,102 +203,102 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				Name:      matchingCluster.Name,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						Kind:       currentClusterFeature.Kind,
-						Name:       currentClusterFeature.Name,
-						APIVersion: currentClusterFeature.APIVersion,
-						UID:        currentClusterFeature.UID,
+						Kind:       currentClusterProfile.Kind,
+						Name:       currentClusterProfile.Name,
+						APIVersion: currentClusterProfile.APIVersion,
+						UID:        currentClusterProfile.UID,
 					},
-					{ // Add a second fake Owner, so that when removing ClusterFeature as owner,
+					{ // Add a second fake Owner, so that when removing ClusterProfile as owner,
 						// ClusterConfiguration is not deleted
-						Kind:       currentClusterFeature.Kind,
+						Kind:       currentClusterProfile.Kind,
 						Name:       randomString(),
-						APIVersion: currentClusterFeature.APIVersion,
+						APIVersion: currentClusterProfile.APIVersion,
 						UID:        types.UID(randomString()),
 					},
 				},
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
-				ClusterFeatureResources: []configv1alpha1.ClusterFeatureResource{
-					{ClusterFeatureName: clusterFeature.Name},
+				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
+					{ClusterProfileName: clusterProfile.Name},
 				},
 			},
 		}
 
 		Expect(c.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterFeature, clusterConfiguration)).To(Succeed())
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile, clusterConfiguration)).To(Succeed())
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(0))
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
 
-		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterFeature, clusterConfiguration)).To(Succeed())
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile, clusterConfiguration)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(0))
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
 	})
 
-	It("Reconciliation of deleted ClusterFeature removes finalizer only when all ClusterSummaries are gone", func() {
+	It("Reconciliation of deleted ClusterProfile removes finalizer only when all ClusterSummaries are gone", func() {
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   clusterFeatureNamePrefix + randomString(),
-				Labels: map[string]string{controllers.ClusterFeatureLabelName: clusterFeature.Name},
+				Name:   clusterProfileNamePrefix + randomString(),
+				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
 			},
 		}
 
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
 
 		now := metav1.NewTime(time.Now())
-		clusterFeature.DeletionTimestamp = &now
-		controllerutil.AddFinalizer(clusterFeature, configv1alpha1.ClusterFeatureFinalizer)
+		clusterProfile.DeletionTimestamp = &now
+		controllerutil.AddFinalizer(clusterProfile, configv1alpha1.ClusterProfileFinalizer)
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		addOwnerReference(ctx, c, clusterSummary, clusterFeature)
+		addOwnerReference(ctx, c, clusterSummary, clusterProfile)
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureName := client.ObjectKey{
-			Name: clusterFeature.Name,
+		clusterProfileName := client.ObjectKey{
+			Name: clusterProfile.Name,
 		}
 
-		// Reconcile ClusterFeature. ClusterSummary will be marked for deletion.
+		// Reconcile ClusterProfile. ClusterSummary will be marked for deletion.
 		// ClusterSummary has tough a finalizer (and there is no controller for it in this
 		// test) so ClusterSummary won't be removed.
-		// Since ClusterSummary won't be removed, ClusterFeature's finalizer will not be
+		// Since ClusterSummary won't be removed, ClusterProfile's finalizer will not be
 		// removed.
 
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterFeatureName,
+			NamespacedName: clusterProfileName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Remove ClusterSummary finalizer
@@ -313,46 +313,46 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			currentClusterSummary)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
-		// Reconcile ClusterFeature again. Since all associated ClusterSummaries are
-		// gone, this reconciliation will remove finalizer and remove ClusterFeature
+		// Reconcile ClusterProfile again. Since all associated ClusterSummaries are
+		// gone, this reconciliation will remove finalizer and remove ClusterProfile
 
 		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterFeatureName,
+			NamespacedName: clusterProfileName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		err = c.Get(context.TODO(), clusterFeatureName, currentClusterFeature)
+		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).To(HaveOccurred())
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
 	It("getMatchingClusters returns matchin CAPI Cluster", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			matchingCluster,
 			nonMatchingCluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		matches, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterFeatureScope)
+		matches, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope)
 		Expect(err).To(BeNil())
 		Expect(len(matches)).To(Equal(1))
 		Expect(matches[0].Namespace).To(Equal(matchingCluster.Namespace))
@@ -361,32 +361,32 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 	It("CreateClusterSummary creates ClusterSummary with proper fields", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			matchingCluster,
 			nonMatchingCluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.CreateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope,
+			clusterProfileScope,
 			&corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
@@ -395,15 +395,15 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
-		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec, clusterFeature.Spec)).To(BeTrue())
+		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).To(BeTrue())
 		Expect(len(clusterSummaryList.Items[0].ObjectMeta.OwnerReferences)).To(Equal(1))
 		owner := clusterSummaryList.Items[0].ObjectMeta.OwnerReferences[0]
-		Expect(owner.Name).To(Equal(clusterFeature.Name))
-		Expect(owner.Kind).To(Equal(clusterFeature.Kind))
+		Expect(owner.Name).To(Equal(clusterProfile.Name))
+		Expect(owner.Kind).To(Equal(clusterProfile.Kind))
 	})
 
-	It("UpdateClusterSummary updates ClusterSummary with proper fields when ClusterFeature syncmode set to continuous", func() {
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, matchingCluster.Name)
+	It("UpdateClusterSummary updates ClusterSummary with proper fields when ClusterProfile syncmode set to continuous", func() {
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, matchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -412,7 +412,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeOneTime,
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
@@ -424,10 +424,10 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				},
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
 				Namespace: "b-" + randomString(),
@@ -441,32 +441,32 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			matchingCluster,
 			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -474,12 +474,12 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
-		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec, clusterFeature.Spec)).To(BeTrue())
+		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).To(BeTrue())
 	})
 
-	It("UpdateClusterSummary does not update ClusterSummary when ClusterFeature syncmode set to one time", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+	It("UpdateClusterSummary does not update ClusterSummary when ClusterProfile syncmode set to one time", func() {
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
@@ -492,7 +492,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, matchingCluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, matchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -501,20 +501,20 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace:   matchingCluster.Namespace,
 				ClusterName:        matchingCluster.Name,
-				ClusterFeatureSpec: clusterFeature.Spec,
+				ClusterProfileSpec: clusterProfile.Spec,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			matchingCluster,
 			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
@@ -522,27 +522,27 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			},
 		}
 
-		Expect(c.Update(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(c.Update(context.TODO(), clusterProfile)).To(Succeed())
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
-			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -550,13 +550,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
-		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec, clusterFeature.Spec)).ToNot(BeTrue())
-		Expect(len(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec.PolicyRefs)).To(Equal(2))
+		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).ToNot(BeTrue())
+		Expect(len(clusterSummaryList.Items[0].Spec.ClusterProfileSpec.PolicyRefs)).To(Equal(2))
 	})
 
 	It("DeleteClusterSummary removes ClusterSummary for non-matching cluster", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
@@ -569,41 +569,41 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, nonMatchingCluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, nonMatchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: nonMatchingCluster.Namespace,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						APIVersion: clusterFeature.APIVersion,
-						Kind:       clusterFeature.Kind,
-						Name:       clusterFeature.Name,
+						APIVersion: clusterProfile.APIVersion,
+						Kind:       clusterProfile.Kind,
+						Name:       clusterProfile.Name,
 					},
 				},
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace:   nonMatchingCluster.Namespace,
 				ClusterName:        nonMatchingCluster.Name,
-				ClusterFeatureSpec: clusterFeature.Spec,
+				ClusterProfileSpec: clusterProfile.Spec,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			clusterSummary,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -616,38 +616,38 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries does not ClusterSummary for matching CAPI Cluster with no running control plane machine", func() {
-		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 			},
 		}
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterFeatureScope)
+		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterProfileScope)
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -668,14 +668,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 			},
 		}
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
 			cpMachine,
@@ -683,24 +683,24 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterFeatureScope)
+		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterProfileScope)
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -723,22 +723,22 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		}
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
-		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 			},
 		}
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "x-" + randomString(),
 				Name:      "y-" + randomString(),
 			},
 		}
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, matchingCluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, matchingCluster.Name)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -747,7 +747,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeContinuous,
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
@@ -759,10 +759,10 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				},
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterFeature.Name, matchingCluster.Namespace, matchingCluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
 			clusterSummary,
@@ -771,24 +771,24 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterFeatureScope)
+		err = controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterProfileScope)
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -796,7 +796,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
-		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterFeatureSpec, clusterFeature.Spec)).To(BeTrue())
+		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).To(BeTrue())
 	})
 
 	It("getMachinesForCluster returns list of all machines for a CPI cluster", func() {
@@ -827,25 +827,25 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
 		cps, err := controllers.GetMachinesForCluster(reconciler, context.TODO(),
-			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(len(cps.Items)).To(Equal(2))
 	})
@@ -879,25 +879,25 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
 		ready, err := controllers.IsClusterReadyToBeConfigured(reconciler, context.TODO(),
-			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(ready).To(Equal(true))
 	})
@@ -932,63 +932,63 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
 		ready, err := controllers.IsClusterReadyToBeConfigured(reconciler, context.TODO(),
-			clusterFeatureScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 		Expect(ready).To(Equal(false))
 	})
 
 	It("updateClusterReports creates ClusterReport for matching cluster in DryRun mode", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 			},
 		}
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateClusterReports(reconciler, context.TODO(), clusterFeatureScope)).To(Succeed())
+		Expect(controllers.UpdateClusterReports(reconciler, context.TODO(), clusterProfileScope)).To(Succeed())
 
 		// ClusterReport for matching cluster is created
 		currentClusterReport := &configv1alpha1.ClusterReport{}
@@ -1003,39 +1003,39 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 	})
 
 	It("updateClusterReports does not create ClusterReport for matching cluster in non dryRun mode", func() {
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Status.MatchingClusterRefs = []corev1.ObjectReference{
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 			},
 		}
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		clusterFeatureScope, err := scope.NewClusterFeatureScope(scope.ClusterFeatureScopeParams{
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
-			ClusterFeature: clusterFeature,
-			ControllerName: "clusterfeature",
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.UpdateClusterReports(reconciler, context.TODO(), clusterFeatureScope)).To(Succeed())
+		Expect(controllers.UpdateClusterReports(reconciler, context.TODO(), clusterProfileScope)).To(Succeed())
 
 		// No ClusterReports are created
 		currentClusterReportList := &configv1alpha1.ClusterReportList{}
@@ -1043,13 +1043,13 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(len(currentClusterReportList.Items)).To(Equal(0))
 	})
 
-	It("cleanClusterSummaries removes all CluterReports created for a ClusterFeature instance", func() {
+	It("cleanClusterSummaries removes all CluterReports created for a ClusterProfile instance", func() {
 		clusterReport1 := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterFeatureLabelName: clusterFeature.Name,
+					controllers.ClusterProfileLabelName: clusterProfile.Name,
 				},
 			},
 		}
@@ -1059,7 +1059,7 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterFeatureLabelName: clusterFeature.Name + randomString(),
+					controllers.ClusterProfileLabelName: clusterProfile.Name + randomString(),
 				},
 			},
 		}
@@ -1071,16 +1071,16 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
-		Expect(controllers.CleanClusterReports(reconciler, context.TODO(), clusterFeature)).To(Succeed())
+		Expect(controllers.CleanClusterReports(reconciler, context.TODO(), clusterProfile)).To(Succeed())
 		// ClusterReport1 is gone
 		currentClusterReport := &configv1alpha1.ClusterReport{}
 		err := c.Get(context.TODO(),
@@ -1098,19 +1098,19 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:  randomString(),
-				Name:       clusterFeatureNamePrefix + randomString(),
-				Labels:     map[string]string{controllers.ClusterFeatureLabelName: clusterFeature.Name},
+				Name:       clusterProfileNamePrefix + randomString(),
+				Labels:     map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
 				Finalizers: []string{configv1alpha1.ClusterSummaryFinalizer},
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeDryRun,
 				},
 			},
 		}
 
 		// Make sure to have clustersummary marked as deleted.
-		// ClusterFeature will update SyncMode for ClusterSummary representing CAPI Clusters
+		// ClusterProfile will update SyncMode for ClusterSummary representing CAPI Clusters
 		// not matching anymore. So deleted ClusterSummaries.
 		now := metav1.NewTime(time.Now())
 		clusterSummary.DeletionTimestamp = &now
@@ -1127,19 +1127,19 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
-		reconciler := &controllers.ClusterFeatureReconciler{
+		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            testEnv,
 			Scheme:            scheme,
 			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		Expect(controllers.UpdateClusterSummarySyncMode(reconciler, context.TODO(),
-			clusterFeature, clusterSummary)).To(Succeed())
+			clusterProfile, clusterSummary)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
@@ -1149,14 +1149,14 @@ var _ = Describe("ClusterFeature: Reconciler", func() {
 			if err != nil {
 				return false
 			}
-			return currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode == clusterFeature.Spec.SyncMode
+			return currentClusterSummary.Spec.ClusterProfileSpec.SyncMode == clusterProfile.Spec.SyncMode
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
 
-var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
-	var matchingClusterFeature *configv1alpha1.ClusterFeature
-	var nonMatchingClusterFeature *configv1alpha1.ClusterFeature
+var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
+	var matchingClusterProfile *configv1alpha1.ClusterProfile
+	var nonMatchingClusterProfile *configv1alpha1.ClusterProfile
 	var cluster *clusterv1.Cluster
 	var namespace string
 
@@ -1178,20 +1178,20 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 			},
 		}
 
-		matchingClusterFeature = &configv1alpha1.ClusterFeature{
+		matchingClusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		nonMatchingClusterFeature = &configv1alpha1.ClusterFeature{
+		nonMatchingClusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: configv1alpha1.Selector("env=production"),
 			},
 		}
@@ -1200,13 +1200,13 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 	AfterEach(func() {
 		ns := &corev1.Namespace{}
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), matchingClusterFeature)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Delete(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Client.Delete(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
-	It("RequeueClusterFeatureForCluster returns correct ClusterFeatures for a CAPI cluster", func() {
+	It("RequeueClusterProfileForCluster returns correct ClusterProfiles for a CAPI cluster", func() {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -1223,28 +1223,28 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
-		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterFeature)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterProfile)).To(Succeed())
 
-		clusterFeatureName := client.ObjectKey{
-			Name: matchingClusterFeature.Name,
+		clusterProfileName := client.ObjectKey{
+			Name: matchingClusterProfile.Name,
 		}
 
-		clusterFeatureReconciler := getClusterFeatureReconciler(testEnv.Client)
-		_, err := clusterFeatureReconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterFeatureName,
+		clusterProfileReconciler := getClusterProfileReconciler(testEnv.Client)
+		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterProfileName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatureList := controllers.RequeueClusterFeatureForCluster(clusterFeatureReconciler,
+			clusterProfileList := controllers.RequeueClusterProfileForCluster(clusterProfileReconciler,
 				cluster)
-			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
-			for i := range clusterFeatureList {
-				if clusterFeatureList[i] == result {
+			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
+			for i := range clusterProfileList {
+				if clusterProfileList[i] == result {
 					return true
 				}
 			}
@@ -1252,7 +1252,7 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
-	It("RequeueClusterFeatureForMachine returns correct ClusterFeatures for a CAPI machine", func() {
+	It("RequeueClusterProfileForMachine returns correct ClusterProfiles for a CAPI machine", func() {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -1282,28 +1282,28 @@ var _ = Describe("ClusterFeatureReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), matchingClusterFeature)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
-		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterFeature)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterProfile)).To(Succeed())
 
-		clusterFeatureName := client.ObjectKey{
-			Name: matchingClusterFeature.Name,
+		clusterProfileName := client.ObjectKey{
+			Name: matchingClusterProfile.Name,
 		}
 
-		clusterFeatureReconciler := getClusterFeatureReconciler(testEnv.Client)
-		_, err := clusterFeatureReconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterFeatureName,
+		clusterProfileReconciler := getClusterProfileReconciler(testEnv.Client)
+		_, err := clusterProfileReconciler.Reconcile(context.TODO(), ctrl.Request{
+			NamespacedName: clusterProfileName,
 		})
 		Expect(err).ToNot(HaveOccurred())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			clusterFeatureList := controllers.RequeueClusterFeatureForMachine(clusterFeatureReconciler,
+			clusterProfileList := controllers.RequeueClusterProfileForMachine(clusterProfileReconciler,
 				cpMachine)
-			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterFeature.Name}}
-			for i := range clusterFeatureList {
-				if clusterFeatureList[i] == result {
+			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
+			for i := range clusterProfileList {
+				if clusterProfileList[i] == result {
 					return true
 				}
 			}

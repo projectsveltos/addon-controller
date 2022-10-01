@@ -5,20 +5,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
-  name: clusterfeatures.config.projectsveltos.io
+  name: clusterprofiles.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
   names:
-    kind: ClusterFeature
-    listKind: ClusterFeatureList
-    plural: clusterfeatures
-    singular: clusterfeature
+    kind: ClusterProfile
+    listKind: ClusterProfileList
+    plural: clusterprofiles
+    singular: clusterprofile
   scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterFeature is the Schema for the clusterfeatures API
+        description: ClusterProfile is the Schema for the clusterprofiles API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,7 +33,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterFeatureSpec defines the desired state of ClusterFeature
+            description: ClusterProfileSpec defines the desired state of ClusterProfile
             properties:
               clusterSelector:
                 description: ClusterSelector identifies ClusterAPI clusters to associate
@@ -120,10 +120,10 @@ spec:
                 default: Continuous
                 description: SyncMode specifies how features are synced in a matching
                   workload cluster. - OneTime means, first time a workload cluster
-                  matches the ClusterFeature, features will be deployed in such cluster.
+                  matches the ClusterProfile, features will be deployed in such cluster.
                   Any subsequent feature configuration change won't be applied into
                   the matching workload clusters; - Continuous means first time a
-                  workload cluster matches the ClusterFeature, features will be deployed
+                  workload cluster matches the ClusterProfile, features will be deployed
                   in such a cluster. Any subsequent feature configuration change will
                   be applied into the matching workload clusters.
                 enum:
@@ -135,11 +135,11 @@ spec:
             - clusterSelector
             type: object
           status:
-            description: ClusterFeatureStatus defines the observed state of ClusterFeature
+            description: ClusterProfileStatus defines the observed state of ClusterProfile
             properties:
               matchinClusters:
                 description: MatchingClusterRefs reference all the cluster-api Cluster
-                  currently matching ClusterFeature ClusterSelector
+                  currently matching ClusterProfile ClusterSelector
                 items:
                   description: "ObjectReference contains enough information to let
                     you inspect or modify the referred object. --- New uses of this

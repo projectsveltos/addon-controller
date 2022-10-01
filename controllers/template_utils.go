@@ -126,13 +126,13 @@ func getSubstituitionObject(ctx context.Context, c client.Client, config *rest.C
 
 	// Two SubstitutionRule are implicit:
 	// - Cluster refers to CAPI Cluster currently being programmed
-	// - ClusterFeature refers to ClusterFeature currently being programmed into the
+	// - ClusterProfile refers to ClusterProfile currently being programmed into the
 	// CAPI Cluster
 	switch ruleName {
 	case "Cluster":
 		return getCluster(ctx, c, clusterSummary)
-	case configv1alpha1.ClusterFeatureKind:
-		return getClusterFeatureOwner(ctx, c, clusterSummary)
+	case configv1alpha1.ClusterProfileKind:
+		return getClusterProfileOwner(ctx, c, clusterSummary)
 	default:
 		substituitionRule := &configv1alpha1.SubstitutionRule{}
 		err := c.Get(ctx, types.NamespacedName{Name: ruleName}, substituitionRule)

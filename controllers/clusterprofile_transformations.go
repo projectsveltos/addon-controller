@@ -28,14 +28,14 @@ import (
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
-func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
+func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	o client.Object,
 ) []reconcile.Request {
 
 	cluster := o.(*clusterv1.Cluster)
 	logger := klogr.New().WithValues(
 		"objectMapper",
-		"requeueClusterFeatureForCluster",
+		"requeueClusterProfileForCluster",
 		"namespace",
 		cluster.Namespace,
 		"cluster",
@@ -49,7 +49,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 
 	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
 
-	// Get all ClusterFeature previously matching this cluster and reconcile those
+	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).items()
 
@@ -61,11 +61,11 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 		}
 	}
 
-	// Iterate over all current ClusterFeature and reconcile the ClusterFeature now
+	// Iterate over all current ClusterProfile and reconcile the ClusterProfile now
 	// matching the Cluster
-	for k := range r.ClusterFeatures {
-		clusterFeatureSelector := r.ClusterFeatures[k]
-		parsedSelector, _ := labels.Parse(string(clusterFeatureSelector))
+	for k := range r.ClusterProfiles {
+		clusterProfileSelector := r.ClusterProfiles[k]
+		parsedSelector, _ := labels.Parse(string(clusterProfileSelector))
 		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
@@ -78,14 +78,14 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForCluster(
 	return requests
 }
 
-func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
+func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	o client.Object,
 ) []reconcile.Request {
 
 	machine := o.(*clusterv1.Machine)
 	logger := klogr.New().WithValues(
 		"objectMapper",
-		"requeueClusterFeatureForMachine",
+		"requeueClusterProfileForMachine",
 		"namespace",
 		machine.Namespace,
 		"cluster",
@@ -103,7 +103,7 @@ func (r *ClusterFeatureReconciler) requeueClusterFeatureForMachine(
 
 	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
 
-	// Get all ClusterFeature previously matching this cluster and reconcile those
+	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).items()
 

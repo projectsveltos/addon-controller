@@ -91,7 +91,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
 	}
 	return nil
@@ -130,12 +130,12 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterFeatureOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
 		configv1alpha1.FeatureResources, []configv1alpha1.Resource{}, nil)
 	if err != nil {
 		return err
@@ -146,7 +146,7 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
 	}
 	return nil
@@ -160,8 +160,8 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	var config string
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs {
-		reference := &clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
+		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		var err error
 		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
@@ -193,7 +193,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 }
 
 func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
-	return clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs
+	return clusterSummary.Spec.ClusterProfileSpec.PolicyRefs
 }
 
 // updateClusterReportWithResourceReports updates ClusterReport Status with ResourceReports.
@@ -203,16 +203,16 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 	created, updated, conflicts, undeployed []configv1alpha1.Resource) error {
 
 	// This is no-op unless in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterFeatureOwnerRef.Name, clusterSummary.Spec.ClusterName)
+	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
 
 	resourceReports := make([]configv1alpha1.ResourceReport, len(created)+len(updated)+len(undeployed)+len(conflicts))
 	currentItem := 0
@@ -241,7 +241,7 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		conflicts[i].LastAppliedTime = nil
 		resourceReports[currentItem] = configv1alpha1.ResourceReport{
 			Resource: conflicts[i], Action: string(configv1alpha1.NoResourceAction),
-			Message: "this resource is currently managed by a different ClusterFeature.",
+			Message: "this resource is currently managed by a different ClusterProfile.",
 		}
 		currentItem++
 	}

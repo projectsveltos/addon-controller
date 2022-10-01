@@ -101,13 +101,13 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 	}
 }
 
-func getClusterFeatureReconciler(c client.Client) *controllers.ClusterFeatureReconciler {
-	return &controllers.ClusterFeatureReconciler{
+func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileReconciler {
+	return &controllers.ClusterProfileReconciler{
 		Client:            c,
 		Scheme:            scheme,
 		ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterFeatureMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterFeatures:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:               sync.Mutex{},
 	}
 }

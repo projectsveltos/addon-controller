@@ -64,10 +64,10 @@ var _ = Describe("Template", func() {
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), templatePolicy)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
-		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -75,11 +75,11 @@ var _ = Describe("Template", func() {
 			},
 		}
 
-		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(clusterFeature)
+		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -104,13 +104,13 @@ var _ = Describe("Template", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for resources", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
-		Byf("Changing clusterfeature to not reference configmap anymore")
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Byf("Changing clusterprofile to not reference configmap anymore")
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {
@@ -121,6 +121,6 @@ var _ = Describe("Template", func() {
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		deleteClusterFeature(clusterFeature)
+		deleteClusterProfile(clusterProfile)
 	})
 })

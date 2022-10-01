@@ -75,7 +75,7 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clusterfeatures
+  - clusterprofiles
   verbs:
   - get
   - list
@@ -85,14 +85,14 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clusterfeatures/finalizers
+  - clusterprofiles/finalizers
   verbs:
   - patch
   - update
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clusterfeatures/status
+  - clusterprofiles/status
   verbs:
   - get
   - patch

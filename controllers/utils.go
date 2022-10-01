@@ -73,24 +73,24 @@ func InitScheme() (*runtime.Scheme, error) {
 	return s, nil
 }
 
-// GetClusterSummaryName returns the ClusterSummary name given a ClusterFeature name and
+// GetClusterSummaryName returns the ClusterSummary name given a ClusterProfile name and
 // CAPI cluster Namespace/Name.
 // This method does not guarantee that name is not already in use. Caller of this method needs
 // to handle that scenario
-func GetClusterSummaryName(clusterFeatureName, clusterName string) string {
+func GetClusterSummaryName(clusterProfileName, clusterName string) string {
 	// generate random name.
-	return fmt.Sprintf("%s-%s", clusterFeatureName, clusterName)
+	return fmt.Sprintf("%s-%s", clusterProfileName, clusterName)
 }
 
-// getClusterSummary returns the ClusterSummary instance created by a specific ClusterFeature for a specific
+// getClusterSummary returns the ClusterSummary instance created by a specific ClusterProfile for a specific
 // CAPI Cluster
 func getClusterSummary(ctx context.Context, c client.Client,
-	clusterFeatureName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
+	clusterProfileName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
-			ClusterFeatureLabelName: clusterFeatureName,
+			ClusterProfileLabelName: clusterProfileName,
 			ClusterLabelNamespace:   clusterNamespace,
 			ClusterLabelName:        clusterName,
 		},
@@ -108,7 +108,7 @@ func getClusterSummary(ctx context.Context, c client.Client,
 
 	if len(clusterSummaryList.Items) != 1 {
 		return nil, fmt.Errorf("more than one clustersummary found for cluster %s/%s created by %s",
-			clusterNamespace, clusterName, clusterFeatureName)
+			clusterNamespace, clusterName, clusterProfileName)
 	}
 
 	return &clusterSummaryList.Items[0], nil
@@ -127,13 +127,13 @@ func getClusterConfiguration(ctx context.Context, c client.Client,
 	return clusterConfiguration, nil
 }
 
-// getClusterFeatureOwner returns the ClusterFeature owning this clusterSummary.
-// Returns nil if ClusterFeature does not exist anymore.
-func getClusterFeatureOwner(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterFeature, error) {
+// getClusterProfileOwner returns the ClusterProfile owning this clusterSummary.
+// Returns nil if ClusterProfile does not exist anymore.
+func getClusterProfileOwner(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterProfile, error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != configv1alpha1.ClusterFeatureKind {
+		if ref.Kind != configv1alpha1.ClusterProfileKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -141,15 +141,15 @@ func getClusterFeatureOwner(ctx context.Context, c client.Client,
 			return nil, errors.WithStack(err)
 		}
 		if gv.Group == configv1alpha1.GroupVersion.Group {
-			clusterFeature := &configv1alpha1.ClusterFeature{}
-			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterFeature)
+			clusterProfile := &configv1alpha1.ClusterProfile{}
+			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
 					return nil, nil
 				}
 				return nil, err
 			}
-			return clusterFeature, nil
+			return clusterProfile, nil
 		}
 	}
 	return nil, nil
@@ -310,7 +310,7 @@ func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstr
 // validateObjectForUpdate finds if object currently exists. If object exists:
 // - verifies this object was created by same ConfigMap/Secret. Returns an error otherwise.
 // This is needed to prevent misconfigurations. An example would be when different
-// ConfigMaps are referenced by ClusterFeature(s) and contain same policy namespace/name
+// ConfigMaps are referenced by ClusterProfile(s) and contain same policy namespace/name
 // (content might be different) and are about to be deployed in the same CAPI Cluster;
 // Return an error if validation fails. Return also true if object currently exists. False otherwise.
 func validateObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
@@ -359,12 +359,12 @@ func validateObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
 	return true, nil
 }
 
-// addOwnerReference adds clusterFeature as an object's OwnerReference.
-// OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
+// addOwnerReference adds clusterProfile as an object's OwnerReference.
+// OwnerReferences are used as ref count. Different ClusterProfiles might match same cluster and
 // reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
 // because of different ClusterSummary. When cleaning up, a policy can be removed only if no more ClusterSummary
 // are listed as OwnerReferences.
-func addOwnerReference(object *unstructured.Unstructured, clusterFeature *configv1alpha1.ClusterFeature) {
+func addOwnerReference(object *unstructured.Unstructured, clusterProfile *configv1alpha1.ClusterProfile) {
 	onwerReferences := object.GetOwnerReferences()
 	if onwerReferences == nil {
 		onwerReferences = make([]metav1.OwnerReference, 0)
@@ -372,8 +372,8 @@ func addOwnerReference(object *unstructured.Unstructured, clusterFeature *config
 
 	for i := range onwerReferences {
 		ref := &onwerReferences[i]
-		if ref.Kind == clusterFeature.Kind &&
-			ref.Name == clusterFeature.Name {
+		if ref.Kind == clusterProfile.Kind &&
+			ref.Name == clusterProfile.Name {
 
 			return
 		}
@@ -381,22 +381,22 @@ func addOwnerReference(object *unstructured.Unstructured, clusterFeature *config
 
 	onwerReferences = append(onwerReferences,
 		metav1.OwnerReference{
-			APIVersion: clusterFeature.APIVersion,
-			Kind:       clusterFeature.Kind,
-			Name:       clusterFeature.Name,
-			UID:        clusterFeature.UID,
+			APIVersion: clusterProfile.APIVersion,
+			Kind:       clusterProfile.Kind,
+			Name:       clusterProfile.Name,
+			UID:        clusterProfile.UID,
 		},
 	)
 
 	object.SetOwnerReferences(onwerReferences)
 }
 
-// removeOwnerReference removes clusterFeature as an OwnerReference from object.
-// OwnerReferences are used as ref count. Different ClusterFeatures might match same cluster and
+// removeOwnerReference removes clusterProfile as an OwnerReference from object.
+// OwnerReferences are used as ref count. Different ClusterProfiles might match same cluster and
 // reference same ConfigMap. This means a policy contained in a ConfigMap is deployed in a CAPI Cluster
-// because of different ClusterFeatures. When cleaning up, a policy can be removed only if no more ClusterFeatures
+// because of different ClusterProfiles. When cleaning up, a policy can be removed only if no more ClusterProfiles
 // are listed as OwnerReferences.
-func removeOwnerReference(object *unstructured.Unstructured, clusterfeature *configv1alpha1.ClusterFeature) {
+func removeOwnerReference(object *unstructured.Unstructured, clusterprofile *configv1alpha1.ClusterProfile) {
 	onwerReferences := object.GetOwnerReferences()
 	if onwerReferences == nil {
 		return
@@ -404,8 +404,8 @@ func removeOwnerReference(object *unstructured.Unstructured, clusterfeature *con
 
 	for i := range onwerReferences {
 		ref := &onwerReferences[i]
-		if ref.Kind == clusterfeature.Kind &&
-			ref.Name == clusterfeature.Name {
+		if ref.Kind == clusterprofile.Kind &&
+			ref.Name == clusterprofile.Name {
 
 			onwerReferences[i] = onwerReferences[len(onwerReferences)-1]
 			onwerReferences = onwerReferences[:len(onwerReferences)-1]
@@ -416,8 +416,8 @@ func removeOwnerReference(object *unstructured.Unstructured, clusterfeature *con
 	object.SetOwnerReferences(onwerReferences)
 }
 
-// isOnlyhOwnerReference returns true if clusterfeature is the only ownerreference for object
-func isOnlyhOwnerReference(object *unstructured.Unstructured, clusterfeature *configv1alpha1.ClusterFeature) bool {
+// isOnlyhOwnerReference returns true if clusterprofile is the only ownerreference for object
+func isOnlyhOwnerReference(object *unstructured.Unstructured, clusterprofile *configv1alpha1.ClusterProfile) bool {
 	onwerReferences := object.GetOwnerReferences()
 	if onwerReferences == nil {
 		return false
@@ -428,8 +428,8 @@ func isOnlyhOwnerReference(object *unstructured.Unstructured, clusterfeature *co
 	}
 
 	ref := &onwerReferences[0]
-	return ref.Kind == clusterfeature.Kind &&
-		ref.Name == clusterfeature.Name
+	return ref.Kind == clusterprofile.Kind &&
+		ref.Name == clusterprofile.Name
 }
 
 func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
@@ -439,6 +439,6 @@ func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
 }
 
-func getClusterReportName(clusterFeatureName, clusterName string) string {
-	return clusterFeatureName + "--" + clusterName
+func getClusterReportName(clusterProfileName, clusterName string) string {
+	return clusterProfileName + "--" + clusterName
 }

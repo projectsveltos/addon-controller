@@ -80,14 +80,14 @@ var _ = Describe("Feature", func() {
 	)
 
 	It("Deploy and updates resources referenced in ResourceRefs correctly", Label("FV"), func() {
-		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(clusterFeature)
+		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		configMapNs := randomString()
 		Byf("Create configMap's namespace %s", configMapNs)
@@ -113,11 +113,11 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
 
-		Byf("Update ClusterFeature %s to reference ConfigMap %s/%s", clusterFeature.Name, configMap.Namespace, configMap.Name)
-		Byf("Update ClusterFeature %s to reference Secret %s/%s", clusterFeature.Name, secret.Namespace, secret.Name)
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
+		Byf("Update ClusterProfile %s to reference Secret %s/%s", clusterProfile.Name, secret.Namespace, secret.Name)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -129,9 +129,9 @@ var _ = Describe("Feature", func() {
 				Name:      secret.Name,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -158,7 +158,7 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: "configmap-updater", namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: podName, namespace: "default", group: ""},
 		}
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		By("Updating ConfigMap to reference new ClusterRole")
@@ -185,7 +185,7 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: "configmap-all", namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: podName, namespace: "default", group: ""},
 		}
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		By("Updating Secret to reference new Pod")
@@ -215,15 +215,15 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: "configmap-all", namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: newPodName, namespace: "default", group: ""},
 		}
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
-		Byf("Changing clusterfeature to not reference configmap/secret anymore")
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Byf("Changing clusterprofile to not reference configmap/secret anymore")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying proper ClusterRole is removed in the workload cluster")
 		Eventually(func() bool {
@@ -242,6 +242,6 @@ var _ = Describe("Feature", func() {
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		deleteClusterFeature(clusterFeature)
+		deleteClusterProfile(clusterProfile)
 	})
 })

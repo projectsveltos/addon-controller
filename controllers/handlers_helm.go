@@ -139,8 +139,8 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 
 	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		if chartManager.CanManageChart(clusterSummary, currentChart) {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
 				currentChart.ChartName,
@@ -161,7 +161,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		} else {
 			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
 				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
-				Action: string(configv1alpha1.NoHelmAction), Message: "Currently managed by another ClusterFeature",
+				Action: string(configv1alpha1.NoHelmAction), Message: "Currently managed by another ClusterProfile",
 			})
 		}
 	}
@@ -176,11 +176,11 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
 	if err != nil {
 		return err
 	}
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterFeatureOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
 		configv1alpha1.FeatureResources, nil, []configv1alpha1.Chart{})
 	if err != nil {
 		return err
@@ -193,7 +193,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 
 	// In dry-run mode nothing gets deployed/undeployed. So if this instance used to manage
 	// an helm release and it is now not referencing anymore, do not unsubscribe.
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
 		chartManager.RemoveStaleRegistrations(clusterSummary)
 		return nil
 	}
@@ -208,11 +208,11 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	var config string
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
-	if clusterSummary.Spec.ClusterFeatureSpec.HelmCharts == nil {
+	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		return h.Sum(nil), nil
 	}
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
 		config += render.AsCode(*currentChart)
 	}
@@ -246,8 +246,8 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 
 	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
 	chartDeployed := make([]configv1alpha1.Chart, 0)
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		if !chartManager.CanManageChart(clusterSummary, currentChart) {
 			var report *configv1alpha1.ReleaseReport
 			report, err = createReportForUnmanagedHelmRelease(ctx, c, clusterSummary, currentChart)
@@ -301,7 +301,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
 		chartManager.RemoveStaleRegistrations(clusterSummary)
 	}
 
@@ -320,7 +320,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 	}
 
 	// In DryRun mode always return an error.
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
 	}
 	return nil
@@ -533,7 +533,7 @@ func installRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	values map[string]interface{}, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -620,7 +620,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	releaseName, releaseNamespace, kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -650,7 +650,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	values map[string]interface{}, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -841,7 +841,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -892,7 +892,7 @@ func doUninstallRelease(clusterSummary *configv1alpha1.ClusterSummary, requested
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -912,7 +912,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -963,17 +963,17 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 	chartDeployed []configv1alpha1.Chart, logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d", len(chartDeployed)))
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	return updateClusterConfiguration(ctx, c, clusterSummary, clusterFeatureOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
+	return updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
 }
 
 // undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
@@ -989,8 +989,8 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 
 	// Build map of current referenced helm charts
 	currentlyReferencedReleases := make(map[string]bool)
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		currentlyReferencedReleases[chartManager.GetReleaseKey(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
 	}
 
@@ -1027,11 +1027,11 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return false, nil
 	}
 
-	if len(clusterSummary.Spec.ClusterFeatureSpec.HelmCharts) == 0 &&
+	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 &&
 		len(clusterSummary.Status.HelmReleaseSummaries) == 0 {
 		// Nothing to do
 		return false, nil
@@ -1058,9 +1058,9 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 			return err
 		}
 
-		helmReleaseSummaries := make([]configv1alpha1.HelmChartSummary, len(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts))
-		for i := range currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-			currentChart := &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+		helmReleaseSummaries := make([]configv1alpha1.HelmChartSummary, len(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts))
+		for i := range currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			currentChart := &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			if chartManager.CanManageChart(currentClusterSummary, currentChart) {
 				helmReleaseSummaries[i] = configv1alpha1.HelmChartSummary{
 					ReleaseName:      currentChart.ReleaseName,
@@ -1112,7 +1112,7 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 	clusterSummary *configv1alpha1.ClusterSummary) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
@@ -1129,8 +1129,8 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 
 	currentlyReferenced := make(map[string]bool)
 
-	for i := range clusterSummary.Spec.ClusterFeatureSpec.HelmCharts {
-		currentChart := clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
 	}
 
@@ -1184,16 +1184,16 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 	releaseReports []configv1alpha1.ReleaseReport) error {
 
 	// This is no-op unless in DryRun mode
-	if clusterSummary.Spec.ClusterFeatureSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
-	clusterFeatureOwnerRef, err := configv1alpha1.GetOwnerClusterFeatureName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterFeatureOwnerRef.Name, clusterSummary.Spec.ClusterName)
+	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1alpha1.ClusterReport{}

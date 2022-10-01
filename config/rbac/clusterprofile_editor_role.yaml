@@ -1,20 +1,24 @@
-# permissions for end users to view clusterfeatures.
+# permissions for end users to edit clusterprofiles.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: clusterfeature-viewer-role
+  name: clusterprofile-editor-role
 rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clusterfeatures
+  - clusterprofiles
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clusterfeatures/status
+  - clusterprofiles/status
   verbs:
   - get

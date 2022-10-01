@@ -141,21 +141,21 @@ type ClusterSummarySpec struct {
 	// ClusterName is the name of the workload Cluster this ClusterSummary is for.
 	ClusterName string `json:"clusterName"`
 
-	// ClusterFeatureSpec represent the configuration that will be applied to
+	// ClusterProfileSpec represent the configuration that will be applied to
 	// the workload cluster.
-	ClusterFeatureSpec ClusterFeatureSpec `json:"clusterFeatureSpec,omitempty"`
+	ClusterProfileSpec ClusterProfileSpec `json:"clusterProfileSpec,omitempty"`
 }
 
 // ClusterSummaryStatus defines the observed state of ClusterSummary
 type ClusterSummaryStatus struct {
 	// FeatureSummaries reports the status of each workload cluster feature
-	// directly managed by ClusterFeature.
+	// directly managed by ClusterProfile.
 	// +listType=atomic
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
 
 	// HelmReleaseSummaries reports the status of each helm chart
-	// directly managed by ClusterFeature.
+	// directly managed by ClusterProfile.
 	// +listType=atomic
 	// +optional
 	HelmReleaseSummaries []HelmChartSummary `json:"helmReleaseSummaries,omitempty"`
@@ -187,10 +187,10 @@ func init() {
 	SchemeBuilder.Register(&ClusterSummary{}, &ClusterSummaryList{})
 }
 
-// GetOwnerClusterFeatureName returns the ClusterFeature owning a given ClusterSummary
-func GetOwnerClusterFeatureName(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
+// GetOwnerClusterProfileName returns the ClusterProfile owning a given ClusterSummary
+func GetOwnerClusterProfileName(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != ClusterFeatureKind {
+		if ref.Kind != ClusterProfileKind {
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -202,5 +202,5 @@ func GetOwnerClusterFeatureName(clusterSummary *ClusterSummary) (*metav1.OwnerRe
 		}
 	}
 
-	return nil, fmt.Errorf("ClusterFeature owner not found")
+	return nil, fmt.Errorf("ClusterProfile owner not found")
 }

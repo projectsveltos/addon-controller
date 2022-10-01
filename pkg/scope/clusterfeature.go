@@ -28,91 +28,91 @@ import (
 	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 )
 
-// ClusterFeatureScopeParams defines the input parameters used to create a new ClusterFeature Scope.
-type ClusterFeatureScopeParams struct {
+// ClusterProfileScopeParams defines the input parameters used to create a new ClusterProfile Scope.
+type ClusterProfileScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
-	ClusterFeature *configv1alpha1.ClusterFeature
+	ClusterProfile *configv1alpha1.ClusterProfile
 	ControllerName string
 }
 
-// NewClusterFeatureScope creates a new ClusterFeature Scope from the supplied parameters.
+// NewClusterProfileScope creates a new ClusterProfile Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
-func NewClusterFeatureScope(params ClusterFeatureScopeParams) (*ClusterFeatureScope, error) {
+func NewClusterProfileScope(params ClusterProfileScopeParams) (*ClusterProfileScope, error) {
 	if params.Client == nil {
-		return nil, errors.New("client is required when creating a ClusterFeatureScope")
+		return nil, errors.New("client is required when creating a ClusterProfileScope")
 	}
-	if params.ClusterFeature == nil {
-		return nil, errors.New("failed to generate new scope from nil ClusterFeature")
+	if params.ClusterProfile == nil {
+		return nil, errors.New("failed to generate new scope from nil ClusterProfile")
 	}
 
-	helper, err := patch.NewHelper(params.ClusterFeature, params.Client)
+	helper, err := patch.NewHelper(params.ClusterProfile, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
-	return &ClusterFeatureScope{
+	return &ClusterProfileScope{
 		Logger:         params.Logger,
 		client:         params.Client,
-		ClusterFeature: params.ClusterFeature,
+		ClusterProfile: params.ClusterProfile,
 		patchHelper:    helper,
 		controllerName: params.ControllerName,
 	}, nil
 }
 
-// ClusterFeatureScope defines the basic context for an actuator to operate upon.
-type ClusterFeatureScope struct {
+// ClusterProfileScope defines the basic context for an actuator to operate upon.
+type ClusterProfileScope struct {
 	logr.Logger
 	client         client.Client
 	patchHelper    *patch.Helper
-	ClusterFeature *configv1alpha1.ClusterFeature
+	ClusterProfile *configv1alpha1.ClusterProfile
 	controllerName string
 }
 
 // PatchObject persists the feature configuration and status.
-func (s *ClusterFeatureScope) PatchObject(ctx context.Context) error {
+func (s *ClusterProfileScope) PatchObject(ctx context.Context) error {
 	return s.patchHelper.Patch(
 		ctx,
-		s.ClusterFeature,
+		s.ClusterProfile,
 	)
 }
 
-// Close closes the current scope persisting the clusterfeature configuration and status.
-func (s *ClusterFeatureScope) Close(ctx context.Context) error {
+// Close closes the current scope persisting the clusterprofile configuration and status.
+func (s *ClusterProfileScope) Close(ctx context.Context) error {
 	return s.PatchObject(ctx)
 }
 
-// Name returns the ClusterFeature name.
-func (s *ClusterFeatureScope) Name() string {
-	return s.ClusterFeature.Name
+// Name returns the ClusterProfile name.
+func (s *ClusterProfileScope) Name() string {
+	return s.ClusterProfile.Name
 }
 
 // ControllerName returns the name of the controller that
-// created the ClusterFeatureScope.
-func (s *ClusterFeatureScope) ControllerName() string {
+// created the ClusterProfileScope.
+func (s *ClusterProfileScope) ControllerName() string {
 	return s.controllerName
 }
 
 // GetSelector returns the ClusterSelector
-func (s *ClusterFeatureScope) GetSelector() string {
-	return string(s.ClusterFeature.Spec.ClusterSelector)
+func (s *ClusterProfileScope) GetSelector() string {
+	return string(s.ClusterProfile.Spec.ClusterSelector)
 }
 
 // SetMatchingClusterRefs sets the feature status.
-func (s *ClusterFeatureScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
-	s.ClusterFeature.Status.MatchingClusterRefs = matchingClusters
+func (s *ClusterProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
+	s.ClusterProfile.Status.MatchingClusterRefs = matchingClusters
 }
 
-// IsContinuousSync returns true if ClusterFeature is set to keep updating workload cluster
-func (s *ClusterFeatureScope) IsContinuousSync() bool {
-	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeContinuous
+// IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
+func (s *ClusterProfileScope) IsContinuousSync() bool {
+	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuous
 }
 
-// IsOneTimeSync returns true if ClusterFeature sync mod is set to one time
-func (s *ClusterFeatureScope) IsOneTimeSync() bool {
-	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeOneTime
+// IsOneTimeSync returns true if ClusterProfile sync mod is set to one time
+func (s *ClusterProfileScope) IsOneTimeSync() bool {
+	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeOneTime
 }
 
-// IsDryRunSync returns true if ClusterFeature sync mod is set to dryRun
-func (s *ClusterFeatureScope) IsDryRunSync() bool {
-	return s.ClusterFeature.Spec.SyncMode == configv1alpha1.SyncModeDryRun
+// IsDryRunSync returns true if ClusterProfile sync mod is set to dryRun
+func (s *ClusterProfileScope) IsDryRunSync() bool {
+	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeDryRun
 }

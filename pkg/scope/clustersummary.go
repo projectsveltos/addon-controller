@@ -34,7 +34,7 @@ import (
 type ClusterSummaryScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
-	ClusterFeature *configv1alpha1.ClusterFeature
+	ClusterProfile *configv1alpha1.ClusterProfile
 	ClusterSummary *configv1alpha1.ClusterSummary
 	ControllerName string
 }
@@ -56,7 +56,7 @@ func NewClusterSummaryScope(params ClusterSummaryScopeParams) (*ClusterSummarySc
 	return &ClusterSummaryScope{
 		Logger:         params.Logger,
 		client:         params.Client,
-		ClusterFeature: params.ClusterFeature,
+		ClusterProfile: params.ClusterProfile,
 		ClusterSummary: params.ClusterSummary,
 		patchHelper:    helper,
 		controllerName: params.ControllerName,
@@ -68,7 +68,7 @@ type ClusterSummaryScope struct {
 	logr.Logger
 	client         client.Client
 	patchHelper    *patch.Helper
-	ClusterFeature *configv1alpha1.ClusterFeature
+	ClusterProfile *configv1alpha1.ClusterProfile
 	ClusterSummary *configv1alpha1.ClusterSummary
 	controllerName string
 }
@@ -81,7 +81,7 @@ func (s *ClusterSummaryScope) PatchObject(ctx context.Context) error {
 	)
 }
 
-// Close closes the current scope persisting the clusterfeature configuration and status.
+// Close closes the current scope persisting the clusterprofile configuration and status.
 func (s *ClusterSummaryScope) Close(ctx context.Context) error {
 	return s.PatchObject(ctx)
 }
@@ -240,17 +240,17 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 	)
 }
 
-// IsContinuousSync returns true if ClusterFeature is set to keep updating workload cluster
+// IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterSummaryScope) IsContinuousSync() bool {
-	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeContinuous
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous
 }
 
-// IsOneTimeSync returns true if ClusterFeature sync mod is set to one time
+// IsOneTimeSync returns true if ClusterProfile sync mod is set to one time
 func (s *ClusterSummaryScope) IsOneTimeSync() bool {
-	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeOneTime
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime
 }
 
-// IsDryRunSync returns true if ClusterFeature sync mod is set to dryRun
+// IsDryRunSync returns true if ClusterProfile sync mod is set to dryRun
 func (s *ClusterSummaryScope) IsDryRunSync() bool {
-	return s.ClusterSummary.Spec.ClusterFeatureSpec.SyncMode == configv1alpha1.SyncModeDryRun
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun
 }

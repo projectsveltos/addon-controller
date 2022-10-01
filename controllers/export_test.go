@@ -17,21 +17,21 @@ limitations under the License.
 package controllers
 
 var (
-	GetMatchingClusters          = (*ClusterFeatureReconciler).getMatchingClusters
-	UpdateClusterSummaries       = (*ClusterFeatureReconciler).updateClusterSummaries
-	CreateClusterSummary         = (*ClusterFeatureReconciler).createClusterSummary
-	UpdateClusterSummary         = (*ClusterFeatureReconciler).updateClusterSummary
-	DeleteClusterSummary         = (*ClusterFeatureReconciler).deleteClusterSummary
-	GetMachinesForCluster        = (*ClusterFeatureReconciler).getMachinesForCluster
-	IsClusterReadyToBeConfigured = (*ClusterFeatureReconciler).isClusterReadyToBeConfigured
-	UpdateClusterConfiguration   = (*ClusterFeatureReconciler).updateClusterConfiguration
-	CleanClusterConfiguration    = (*ClusterFeatureReconciler).cleanClusterConfiguration
-	CleanClusterReports          = (*ClusterFeatureReconciler).cleanClusterReports
-	UpdateClusterReports         = (*ClusterFeatureReconciler).updateClusterReports
-	UpdateClusterSummarySyncMode = (*ClusterFeatureReconciler).updateClusterSummarySyncMode
+	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
+	UpdateClusterSummaries       = (*ClusterProfileReconciler).updateClusterSummaries
+	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
+	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary
+	DeleteClusterSummary         = (*ClusterProfileReconciler).deleteClusterSummary
+	GetMachinesForCluster        = (*ClusterProfileReconciler).getMachinesForCluster
+	IsClusterReadyToBeConfigured = (*ClusterProfileReconciler).isClusterReadyToBeConfigured
+	UpdateClusterConfiguration   = (*ClusterProfileReconciler).updateClusterConfiguration
+	CleanClusterConfiguration    = (*ClusterProfileReconciler).cleanClusterConfiguration
+	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports
+	UpdateClusterReports         = (*ClusterProfileReconciler).updateClusterReports
+	UpdateClusterSummarySyncMode = (*ClusterProfileReconciler).updateClusterSummarySyncMode
 
-	RequeueClusterFeatureForCluster = (*ClusterFeatureReconciler).requeueClusterFeatureForCluster
-	RequeueClusterFeatureForMachine = (*ClusterFeatureReconciler).requeueClusterFeatureForMachine
+	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
+	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
 )
 
 var (
@@ -93,7 +93,7 @@ type (
 )
 
 var (
-	GetClusterFeatureOwner = getClusterFeatureOwner
+	GetClusterProfileOwner = getClusterProfileOwner
 	GetUnstructured        = getUnstructured
 	AddOwnerReference      = addOwnerReference
 	RemoveOwnerReference   = removeOwnerReference

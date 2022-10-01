@@ -35,19 +35,19 @@ var _ = Describe("Helm", func() {
 	)
 
 	It("Deploy and updates helm charts correctly", Label("FV"), func() {
-		Byf("Create a ClusterFeature matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterFeature := getClusterfeature(namePrefix, map[string]string{key: value})
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(k8sClient.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterFeatureMatches(clusterFeature)
+		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Update ClusterFeature %s to deploy helm charts", clusterFeature.Name)
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -67,9 +67,9 @@ var _ = Describe("Helm", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -98,12 +98,12 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
-		Byf("Changing ClusterFeature requiring different chart version for kyverno")
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Changing ClusterProfile requiring different chart version for kyverno")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -123,9 +123,9 @@ var _ = Describe("Helm", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying Kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
@@ -149,12 +149,12 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
-		Byf("Changing ClusterFeature to not require nginx anymore")
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		currentClusterFeature.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		Byf("Changing ClusterProfile to not require nginx anymore")
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -165,9 +165,9 @@ var _ = Describe("Helm", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterFeature)).To(Succeed())
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterFeature, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying Kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
@@ -188,10 +188,10 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(clusterFeature.Name, clusterSummary.Spec.ClusterNamespace,
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
-		deleteClusterFeature(clusterFeature)
+		deleteClusterProfile(clusterProfile)
 
 		Byf("Verifying Kyverno deployment is removed from workload cluster")
 		Eventually(func() bool {

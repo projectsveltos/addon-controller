@@ -45,7 +45,7 @@ import (
 )
 
 var _ = Describe("ClustersummaryController", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
@@ -65,16 +65,16 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterFeature.Name, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -86,7 +86,7 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		prepareForDeployment(clusterFeature, clusterSummary, cluster)
+		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
@@ -95,7 +95,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -125,7 +125,7 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 		}
 
@@ -144,10 +144,10 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns true when mode is Continuous", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -175,8 +175,8 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("updateChartMap updates chartMap always but in DryRun mode", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()},
 		}
@@ -208,19 +208,19 @@ var _ = Describe("ClustersummaryController", func() {
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
-		Expect(manager.CanManageChart(clusterSummary, &clusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeTrue())
+		Expect(manager.CanManageChart(clusterSummary, &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
 
 		// set mode to dryRun
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Add an extra helm chart
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts = append(currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts,
+		currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
 			configv1alpha1.HelmChart{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()})
 		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -228,13 +228,13 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		// Verify chart registrations have not changed
-		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[0])).To(BeTrue())
-		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterFeatureSpec.HelmCharts[1])).To(BeFalse())
+		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
+		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeFalse())
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -242,7 +242,7 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -270,8 +270,8 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -279,7 +279,7 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -307,11 +307,11 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns false when mode is OneTime and policies and helm charts are deployed", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterFeatureSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -320,7 +320,7 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -349,7 +349,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("Adds finalizer", func() {
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -388,13 +388,13 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldRedeploy returns true in DryRun mode", func() {
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
 		}
 		initObjects := []client.Object{
-			clusterFeature,
+			clusterProfile,
 			clusterSummary,
 			cluster,
 		}
@@ -434,7 +434,7 @@ var _ = Describe("ClustersummaryController", func() {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
 		Expect(err).ToNot(HaveOccurred())
-		currentClusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		clusterSummaryScope.ClusterSummary = currentClusterSummary
@@ -454,7 +454,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 			cluster,
 		}
 
@@ -508,15 +508,15 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterFeature are deleted", func() {
+	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-		controllerutil.AddFinalizer(clusterFeature, configv1alpha1.ClusterFeatureFinalizer)
+		controllerutil.AddFinalizer(clusterProfile, configv1alpha1.ClusterProfileFinalizer)
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeDryRun
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 			cluster,
 		}
 
@@ -548,16 +548,16 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.DeletionTimestamp = &now
 		clusterSummaryScope.ClusterSummary = clusterSummary
 
-		// ClusterFeature is not marked for deletion. So cannot remove finalizer
+		// ClusterProfile is not marked for deletion. So cannot remove finalizer
 		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
 
-		// Mark ClusterFeature for deletion
-		currentClusterFeature := &configv1alpha1.ClusterFeature{}
+		// Mark ClusterProfile for deletion
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(c.Get(context.TODO(),
-			types.NamespacedName{Name: clusterFeature.Name}, currentClusterFeature)).To(Succeed())
-		Expect(c.Delete(context.TODO(), currentClusterFeature)).To(Succeed())
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		Expect(c.Delete(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummaryScope.ClusterFeature = currentClusterFeature
+		clusterSummaryScope.ClusterProfile = currentClusterProfile
 
 		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
 	})
@@ -565,17 +565,17 @@ var _ = Describe("ClustersummaryController", func() {
 	It("canRemoveFinalizer in not DryRun returns true when ClusterSummary is deleted and features removed", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
 		}
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 			cluster,
 		}
 
@@ -624,17 +624,17 @@ var _ = Describe("ClustersummaryController", func() {
 	It("canRemoveFinalizer returns true when Cluster is gone", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
 
-		clusterSummary.Spec.ClusterFeatureSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
 		}
 
-		clusterFeature.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 
 		initObjects := []client.Object{
 			clusterSummary,
-			clusterFeature,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -671,7 +671,7 @@ var _ = Describe("ClustersummaryController", func() {
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var referencingClusterSummary *configv1alpha1.ClusterSummary
 	var nonReferencingClusterSummary *configv1alpha1.ClusterSummary
 	var configMap *corev1.ConfigMap
@@ -692,7 +692,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		namespace = "reconcile" + randomString()
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
@@ -713,7 +713,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
@@ -734,7 +734,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
@@ -767,7 +767,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
@@ -779,7 +779,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
-		referencingClusterSummary.Spec.ClusterFeatureSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: namespace,
 				Name:      configMap.Name,
@@ -789,7 +789,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
-		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterFeature)
+		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
 
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
@@ -835,13 +835,13 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
-		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterFeature)
+		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
 
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())

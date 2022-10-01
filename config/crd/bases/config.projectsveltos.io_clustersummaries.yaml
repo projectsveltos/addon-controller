@@ -35,8 +35,16 @@ spec:
           spec:
             description: ClusterSummarySpec defines the desired state of ClusterSummary
             properties:
-              clusterFeatureSpec:
-                description: ClusterFeatureSpec represent the configuration that will
+              clusterName:
+                description: ClusterName is the name of the workload Cluster this
+                  ClusterSummary is for.
+                type: string
+              clusterNamespace:
+                description: ClusterNamespace is the namespace of the workload Cluster
+                  this ClusterSummary is for.
+                type: string
+              clusterProfileSpec:
+                description: ClusterProfileSpec represent the configuration that will
                   be applied to the workload cluster.
                 properties:
                   clusterSelector:
@@ -125,10 +133,10 @@ spec:
                     default: Continuous
                     description: SyncMode specifies how features are synced in a matching
                       workload cluster. - OneTime means, first time a workload cluster
-                      matches the ClusterFeature, features will be deployed in such
+                      matches the ClusterProfile, features will be deployed in such
                       cluster. Any subsequent feature configuration change won't be
                       applied into the matching workload clusters; - Continuous means
-                      first time a workload cluster matches the ClusterFeature, features
+                      first time a workload cluster matches the ClusterProfile, features
                       will be deployed in such a cluster. Any subsequent feature configuration
                       change will be applied into the matching workload clusters.
                     enum:
@@ -139,14 +147,6 @@ spec:
                 required:
                 - clusterSelector
                 type: object
-              clusterName:
-                description: ClusterName is the name of the workload Cluster this
-                  ClusterSummary is for.
-                type: string
-              clusterNamespace:
-                description: ClusterNamespace is the namespace of the workload Cluster
-                  this ClusterSummary is for.
-                type: string
             required:
             - clusterName
             - clusterNamespace
@@ -156,7 +156,7 @@ spec:
             properties:
               featureSummaries:
                 description: FeatureSummaries reports the status of each workload
-                  cluster feature directly managed by ClusterFeature.
+                  cluster feature directly managed by ClusterProfile.
                 items:
                   description: FeatureSummary contains a summary of the state of a
                     workload cluster feature.
@@ -210,7 +210,7 @@ spec:
                 x-kubernetes-list-type: atomic
               helmReleaseSummaries:
                 description: HelmReleaseSummaries reports the status of each helm
-                  chart directly managed by ClusterFeature.
+                  chart directly managed by ClusterProfile.
                 items:
                   properties:
                     conflictMessage:

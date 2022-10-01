@@ -101,16 +101,16 @@ func main() {
 
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
-	if err = (&controllers.ClusterFeatureReconciler{
+	if err = (&controllers.ClusterProfileReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ClusterMap:           make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterFeatureMap:    make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterFeatures:      make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterProfileMap:    make(map[configv1alpha1.PolicyRef]*controllers.Set),
+		ClusterProfiles:      make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterFeatureKind)
+		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
 		os.Exit(1)
 	}
 	if err = (&controllers.ClusterSummaryReconciler{

@@ -40,17 +40,17 @@ import (
 )
 
 var _ = Describe("HandlersHelm", func() {
-	var clusterFeature *configv1alpha1.ClusterFeature
+	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 
 	BeforeEach(func() {
 		clusterNamespace := randomString()
 
-		clusterFeature = &configv1alpha1.ClusterFeature{
+		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterFeatureNamePrefix + randomString(),
+				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterFeatureSpec{
+			Spec: configv1alpha1.ClusterProfileSpec{
 				ClusterSelector: selector,
 			},
 		}
@@ -61,8 +61,8 @@ var _ = Describe("HandlersHelm", func() {
 				Namespace: clusterNamespace,
 				OwnerReferences: []metav1.OwnerReference{
 					{
-						Kind:       configv1alpha1.ClusterFeatureKind,
-						Name:       clusterFeature.Name,
+						Kind:       configv1alpha1.ClusterProfileKind,
+						Name:       clusterProfile.Name,
 						APIVersion: "config.projectsveltos.io/v1alpha1",
 					},
 				},
@@ -163,7 +163,7 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			HelmCharts: []configv1alpha1.HelmChart{*calicoChart},
 		}
 
@@ -207,7 +207,7 @@ var _ = Describe("HandlersHelm", func() {
 	})
 
 	It("updateStatusForReferencedHelmReleases is no-op in DryRun mode", func() {
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			HelmCharts: []configv1alpha1.HelmChart{
 				{RepositoryURL: randomString(), RepositoryName: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 					ReleaseName: randomString(), ReleaseNamespace: randomString()},
@@ -263,7 +263,7 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			HelmCharts: []configv1alpha1.HelmChart{*contourChart},
 		}
 		// List a helm chart non referenced anymore as managed
@@ -319,8 +319,8 @@ var _ = Describe("HandlersHelm", func() {
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
-				ClusterFeatureResources: []configv1alpha1.ClusterFeatureResource{
-					{ClusterFeatureName: clusterFeature.Name},
+				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
+					{ClusterProfileName: clusterProfile.Name},
 				},
 			},
 		}
@@ -339,21 +339,21 @@ var _ = Describe("HandlersHelm", func() {
 			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
 			currentClusterConfiguration)).To(Succeed())
 
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources).ToNot(BeNil())
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].ClusterFeatureName).To(
-			Equal(clusterFeature.Name))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features).ToNot(BeNil())
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].FeatureID).To(
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].ClusterProfileName).To(
+			Equal(clusterProfile.Name))
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources[0].Features)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].FeatureID).To(
 			Equal(configv1alpha1.FeatureHelm))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts).ToNot(BeNil())
-		Expect(len(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].RepoURL).To(
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts).ToNot(BeNil())
+		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts)).To(Equal(1))
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts[0].RepoURL).To(
 			Equal(chartDeployed[0].RepoURL))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ReleaseName).To(
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts[0].ReleaseName).To(
 			Equal(chartDeployed[0].ReleaseName))
-		Expect(currentClusterConfiguration.Status.ClusterFeatureResources[0].Features[0].Charts[0].ChartVersion).To(
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts[0].ChartVersion).To(
 			Equal(chartDeployed[0].ChartVersion))
 	})
 
@@ -365,7 +365,7 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			SyncMode:   configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
 		}
@@ -392,14 +392,14 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			SyncMode:   configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
 		}
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterFeature.Name, clusterSummary.Spec.ClusterName),
+				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -452,7 +452,7 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionUninstall,
 		}
 
-		clusterSummary.Spec.ClusterFeatureSpec = configv1alpha1.ClusterFeatureSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			SyncMode: configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{
 				*helmChartInstall, *helmChartUninstall,
@@ -461,7 +461,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterFeature.Name, clusterSummary.Spec.ClusterName),
+				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -478,13 +478,13 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterFeature)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 		clusterSummary.OwnerReferences = []metav1.OwnerReference{
 			{
-				Kind:       configv1alpha1.ClusterFeatureKind,
-				Name:       clusterFeature.Name,
+				Kind:       configv1alpha1.ClusterProfileKind,
+				Name:       clusterProfile.Name,
 				APIVersion: "config.projectsveltos.io/v1alpha1",
-				UID:        clusterFeature.UID,
+				UID:        clusterProfile.UID,
 			},
 		}
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
@@ -569,7 +569,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterFeatureSpec: configv1alpha1.ClusterFeatureSpec{
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						kyvernoChart,
 						nginxChart,

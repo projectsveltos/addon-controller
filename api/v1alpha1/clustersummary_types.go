@@ -17,11 +17,15 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -187,8 +191,20 @@ func init() {
 	SchemeBuilder.Register(&ClusterSummary{}, &ClusterSummaryList{})
 }
 
-// GetOwnerClusterProfileName returns the ClusterProfile owning a given ClusterSummary
-func GetOwnerClusterProfileName(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
+func GetClusterSummary(ctx context.Context, c client.Client, namespace, name string,
+) (*ClusterSummary, error) {
+
+	clusterSummary := &ClusterSummary{}
+	err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	return clusterSummary, nil
+}
+
+// GetClusterProfileOwnerReference returns the ClusterProfile owning a given ClusterSummary
+func GetClusterProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
 	for _, ref := range clusterSummary.OwnerReferences {
 		if ref.Kind != ClusterProfileKind {
 			continue
@@ -203,4 +219,32 @@ func GetOwnerClusterProfileName(clusterSummary *ClusterSummary) (*metav1.OwnerRe
 	}
 
 	return nil, fmt.Errorf("ClusterProfile owner not found")
+}
+
+// GetClusterProfileOwner returns the ClusterProfile owning this clusterSummary.
+// Returns nil if ClusterProfile does not exist anymore.
+func GetClusterProfileOwner(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
+) (*ClusterProfile, error) {
+
+	for _, ref := range clusterSummary.OwnerReferences {
+		if ref.Kind != ClusterProfileKind {
+			continue
+		}
+		gv, err := schema.ParseGroupVersion(ref.APIVersion)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		if gv.Group == GroupVersion.Group {
+			clusterProfile := &ClusterProfile{}
+			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					return nil, nil
+				}
+				return nil, err
+			}
+			return clusterProfile, nil
+		}
+	}
+	return nil, nil
 }

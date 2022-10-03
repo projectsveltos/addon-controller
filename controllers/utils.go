@@ -127,34 +127,6 @@ func getClusterConfiguration(ctx context.Context, c client.Client,
 	return clusterConfiguration, nil
 }
 
-// getClusterProfileOwner returns the ClusterProfile owning this clusterSummary.
-// Returns nil if ClusterProfile does not exist anymore.
-func getClusterProfileOwner(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterProfile, error) {
-
-	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != configv1alpha1.ClusterProfileKind {
-			continue
-		}
-		gv, err := schema.ParseGroupVersion(ref.APIVersion)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		if gv.Group == configv1alpha1.GroupVersion.Group {
-			clusterProfile := &configv1alpha1.ClusterProfile{}
-			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
-			if err != nil {
-				if apierrors.IsNotFound(err) {
-					return nil, nil
-				}
-				return nil, err
-			}
-			return clusterProfile, nil
-		}
-	}
-	return nil, nil
-}
-
 func getKubernetesRestConfig(ctx context.Context, logger logr.Logger, c client.Client,
 	clusterNamespace, clusterName string) (*rest.Config, error) {
 
@@ -312,20 +284,22 @@ func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstr
 // This is needed to prevent misconfigurations. An example would be when different
 // ConfigMaps are referenced by ClusterProfile(s) and contain same policy namespace/name
 // (content might be different) and are about to be deployed in the same CAPI Cluster;
-// Return an error if validation fails. Return also true if object currently exists. False otherwise.
+// Return an error if validation fails. Return also whether the object currently exists or not.
+// If object exists, return value of PolicyHash annotation.
 func validateObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
-	object *unstructured.Unstructured, referenceKind, referenceNamespace, referenceName string) (bool, error) {
+	object *unstructured.Unstructured,
+	referenceKind, referenceNamespace, referenceName string) (exist bool, hash string, err error) {
 
 	if object == nil {
-		return false, nil
+		return false, "", nil
 	}
 
 	currentObject, err := dr.Get(ctx, object.GetName(), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, nil
+			return false, "", nil
 		}
-		return false, err
+		return false, "", err
 	}
 
 	if labels := currentObject.GetLabels(); labels != nil {
@@ -335,28 +309,69 @@ func validateObjectForUpdate(ctx context.Context, dr dynamic.ResourceInterface,
 
 		if kindOk {
 			if kind != referenceKind {
-				return true, &conflictError{
+				return true, "", &conflictError{
 					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
 						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 		if namespaceOk {
 			if namespace != referenceNamespace {
-				return true, &conflictError{
+				return true, "", &conflictError{
 					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
 						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 		if nameOk {
 			if name != referenceName {
-				return true, &conflictError{
+				return true, "", &conflictError{
 					message: fmt.Sprintf("conflict: policy (kind: %s) %s is currently deployed by %s: %s/%s",
 						object.GetKind(), object.GetName(), kind, namespace, name)}
 			}
 		}
 	}
 
-	return true, nil
+	// Only in case object exists and there are no conflicts, return hash
+	if annotations := currentObject.GetAnnotations(); annotations != nil {
+		hash = annotations[PolicyHash]
+	}
+
+	return true, hash, nil
+}
+
+// getOwnerMessage returns a message listing why this object is deployed. The message lists:
+// - which ClusterProfile(s) is currently causing it to be deployed
+// - which Secret/ConfigMap contains it
+func getOwnerMessage(ctx context.Context, dr dynamic.ResourceInterface,
+	objectName string) (string, error) {
+
+	currentObject, err := dr.Get(ctx, objectName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+
+	var message string
+
+	if labels := currentObject.GetLabels(); labels != nil {
+		kind := labels[ReferenceLabelKind]
+		namespace := labels[ReferenceLabelNamespace]
+		name := labels[ReferenceLabelName]
+
+		message += fmt.Sprintf("Object currently deployed because of %s %s/%s.", kind, namespace, name)
+	}
+
+	message += "List of ClusterProfiles:"
+	ownerRefs := currentObject.GetOwnerReferences()
+	for i := range ownerRefs {
+		or := &ownerRefs[i]
+		if or.Kind == configv1alpha1.ClusterProfileKind {
+			message += fmt.Sprintf("%s;", or.Name)
+		}
+	}
+
+	return message, nil
 }
 
 // addOwnerReference adds clusterProfile as an object's OwnerReference.

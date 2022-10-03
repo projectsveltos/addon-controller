@@ -376,7 +376,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary, helmChart)
+		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary,
+			helmChart, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(report).ToNot(BeNil())
 		Expect(report.Action).To(Equal(string(configv1alpha1.InstallHelmAction)))

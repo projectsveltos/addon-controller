@@ -123,7 +123,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Fetch the ClusterProfile.
-	clusterProfile, err := getClusterProfileOwner(ctx, r.Client, clusterSummary)
+	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
 		return reconcile.Result{}, errors.Wrapf(
@@ -602,7 +602,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
 		// ClusterProfile is moved away from DryRun mode.
-		clusterProfile, err := getClusterProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile %v", err))
 			return false

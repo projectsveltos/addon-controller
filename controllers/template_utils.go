@@ -132,7 +132,7 @@ func getSubstituitionObject(ctx context.Context, c client.Client, config *rest.C
 	case "Cluster":
 		return getCluster(ctx, c, clusterSummary)
 	case configv1alpha1.ClusterProfileKind:
-		return getClusterProfileOwner(ctx, c, clusterSummary)
+		return configv1alpha1.GetClusterProfileOwner(ctx, c, clusterSummary)
 	default:
 		substituitionRule := &configv1alpha1.SubstitutionRule{}
 		err := c.Get(ctx, types.NamespacedName{Name: ruleName}, substituitionRule)

@@ -29,16 +29,18 @@ const (
 	InstallHelmAction   HelmAction = "Install"
 	UpgradeHelmAction   HelmAction = "Upgrade"
 	UninstallHelmAction HelmAction = "Delete"
+	ConflictHelmAction  HelmAction = "Conflict"
 )
 
 type ResourceAction string
 
 // Define the Action constants.
 const (
-	NoResourceAction     ResourceAction = "No Action"
-	CreateResourceAction ResourceAction = "Create"
-	UpdateResourceAction ResourceAction = "Update"
-	DeleteResourceAction ResourceAction = "Delete"
+	NoResourceAction       ResourceAction = "No Action"
+	CreateResourceAction   ResourceAction = "Create"
+	UpdateResourceAction   ResourceAction = "Update"
+	DeleteResourceAction   ResourceAction = "Delete"
+	ConflictResourceAction ResourceAction = "Conflict"
 )
 
 type ReleaseReport struct {
@@ -55,7 +57,7 @@ type ReleaseReport struct {
 	ChartVersion string `json:"chartVersion"`
 
 	// Action represent the type of operation on the Helm Chart
-	// +kubebuilder:validation:Enum=No Action;Install;Upgrade;Delete
+	// +kubebuilder:validation:Enum=No Action;Install;Upgrade;Delete;Conflict
 	// +optional
 	Action string `json:"action,omitempty"`
 
@@ -70,7 +72,7 @@ type ResourceReport struct {
 	Resource Resource `json:"resource"`
 
 	// Action represent the type of operation on the Kubernetes resource.
-	// +kubebuilder:validation:Enum=No Action;Create;Update;Delete
+	// +kubebuilder:validation:Enum=No Action;Create;Update;Delete;Conflict
 	Action string `json:"action,omitempty"`
 
 	// Message is for any message that needs to added to better

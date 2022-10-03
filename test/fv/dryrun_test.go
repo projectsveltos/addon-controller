@@ -211,7 +211,7 @@ var _ = Describe("DryRun", func() {
 			}
 			// Another ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.ConflictHelmAction))
 			if err != nil {
 				return err
 			}
@@ -244,10 +244,11 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// Another ClusterProfile is managing this. This ClusterProfile is also referencing same ConfigMap. So Action is Update
-			// as changing SyncMode will cause reconciliation and so a patch of this resource.
+			// Another ClusterProfile is managing this, by referencing same ConfigMap this ClusterProfile is, so no conflict.
+			// Content of ConfigMap has not changed. Action is actuall NoAction as changing SyncMode will cause reconciliation
+			// but no update will happen since ConfigMap has not changed since deployment time.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1alpha1.UpdateResourceAction))
+				"ServiceAccount", "", string(configv1alpha1.NoResourceAction))
 			if err != nil {
 				return err
 			}
@@ -377,7 +378,7 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1alpha1.UpdateResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(configv1alpha1.NoResourceAction))
 			if err != nil {
 				return err
 			}

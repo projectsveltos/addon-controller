@@ -61,32 +61,41 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var created []configv1alpha1.Resource
-	var updated []configv1alpha1.Resource
-	var conflicts []configv1alpha1.Resource
-	created, updated, conflicts, err = deployReferencedObjects(ctx, c, remoteRestConfig, configv1alpha1.FeatureResources,
-		referencedObjects, clusterSummary, logger)
+	var resourceReports []configv1alpha1.ResourceReport
+	resourceReports, err = deployReferencedObjects(ctx, c, remoteRestConfig, referencedObjects, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	for i := range created {
-		key := getPolicyInfo(&created[i])
-		currentPolicies[key] = created[i]
-	}
-	for i := range updated {
-		key := getPolicyInfo(&updated[i])
-		currentPolicies[key] = updated[i]
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return err
 	}
 
-	var undeployed []configv1alpha1.Resource
+	var deployed []configv1alpha1.Resource
+	for i := range resourceReports {
+		// If we are here there are no conflicts (and error would have been returned by deployReferencedObjects)
+		deployed = append(deployed, resourceReports[i].Resource)
+	}
+	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, featureHandler.id, deployed, nil)
+	if err != nil {
+		return err
+	}
+
+	for i := range resourceReports {
+		key := getPolicyInfo(&resourceReports[i].Resource)
+		currentPolicies[key] = resourceReports[i].Resource
+	}
+
+	var undeployed []configv1alpha1.ResourceReport
 	undeployed, err = undeployStaleResources(ctx, remoteRestConfig, c, remoteClient, clusterSummary,
 		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies, logger)
 	if err != nil {
 		return err
 	}
+	resourceReports = append(resourceReports, undeployed...)
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, created, updated, conflicts, undeployed)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports)
 	if err != nil {
 		return err
 	}
@@ -122,15 +131,15 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var undeployed []configv1alpha1.Resource
-	undeployed, err = undeployStaleResources(ctx, remoteRestConfig, c, remoteClient, clusterSummary,
+	var resourceReports []configv1alpha1.ResourceReport
+	resourceReports, err = undeployStaleResources(ctx, remoteRestConfig, c, remoteClient, clusterSummary,
 		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -141,7 +150,7 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, nil, nil, nil, undeployed)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports)
 	if err != nil {
 		return err
 	}
@@ -200,51 +209,19 @@ func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1al
 // This is no-op unless mode is DryRun.
 func updateClusterReportWithResourceReports(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary,
-	created, updated, conflicts, undeployed []configv1alpha1.Resource) error {
+	resourceReports []configv1alpha1.ResourceReport) error {
 
 	// This is no-op unless in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
 		return nil
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
 	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
-
-	resourceReports := make([]configv1alpha1.ResourceReport, len(created)+len(updated)+len(undeployed)+len(conflicts))
-	currentItem := 0
-	for i := range created {
-		created[i].LastAppliedTime = nil
-		resourceReports[currentItem] = configv1alpha1.ResourceReport{
-			Resource: created[i], Action: string(configv1alpha1.CreateResourceAction),
-		}
-		currentItem++
-	}
-	for i := range updated {
-		updated[i].LastAppliedTime = nil
-		resourceReports[currentItem] = configv1alpha1.ResourceReport{
-			Resource: updated[i], Action: string(configv1alpha1.UpdateResourceAction),
-		}
-		currentItem++
-	}
-	for i := range undeployed {
-		undeployed[i].LastAppliedTime = nil
-		resourceReports[currentItem] = configv1alpha1.ResourceReport{
-			Resource: undeployed[i], Action: string(configv1alpha1.DeleteResourceAction),
-		}
-		currentItem++
-	}
-	for i := range conflicts {
-		conflicts[i].LastAppliedTime = nil
-		resourceReports[currentItem] = configv1alpha1.ResourceReport{
-			Resource: conflicts[i], Action: string(configv1alpha1.NoResourceAction),
-			Message: "this resource is currently managed by a different ClusterProfile.",
-		}
-		currentItem++
-	}
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1alpha1.ClusterReport{}

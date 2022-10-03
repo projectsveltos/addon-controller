@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -85,11 +86,10 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // and kind.group::name for cluster wide policies.
 func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (deployed, updated, conflicts []configv1alpha1.Resource, err error) {
+	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
 
-	l := logger.WithValues(string(configv1alpha1.ConfigMapReferencedResourceKind),
-		fmt.Sprintf("%s/%s", configMap.Namespace, configMap.Name))
-	deployed, updated, conflicts, err = deployContent(ctx, remoteConfig, c, remoteClient, configMap, configMap.Data, clusterSummary, l)
+	reports, err =
+		deployContent(ctx, remoteConfig, c, remoteClient, configMap, configMap.Data, clusterSummary, logger)
 	return
 }
 
@@ -99,31 +99,35 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, c,
 // and kind.group::name for cluster wide policies.
 func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
 	secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (deployed, updated, conflicts []configv1alpha1.Resource, err error) {
+	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
 
-	l := logger.WithValues(string(configv1alpha1.SecretReferencedResourceKind),
-		fmt.Sprintf("%s/%s", secret.Namespace, secret.Name))
 	data := make(map[string]string)
 	for key, value := range secret.Data {
 		data[key], err = decode(value)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 	}
 
-	deployed, updated, conflicts, err = deployContent(ctx, remoteConfig, c, remoteClient, secret, data, clusterSummary, l)
+	reports, err =
+		deployContent(ctx, remoteConfig, c, remoteClient, secret, data, clusterSummary, logger)
 	return
 }
 
 // updateResource creates or updates a resource in a CAPI Cluster.
 // No action in DryRun mode.
 func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
-	clusterSummary *configv1alpha1.ClusterSummary, object *unstructured.Unstructured) error {
+	clusterSummary *configv1alpha1.ClusterSummary, object *unstructured.Unstructured,
+	logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return nil
 	}
+
+	l := logger.WithValues("resourceNamespace", object.GetNamespace(),
+		"resourceName", object.GetName(), "resourceGVK", object.GetObjectKind().GroupVersionKind())
+	l.V(logs.LogDebug).Info("deploying policy")
 
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
 	if err != nil {
@@ -147,82 +151,27 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 // and kind.group::name for cluster wide policies.
 func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
 	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (created, updated, conflicts []configv1alpha1.Resource, err error) {
+	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
 
 	referencedPolicies, err := collectContent(ctx, clusterSummary, data, logger)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	clusterProfile, err := getClusterProfileOwner(ctx, c, clusterSummary)
+	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, c, clusterSummary)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	conflictPolicies := make([]configv1alpha1.Resource, 0)
-	createdPolicies := make([]configv1alpha1.Resource, 0)
-	updatedPolicies := make([]configv1alpha1.Resource, 0)
+	reports = make([]configv1alpha1.ResourceReport, 0)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
-		addLabel(policy, ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
-		addLabel(policy, ReferenceLabelName, referencedObject.GetName())
-		addLabel(policy, ReferenceLabelNamespace, referencedObject.GetNamespace())
-		name := getPolicyName(policy.GetName(), clusterSummary)
-		policy.SetName(name)
 
-		// If policy is namespaced, create namespace if not already existing
-		err := createNamespace(ctx, remoteClient, clusterSummary, policy.GetNamespace())
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		// If policy already exists, just get current version and update it by overridding
-		// all metadata and spec.
-		// If policy does not exist already, create it
-		dr, err := getDynamicResourceInterface(remoteConfig, policy)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		var exists bool
-		exists, err = validateObjectForUpdate(ctx, dr, policy,
-			referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName())
-		if err != nil {
-			var conflictErr *conflictError
-			ok := errors.As(err, &conflictErr)
-			// In DryRun mode do not stop here, but report the conflict.
-			if ok && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-				conflictPolicies = append(conflictPolicies, configv1alpha1.Resource{
-					Name:      policy.GetName(),
-					Namespace: policy.GetNamespace(),
-					Kind:      policy.GetKind(),
-					Group:     policy.GetObjectKind().GroupVersionKind().Group,
-					Owner: corev1.ObjectReference{
-						Namespace: referencedObject.GetNamespace(),
-						Name:      referencedObject.GetName(),
-						Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
-					},
-				})
-				continue
-			}
-			return nil, nil, nil, err
-		}
-
-		addOwnerReference(policy, clusterProfile)
-
-		l := logger.WithValues("resourceNamespace", policy.GetNamespace(), "resourceName", policy.GetName())
-		l.V(logs.LogDebug).Info("deploying policy")
-
-		err = updateResource(ctx, dr, clusterSummary, policy)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		resource := configv1alpha1.Resource{
-			Name:            policy.GetName(),
-			Namespace:       policy.GetNamespace(),
-			Kind:            policy.GetKind(),
-			Group:           policy.GetObjectKind().GroupVersionKind().Group,
-			LastAppliedTime: &metav1.Time{Time: time.Now()},
+		resource := &configv1alpha1.Resource{
+			Name:      policy.GetName(),
+			Namespace: policy.GetNamespace(),
+			Kind:      policy.GetKind(),
+			Group:     policy.GetObjectKind().GroupVersionKind().Group,
 			Owner: corev1.ObjectReference{
 				Namespace: referencedObject.GetNamespace(),
 				Name:      referencedObject.GetName(),
@@ -230,14 +179,74 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 			},
 		}
 
-		if !exists {
-			createdPolicies = append(createdPolicies, resource)
+		policyHash, err := computePolicyHash(policy)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to compute policy hash %v", err))
+			policyHash = ""
+		}
+
+		// Get policy hash of referenced policy
+		addLabel(policy, ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
+		addLabel(policy, ReferenceLabelName, referencedObject.GetName())
+		addLabel(policy, ReferenceLabelNamespace, referencedObject.GetNamespace())
+		addAnnotation(policy, PolicyHash, policyHash)
+
+		// If policy is namespaced, create namespace if not already existing
+		err = createNamespace(ctx, remoteClient, clusterSummary, policy.GetNamespace())
+		if err != nil {
+			return nil, err
+		}
+
+		// If policy already exists, just get current version and update it by overridding
+		// all metadata and spec.
+		// If policy does not exist already, create it
+		dr, err := getDynamicResourceInterface(remoteConfig, policy)
+		if err != nil {
+			return nil, err
+		}
+
+		var exist bool
+		var currentHash string
+		exist, currentHash, err = validateObjectForUpdate(ctx, dr, policy,
+			referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName())
+		if err != nil {
+			var conflictErr *conflictError
+			ok := errors.As(err, &conflictErr)
+			// In DryRun mode do not stop here, but report the conflict.
+			if ok && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+				conflictResourceReport := generateConflictResourceReport(ctx, dr, resource)
+				reports = append(reports, *conflictResourceReport)
+				continue
+			}
+			return nil, err
+		}
+
+		addOwnerReference(policy, clusterProfile)
+
+		// Update only if object does not exist yet or hash is different
+		if !exist || currentHash != policyHash {
+			err = updateResource(ctx, dr, clusterSummary, policy, logger)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
+
+		if !exist {
+			reports = append(reports,
+				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.CreateResourceAction)})
+		} else if policyHash != currentHash {
+			reports = append(reports,
+				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.UpdateResourceAction)})
 		} else {
-			updatedPolicies = append(updatedPolicies, resource)
+			reports = append(reports,
+				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.NoResourceAction),
+					Message: "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."})
 		}
 	}
 
-	return createdPolicies, updatedPolicies, conflictPolicies, nil
+	return reports, nil
 }
 
 // collectContent collect policies contained in a ConfigMap/Secret.
@@ -290,10 +299,6 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	}
 
 	return policies, nil
-}
-
-func getPolicyName(policyName string, _ *configv1alpha1.ClusterSummary) string {
-	return policyName
 }
 
 func getPolicyInfo(policy *configv1alpha1.Resource) string {
@@ -357,15 +362,11 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var object client.Object
 		reference := &references[i]
 		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
-			configMap := &corev1.ConfigMap{}
-			err = controlClusterClient.Get(ctx,
-				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configMap)
-			object = configMap
+			object, err = getConfigMap(ctx, controlClusterClient,
+				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
 		} else {
-			secret := &corev1.Secret{}
-			err = controlClusterClient.Get(ctx,
-				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
-			object = secret
+			object, err = getSecret(ctx, controlClusterClient,
+				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -383,56 +384,43 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 
 // deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	featureID configv1alpha1.FeatureID, referencedObject []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (created, updated, conflicts []configv1alpha1.Resource, err error) {
+	referencedObject []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
 
 	remoteClient, err := client.New(remoteConfig, client.Options{})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	for i := range referencedObject {
-		var tmpCreated []configv1alpha1.Resource
-		var tmpUpdated []configv1alpha1.Resource
-		var tmpConflicts []configv1alpha1.Resource
+		var tmpResourceReports []configv1alpha1.ResourceReport
 		if referencedObject[i].GetObjectKind().GroupVersionKind().Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
 			configMap := referencedObject[i].(*corev1.ConfigMap)
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
-			tmpCreated, tmpUpdated, tmpConflicts, err = deployContentOfConfigMap(ctx, remoteConfig, c, remoteClient, configMap, clusterSummary, l)
+			tmpResourceReports, err =
+				deployContentOfConfigMap(ctx, remoteConfig, c, remoteClient, configMap, clusterSummary, l)
 		} else {
 			secret := referencedObject[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
-			tmpCreated, tmpUpdated, tmpConflicts, err = deployContentOfSecret(ctx, remoteConfig, c, remoteClient, secret, clusterSummary, l)
+			tmpResourceReports, err =
+				deployContentOfSecret(ctx, remoteConfig, c, remoteClient, secret, clusterSummary, l)
 		}
 
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
-		created = append(created, tmpCreated...)
-		updated = append(updated, tmpUpdated...)
-		conflicts = append(conflicts, tmpConflicts...)
+		reports = append(reports, tmpResourceReports...)
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	deployed := append(append([]configv1alpha1.Resource{}, created...), updated...)
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, featureID, deployed, nil)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return created, updated, conflicts, nil
+	return reports, nil
 }
 
 func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary,
 	deployedGVKs []schema.GroupVersionKind,
-	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.Resource, error) {
+	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
 
 	// Do not use due to metav1.Selector limitation
 	// labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{ClusterSummaryLabelName: clusterSummary.Name}}
@@ -442,12 +430,12 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
-	clusterProfile, err := getClusterProfileOwner(ctx, c, clusterSummary)
+	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, c, clusterSummary)
 	if err != nil {
 		return nil, err
 	}
 
-	undeployed := make([]configv1alpha1.Resource, 0)
+	undeployed := make([]configv1alpha1.ResourceReport, 0)
 
 	dc := discovery.NewDiscoveryClientForConfigOrDie(remoteConfig)
 	groupResources, err := restmapper.GetAPIGroupResources(dc)
@@ -494,9 +482,12 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			// policy would be withdrawn
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) {
-					undeployed = append(undeployed, configv1alpha1.Resource{
-						Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
-						Group: r.GroupVersionKind().Group,
+					undeployed = append(undeployed, configv1alpha1.ResourceReport{
+						Resource: configv1alpha1.Resource{
+							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
+							Group: r.GroupVersionKind().Group,
+						},
+						Action: string(configv1alpha1.DeleteResourceAction),
 					})
 				}
 			} else {
@@ -641,4 +632,60 @@ func decode(encoded []byte) (string, error) {
 	}
 
 	return string(decoded), nil
+}
+
+// computePolicyHash compute policy hash.
+func computePolicyHash(policy *unstructured.Unstructured) (string, error) {
+	b, err := policy.MarshalJSON()
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	_, err = hash.Write(b)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", hash.Sum(nil)), nil
+}
+
+// getConfigMap retrieves any ConfigMap from the given name and namespace.
+func getConfigMap(ctx context.Context, c client.Client, configmapName types.NamespacedName) (*corev1.ConfigMap, error) {
+	configMap := &corev1.ConfigMap{}
+	configMapKey := client.ObjectKey{
+		Namespace: configmapName.Namespace,
+		Name:      configmapName.Name,
+	}
+	if err := c.Get(ctx, configMapKey, configMap); err != nil {
+		return nil, err
+	}
+
+	return configMap, nil
+}
+
+// getSecret retrieves any Secret from the given secret name and namespace.
+func getSecret(ctx context.Context, c client.Client, secretName types.NamespacedName) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	secretKey := client.ObjectKey{
+		Namespace: secretName.Namespace,
+		Name:      secretName.Name,
+	}
+	if err := c.Get(ctx, secretKey, secret); err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
+func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInterface,
+	resource *configv1alpha1.Resource) *configv1alpha1.ResourceReport {
+
+	conflictReport := &configv1alpha1.ResourceReport{
+		Resource: *resource,
+		Action:   string(configv1alpha1.ConflictResourceAction),
+	}
+	message, err := getOwnerMessage(ctx, dr, resource.Name)
+	if err == nil {
+		conflictReport.Message = message
+	}
+	return conflictReport
 }

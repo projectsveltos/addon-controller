@@ -176,7 +176,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -250,7 +250,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		if !chartManager.CanManageChart(clusterSummary, currentChart) {
 			var report *configv1alpha1.ReleaseReport
-			report, err = createReportForUnmanagedHelmRelease(ctx, c, clusterSummary, currentChart)
+			report, err = createReportForUnmanagedHelmRelease(ctx, c, clusterSummary, currentChart, logger)
 			if err != nil {
 				return err
 			} else {
@@ -344,7 +344,8 @@ func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 }
 
 func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary, currentChart *configv1alpha1.HelmChart,
-	remoteClient client.Client, kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
+	currentRelease *releaseInfo, remoteClient client.Client, kubeconfig string,
+	logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	var report *configv1alpha1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
@@ -353,9 +354,12 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 	if err != nil {
 		return nil, err
 	}
+	message := fmt.Sprintf("Current version: %s. Would move to version: %s",
+		currentRelease.ChartVersion, currentChart.ChartVersion)
 	report = &configv1alpha1.ReleaseReport{
 		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.UpgradeHelmAction),
+		Message: message,
 	}
 	return report, nil
 }
@@ -394,7 +398,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 			return nil, nil, err
 		}
 	} else if shouldUpgrade(currentRelease, currentChart) {
-		report, err = handleUpgrade(ctx, clusterSummary, currentChart, remoteClient, kubeconfig, logger)
+		report, err = handleUpgrade(ctx, clusterSummary, currentChart, currentRelease, remoteClient, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -967,8 +971,9 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 		return nil
 	}
 
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d", len(chartDeployed)))
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d",
+		len(chartDeployed)))
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -1152,9 +1157,32 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 	return c.Status().Update(ctx, currentClusterSummary)
 }
 
+// getHelmChartConflictManager returns a message listing ClusterProfile managing an helm chart.
+// - clusterSummaryManagerName is the name of the ClusterSummary currently managing the helm chart
+// (essentially what chartManager.GetManagerForChart returns, given registrations are done using ClusterSummaries)
+// - clusterNamespace is the namespace of the cluster
+func getHelmChartConflictManager(ctx context.Context, c client.Client,
+	clusterNamespace, clusterSummaryManagerName string, logger logr.Logger) string {
+
+	defaultMessage := "Cannot manage it. Currently managed by different ClusterProfile"
+	clusterSummaryManager, err := configv1alpha1.GetClusterSummary(ctx, c, clusterNamespace, clusterSummaryManagerName)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterSummary. Err: %v", clusterSummaryManagerName))
+		return defaultMessage
+	}
+
+	clusterProfileManager, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummaryManager)
+	if err != nil || clusterProfileManager == nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile. Err: %v", clusterSummaryManagerName))
+		return defaultMessage
+	}
+
+	return fmt.Sprintf("Cannot manage it. Currently managed by %s %s", clusterProfileManager.Kind, clusterProfileManager.Name)
+}
+
 // createReportForUnmanagedHelmRelease creates ReleaseReport for an un-managed (by this instance) helm release
 func createReportForUnmanagedHelmRelease(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	currentChart *configv1alpha1.HelmChart) (*configv1alpha1.ReleaseReport, error) {
+	currentChart *configv1alpha1.HelmChart, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
@@ -1165,9 +1193,11 @@ func createReportForUnmanagedHelmRelease(ctx context.Context, c client.Client, c
 		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
 	}
-	if manager, err := chartManager.GetManagerForChart(clusterSummary.Spec.ClusterNamespace,
+	if clusterSummaryManagerName, err := chartManager.GetManagerForChart(clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, currentChart); err == nil {
-		report.Message = fmt.Sprintf("Cannot manage it. Currently managed by %s", manager)
+		report.Message = getHelmChartConflictManager(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummaryManagerName, logger)
+		report.Action = string(configv1alpha1.ConflictHelmAction)
 	} else if currentChart.HelmChartAction == configv1alpha1.HelmChartActionInstall {
 		report.Action = string(configv1alpha1.InstallHelmAction)
 	} else {
@@ -1188,7 +1218,7 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetOwnerClusterProfileName(clusterSummary)
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}

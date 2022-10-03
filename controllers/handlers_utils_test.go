@@ -213,66 +213,102 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
 	})
 
-	It("deployContent in DryRun mode returns policies which will be created, updated and have conflicts", func() {
+	It("deployContent in DryRun mode returns policies which will be created, updated, no action", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 
+		// Create a secret containing two services.
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), secret)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		created, updated, conflict, err := controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		// Because those services do not exist in the workload cluster yet, both will be reported
+		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
+		// created)
+		resourceReports, err := controllers.DeployContent(context.TODO(),
+			testEnv.Config, testEnv.Client, testEnv.Client,
 			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(created)).To(Equal(2))
-		Expect(len(updated)).To(Equal(0))
-		Expect(len(conflict)).To(Equal(0))
+		By("Validating action for all resourceReports is Create")
+		validateResourceReports(resourceReports, 2, 0, 0, 0)
 
-		// Create services
+		// Create services in the workload cluster and have their content exactly match
+		// the content contained in the secret referenced by ClusterProfile.
 		elements := strings.Split(services, "---")
 		for i := range elements {
 			var policy *unstructured.Unstructured
 			policy, err = controllers.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
+			var policyHash string
+			policyHash, err = controllers.ComputePolicyHash(policy)
+			Expect(err).To(BeNil())
+			controllers.AddLabel(policy, controllers.ReferenceLabelKind, secret.Kind)
+			controllers.AddLabel(policy, controllers.ReferenceLabelName, secret.Name)
+			controllers.AddLabel(policy, controllers.ReferenceLabelNamespace, secret.Namespace)
+			controllers.AddAnnotation(policy, controllers.PolicyHash, policyHash)
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
 
-		created, updated, conflict, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		// Because services are now existing in the workload cluster and match the content in
+		// the secret referenced by ClusterProfile, both obejcts will be reported as no action
+		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
+		resourceReports, err = controllers.DeployContent(context.TODO(),
+			testEnv.Config, testEnv.Client, testEnv.Client,
 			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(created)).To(Equal(0))
-		Expect(len(updated)).To(Equal(2))
-		Expect(len(conflict)).To(Equal(0))
+		By("Validating action for all resourceReports is NoAction")
+		validateResourceReports(resourceReports, 0, 0, 2, 0)
 
-		// Mark services as owned by a different secret
-		elements = strings.Split(services, "---")
+		// Update the secret referenced by ClusterProfile by changing the content of the
+		// two services by adding extra label
+		newContent := ""
 		for i := range elements {
 			var policy *unstructured.Unstructured
 			policy, err = controllers.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
-			currentService := &corev1.Service{}
-			Expect(testEnv.Client.Get(context.TODO(),
-				types.NamespacedName{Namespace: policy.GetNamespace(), Name: policy.GetName()}, currentService)).To(Succeed())
-			currentService.Labels = map[string]string{
-				controllers.ReferenceLabelKind:      "Secret",
-				controllers.ReferenceLabelName:      randomString(),
-				controllers.ReferenceLabelNamespace: randomString(),
+			labels := policy.GetLabels()
+			if labels == nil {
+				labels = make(map[string]string)
 			}
-			Expect(testEnv.Client.Update(context.TODO(), currentService)).To(Succeed())
+			labels[randomString()] = randomString()
+			policy.SetLabels(labels)
+			var b []byte
+			b, err = policy.MarshalJSON()
+			Expect(err).To(BeNil())
+			newContent += fmt.Sprintf("%s\n---\n", string(b))
 		}
+		secret = createSecretWithPolicy(namespace, secret.Name, depl, newContent)
+		Expect(testEnv.Update(context.TODO(), secret)).To(Succeed())
 
-		// Wait for cache to be updated
-		Eventually(func() bool {
-			created, updated, conflict, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
-				secret, map[string]string{"service": services}, clusterSummary, klogr.New())
-			return err == nil &&
-				len(created) == 0 && len(updated) == 0 && len(conflict) == 2
-		}, timeout, pollingInterval).Should(BeTrue())
+		// Because objects are now existing in the workload cluster but don't match the content
+		// in the secret referenced by ClusterProfile, both services will be reported as updated
+		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
+		resourceReports, err = controllers.DeployContent(context.TODO(),
+			testEnv.Config, testEnv.Client, testEnv.Client,
+			secret, map[string]string{"service": newContent}, clusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		By("Validating action for all resourceReports is Update")
+		validateResourceReports(resourceReports, 0, 2, 0, 0)
+
+		// Pass a different secret to DeployContent, which means the services are contained in a different Secret
+		// and that is the one referenced by ClusterSummary. DeployContent will report conflicts in this case.
+		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
+		resourceReports, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+			tmpSecret, map[string]string{"service": services}, clusterSummary, klogr.New())
+		Expect(err).To(BeNil())
+		By("Validating action for all resourceReports is Conflict")
+		validateResourceReports(resourceReports, 0, 0, 0, 2)
+		for i := range resourceReports {
+			rr := &resourceReports[i]
+			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object currently deployed because of %s %s/%s.", secret.Kind,
+				secret.Namespace, secret.Name)))
+		}
 	})
 
 	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {
@@ -287,10 +323,10 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		created, updated, _, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
 			secret, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(created) + len(updated)).To(Equal(3))
+		Expect(len(resourceReports)).To(Equal(3))
 	})
 
 	It("deployContentOfConfigMap deploys all policies contained in a Secret", func() {
@@ -305,10 +341,10 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		created, updated, _, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
 			configMap, clusterSummary, klogr.New())
 		Expect(err).To(BeNil())
-		Expect(len(created) + len(updated)).To(Equal(3))
+		Expect(len(resourceReports)).To(Equal(3))
 	})
 
 	It("undeployStaleResources does not remove resources in dryRun mode", func() {
@@ -406,7 +442,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), currentClusterSummary)).To(Succeed())
 
-		clusterRoleName1 := controllers.GetPolicyName(viewClusterRoleName, currentClusterSummary)
+		clusterRoleName1 := viewClusterRoleName
 		clusterRole1 := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterRoleName1,
@@ -418,7 +454,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterRoleName2 := controllers.GetPolicyName(editClusterRoleName, currentClusterSummary)
+		clusterRoleName2 := editClusterRoleName
 		clusterRole2 := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterRoleName2,
@@ -524,3 +560,28 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
+
+// validateResourceReports validates that number of resourceResources with certain actions
+// match the expected number per action
+func validateResourceReports(resourceReports []configv1alpha1.ResourceReport,
+	created, updated, noAction, conflict int) {
+
+	var foundCreated, foundUpdated, foundNoAction, foundConflict int
+	for i := range resourceReports {
+		rr := &resourceReports[i]
+		if rr.Action == string(configv1alpha1.CreateResourceAction) {
+			foundCreated++
+		} else if rr.Action == string(configv1alpha1.UpdateResourceAction) {
+			foundUpdated++
+		} else if rr.Action == string(configv1alpha1.NoResourceAction) {
+			foundNoAction++
+		} else if rr.Action == string(configv1alpha1.ConflictResourceAction) {
+			foundConflict++
+		}
+	}
+
+	Expect(foundCreated).To(Equal(created))
+	Expect(foundUpdated).To(Equal(updated))
+	Expect(foundNoAction).To(Equal(noAction))
+	Expect(foundConflict).To(Equal(conflict))
+}

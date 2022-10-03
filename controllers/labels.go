@@ -55,6 +55,10 @@ const (
 	// PolicyTemplate is the annotation that must be set on a policy when the
 	// policy is a template and needs variable sustitution.
 	PolicyTemplate = "projectsveltos.io/template"
+
+	// PolicyHash is the annotation set on a policy when deployed in a CAPI
+	// cluster.
+	PolicyHash = "projectsveltos.io/hash"
 )
 
 // addLabel adds label to an object
@@ -65,4 +69,14 @@ func addLabel(obj metav1.Object, labelKey, labelValue string) {
 	}
 	labels[labelKey] = labelValue
 	obj.SetLabels(labels)
+}
+
+// addAnnotation adds annotation to an object
+func addAnnotation(obj metav1.Object, annotationKey, annotationValue string) {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[annotationKey] = annotationValue
+	obj.SetAnnotations(annotations)
 }

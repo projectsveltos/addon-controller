@@ -68,7 +68,8 @@ var (
 	DeployContentOfConfigMap     = deployContentOfConfigMap
 	DeployContentOfSecret        = deployContentOfSecret
 	DeployContent                = deployContent
-	GetPolicyName                = getPolicyName
+	AddAnnotation                = addAnnotation
+	ComputePolicyHash            = computePolicyHash
 	GetPolicyInfo                = getPolicyInfo
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
@@ -93,10 +94,9 @@ type (
 )
 
 var (
-	GetClusterProfileOwner = getClusterProfileOwner
-	GetUnstructured        = getUnstructured
-	AddOwnerReference      = addOwnerReference
-	RemoveOwnerReference   = removeOwnerReference
+	GetUnstructured      = getUnstructured
+	AddOwnerReference    = addOwnerReference
+	RemoveOwnerReference = removeOwnerReference
 )
 
 var (

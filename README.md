@@ -221,6 +221,7 @@ A ClusterProfile in DryRun mode will make no changes to matching clusters. It wi
 There is a CRD for that, called *ClusterReport*.
 But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much easier to see what those changes would be.
 
+```
 ./bin/sveltosctl show dryrun
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
 |               CLUSTER               |      RESOURCE TYPE       | NAMESPACE |      NAME      |  ACTION   |            MESSAGE             | CLUSTER FEATURES |
@@ -233,6 +234,7 @@ But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much eas
 |                                     |                          |           |                |           | since last deployment.         |                  |
 | default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | Create    |                                | dryrun           |
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
+```
 
 ### List helm charts and resources deployed in a CAPI Cluster.
 
@@ -301,6 +303,7 @@ items:
 
 As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be used to properly list all deployed features per CAPI cluster:
 
+```
 ./bin/sveltosctl show dryrun
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
 |               CLUSTER               |      RESOURCE TYPE       | NAMESPACE |      NAME      |  ACTION   |            MESSAGE             | CLUSTER FEATURES |
@@ -313,6 +316,7 @@ As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be
 |                                     |                          |           |                |           | since last deployment.         |                  |
 | default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | Create    |                                | dryrun           |
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
+```
 
 ## Detecting conflicts
 Multiple ClusterProfiles can match same CAPI cluster. Because of that misconfiguration can happen and need to be detected.

@@ -50,6 +50,15 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
+## Getting Started
+Just execute, `make create-cluster` and it will:
+1. create a [KIND](https://sigs.k8s.io/kind) cluster;
+2. install ClusterAPI;
+3. create a CAPI Cluster with Docker as infrastructure provider;
+4. install CRD and the Deployment from this project.
+
+# Understanding how to configure and use the project
+
 ## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
 
@@ -337,20 +346,14 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
-## Getting Started
-Just execute, `make create-cluster` and it will:
-1. create a [KIND](https://sigs.k8s.io/kind) cluster;
-2. install ClusterAPI;
-3. create a CAPI Cluster with Docker as infrastructure provider;
-4. install CRD and the Deployment from this project.
+## Getting started on any Kubernetes cluster
+You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
 
-Alternative, you’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
+First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
 
-You also need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+Second you need to install the CRD and Deployment for the project in the management cluster:
 
-Then install the CRD and Deployment for this project in the management cluster:
-
-### Running on the cluster
+### install CRD and Deployment
 1. Install Instances of Custom Resources:
 
 ```sh

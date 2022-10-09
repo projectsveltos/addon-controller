@@ -50,6 +50,9 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
+## Features List
+
+
 ## Getting Started
 Just execute, `make create-cluster` and it will:
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;

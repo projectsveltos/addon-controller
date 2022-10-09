@@ -1,14 +1,12 @@
 # cluster-api-feature-manager
-[ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) provides declarative APIs to simplify controlling the life cycle of a kubernetes cluster.
-Thanks to ClusterAPI, provisioning multiple kubernetes clusters is extremely easy.
+The goal of this project is to provide declarative and policy driven APIs to provision any set of features (like Helm charts, Ingress Controllers, CNIs, Storage Classes and other resources) in a given set of Kubernetes clusters. 
 
-After a cluster is created, certain number of features (like CNI for instances) need to be deployed.
+This project utilizes [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api). 
 
-The goal of this project is to provide declarative APIs to easily provision set of features in a given set of clusters. 
+[ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
-## Description
-We want to provide a declarative way for deploying features in a cluster.  
 
+## Description 
 The idea is simple:
 1. from the management cluster, selects one or more `clusters` with a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors);
 2. lists which `features` need to be deployed on such clusters.

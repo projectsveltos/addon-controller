@@ -1,14 +1,12 @@
 # cluster-api-feature-manager
-[ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) provides declarative APIs to simplify controlling the life cycle of a kubernetes cluster.
-Thanks to ClusterAPI, provisioning multiple kubernetes clusters is extremely easy.
+The goal of this project is to provide declarative and policy driven APIs to provision any set of features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 
-After a cluster is created, certain number of features (like CNI for instances) need to be deployed.
+This project utilizes [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api). 
 
-The goal of this project is to provide declarative APIs to easily provision set of features in a given set of clusters. 
+[ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
-## Description
-We want to provide a declarative way for deploying features in a cluster.  
 
+## Description 
 The idea is simple:
 1. from the management cluster, selects one or more `clusters` with a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors);
 2. lists which `features` need to be deployed on such clusters.
@@ -49,74 +47,18 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
-### ClusterSelector
+## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
 
-## Secrets and ConfigMaps
-When, for instance, we want to deploy a `StorageClass` in a subset of CAPI Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
-
-In this example, we need the StorageClass instance deployed in matching CAPI cluster. We don't need such resource in the management cluster. So where do we put the StorageClass instance in the management class so that ClusterProfile can reference it? We use `Secrets` and `ConfigMaps`.
-
-Both *Secrets* and *ConfigMaps* data fields can be a list of key-value pairs. Any key is acceptable, and as value, there can be multiple objects in yaml or json format.
-
-Secrets are preferred if the data includes sensitive information.
-
-ClusterProfile can reference a ConfigMap and/or Secret, and the ConfigMap/Secret contains the Kubernetes resources we want to deploy in matching CAPI Clusters.
-
-ClusterProfile's PolicyRefs section, is then a list of ConfigMaps/Secrets (identified by name and namespace and kind).
-
-For instance by referecing following *contour-gateway* ConfigMap, a GatewayClass and Gateway instance will be automatically deployed in each matching CAPI clusters.
-
-```
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: contour-gateway
-  namespace: default
-data:
-  gatewayclass.yaml: |
-    kind: GatewayClass
-    apiVersion: gateway.networking.k8s.io/v1beta1
-    metadata:
-      name: contour
-    spec:
-      controllerName: projectcontour.io/projectcontour/contour
-  gateway.yaml: |
-    kind: Namespace
-    apiVersion: v1
-    metadata:
-      name: projectcontour
-    ---
-    kind: Gateway
-    apiVersion: gateway.networking.k8s.io/v1beta1
-    metadata:
-     name: contour
-     namespace: projectcontour
-    spec:
-      gatewayClassName: contour
-      listeners:
-        - name: http
-          protocol: HTTP
-          port: 80
-          allowedRoutes:
-            namespaces:
-              from: All
-```
-
-### Helm charts
-HelmCharts section in above CRD instance, is a list of Helm charts we want to deploy in each CAPI  matching clusters.
-
-[Helm](https://helm.sh) is a CNCF graduated project that serves as a package manager widely used in the community. This project uses [Helm golang SDK](helm.sh/helm/v3/pkg) to deploy all helm charts listed in above ClusterProfile instance.
-
-### SyncMode 
+## SyncMode 
 
 SyncMode has three possible options: `Continuous`, `OneTime` and `DryRun`.
 
-#### OneTime
+### OneTime
 OneTime means that when a CAPI Cluster matches a ClusterProfile instances, all the ClusterProfile's helm charts and Kubernetes resources at that point in time will be installed into the CAPI Cluster.
 Any change to ClusterProfile (for instance adding one more helm chart or referencing a new ConfigMap/Secret) will not be deployed into the already matching CAPI Clusters.
 
-#### Continuous
+### Continuous
 Continuous means that any change to ClusterProfiles (referencing a new helm chart or a new ConfigMap) will be immediately reconciled into the matching CAPI Clusters.
 Reconciled can mean three things: deploy, update or withdraw.
 
@@ -211,7 +153,7 @@ spec:
 
 that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any matching CAPI cluster.
 
-#### DryRun
+### DryRun
 In a dry-run execution, you can execute a workflow so that the entire flow of the execution (all the operations that are executed in an actual run) is shown, but no actual code is executed and there are no side effects. 
 
 Some applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
@@ -235,6 +177,63 @@ But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much eas
 | default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | Create    |                                | dryrun           |
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
 ```
+
+## Secrets and ConfigMaps
+When, for instance, we want to deploy a `StorageClass` in a subset of CAPI Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
+
+In this example, we need the StorageClass instance deployed in matching CAPI cluster. We don't need such resource in the management cluster. So where do we put the StorageClass instance in the management class so that ClusterProfile can reference it? We use `Secrets` and `ConfigMaps`.
+
+Both *Secrets* and *ConfigMaps* data fields can be a list of key-value pairs. Any key is acceptable, and as value, there can be multiple objects in yaml or json format.
+
+Secrets are preferred if the data includes sensitive information.
+
+ClusterProfile can reference a ConfigMap and/or Secret, and the ConfigMap/Secret contains the Kubernetes resources we want to deploy in matching CAPI Clusters.
+
+ClusterProfile's PolicyRefs section, is then a list of ConfigMaps/Secrets (identified by name and namespace and kind).
+
+For instance by referecing following *contour-gateway* ConfigMap, a GatewayClass and Gateway instance will be automatically deployed in each matching CAPI clusters.
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: contour-gateway
+  namespace: default
+data:
+  gatewayclass.yaml: |
+    kind: GatewayClass
+    apiVersion: gateway.networking.k8s.io/v1beta1
+    metadata:
+      name: contour
+    spec:
+      controllerName: projectcontour.io/projectcontour/contour
+  gateway.yaml: |
+    kind: Namespace
+    apiVersion: v1
+    metadata:
+      name: projectcontour
+    ---
+    kind: Gateway
+    apiVersion: gateway.networking.k8s.io/v1beta1
+    metadata:
+     name: contour
+     namespace: projectcontour
+    spec:
+      gatewayClassName: contour
+      listeners:
+        - name: http
+          protocol: HTTP
+          port: 80
+          allowedRoutes:
+            namespaces:
+              from: All
+```
+
+## Helm charts
+HelmCharts section in above CRD instance, is a list of Helm charts we want to deploy in each CAPI  matching clusters.
+
+[Helm](https://helm.sh) is a CNCF graduated project that serves as a package manager widely used in the community. This project uses [Helm golang SDK](helm.sh/helm/v3/pkg) to deploy all helm charts listed in above ClusterProfile instance.
+
 
 ### List helm charts and resources deployed in a CAPI Cluster.
 

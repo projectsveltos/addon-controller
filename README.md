@@ -353,7 +353,7 @@ First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](h
 
 Second you need to install the CRD and Deployment for the project in the management cluster:
 
-### install CRD and Deployment
+### Install CRD and Deployment
 1. Install Instances of Custom Resources:
 
 ```sh

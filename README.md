@@ -1,7 +1,10 @@
 # cluster-api-feature-manager
-The goal of this project is to provide declarative and policy driven APIs to provision any set of features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
+The goal of the project is to provide a declarative and policy driven APIs to provision new features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 
-This project utilizes [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api). 
+## How it works
+The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster. 
+
+The project requires ClusterAPI to be installed in such cluster [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api). 
 
 [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
@@ -46,6 +49,24 @@ spec:
 ```
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+
+## Features List
+1. Flexible cluster selection
+2. One Time or Continuous sync some
+3. Dry Run
+4. Snapshoting
+5. Rollback
+6. Conflict detection
+7. Declaritive API and CLI
+
+## Getting Started
+Just execute, `make create-cluster` and it will:
+1. create a [KIND](https://sigs.k8s.io/kind) cluster;
+2. install ClusterAPI;
+3. create a CAPI Cluster with Docker as infrastructure provider;
+4. install CRD and the Deployment from this project.
+
+# Understanding how to configure and use the project
 
 ## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
@@ -334,20 +355,14 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
-## Getting Started
-If you want to quick start, `make create-cluster` will:
-1. create a [KIND](https://sigs.k8s.io/kind);
-2. install ClusterAPI;
-3. create a CAPI Cluster with Docker as infrastructure provider;
-4. install CRD and the Deployment from this project.
+## Getting started on any Kubernetes cluster
+You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
 
-Alternative, you’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
+First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
 
-ClusterAPI needs to be installed in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+Second you need to install the CRD and Deployment for the project in the management cluster:
 
-Then CRD and Deployment for this project can be installed in the management cluster:
-
-### Running on the cluster
+### Install CRD and Deployment
 1. Install Instances of Custom Resources:
 
 ```sh
@@ -383,13 +398,8 @@ make undeploy
 ## Contributing
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
-2. TODO
 
-### How it works
-This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
 
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) 
-which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster 
 
 ### Test It Out
 1. Install the CRDs into the cluster:

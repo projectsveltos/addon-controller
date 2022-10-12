@@ -4,10 +4,9 @@ The goal of the project is to provide a declarative and policy driven APIs to pr
 ## How it works
 The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster. 
 
-The project requires ClusterAPI to be installed in such cluster [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api). 
+The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. 
 
 [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
-
 
 ## Description 
 The idea is simple:
@@ -18,7 +17,7 @@ where term:
 1. `clusters` represents [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/cluster_types.go);
 2. `features` represents either an [helm release](https://helm.sh) or a Kubernetes resource.
 
-Here is an example of how to require that any CAPI Cluster with label *env: fv* has following features deployed:
+Here is an example of how to require that any CAPI Cluster with label *env: prod* has following features deployed:
 1. Kyverno helm chart (version v2.5.0)
 2. kubernetes resource(s) contained in the referenced Secret: *default/storage-class*
 3. kubernetes resource(s) contained in the referenced ConfigMap: *default/contour*.
@@ -29,7 +28,7 @@ kind: ClusterProfile
 metadata:
   name: demo
 spec:
-  clusterSelector: env=fv
+  clusterSelector: env=prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL: https://kyverno.github.io/kyverno/
@@ -60,11 +59,13 @@ As soon as a CAPI cluster is a match for above ClusterProfile instance, all refe
 7. Declaritive API and CLI
 
 ## Getting Started
-Just execute, `make create-cluster` and it will:
+If you want to test it out, just execute, `make create-cluster` and it will:
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;
 2. install ClusterAPI;
 3. create a CAPI Cluster with Docker as infrastructure provider;
-4. install CRD and the Deployment from this project.
+4. install CRD and the Deployment from this project;
+5. create a ClusterProfile instance;
+6. modify CAPI Cluster labels so to match ClusterProfile selector.
 
 # Understanding how to configure and use the project
 
@@ -81,7 +82,10 @@ Any change to ClusterProfile (for instance adding one more helm chart or referen
 
 ### Continuous
 Continuous means that any change to ClusterProfiles (referencing a new helm chart or a new ConfigMap) will be immediately reconciled into the matching CAPI Clusters.
-Reconciled can mean three things: deploy, update or withdraw.
+Reconciled can mean three things: 
+1. deploy (when CAPI Cluster matches a ClusterProfile) 
+2. update (when ClusterProfile configuration changes and/or any of the referenced ConfigMap/Secret changes);
+3. withdraw (when ClusterProfile stops listing an helm release and/or referencing to a ConfigMap/Secret or any of the referenced ConfigMap/Secret is deleted).
 
 Let's take an example. 
 ClusterProfile is referencing, in the policyRefs section, following ConfigMap containing a Kyverno policy preventing any ServiceAccount (except cluster-admin) to create/delete a Gateway instance.
@@ -129,13 +133,13 @@ data:
                 - DELETE
 ```
 
-Because of above ClusterProfile, such Kyverno ClusterPolicy *no-gateway* will be deployed in any matching CAPI Clusters.
+Because ClusterProfile is referencing above ConfigMap, such Kyverno ClusterPolicy *no-gateway* will be deployed in any matching CAPI Clusters.
 Because the ClusterProfile syncMode is set to Continuous, any modifications to:
 1. ClusterProfiles;
 2. the content of the referenced ConfigMaps/Secret 
-will reflect in an update in any of the matching CAPI Clusters.
+will result in an update in any of the matching CAPI Clusters.
 
-For instance, continuing with above example, if we modify the content of the ConfigMap by changing the validate part to:
+For instance, continuing with above example, if we modify the content of the ConfigMap by changing the validate part to (note we are adding UPDATE on top of CREATE/DELETE):
 
 ```
 apiVersion: v1
@@ -258,7 +262,9 @@ HelmCharts section in above CRD instance, is a list of Helm charts we want to de
 
 ### List helm charts and resources deployed in a CAPI Cluster.
 
-There is many-to-many mapping between Clusters and ClusterProfile: Multiple ClusterProfiles can match with a CAPI cluster; and multiple CAPI clusters can match with a single ClusterProfile.
+There is many-to-many mapping between Clusters and ClusterProfile: 
+- Multiple ClusterProfiles can match with a CAPI cluster; 
+- Multiple CAPI clusters can match with a single ClusterProfile.
 
 A new CRD is introduced to easily visualize which features (either helm charts or kubernetes resources) are deployed in a given CAPI cluster because of one or more ClusterProfiles.
 Such CRD is called *ClusterConfiguration*.
@@ -363,19 +369,7 @@ First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](h
 Second you need to install the CRD and Deployment for the project in the management cluster:
 
 ### Install CRD and Deployment
-1. Install Instances of Custom Resources:
-
-```sh
-kubectl apply -f config/samples/
-```
-
-2. Build and push your image to the location specified by `IMG`:
-	
-```sh
-make docker-build docker-push IMG=<some-registry>/cluster-api-feature-manager:tag
-```
-	
-3. Deploy the controller to the cluster with the image specified by `IMG`:
+1. . Deploy the controller to the cluster with the image specified by `IMG`:
 
 ```sh
 make deploy IMG=<some-registry>/cluster-api-feature-manager:tag
@@ -398,23 +392,6 @@ make undeploy
 ## Contributing
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
-
-
-
-### Test It Out
-1. Install the CRDs into the cluster:
-
-```sh
-make install
-```
-
-1. Run your controller:
-
-```sh
-make deploy
-```
-
-1. Create one or more CAPI clusters and one or more ClusterProfile instances.
 
 ## License
 

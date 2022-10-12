@@ -266,7 +266,22 @@ There is many-to-many mapping between Clusters and ClusterProfile:
 - Multiple ClusterProfiles can match with a CAPI cluster; 
 - Multiple CAPI clusters can match with a single ClusterProfile.
 
-A new CRD is introduced to easily visualize which features (either helm charts or kubernetes resources) are deployed in a given CAPI cluster because of one or more ClusterProfiles.
+As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be used to properly list all deployed features per CAPI cluster:
+
+```
+./bin/sveltosctl show features
++-------------------------------------+--------------------------+-----------+----------------+---------+-------------------------------+------------------+
+|               CLUSTER               |      RESOURCE TYPE       | NAMESPACE |      NAME      | VERSION |             TIME              | CLUSTER PROFILES |
++-------------------------------------+--------------------------+-----------+----------------+---------+-------------------------------+------------------+
+| default/sveltos-management-workload | helm chart               | kyverno   | kyverno-latest | v2.5.0  | 2022-10-11 20:59:18 -0700 PDT | mgianluc         |
+| default/sveltos-management-workload | helm chart               | nginx     | nginx-latest   | 0.14.0  | 2022-10-11 20:59:25 -0700 PDT | mgianluc         |
+| default/sveltos-management-workload | helm chart               | mysql     | mysql          | 9.3.3   | 2022-10-11 20:43:41 -0700 PDT | mgianluc         |
+| default/sveltos-management-workload | :Pod                     | default   | nginx          | N/A     | 2022-10-12 09:33:25 -0700 PDT | mgianluc         |
+| default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | N/A     | 2022-10-12 09:33:25 -0700 PDT | mgianluc         |
++-------------------------------------+--------------------------+-----------+----------------+---------+-------------------------------+------------------+
+```
+
+Otherwise, a new CRD is introduced to easily summarize which features (either helm charts or kubernetes resources) are deployed in a given CAPI cluster because of one or more ClusterProfiles.
 Such CRD is called *ClusterConfiguration*.
 
 There is exactly only one ClusterConfiguration for each CAPI Cluster.
@@ -327,22 +342,6 @@ items:
       clusterProfileName: demo
 ```
 
-As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be used to properly list all deployed features per CAPI cluster:
-
-```
-./bin/sveltosctl show dryrun
-+-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
-|               CLUSTER               |      RESOURCE TYPE       | NAMESPACE |      NAME      |  ACTION   |            MESSAGE             | CLUSTER FEATURES |
-+-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
-| default/sveltos-management-workload | helm release             | kyverno   | kyverno-latest | Install   |                                | dryrun           |
-| default/sveltos-management-workload | helm release             | nginx     | nginx-latest   | Install   |                                | dryrun           |
-| default/sveltos-management-workload | :Pod                     | default   | nginx          | No Action | Object already deployed.       | dryrun           |
-|                                     |                          |           |                |           | And policy referenced by       |                  |
-|                                     |                          |           |                |           | ClusterProfile has not changed |                  |
-|                                     |                          |           |                |           | since last deployment.         |                  |
-| default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | Create    |                                | dryrun           |
-+-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
-```
 
 ## Detecting conflicts
 Multiple ClusterProfiles can match same CAPI cluster. Because of that misconfiguration can happen and need to be detected.

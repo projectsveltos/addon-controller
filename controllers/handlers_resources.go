@@ -72,7 +72,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var deployed []configv1alpha1.Resource
+	deployed := make([]configv1alpha1.Resource, 0)
 	for i := range resourceReports {
 		// If we are here there are no conflicts (and error would have been returned by deployReferencedObjects)
 		deployed = append(deployed, resourceReports[i].Resource)

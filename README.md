@@ -1,6 +1,6 @@
 # cluster-api-feature-manager
 
-<img src="https://github.com/projectsveltos/cluster-api-feature-manager/raw/master/logo/logo.png" width="100">
+<img src="https://github.com/projectsveltos/cluster-api-feature-manager/master/logo/logo.png" width="100">
 
 The goal of the project is to provide a declarative and policy driven APIs to provision new features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 

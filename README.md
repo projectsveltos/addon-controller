@@ -54,7 +54,7 @@ As soon as a CAPI cluster is a match for above ClusterProfile instance, all refe
 
 ## Features List
 1. Flexible cluster selection
-2. One Time or Continuous sync mode
+2. Sync Modes: One Time or Continuous 
 3. Dry Run
 4. Snapshotting
 5. Rollback

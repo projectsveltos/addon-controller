@@ -1,4 +1,7 @@
 # cluster-api-feature-manager
+
+<img src="https://github.com/projectsveltos/cluster-api-feature-manager/raw/master/logo/logo.png" width="100">
+
 The goal of the project is to provide a declarative and policy driven APIs to provision new features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 
 ## How it works
@@ -51,7 +54,7 @@ As soon as a CAPI cluster is a match for above ClusterProfile instance, all refe
 
 ## Features List
 1. Flexible cluster selection
-2. One Time or Continuous sync mode
+2. Sync Modes: One Time or Continuous 
 3. Dry Run
 4. Snapshotting
 5. Rollback

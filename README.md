@@ -1,6 +1,6 @@
 # cluster-api-feature-manager
 
-<img src="https://github.com/projectsveltos/cluster-api-feature-manager/raw/master/logo/logo.png" width="100">
+![sveltos logo](./logos/logo.png)
 
 The goal of the project is to provide a declarative and policy driven APIs to provision new features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 
@@ -51,6 +51,8 @@ spec:
 ```
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+
+To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haWKM)
 
 ## Features List
 1. Flexible cluster selection
@@ -205,6 +207,8 @@ But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much eas
 | default/sveltos-management-workload | kyverno.io:ClusterPolicy |           | no-gateway     | Create    |                                | dryrun           |
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
 ```
+
+To see DryRun mode in action, have a look at this [video](https://youtu.be/2Ru8rN6b7ew)
 
 ## Secrets and ConfigMaps
 When, for instance, we want to deploy a `StorageClass` in a subset of CAPI Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
@@ -369,6 +373,13 @@ You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing,
 First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
 
 Second you need to install the CRD and Deployment for the project in the management cluster:
+
+### Deploy YAML
+You can post the YAML to the management cluster
+
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+```
 
 ### Install CRD and Deployment
 1. . Deploy the controller to the cluster with the image specified by `IMG`:

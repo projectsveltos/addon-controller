@@ -208,7 +208,7 @@ But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much eas
 +-------------------------------------+--------------------------+-----------+----------------+-----------+--------------------------------+------------------+
 ```
 
-To see DryRun mode in action, have a look at this [video](https://youtu.be/2Ru8rN6b7ew)
+To see DryRun mode in action, have a look at this [video](https://youtu.be/gfWN_QJAL6k)
 
 ## Secrets and ConfigMaps
 When, for instance, we want to deploy a `StorageClass` in a subset of CAPI Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
@@ -401,6 +401,26 @@ UnDeploy the controller to the cluster:
 ```sh
 make undeploy
 ```
+
+## Compatibility with Cluster API and Kubernetes Versions
+
+Sveltos is compatible with the following versions of Cluster API:
+
+|  | Cluster API `v1beta1` (`v1.0.x`) | Cluster API `v1beta1` (`v1.1.x`)  | Cluster API `v1beta1` (`v1.2.x`) |
+|---|---|---|---|
+|Sveltos `v1.0.0` | ✓ | ✓ | ✓ |
+
+This controller version can install and manage the following versions of Kubernetes:
+
+|  | Sveltos `v1.0.0` |
+|---|---|
+| Kubernetes 1.23.x | ✓ |
+| Kubernetes 1.24.x | ✓ |
+| Kubernetes 1.25.x | ✓ |
+
+Test status:
+
+* `✓` tested
 
 ## Contributing
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:

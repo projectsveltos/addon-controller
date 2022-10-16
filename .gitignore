@@ -27,3 +27,5 @@ bin/manager
 
 manager_image_patch.yaml-e
 manager_pull_policy.yaml-e
+
+version.txt

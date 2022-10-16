@@ -55,11 +55,11 @@ As soon as a CAPI cluster is a match for above ClusterProfile instance, all refe
 To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haWKM)
 
 ## Features List
-1. Flexible cluster selection
+1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))
 2. Sync Modes: One Time or Continuous 
-3. Dry Run
-4. Snapshotting
-5. Rollback
+3. Dry Run  (see [video](https://youtu.be/gfWN_QJAL6k))
+4. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
+5. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
 6. Conflict detection
 7. Declaritive API and CLI
 
@@ -408,11 +408,11 @@ Sveltos is compatible with the following versions of Cluster API:
 
 |  | Cluster API `v1beta1` (`v1.0.x`) | Cluster API `v1beta1` (`v1.1.x`)  | Cluster API `v1beta1` (`v1.2.x`) |
 |---|---|---|---|
-|Sveltos `v1.0.0` | ✓ | ✓ | ✓ |
+|Sveltos `v0.1.0` | ✓ | ✓ | ✓ |
 
 This controller version can install and manage the following versions of Kubernetes:
 
-|  | Sveltos `v1.0.0` |
+|  | Sveltos `v0.1.0` |
 |---|---|
 | Kubernetes 1.23.x | ✓ |
 | Kubernetes 1.24.x | ✓ |

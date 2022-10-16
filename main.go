@@ -19,11 +19,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"sync"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
+	_ "embed"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/types"
@@ -47,6 +50,10 @@ var (
 	probeAddr            string
 	workers              int
 	concurrentReconciles int
+
+	//go:generate bash hack/get_version.sh
+	//go:embed version.txt
+	version string
 )
 
 const (
@@ -132,7 +139,7 @@ func main() {
 
 	setupIndexes(ctx, mgr)
 
-	setupLog.Info("starting manager")
+	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

@@ -130,6 +130,7 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt ## Generate WebhookCon
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	go generate
 
 .PHONY: fmt
 fmt: $(GOIMPORTS) ## Run go fmt against code.
@@ -265,6 +266,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
+	go generate
 	docker build -t $(CONTROLLER_IMG)-$(ARCH):$(TAG) .
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(MAKE) set-manifest-pull-policy

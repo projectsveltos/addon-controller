@@ -118,6 +118,7 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTE
 clean: ## Remove all built tools
 	rm -rf $(TOOLS_BIN_DIR)/*
 	rm -rf $(GENERATED_FILES)
+	rm -rf version.txt
 
 ##@ Development
 
@@ -129,8 +130,8 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt ## Generate WebhookCon
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 	go generate
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 .PHONY: fmt
 fmt: $(GOIMPORTS) ## Run go fmt against code.

@@ -320,7 +320,7 @@ var _ = Describe("Template Utils", func() {
 		// When instantiating later on, cf.Spec.PolicyRef will be the value of instantiation
 		// Name of following clusterProfile is set to Cluster.Name and it is what
 		// cfSubstituitionRule expect it.
-		cf := &configv1alpha1.ClusterProfile{
+		cp := &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: cluster.Name,
 			},
@@ -332,11 +332,11 @@ var _ = Describe("Template Utils", func() {
 				},
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), cf))
-		Expect(waitForObject(ctx, testEnv.Client, cf)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), cp))
+		Expect(waitForObject(ctx, testEnv.Client, cp)).To(Succeed())
 
 		By("Creating get-cluster-feature SubstitutionRule")
-		cfSubstituitionRule := &configv1alpha1.SubstitutionRule{
+		substituitionRule := &configv1alpha1.SubstitutionRule{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "get-cluster-feature",
 			},
@@ -346,8 +346,8 @@ var _ = Describe("Template Utils", func() {
 				Name:       "Cluster:/metadata/name",
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), cfSubstituitionRule)).To(Succeed())
-		Expect(waitForObject(ctx, testEnv.Client, cf)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), substituitionRule)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, substituitionRule)).To(Succeed())
 
 		By("Instantiate a policy that requires a slice as substitution value")
 		policy, err := controllers.InstantiateTemplate(context.TODO(), testEnv.Client, testEnv.Config,
@@ -361,6 +361,6 @@ var _ = Describe("Template Utils", func() {
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), currentClusterProfile)).To(Succeed())
 		Expect(len(currentClusterProfile.Spec.PolicyRefs)).ToNot(BeZero())
-		Expect(len(currentClusterProfile.Spec.PolicyRefs)).To(Equal(len(cf.Spec.PolicyRefs)))
+		Expect(len(currentClusterProfile.Spec.PolicyRefs)).To(Equal(len(cp.Spec.PolicyRefs)))
 	})
 })

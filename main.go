@@ -43,6 +43,11 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
+//go:generate bash hack/get_version.sh
+//go:embed version.txt
+//nolint:grouper // run generate embed
+var version string
+
 var (
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
@@ -50,10 +55,6 @@ var (
 	probeAddr            string
 	workers              int
 	concurrentReconciles int
-
-	//go:generate bash hack/get_version.sh
-	//go:embed version.txt
-	version string
 )
 
 const (

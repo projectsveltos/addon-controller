@@ -1,46 +1,30 @@
-name: "🐛 Bug Report"
-description: Create a new ticket for a bug.
-title: "🐛 [BUG] - <title>"
-labels: [
-  "bug"
-]
-body:
-  - type: textarea
-    id: description
-    attributes:
-      label: "Description"
-      description: Please enter an explicit description of your issue
-      placeholder: Short and explicit description of your incident...
-    validations:
-      required: true
-  - type: textarea
-    id: reprod
-    attributes:
-      label: "Reproduction steps"
-      description: Please enter an explicit description of your issue
-      value: |
-        1. Running version ...
-        2. Step 1
-        3. Step 2 
-        4. See error
-      render: bash
-    validations:
-      required: true
-  - type: textarea
-    id: screenshot
-    attributes:
-      label: "Screenshots"
-      description: If applicable, add screenshots to help explain your problem.
-      value: |
-        ![DESCRIPTION](LINK.png)
-      render: bash
-    validations:
-      required: false
-  - type: textarea
-    id: logs
-    attributes:
-      label: "Logs"
-      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
-      render: bash
-    validations:
-      required: false
+---
+name: Bug issue
+about: Use this template for tracking a bug.
+title: "BUG: [bug subject here]"
+labels: bug, untriaged
+---
+
+# Problem Description
+
+_INSTRUCTIONS: Describe the problem in as much detail as possible, including the actions which caused the problem, and any other information you believe would be helpful in reproducing the problem._
+
+``
+[insert problem description here]
+``
+
+# System Information
+
+_INSTRUCTIONS: Provide the system and application information below._
+
+CLUSTERAPI VERSION: ` [e.g. v1.2.4 etc.] `
+SVELTOS VERSION: ` [e.g. PRODUCT version X.Y.Z] `
+KUBERNETES VERSION: ` [e.g. v1.25 etc.] `
+
+# Logs
+
+_INSTRUCTIONS: Provide any additional information you think would be helpful below.  Large files, logs, etc. can be attached to this issue so long as they meet the GitHub attachment guidelines described here: https://help.github.com/en/github/managing-your-work-on-github/file-attachments-on-issues-and-pull-requests_
+
+``
+[insert additional information here]
+``

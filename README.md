@@ -385,13 +385,6 @@ You can post the YAML to the management cluster
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
 
-### Install CRD and Deployment
-1. . Deploy the controller to the cluster with the image specified by `IMG`:
-
-```sh
-make deploy IMG=<some-registry>/cluster-api-feature-manager:tag
-```
-
 ### Uninstall CRDs
 To delete the CRDs from the cluster:
 

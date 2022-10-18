@@ -5,7 +5,7 @@
 The goal of the project is to provide a declarative and policy driven APIs to provision new features (like Helm charts, ingress controllers, CNIs, storage classes and other resources) in a given set of Kubernetes clusters. 
 
 ## How it works
-The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster. 
+The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 
 
 The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. 
 
@@ -56,12 +56,11 @@ To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haW
 
 ## Features List
 1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))
-2. Sync Modes: One Time or Continuous 
-3. Dry Run  (see [video](https://youtu.be/gfWN_QJAL6k))
-4. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
-5. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
-6. Conflict detection
-7. Declaritive API and CLI
+2. Sync Modes: OneTime, Continuous or DryRun  (see [video](https://youtu.be/gfWN_QJAL6k))
+3. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
+4. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
+5. Conflict detection
+6. Declaritive API and CLI
 
 ## Getting Started
 If you want to test it out, just execute, `make create-cluster` and it will:
@@ -82,7 +81,7 @@ The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io
 SyncMode has three possible options: `Continuous`, `OneTime` and `DryRun`.
 
 ### OneTime
-OneTime means that when a CAPI Cluster matches a ClusterProfile instances, all the ClusterProfile's helm charts and Kubernetes resources at that point in time will be installed into the CAPI Cluster.
+OneTime means that when a CAPI Cluster matches a ClusterProfile instance, all the ClusterProfile's helm charts and Kubernetes resources at that point in time will be installed into the CAPI Cluster.
 Any change to ClusterProfile (for instance adding one more helm chart or referencing a new ConfigMap/Secret) will not be deployed into the already matching CAPI Clusters.
 
 ### Continuous
@@ -357,7 +356,7 @@ For instance:
 1. ClusterProfile A references ConfigMap A containing a Kyverno ClusterPolicy called *no-gateway"
 2. ClusterProfile B references ConfigMap B containing a Kyverno ClusterPolicy called *no-gateway"
 
-In such case, ClusterProfile will be allowed to deploy the Kyverno ClusterPolicy, while ClusterProfile B will report a conflict.
+In such case, ClusterProfile A will be allowed to deploy the Kyverno ClusterPolicy, while ClusterProfile B will report a conflict.
 
 Please note that in following example there is no conflict since both ClusterProfiles are referencing same ConfigMap:
 1. ClusterProfile A references ConfigMap A containing a Kyverno ClusterPolicy called *no-gateway"

@@ -1,3 +1,8 @@
+[![CI](https://github.com/projectsveltos/sveltos-manager/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/sveltos-manager/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/sveltos-manager)](https://goreportcard.com/report/github.com/projectsveltos/sveltos-manager)
+[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-green)](https://projectsveltos.slack.com/archives/C046L9HFJFP)
+
+
 # cluster-api-feature-manager
 
 ![sveltos logo](./logos/logo.png)
@@ -421,7 +426,7 @@ Test status:
 
 * `✓` tested
 
-## Contributing
+## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
 2. Chat with us on the Slack in the [#projectsveltos](https://projectsveltos.slack.com/archives/C046L9HFJFP) channel

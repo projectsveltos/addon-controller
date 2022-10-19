@@ -84,19 +84,24 @@ The command will:
 
 ## Install Sveltos on Docker Desktop
 First, enable Kubernetes in Docker Desktop
+```
 1. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
 2. select Kubernetes from the left sidebar.
 3. next to Enable Kubernetes, select the checkbox.
 4. select Apply & Restart to save the settings and then click Install to confirm.
+```
 
 Second, install ClusterAPI
-- Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
+```
+Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
+```
 
 Third, initialize the management cluster
+```
 - clusterctl init --infrastructure docker
+```
 
 Fourth, Install Sveltos
-- 
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```

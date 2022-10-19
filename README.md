@@ -384,7 +384,7 @@ Second you need to install the CRD and Deployment for the project in the managem
 You can post the YAML to the management cluster
 
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/v0.1.0/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
 
 ### Uninstall CRDs

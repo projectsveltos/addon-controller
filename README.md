@@ -7,7 +7,7 @@
 
 ![sveltos logo](./logos/logo.png)
 
-Sveltos is a policy driven approach to manage kubernetes resources and helm charts in ClusterAPI clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes. Sveltos powered by [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api).
+Sveltos is a policy driven approach to manage kubernetes resources and helm charts in ClusterAPI clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes. Sveltos is powered by [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api).
 
 ## How it works
 The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 

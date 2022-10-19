@@ -7,9 +7,10 @@
 
 ![sveltos logo](./logos/logo.png)
 
+## What it is
 Sveltos is tool for policy driven management of kubernetes resources and helm charts in [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) powered Kubernetes clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
 
-## How it works
+## how it works
 The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 
 
 The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
@@ -80,7 +81,7 @@ If you want to test it out, just execute, `make create-cluster` and it will:
 5. create a ClusterProfile instance;
 6. modify CAPI Cluster labels so to match ClusterProfile selector.
 
-## Getting started on any Kubernetes cluster
+## Install Sveltos 
 If you want to install it on local or remote Kubernetes cluster.
 
 1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
@@ -91,7 +92,7 @@ If you want to install it on local or remote Kubernetes cluster.
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
 
-# Understanding how to configure and use the project
+# Understanding how to configure and use Sveltos
 
 ## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.

@@ -93,7 +93,7 @@ First, enable Kubernetes in Docker Desktop
 
 Second, install ClusterAPI
 ```
-Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
+Follow instruction https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
 ```
 
 Third, initialize the management cluster

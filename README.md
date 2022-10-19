@@ -7,14 +7,13 @@
 
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/master/logos/logo.png" width="100">
 
-Sveltos is a policy driven approach to manage kubernetes resources and helm charts in ClusterAPI clusters. Sveltos provides declarative APIs to provision new features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. 
+## What it is
+Sveltos is tool for policy driven management of kubernetes resources and helm charts in [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) powered Kubernetes clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
 
 ## How it works
 The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 
 
-The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. 
-
-[ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
+The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
 ## Description 
 ![sveltos logo](./doc/sveltos.png)
@@ -59,7 +58,11 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
-To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haWKM)
+## Sveltos in action
+
+![Sveltos in action](doc/SveltosOverview.gif)
+
+To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr9haWKM)
 
 ## Features List
 1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))
@@ -69,7 +72,7 @@ To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haW
 5. Conflict detection
 6. Declaritive API and CLI
 
-## Getting Started
+## Test Sveltos on your laptop
 If you want to test it out, just execute, `make create-cluster` and it will:
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;
 2. install ClusterAPI;
@@ -78,7 +81,18 @@ If you want to test it out, just execute, `make create-cluster` and it will:
 5. create a ClusterProfile instance;
 6. modify CAPI Cluster labels so to match ClusterProfile selector.
 
-# Understanding how to configure and use the project
+## Install Sveltos 
+If you want to install it on local or remote Kubernetes cluster.
+
+1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+
+2. install the CRD and Deployment in the management cluster applying this YAML file:
+
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+```
+
+# Understanding how to configure and use Sveltos
 
 ## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
@@ -192,7 +206,7 @@ that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any 
 ### DryRun
 In a dry-run execution, you can execute a workflow so that the entire flow of the execution (all the operations that are executed in an actual run) is shown, but no actual code is executed and there are no side effects. 
 
-Some applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
+Same applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
 
 A ClusterProfile in DryRun mode will make no changes to matching clusters. It will though generate a report indicating, per CAPI Cluster, what those changes would be. 
 
@@ -373,19 +387,6 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
-## Getting started on any Kubernetes cluster
-You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-
-First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
-
-Second you need to install the CRD and Deployment for the project in the management cluster:
-
-### Deploy YAML
-You can post the YAML to the management cluster
-
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
-```
 
 ### Uninstall CRDs
 To delete the CRDs from the cluster:

@@ -59,6 +59,7 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
+## Sveltos in action
 
 ![Sveltos in action](doc/SveltosOverview.gif)
 

@@ -17,6 +17,8 @@ The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api
 [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
 ## Description 
+![sveltos logo](./SveltosSlide.png)
+
 The idea is simple:
 1. from the management cluster, selects one or more `clusters` with a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors);
 2. lists which `features` need to be deployed on such clusters.

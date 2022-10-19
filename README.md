@@ -72,10 +72,10 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 5. Conflict detection
 6. Declaritive API and CLI
 
-## Install Sveltos on your laptop using the make cmnd
+## Install Sveltos on your laptop using the make cmd
 Just execute `make create-cluster` 
 The command will:
-- create a [KIND](https://sigs.k8s.io/kind) cluster;
+- create a [KIND](https://sigs.k8s.io/kind) cluster on your laptop;
 - install ClusterAPI;
 - create a CAPI Cluster with Docker as infrastructure provider;
 - install CRD and the Deployment from this project;
@@ -116,7 +116,7 @@ https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
 
 Second, initialize the management cluster
 ```
-clusterctl init --infrastructure docker
+https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
 ```
 
 Third, install Sveltos applying this manifest YAML

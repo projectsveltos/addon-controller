@@ -59,7 +59,10 @@ spec:
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
-To see Sveltos in action, have a look at this [video](https://youtu.be/Ai5Mr9haWKM)
+
+![Sveltos in action](doc/SveltosOverview.gif)
+
+To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr9haWKM)
 
 ## Features List
 1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))

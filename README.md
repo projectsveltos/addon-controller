@@ -73,7 +73,7 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 5. Conflict detection
 6. Declaritive API and CLI
 
-## Getting Started
+## Test it out on your local laptop
 If you want to test it out, just execute, `make create-cluster` and it will:
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;
 2. install ClusterAPI;
@@ -81,6 +81,20 @@ If you want to test it out, just execute, `make create-cluster` and it will:
 4. install CRD and the Deployment from this project;
 5. create a ClusterProfile instance;
 6. modify CAPI Cluster labels so to match ClusterProfile selector.
+
+## Getting started on any Kubernetes cluster
+If you want to install it on local or remote Kubernetes cluster.
+
+1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+
+2. install the CRD and Deployment in the management cluster:
+
+### Deploy YAML
+Just post this YAML to the management cluster
+
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+```
 
 # Understanding how to configure and use the project
 
@@ -377,19 +391,6 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
-## Getting started on any Kubernetes cluster
-You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-
-First you need to install ClusterAPI in such cluster. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
-
-Second you need to install the CRD and Deployment for the project in the management cluster:
-
-### Deploy YAML
-You can post the YAML to the management cluster
-
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
-```
 
 ### Uninstall CRDs
 To delete the CRDs from the cluster:

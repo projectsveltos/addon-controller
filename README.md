@@ -206,7 +206,7 @@ that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any 
 ### DryRun
 In a dry-run execution, you can execute a workflow so that the entire flow of the execution (all the operations that are executed in an actual run) is shown, but no actual code is executed and there are no side effects. 
 
-Some applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
+Same applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
 
 A ClusterProfile in DryRun mode will make no changes to matching clusters. It will though generate a report indicating, per CAPI Cluster, what those changes would be. 
 

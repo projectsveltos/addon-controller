@@ -1,7 +1,7 @@
 [![CI](https://github.com/projectsveltos/sveltos-manager/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/sveltos-manager/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/sveltos-manager)](https://goreportcard.com/report/github.com/projectsveltos/sveltos-manager)
-[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://projectsveltos.slack.com/archives/C046L9HFJFP)
-
+[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](http://projectsveltos.slack.com/)
+[![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
 
 # Sveltos
 
@@ -17,7 +17,7 @@ The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api
 [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
 
 ## Description 
-![sveltos logo](./SveltosSlide.png)
+![sveltos logo](./doc/sveltos.png)
 
 The idea is simple:
 1. from the management cluster, selects one or more `clusters` with a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors);
@@ -384,7 +384,7 @@ Second you need to install the CRD and Deployment for the project in the managem
 You can post the YAML to the management cluster
 
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/v0.1.0/manifest/manifest.yaml
 ```
 
 ### Uninstall CRDs
@@ -424,7 +424,7 @@ Test status:
 ## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
-2. Chat with us on the Slack in the [#projectsveltos](https://projectsveltos.slack.com/archives/C046L9HFJFP) channel
+2. Chat with us on the Slack in the [#projectsveltos](http://projectsveltos.slack.com/) channel
 
 ## License
 

@@ -5,7 +5,7 @@
 
 # Sveltos
 
-![sveltos logo](./logos/logo.png)
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/master/logos/logo.png" width="100">
 
 Sveltos is a policy driven approach to manage kubernetes resources and helm charts in ClusterAPI clusters. Sveltos provides declarative APIs to provision new features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. 
 

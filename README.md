@@ -89,7 +89,7 @@ If you want to install it on local or remote Kubernetes cluster.
 2. install the CRD and Deployment in the management cluster applying this YAML file:
 
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/dev/manifest/manifest.yaml
 ```
 
 # Understanding how to configure and use Sveltos

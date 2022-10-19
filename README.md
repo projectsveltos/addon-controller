@@ -1,11 +1,11 @@
 [![CI](https://github.com/projectsveltos/sveltos-manager/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/sveltos-manager/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/sveltos-manager)](https://goreportcard.com/report/github.com/projectsveltos/sveltos-manager)
-[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](http://projectsveltos.slack.com/)
+[![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)]([http://projectsveltos.slack.com/](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q))
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
 
 # Sveltos
 
-![sveltos logo](./logos/logo.png)
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/master/logos/logo.png" width="100">
 
 Sveltos is a policy driven approach to manage kubernetes resources and helm charts in ClusterAPI clusters. Sveltos provides declarative APIs to provision new features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. 
 
@@ -424,7 +424,7 @@ Test status:
 ## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
-2. Chat with us on the Slack in the [#projectsveltos](http://projectsveltos.slack.com/) channel
+2. Chat with us on the Slack in the [#projectsveltos]([http://projectsveltos.slack.com/](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)) channel
 
 ## License
 

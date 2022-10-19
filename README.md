@@ -87,10 +87,7 @@ If you want to install it on local or remote Kubernetes cluster.
 
 1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
 
-2. install the CRD and Deployment in the management cluster:
-
-### Deploy YAML
-Just post this YAML to the management cluster
+2. install the CRD and Deployment in the management cluster applying this YAML file:
 
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml

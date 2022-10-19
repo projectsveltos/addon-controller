@@ -98,7 +98,7 @@ Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#
 
 Third, initialize the management cluster
 ```
-- clusterctl init --infrastructure docker
+clusterctl init --infrastructure docker
 ```
 
 Fourth, Install Sveltos

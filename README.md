@@ -74,29 +74,30 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 
 ## Install Sveltos on your laptop using the make cmnd
 Just execute `make create-cluster` 
-The command will:`
-1. create a [KIND](https://sigs.k8s.io/kind) cluster;
-2. install ClusterAPI;
-3. create a CAPI Cluster with Docker as infrastructure provider;
-4. install CRD and the Deployment from this project;
-5. create a ClusterProfile instance;
-6. modify CAPI Cluster labels so to match ClusterProfile selector.`
+The command will:
+- create a [KIND](https://sigs.k8s.io/kind) cluster;
+- install ClusterAPI;
+- create a CAPI Cluster with Docker as infrastructure provider;
+- install CRD and the Deployment from this project;
+- create a ClusterProfile instance;
+- modify CAPI Cluster labels so to match ClusterProfile selector.
 
 ## Install Sveltos on Docker Desktop
 First, enable Kubernetes in Docker Desktop
-a. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
-b. select Kubernetes from the left sidebar.
-c. next to Enable Kubernetes, select the checkbox.
-d. select Apply & Restart to save the settings and then click Install to confirm.
+1. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
+2. select Kubernetes from the left sidebar.
+3. next to Enable Kubernetes, select the checkbox.
+4. select Apply & Restart to save the settings and then click Install to confirm.
 
 Second, install ClusterAPI
-a. Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
+- Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
 
 Third, initialize the management cluster
-a. clusterctl init --infrastructure docker
+- clusterctl init --infrastructure docker
 
 Fourth, Install Sveltos
-a. ```
+- 
+```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
 

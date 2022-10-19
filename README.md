@@ -96,6 +96,10 @@ Second, install ClusterAPI
 (https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
 ```
 
+```
+[https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl](Second,%20install%20ClusterAPI%20%60%60%60%20%28https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl%29%20%60%60%60)
+```
+
 Third, initialize the management cluster
 ```
 clusterctl init --infrastructure docker

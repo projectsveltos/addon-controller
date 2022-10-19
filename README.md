@@ -72,17 +72,36 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 5. Conflict detection
 6. Declaritive API and CLI
 
-## Test Sveltos on your laptop
-If you want to test it out, just execute, `make create-cluster` and it will:
+## Install Sveltos on your laptop using the make cmnd
+Just execute `make create-cluster` 
+The command will:`
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;
 2. install ClusterAPI;
 3. create a CAPI Cluster with Docker as infrastructure provider;
 4. install CRD and the Deployment from this project;
 5. create a ClusterProfile instance;
-6. modify CAPI Cluster labels so to match ClusterProfile selector.
+6. modify CAPI Cluster labels so to match ClusterProfile selector.`
 
-## Install Sveltos 
-If you want to install it on local or remote Kubernetes cluster.
+## Install Sveltos on Docker Desktop
+First, enable Kubernetes in Docker Desktop
+a. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
+b. select Kubernetes from the left sidebar.
+c. next to Enable Kubernetes, select the checkbox.
+d. select Apply & Restart to save the settings and then click Install to confirm.
+
+Second, install ClusterAPI
+a. Follow instruction [here](https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl)
+
+Third, initialize the management cluster
+a. clusterctl init --infrastructure docker
+
+Fourth, Install Sveltos
+a. ```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+```
+
+
+## Install Sveltos on any local or remote Kubernetes cluster.
 
 1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
 

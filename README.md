@@ -101,7 +101,7 @@ Third, initialize the management cluster
 clusterctl init --infrastructure docker
 ```
 
-Fourth, Install Sveltos
+Fourth, install Sveltos applying this manifest YAML
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
@@ -109,10 +109,17 @@ kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-
 
 ## Install Sveltos on any local or remote Kubernetes cluster.
 
-1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+First, install ClusterAPI
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+```
 
-2. install the CRD and Deployment in the management cluster applying this YAML file:
+Second, initialize the management cluster
+```
+clusterctl init --infrastructure docker
+```
 
+Third, install Sveltos applying this manifest YAML
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```

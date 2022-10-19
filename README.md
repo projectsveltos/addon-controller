@@ -73,7 +73,7 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 5. Conflict detection
 6. Declaritive API and CLI
 
-## Test it out on your local laptop
+## Test Sveltos on your laptop
 If you want to test it out, just execute, `make create-cluster` and it will:
 1. create a [KIND](https://sigs.k8s.io/kind) cluster;
 2. install ClusterAPI;

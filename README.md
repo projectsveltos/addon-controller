@@ -70,7 +70,7 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 3. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
 4. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
 5. Conflict detection
-6. Declaritive API and CLI
+6. Declaritive API and CLI [sveltosctl](https://github.com/projectsveltos/sveltosctl)
 
 ## Install Sveltos on your laptop using the make cmd
 Just execute `make create-cluster` 

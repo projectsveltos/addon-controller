@@ -64,6 +64,12 @@ func (r PolicyRef) String() string {
 	return r.Kind + "-" + r.Namespace + "-" + r.Name
 }
 
+type DryRunReconciliationError struct{}
+
+func (m *DryRunReconciliationError) Error() string {
+	return "mode is DryRun. Nothing is reconciled"
+}
+
 // SyncMode specifies how features are synced in a workload cluster.
 // +kubebuilder:validation:Enum:=OneTime;Continuous;DryRun
 type SyncMode string

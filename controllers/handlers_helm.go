@@ -198,7 +198,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	return fmt.Errorf("mode is DryRun. Nothing is reconciled")
+	return &configv1alpha1.DryRunReconciliationError{}
 }
 
 func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -321,7 +321,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 
 	// In DryRun mode always return an error.
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
+		return &configv1alpha1.DryRunReconciliationError{}
 	}
 	return nil
 }

@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -501,7 +502,10 @@ var _ = Describe("HandlersHelm", func() {
 		// such release has never been installed.
 		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, nil, kubeconfig, klogr.New())
 		Expect(err).ToNot(BeNil())
-		Expect(err.Error()).To(Equal("mode is DryRun. Nothing is reconciled"))
+
+		var druRunError *configv1alpha1.DryRunReconciliationError
+		ok := errors.As(err, &druRunError)
+		Expect(ok).To(BeTrue())
 
 		currentClusterReport := &configv1alpha1.ClusterReport{}
 		Eventually(func() bool {

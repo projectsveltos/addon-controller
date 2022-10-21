@@ -126,7 +126,7 @@ https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-
 
 Third, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/dev/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
 ```
 
 # Understanding how to configure and use Sveltos

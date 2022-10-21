@@ -106,6 +106,11 @@ Fourth, install Sveltos applying this manifest YAML
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
 ```
 
+Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/service_monitor.yaml
+```
+
 
 ## Install Sveltos on any local or remote Kubernetes cluster.
 
@@ -419,6 +424,13 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
+
+## Metrics
+Sveltos exposes following metrics:
+1. projectsveltos_program_resources_time_seconds: time to deploy resources in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
+2. projectsveltos_program_charts_time_seconds: time to deploy Helm charts in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
+3. *clusterNamespace*_*clusterName*_program_resources_time_seconds: time to deploy resources in a specific CAPI clusters (all ClusterProfiles considered);
+4. *clusterNamespace*_*clusterName*_program_charts_time_seconds: time to deploy Helm charts in a specific CAPI clusters (all ClusterProfiles considered);
 
 ### Uninstall CRDs
 To delete the CRDs from the cluster:

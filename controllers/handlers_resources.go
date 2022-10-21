@@ -101,7 +101,7 @@ func deployResources(ctx context.Context, c client.Client,
 	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
+		return &configv1alpha1.DryRunReconciliationError{}
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return fmt.Errorf("mode is DryRun. Nothing is reconciled")
+		return &configv1alpha1.DryRunReconciliationError{}
 	}
 	return nil
 }

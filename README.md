@@ -5,7 +5,7 @@
 
 # Sveltos
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/master/logos/logo.png" width="100">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/master/logos/logo.png" width="200">
 
 ## What it is
 Sveltos is tool for policy driven management of kubernetes resources and helm charts in [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) powered Kubernetes clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
@@ -70,26 +70,63 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 3. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
 4. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
 5. Conflict detection
-6. Declaritive API and CLI
+6. Declaritive API and CLI [sveltosctl](https://github.com/projectsveltos/sveltosctl)
 
-## Test Sveltos on your laptop
-If you want to test it out, just execute, `make create-cluster` and it will:
-1. create a [KIND](https://sigs.k8s.io/kind) cluster;
-2. install ClusterAPI;
-3. create a CAPI Cluster with Docker as infrastructure provider;
-4. install CRD and the Deployment from this project;
-5. create a ClusterProfile instance;
-6. modify CAPI Cluster labels so to match ClusterProfile selector.
+## Install Sveltos on your laptop using the make cmd
+Just execute `make create-cluster` 
+The command will:
+- create a [KIND](https://sigs.k8s.io/kind) cluster on your laptop;
+- install ClusterAPI;
+- create a CAPI Cluster with Docker as infrastructure provider;
+- install CRD and the Deployment from this project;
+- create a ClusterProfile instance;
+- modify CAPI Cluster labels so to match ClusterProfile selector.
 
-## Install Sveltos 
-If you want to install it on local or remote Kubernetes cluster.
+## Install Sveltos on Docker Desktop
+First, enable Kubernetes in Docker Desktop
+```
+1. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
+2. select Kubernetes from the left sidebar.
+3. next to Enable Kubernetes, select the checkbox.
+4. select Apply & Restart to save the settings and then click Install to confirm.
+```
 
-1. install ClusterAPI. [ClusterAPI instruction](https://cluster-api.sigs.k8s.io/user/quick-start.html) can be followed.
+Second, install ClusterAPI
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+```
 
-2. install the CRD and Deployment in the management cluster applying this YAML file:
+Third, initialize the management cluster
+```
+clusterctl init --infrastructure docker
+```
 
+Fourth, install Sveltos applying this manifest YAML
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/manifest.yaml
+```
+
+Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/master/manifest/service_monitor.yaml
+```
+
+
+## Install Sveltos on any local or remote Kubernetes cluster.
+
+First, install ClusterAPI
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+```
+
+Second, initialize the management cluster
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
+```
+
+Third, install Sveltos applying this manifest YAML
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
 ```
 
 # Understanding how to configure and use Sveltos
@@ -387,6 +424,13 @@ Another example of misconfiguration is when two different ClusterProfiles match 
 
 In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
 
+
+## Metrics
+Sveltos exposes following metrics:
+1. projectsveltos_program_resources_time_seconds: time to deploy resources in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
+2. projectsveltos_program_charts_time_seconds: time to deploy Helm charts in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
+3. *clusterNamespace*_*clusterName*_program_resources_time_seconds: time to deploy resources in a specific CAPI clusters (all ClusterProfiles considered);
+4. *clusterNamespace*_*clusterName*_program_charts_time_seconds: time to deploy Helm charts in a specific CAPI clusters (all ClusterProfiles considered);
 
 ### Uninstall CRDs
 To delete the CRDs from the cluster:

@@ -27,6 +27,7 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
 	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
 )
 
@@ -151,10 +152,13 @@ func processRequests(ctx context.Context, d *deployer, i int, logger logr.Logger
 			if err != nil {
 				storeResult(d, params.key, err, params.handler, logger)
 			} else {
+				start := time.Now()
 				err = params.handler(ctx, controlClusterClient,
 					ns, name, applicant, featureID,
 					l)
 				storeResult(d, params.key, err, params.handler, logger)
+				elapsed := time.Since(start)
+				programDuration(elapsed, ns, name, featureID, l)
 			}
 		}
 		params = nil
@@ -284,4 +288,26 @@ func getRequestStatus(d *deployer, clusterNamespace, clusterName, applicant, fea
 func removeFromSlice(s []string, i int) []string {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
+}
+
+func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
+	logger logr.Logger) {
+
+	if featureID == string(configv1alpha1.FeatureResources) {
+		programResourceDurationHistogram.Observe(elapsed.Seconds())
+		clusterHistogram := newResourceHistogram(clusterNamespace, clusterName, logger)
+		if clusterHistogram != nil {
+			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
+				clusterNamespace, clusterName, featureID))
+			clusterHistogram.Observe(elapsed.Seconds())
+		}
+	} else {
+		programChartDurationHistogram.Observe(elapsed.Seconds())
+		clusterHistogram := newChartHistogram(clusterNamespace, clusterName, logger)
+		if clusterHistogram != nil {
+			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
+				clusterNamespace, clusterName, featureID))
+			clusterHistogram.Observe(elapsed.Seconds())
+		}
+	}
 }

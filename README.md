@@ -5,7 +5,7 @@
 
 # Sveltos
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/main/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/release-0.1/logos/logo.png" width="200">
 
 ## What it is
 Sveltos is tool for policy driven management of kubernetes resources and helm charts in [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) powered Kubernetes clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
@@ -103,12 +103,12 @@ clusterctl init --infrastructure docker
 
 Fourth, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/release-0.1/manifest/manifest.yaml
 ```
 
 Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/service_monitor.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/release-0.1/manifest/service_monitor.yaml
 ```
 
 
@@ -126,7 +126,7 @@ https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-
 
 Third, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/release-0.1/manifest/manifest.yaml
 ```
 
 # Understanding how to configure and use Sveltos

@@ -40,10 +40,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
 	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
-	"github.com/projectsveltos/sveltos-manager/pkg/logs"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
@@ -64,9 +66,9 @@ type ClusterSummaryReconciler struct {
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
-	PolicyMux            sync.Mutex                        // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	ReferenceMap         map[configv1alpha1.PolicyRef]*Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
-	ClusterSummaryMap    map[types.NamespacedName]*Set     // key: ClusterSummary namespace/name; value: set of referenced resources
+	PolicyMux            sync.Mutex                                          // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	ReferenceMap         map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
+	ClusterSummaryMap    map[types.NamespacedName]*libsveltosset.Set         // key: ClusterSummary namespace/name; value: set of referenced resources
 
 	// Reason for the two maps:
 	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a CAPI Cluster.
@@ -465,16 +467,17 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 	defer r.PolicyMux.Unlock()
 
 	// Get list of References not referenced anymore by ClusterSummary
-	var toBeRemoved []configv1alpha1.PolicyRef
+	var toBeRemoved []libsveltosv1alpha1.PolicyRef
 	clusterSummaryName := types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()}
 	if v, ok := r.ClusterSummaryMap[clusterSummaryName]; ok {
-		toBeRemoved = v.difference(currentReferences)
+		toBeRemoved = v.Difference(currentReferences)
 	}
 
 	// For each currently referenced instance, add ClusterSummary as consumer
-	for referencedResource := range currentReferences.data {
-		r.getReferenceMapForEntry(&referencedResource).insert(
-			&configv1alpha1.PolicyRef{
+	for _, referencedResource := range currentReferences.Items() {
+		tmpResource := referencedResource
+		r.getReferenceMapForEntry(&tmpResource).Insert(
+			&libsveltosv1alpha1.PolicyRef{
 				Kind:      configv1alpha1.ClusterSummaryKind,
 				Namespace: clusterSummaryScope.Namespace(),
 				Name:      clusterSummaryScope.Name(),
@@ -485,8 +488,8 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 	// For each resource not reference anymore, remove ClusterSummary as consumer
 	for i := range toBeRemoved {
 		referencedResource := toBeRemoved[i]
-		r.getReferenceMapForEntry(&referencedResource).erase(
-			&configv1alpha1.PolicyRef{
+		r.getReferenceMapForEntry(&referencedResource).Erase(
+			&libsveltosv1alpha1.PolicyRef{
 				Kind:      configv1alpha1.ClusterSummaryKind,
 				Namespace: clusterSummaryScope.Namespace(),
 				Name:      clusterSummaryScope.Name(),
@@ -530,12 +533,12 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 	return false
 }
 
-func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *Set {
-	currentReferences := &Set{}
+func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name
-		currentReferences.insert(&configv1alpha1.PolicyRef{
+		currentReferences.Insert(&libsveltosv1alpha1.PolicyRef{
 			Kind:      clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
 			Namespace: referencedNamespace,
 			Name:      referencedName,
@@ -544,10 +547,10 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 	return currentReferences
 }
 
-func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *configv1alpha1.PolicyRef) *Set {
+func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *libsveltosv1alpha1.PolicyRef) *libsveltosset.Set {
 	s := r.ReferenceMap[*entry]
 	if s == nil {
-		s = &Set{}
+		s = &libsveltosset.Set{}
 		r.ReferenceMap[*entry] = s
 	}
 	return s

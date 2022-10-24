@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/projectsveltos/sveltos-manager/pkg/logs"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 // ConfigMapPredicates predicates for ConfigMaps. ClusterSummaryReconciler watches ConfigMap events

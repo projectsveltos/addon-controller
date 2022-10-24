@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
@@ -117,7 +118,7 @@ var _ = Describe("Feature", func() {
 		Byf("Update ClusterProfile %s to reference Secret %s/%s", clusterProfile.Name, secret.Namespace, secret.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -220,7 +221,7 @@ var _ = Describe("Feature", func() {
 
 		Byf("Changing clusterprofile to not reference configmap/secret anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

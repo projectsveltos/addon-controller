@@ -124,7 +124,12 @@ Second, initialize the management cluster
 https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
 ```
 
-Third, install Sveltos applying this manifest YAML
+Third, install Sveltos applying following manifest YAMLs
+
+```
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+```
+
 ```
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```

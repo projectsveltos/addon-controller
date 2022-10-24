@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
@@ -99,7 +100,7 @@ var _ = Describe("HandlersResource", func() {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -256,7 +257,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 						{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},

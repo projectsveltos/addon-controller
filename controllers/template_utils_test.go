@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -325,7 +326,7 @@ var _ = Describe("Template Utils", func() {
 				Name: cluster.Name,
 			},
 			Spec: configv1alpha1.ClusterProfileSpec{
-				PolicyRefs: []configv1alpha1.PolicyRef{
+				PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
 					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},
 					{Kind: string(configv1alpha1.SecretReferencedResourceKind), Name: randomString(), Namespace: randomString()},

@@ -262,6 +262,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 	Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 
+	Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
 	currentClusterProfile := &configv1alpha1.ClusterProfile{}

@@ -28,9 +28,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
+	"github.com/projectsveltos/sveltos-manager/pkg/logs"
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(

@@ -49,10 +49,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
+	"github.com/projectsveltos/sveltos-manager/pkg/logs"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var (

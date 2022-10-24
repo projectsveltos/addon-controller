@@ -24,7 +24,7 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	"github.com/projectsveltos/sveltos-manager/pkg/logs"
 )
 
 var (

@@ -103,12 +103,12 @@ clusterctl init --infrastructure docker
 
 Fourth, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/dev/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```
 
 Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/dev/manifest/service_monitor.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/service_monitor.yaml
 ```
 
 
@@ -126,7 +126,7 @@ https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-
 
 Third, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/dev/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```
 
 # Understanding how to configure and use Sveltos

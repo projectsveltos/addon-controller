@@ -23,7 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
 )
 
 // fakeDeployer is a fake provider that implements the DeployerInterface

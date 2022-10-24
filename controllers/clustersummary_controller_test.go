@@ -37,11 +37,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
-	fakedeployer "github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer/fake"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
+	fakedeployer "github.com/projectsveltos/sveltos-manager/pkg/deployer/fake"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("ClustersummaryController", func() {

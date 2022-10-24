@@ -32,10 +32,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
+	"github.com/projectsveltos/sveltos-manager/pkg/logs"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,

@@ -1,4 +1,4 @@
-module github.com/projectsveltos/cluster-api-feature-manager
+module github.com/projectsveltos/sveltos-manager
 
 go 1.19
 

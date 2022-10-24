@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/controllers"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 // addOwnerReference adds owner as OwnerReference of obj

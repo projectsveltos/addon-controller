@@ -17,7 +17,7 @@ limitations under the License.
 package controllers
 
 import (
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 type Set struct {

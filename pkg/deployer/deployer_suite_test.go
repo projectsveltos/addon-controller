@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
 )
 
 const namespacePrefix = "worker"

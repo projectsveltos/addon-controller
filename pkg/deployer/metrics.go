@@ -25,7 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"github.com/projectsveltos/sveltos-manager/pkg/logs"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 var (

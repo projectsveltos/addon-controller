@@ -36,6 +36,7 @@ clusterapi_minor := $(word 2,$(clusterapi_version_tuple))
 clusterapi_patch := $(word 3,$(clusterapi_version_tuple))
 CLUSTERAPI_LDFLAGS := "-X 'sigs.k8s.io/cluster-api/version.gitMajor=$(clusterapi_major)' -X 'sigs.k8s.io/cluster-api/version.gitMinor=$(clusterapi_minor)' -X 'sigs.k8s.io/cluster-api/version.gitVersion=$(clusterapi_version)'"
 
+
 .PHONY: all
 all: build
 
@@ -239,6 +240,9 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Load projectsveltos image into cluster'
 	$(MAKE) load-image
 	
+	@echo 'Install libsveltos CRDs'
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+
 	# Install projectsveltos controller-manager components
 	@echo 'Install projectsveltos controller-manager components'
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}

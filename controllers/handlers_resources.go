@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
@@ -201,7 +202,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	return h.Sum(nil), nil
 }
 
-func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
+func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []libsveltosv1alpha1.PolicyRef {
 	return clusterSummary.Spec.ClusterProfileSpec.PolicyRefs
 }
 

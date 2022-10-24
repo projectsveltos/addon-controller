@@ -107,14 +107,6 @@ var (
 )
 
 var (
-	Insert = (*Set).insert
-	Erase  = (*Set).erase
-	Len    = (*Set).len
-	Items  = (*Set).items
-	Has    = (*Set).has
-)
-
-var (
 	GetClusterReportName = getClusterReportName
 	CreateKubeconfig     = createKubeconfig
 )

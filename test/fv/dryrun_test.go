@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
@@ -99,7 +100,7 @@ var _ = Describe("DryRun", func() {
 			clusterProfile.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: kongSAConfigMap.Namespace,
@@ -159,7 +160,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Update ClusterProfile %s to reference configMaps with Kong's configuration", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongSAConfigMap.Name},
 		}
@@ -303,7 +304,7 @@ var _ = Describe("DryRun", func() {
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 		}
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{

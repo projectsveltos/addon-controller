@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
@@ -199,7 +200,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy("default", randomString(), render.AsCode(clusterRole))
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -252,7 +253,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -316,7 +317,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		configMap := createConfigMapWithPolicy(namespace, render.AsCode(clusterRole))
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -390,7 +391,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -426,7 +427,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
@@ -456,7 +457,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeatures returns an error if deploying is in progress", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
@@ -490,7 +491,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
@@ -521,7 +522,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
@@ -531,7 +532,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
 		expectedLength := len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
-		Expect(controllers.Len(set)).To(Equal(expectedLength))
+		Expect(set.Len()).To(Equal(expectedLength))
 	})
 })
 

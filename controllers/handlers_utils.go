@@ -43,8 +43,9 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/pkg/logs"
 )
 
 const (
@@ -354,7 +355,7 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
 func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client,
-	references []configv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
+	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
 
 	objects := make([]client.Object, 0)
 	for i := range references {

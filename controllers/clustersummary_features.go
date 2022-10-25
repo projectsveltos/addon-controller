@@ -22,8 +22,8 @@ import (
 
 	"github.com/go-logr/logr"
 
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
 )
 
 var (

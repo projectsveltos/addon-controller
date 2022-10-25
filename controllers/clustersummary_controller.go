@@ -41,11 +41,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
-	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 

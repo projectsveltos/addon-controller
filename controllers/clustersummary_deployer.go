@@ -33,9 +33,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
@@ -130,7 +130,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Feature must be (re)deployed.
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), false, genericDeploy); err != nil {
+		clusterSummary.Name, string(f.id), false, genericDeploy, programDuration); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
@@ -211,7 +211,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), true, genericUndeploy); err != nil {
+		clusterSummary.Name, string(f.id), true, genericUndeploy, programDuration); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}

@@ -16,10 +16,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
-	"github.com/projectsveltos/sveltos-manager/pkg/deployer"
-	fakedeployer "github.com/projectsveltos/sveltos-manager/pkg/deployer/fake"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 

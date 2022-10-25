@@ -38,11 +38,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
-	fakedeployer "github.com/projectsveltos/sveltos-manager/pkg/deployer/fake"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 

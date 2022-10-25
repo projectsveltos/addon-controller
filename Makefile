@@ -174,7 +174,7 @@ NUM_NODES ?= 5
 
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v pkg/deployer/fake |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
 
 .PHONY: kind-test
 kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv

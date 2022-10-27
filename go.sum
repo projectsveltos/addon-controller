@@ -780,8 +780,8 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/posener/complete v1.2.3/go.mod h1:WZIdtGGp+qx0sLrYKtIRAruyNpv6hFCicSgv7Sy7s/s=
 github.com/poy/onpar v0.0.0-20190519213022-ee068f8ea4d1 h1:oL4IBbcqwhhNWh31bjOX8C/OCy0zs9906d/VUru+bqg=
 github.com/poy/onpar v0.0.0-20190519213022-ee068f8ea4d1/go.mod h1:nSbFQvMj97ZyhFRSJYtut+msi4sOY6zJDGCdSc+/rZU=
-github.com/projectsveltos/libsveltos v0.0.0-20221025201400-def8ee7ad651 h1:jNfsHkQODLz93lJYboAvTV54hTv6UtQS3R3Vs06gtnM=
-github.com/projectsveltos/libsveltos v0.0.0-20221025201400-def8ee7ad651/go.mod h1:UiTbOwoj0nATxKGrK7/Ko4JK2zHY6MY61D39RlUFekk=
+github.com/projectsveltos/libsveltos v0.0.0-20221027160111-fd9cbff42aae h1:vVeyD53lqznAgNDEAY6zdqoyb8RPYUTcQ76VTaCD2kc=
+github.com/projectsveltos/libsveltos v0.0.0-20221027160111-fd9cbff42aae/go.mod h1:UiTbOwoj0nATxKGrK7/Ko4JK2zHY6MY61D39RlUFekk=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
 github.com/prometheus/client_golang v1.1.0/go.mod h1:I1FGZT9+L76gKKOs5djB6ezCbFQP1xR9D75/vuwEF3g=

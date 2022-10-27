@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
@@ -92,13 +93,13 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	}
 
 	var kubeconfigContent []byte
-	kubeconfigContent, err = getSecretData(ctx, logger, c, clusterNamespace, clusterName)
+	kubeconfigContent, err = clusterproxy.GetSecretData(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
 
 	var kubeconfig string
-	kubeconfig, err = createKubeconfig(logger, kubeconfigContent)
+	kubeconfig, err = clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
 	if err != nil {
 		return err
 	}
@@ -122,13 +123,13 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 
 	var kubeconfigContent []byte
-	kubeconfigContent, err = getSecretData(ctx, logger, c, clusterNamespace, clusterName)
+	kubeconfigContent, err = clusterproxy.GetSecretData(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
 
 	var kubeconfig string
-	kubeconfig, err = createKubeconfig(logger, kubeconfigContent)
+	kubeconfig, err = clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
 	if err != nil {
 		return err
 	}

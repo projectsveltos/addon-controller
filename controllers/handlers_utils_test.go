@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -243,7 +244,7 @@ var _ = Describe("HandlersUtils", func() {
 		elements := strings.Split(services, "---")
 		for i := range elements {
 			var policy *unstructured.Unstructured
-			policy, err = controllers.GetUnstructured([]byte(elements[i]))
+			policy, err = utils.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
 			var policyHash string
 			policyHash, err = controllers.ComputePolicyHash(policy)
@@ -271,7 +272,7 @@ var _ = Describe("HandlersUtils", func() {
 		newContent := ""
 		for i := range elements {
 			var policy *unstructured.Unstructured
-			policy, err = controllers.GetUnstructured([]byte(elements[i]))
+			policy, err = utils.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
 			labels := policy.GetLabels()
 			if labels == nil {
@@ -385,7 +386,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
 		// of this ClusterSummary (owner is ClusterProfile owning the ClusterSummary)
-		clusterRole, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
+		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
 			controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),

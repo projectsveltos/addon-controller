@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -230,12 +231,6 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(owner).To(BeNil())
 	})
 
-	It("getUnstructured returns proper object", func() {
-		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
-		Expect(err).To(BeNil())
-		Expect(policy.GetKind()).To(Equal("ClusterRole"))
-	})
-
 	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -262,7 +257,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	})
 
 	It("addOwnerReference adds an OwnerReference to an object. removeOwnerReference removes it", func() {
-		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
+		policy, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
 		Expect(policy.GetKind()).To(Equal("ClusterRole"))
 

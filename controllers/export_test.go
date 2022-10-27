@@ -92,7 +92,6 @@ type (
 )
 
 var (
-	GetUnstructured      = getUnstructured
 	AddOwnerReference    = addOwnerReference
 	RemoveOwnerReference = removeOwnerReference
 )

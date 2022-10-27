@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -138,7 +139,7 @@ var _ = Describe("Template Utils", func() {
 	})
 
 	It("isTemplate returns true when PolicyTemplate annotation is set", func() {
-		installation, err := controllers.GetUnstructured([]byte(installation))
+		installation, err := utils.GetUnstructured([]byte(installation))
 		Expect(err).To(BeNil())
 
 		Expect(controllers.IsTemplate(installation)).To(BeFalse())
@@ -310,7 +311,7 @@ var _ = Describe("Template Utils", func() {
 			clusterSummary, configMap, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(policy).ToNot(ContainSubstring("{{ Cluster:/metadata/labels }}"))
-		u, err := controllers.GetUnstructured([]byte(policy))
+		u, err := utils.GetUnstructured([]byte(policy))
 		Expect(err).To(BeNil())
 		Expect(u.GetLabels()).ToNot(BeNil())
 		Expect(len(u.GetLabels())).To(Equal(2)) // 2 is the length of labels on Cluster
@@ -355,7 +356,7 @@ var _ = Describe("Template Utils", func() {
 			clusterSummary, templateClusterProfile, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(policy).ToNot(ContainSubstring("{{ get-cluster-feature:/spec/policyRefs }}"))
-		u, err := controllers.GetUnstructured([]byte(policy))
+		u, err := utils.GetUnstructured([]byte(policy))
 		Expect(err).To(BeNil())
 
 		// Convert unstructured to ClusterProfile

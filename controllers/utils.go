@@ -21,19 +21,13 @@ import (
 	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
-	"k8s.io/kubectl/pkg/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -116,53 +110,6 @@ func getClusterConfiguration(ctx context.Context, c client.Client,
 	}
 
 	return clusterConfiguration, nil
-}
-
-// getUnstructured returns an unstructured given a []bytes containing it
-func getUnstructured(object []byte) (*unstructured.Unstructured, error) {
-	request := &unstructured.Unstructured{}
-	universalDeserializer := scheme.Codecs.UniversalDeserializer()
-	_, _, err := universalDeserializer.Decode(object, nil, request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode k8s resource %.50s. Err: %w",
-			string(object), err)
-	}
-
-	return request, nil
-}
-
-// getDynamicResourceInterface returns a dynamic ResourceInterface for the policy's GroupVersionKind
-func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstructured) (dynamic.ResourceInterface, error) {
-	if config == nil {
-		return nil, fmt.Errorf("rest.Config is nil")
-	}
-
-	dynClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	gvk := policy.GroupVersionKind()
-
-	dc, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
-	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return nil, err
-	}
-	var dr dynamic.ResourceInterface
-	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		// namespaced resources should specify the namespace
-		dr = dynClient.Resource(mapping.Resource).Namespace(policy.GetNamespace())
-	} else {
-		// for cluster-wide resources
-		dr = dynClient.Resource(mapping.Resource)
-	}
-
-	return dr, nil
 }
 
 // validateObjectForUpdate finds if object currently exists. If object exists:

@@ -46,6 +46,7 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
@@ -202,7 +203,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 		// If policy already exists, just get current version and update it by overridding
 		// all metadata and spec.
 		// If policy does not exist already, create it
-		dr, err := getDynamicResourceInterface(remoteConfig, policy)
+		dr, err := utils.GetDynamicResourceInterface(remoteConfig, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +268,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				continue
 			}
 
-			policy, err := getUnstructured([]byte(elements[i]))
+			policy, err := utils.GetUnstructured([]byte(elements[i]))
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 				return nil, err
@@ -284,7 +285,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 					return nil, err
 				}
 
-				policy, err = getUnstructured([]byte(instance))
+				policy, err = utils.GetUnstructured([]byte(instance))
 				if err != nil {
 					logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 					return nil, err

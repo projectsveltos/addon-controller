@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -422,7 +423,7 @@ func (r *ClusterProfileReconciler) cleanClusterReports(ctx context.Context,
 func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		ready, err := r.isClusterReadyToBeConfigured(ctx, clusterProfileScope, &cluster)
+		ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, &cluster, clusterProfileScope.Logger)
 		if err != nil {
 			return err
 		}
@@ -842,52 +843,6 @@ func (r *ClusterProfileReconciler) updateClusterConfigurationClusterProfileResou
 		return err
 	})
 	return err
-}
-
-// isClusterReadyToBeConfigured gets all Machines for a given CAPI Cluster and returns true
-// if at least one control plane machine is in running phase
-func (r *ClusterProfileReconciler) isClusterReadyToBeConfigured(
-	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-	cluster *corev1.ObjectReference,
-) (bool, error) {
-
-	machineList, err := r.getMachinesForCluster(ctx, clusterProfileScope, cluster)
-	if err != nil {
-		return false, err
-	}
-
-	for i := range machineList.Items {
-		if util.IsControlPlaneMachine(&machineList.Items[i]) &&
-			machineList.Items[i].Status.GetTypedPhase() == clusterv1.MachinePhaseRunning {
-
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-// getMachinesForCluster find all Machines for a given CAPI Cluster.
-func (r *ClusterProfileReconciler) getMachinesForCluster(
-	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-	cluster *corev1.ObjectReference,
-) (*clusterv1.MachineList, error) {
-
-	listOptions := []client.ListOption{
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels{clusterv1.ClusterLabelName: cluster.Name},
-	}
-	var machineList clusterv1.MachineList
-	if err := r.Client.List(ctx, &machineList, listOptions...); err != nil {
-		clusterProfileScope.Error(err, fmt.Sprintf("unable to list Machines for CAPI Cluster %s/%s",
-			cluster.Namespace, cluster.Name))
-		return nil, err
-	}
-	clusterProfileScope.V(logs.LogDebug).Info(fmt.Sprintf("Found %d machine", len(machineList.Items)))
-
-	return &machineList, nil
 }
 
 func (r *ClusterProfileReconciler) updatesMaps(clusterProfileScope *scope.ClusterProfileScope) {

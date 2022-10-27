@@ -60,8 +60,6 @@ var (
 	GenericUndeploy         = genericUndeploy
 
 	GetClusterSummary            = getClusterSummary
-	GetSecretData                = getSecretData
-	GetKubernetesClient          = getKubernetesClient
 	AddLabel                     = addLabel
 	CreateNamespace              = createNamespace
 	GetEntryKey                  = getEntryKey
@@ -108,5 +106,4 @@ var (
 
 var (
 	GetClusterReportName = getClusterReportName
-	CreateKubeconfig     = createKubeconfig
 )

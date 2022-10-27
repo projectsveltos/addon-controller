@@ -24,14 +24,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -127,7 +124,6 @@ func setupScheme() (*runtime.Scheme, error) {
 }
 
 var _ = Describe("getClusterProfileOwner ", func() {
-	var logger logr.Logger
 	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
 	var cluster *clusterv1.Cluster
@@ -139,11 +135,8 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		logger = klogr.New()
-
 		namespace = "reconcile" + randomString()
 
-		logger = klogr.New()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -241,89 +234,6 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		policy, err := controllers.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
 		Expect(policy.GetKind()).To(Equal("ClusterRole"))
-	})
-
-	It("getSecretData returns an error when cluster does not exist", func() {
-		initObjects := []client.Object{
-			clusterProfile,
-			clusterSummary,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		_, err := controllers.GetSecretData(context.TODO(), logger, c, cluster.Namespace, cluster.Name)
-		Expect(err).ToNot(BeNil())
-		Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("Cluster %s/%s does not exist", cluster.Namespace, cluster.Name)))
-	})
-
-	It("getSecretData returns an error when secret does not exist", func() {
-		initObjects := []client.Object{
-			clusterProfile,
-			cluster,
-			clusterSummary,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		_, err := controllers.GetSecretData(context.TODO(), logger, c, cluster.Namespace, cluster.Name)
-		Expect(err).ToNot(BeNil())
-		Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("Failed to get secret %s/%s-kubeconfig", cluster.Namespace, cluster.Name)))
-	})
-
-	It("getSecretData returns secret data", func() {
-		randomData := []byte(randomString())
-		secret := corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": randomData,
-			},
-		}
-
-		initObjects := []client.Object{
-			clusterProfile,
-			cluster,
-			clusterSummary,
-			&secret,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		data, err := controllers.GetSecretData(context.TODO(), logger, c, cluster.Namespace, cluster.Name)
-		Expect(err).To(BeNil())
-		Expect(data).To(Equal(randomData))
-	})
-
-	It("getKubernetesClient returns client to access CAPI cluster", func() {
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name + "-kubeconfig",
-			},
-			Data: map[string][]byte{
-				"data": testEnv.Kubeconfig,
-			},
-		}
-
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
-
-		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
-
-		wcClient, err := controllers.GetKubernetesClient(context.TODO(), logger, testEnv.Client, cluster.Namespace, cluster.Name)
-		Expect(err).To(BeNil())
-		Expect(wcClient).ToNot(BeNil())
 	})
 
 	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {

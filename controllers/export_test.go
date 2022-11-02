@@ -22,8 +22,6 @@ var (
 	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
 	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary
 	DeleteClusterSummary         = (*ClusterProfileReconciler).deleteClusterSummary
-	GetMachinesForCluster        = (*ClusterProfileReconciler).getMachinesForCluster
-	IsClusterReadyToBeConfigured = (*ClusterProfileReconciler).isClusterReadyToBeConfigured
 	UpdateClusterConfiguration   = (*ClusterProfileReconciler).updateClusterConfiguration
 	CleanClusterConfiguration    = (*ClusterProfileReconciler).cleanClusterConfiguration
 	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports

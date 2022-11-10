@@ -181,7 +181,7 @@ kind-test: test create-cluster fv ## Build docker image; start kind cluster; loa
 
 .PHONY: fv
 fv: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
-	cd test/fv; ../../$(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+	cd test/fv; ../../$(GINKGO) -nodes $(NUM_NODES) --label-filter='FV1' --v --trace --randomize-all
 
 .PHONY: create-cluster
 create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development

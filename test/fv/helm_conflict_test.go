@@ -31,7 +31,7 @@ import (
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
-var _ = Describe("Helm with conflicts", Serial, func() {
+var _ = Describe("Helm with conflicts", func() {
 	const (
 		namePrefix = "helm-conflict-"
 	)
@@ -43,31 +43,10 @@ var _ = Describe("Helm with conflicts", Serial, func() {
 			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
 			currentCluster)).To(Succeed())
 
-		currentCluster.Spec.Paused = false
-
 		Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
 	})
 
-	AfterEach(func() {
-		// Set Cluster unpaused and reset labels
-
-		currentCluster := &clusterv1.Cluster{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCluster)).To(Succeed())
-
-		currentLabels := currentCluster.Labels
-		if currentLabels == nil {
-			currentLabels = make(map[string]string)
-		}
-		currentLabels[key] = value
-		currentCluster.Labels = currentLabels
-		currentCluster.Spec.Paused = false
-
-		Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
-	})
-
-	It("Two ClusterProfiles managing same helm chart on same cluster", Label("FV"), func() {
+	It("Two ClusterProfiles managing same helm chart on same cluster", Label("FV1"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -104,33 +83,21 @@ var _ = Describe("Helm with conflicts", Serial, func() {
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
 
 		By("Creating a second ClusterProfile which conflicts with first ClusterProfile")
-		newValue := value + randomString()
-		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: newValue})
+		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile2.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile2)).To(Succeed())
 		Byf("Created ClusterProfile %s", clusterProfile2.Name)
 
-		newInfluxDBVersion := "5.4.6"
-		addInfluxdbHelmChart(clusterProfile2.Name, newInfluxDBVersion)
-
-		// Change cluster label
-		Byf("Change Cluster labels so to stop matching ClusterProfile %s and start matching second ClusterProfile %s",
-			clusterProfile.Name, clusterProfile2.Name)
-		currentCluster := &clusterv1.Cluster{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCluster)).To(Succeed())
-
-		currentLabels := currentCluster.Labels
-		if currentLabels == nil {
-			currentLabels = make(map[string]string)
-		}
-		currentLabels[key] = newValue
-		Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
+		addInfluxdbHelmChart(clusterProfile2.Name, influxDBVersion)
 
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile2.Name}, currentClusterProfile)).To(Succeed())
 		clusterSummary = verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
+		Byf("Deleting clusterProfile %s", clusterProfile.Name)
+		deleteClusterProfile(clusterProfile)
+
+		// Since second ClusterProfile is waiting to manage same helm chart, it should not be ever
+		// uninstalled when first ClusterProfile is deleted
 		Byf("Verifying influxdb deployment is still in the workload cluster")
 		Consistently(func() error {
 			depl := &appsv1.Deployment{}
@@ -139,13 +106,10 @@ var _ = Describe("Helm with conflicts", Serial, func() {
 		}, timeout/2, pollingInterval).Should(BeNil())
 
 		charts = []configv1alpha1.Chart{
-			{ReleaseName: "influxdb", ChartVersion: newInfluxDBVersion, Namespace: "influxdb"},
+			{ReleaseName: "influxdb", ChartVersion: influxDBVersion, Namespace: "influxdb"},
 		}
 		verifyClusterConfiguration(clusterProfile2.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
-
-		Byf("Deleting clusterProfile %s", clusterProfile.Name)
-		deleteClusterProfile(clusterProfile)
 
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
 		deleteClusterProfile(clusterProfile2)

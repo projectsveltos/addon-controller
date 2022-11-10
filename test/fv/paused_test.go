@@ -43,7 +43,7 @@ metadata:
 
 var _ = Describe("Feature", Serial, func() {
 	const (
-		namePrefix = "paused"
+		namePrefix = "paused-"
 	)
 
 	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV"), func() {
@@ -51,7 +51,7 @@ var _ = Describe("Feature", Serial, func() {
 		setClusterPausedField(true)
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 

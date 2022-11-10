@@ -149,10 +149,18 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 				currentChart.RepositoryURL,
 				currentChart.RepositoryName))
 
-			err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
-			if err != nil {
-				if !errors.Is(err, driver.ErrReleaseNotFound) {
-					return err
+			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
+			// Let the other ClusterSummary take it over.
+			if chartManager.GetNumberOfRegisteredClusterSummaries(clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, currentChart) > 1 {
+				// Immediately unregister so next inline ClusterSummary can take this over
+				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+			} else {
+				err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+				if err != nil {
+					if !errors.Is(err, driver.ErrReleaseNotFound) {
+						return err
+					}
 				}
 			}
 
@@ -183,7 +191,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
-		configv1alpha1.FeatureResources, nil, []configv1alpha1.Chart{})
+		configv1alpha1.FeatureHelm, nil, []configv1alpha1.Chart{})
 	if err != nil {
 		return err
 	}

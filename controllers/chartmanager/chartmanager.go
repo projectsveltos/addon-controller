@@ -123,6 +123,29 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha
 	}
 }
 
+// UnregisterClusterSummaryForChart unregisters ClusterSummary as possible manager for specified chart
+func (m *instance) UnregisterClusterSummaryForChart(clusterSummary *configv1alpha1.ClusterSummary,
+	chart *configv1alpha1.HelmChart) {
+
+	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	for i := range m.perClusterChartMap[clusterKey][releaseKey] {
+		if m.perClusterChartMap[clusterKey][releaseKey][i] == clusterSummaryKey {
+			// Order is not important. So move the element at index i with last one in order to avoid moving all elements.
+			length := len(m.perClusterChartMap[clusterKey][releaseKey])
+			m.perClusterChartMap[clusterKey][releaseKey][i] =
+				m.perClusterChartMap[clusterKey][releaseKey][length-1]
+			m.perClusterChartMap[clusterKey][releaseKey] = m.perClusterChartMap[clusterKey][releaseKey][:length-1]
+			break
+		}
+	}
+}
+
 // RemoveStaleRegistrations removes stale registrations.
 // It considers all the helm releases the provided clusterSummary is currently registered.
 // Any helm release, not referenced anymore by clusterSummary, for which clusterSummary is currently
@@ -203,6 +226,20 @@ func (m *instance) GetManagedHelmReleases(clusterSummary *configv1alpha1.Cluster
 	}
 
 	return info
+}
+
+// GetNumberOfRegisteredClusterSummaries returns number of ClusterSummaries currently registered
+// for managing a chart in a given cluster
+func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clusterName string,
+	chart *configv1alpha1.HelmChart) int {
+
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName)
+	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	return len(m.perClusterChartMap[clusterKey][releaseKey])
 }
 
 // CanManageChart returns true if a ClusterSummary can manage the helm chart.

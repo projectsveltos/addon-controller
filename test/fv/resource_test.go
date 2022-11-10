@@ -77,12 +77,12 @@ spec:
 
 var _ = Describe("Feature", func() {
 	const (
-		namePrefix = "feature"
+		namePrefix = "feature-"
 	)
 
 	It("Deploy and updates resources referenced in ResourceRefs correctly", Label("FV"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 

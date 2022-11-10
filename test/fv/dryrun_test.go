@@ -70,7 +70,7 @@ rules:
 
 var _ = Describe("DryRun", func() {
 	const (
-		namePrefix = "drynrun"
+		namePrefix = "dry-run-"
 	)
 
 	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts", Label("FV"), func() {
@@ -88,7 +88,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Create(context.TODO(), kongSAConfigMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile in Continuous syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
@@ -150,7 +150,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Create(context.TODO(), kongRoleConfigMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		dryRunClusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		dryRunClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		dryRunClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(k8sClient.Create(context.TODO(), dryRunClusterProfile)).To(Succeed())
 

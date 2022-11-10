@@ -118,7 +118,7 @@ func newChartHistogram(clusterNamespace, clusterName string,
 }
 
 func logCollectorError(err error, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info(fmt.Sprint("failed to register collector: %w", err))
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to register collector: %s", err))
 }
 
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,

@@ -51,7 +51,7 @@ metadata:
 
 var _ = Describe("SyncMode one time", func() {
 	const (
-		namePrefix = "one-time"
+		namePrefix = "one-time-"
 	)
 
 	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once", Label("FV"), func() {
@@ -72,7 +72,7 @@ var _ = Describe("SyncMode one time", func() {
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{

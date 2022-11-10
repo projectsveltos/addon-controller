@@ -490,6 +490,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 		return err
 	}
 
+	foundClusterSummaries := false
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterProfileScope.ClusterProfile) {
@@ -500,6 +501,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 						cs.Namespace, cs.Name))
 					return err
 				}
+				foundClusterSummaries = true
 			}
 			// update SyncMode
 			err := r.updateClusterSummarySyncMode(ctx, clusterProfileScope.ClusterProfile, cs)
@@ -507,6 +509,10 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 				return err
 			}
 		}
+	}
+
+	if foundClusterSummaries {
+		return fmt.Errorf("clusterSummaries still present")
 	}
 
 	return nil

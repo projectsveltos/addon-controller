@@ -50,7 +50,7 @@ func Byf(format string, a ...interface{}) {
 	By(fmt.Sprintf(format, a...)) // ignore_by_check
 }
 
-func getClusterprofile(namePrefix string, clusterLabels map[string]string) *configv1alpha1.ClusterProfile {
+func getClusterProfile(namePrefix string, clusterLabels map[string]string) *configv1alpha1.ClusterProfile {
 	selector := ""
 	for k := range clusterLabels {
 		if selector != "" {

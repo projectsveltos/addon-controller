@@ -297,7 +297,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterProfileName,
 		})
-		Expect(err).ToNot(HaveOccurred())
+		// Because there was one ClusterSummary and reconciliation deleted it and returned an error
+		Expect(err).To(HaveOccurred())
 
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)

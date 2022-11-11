@@ -325,6 +325,14 @@ spec:
                   - namespace
                   type: object
                 type: array
+              stopMatchingBehavior:
+                default: WithdrawPolicies
+                description: StopMatchingBehavior indicates what behavior should be
+                  when a Cluster stop matching the ClusterProfile. By default all
+                  deployed Helm charts and Kubernetes resources will be withdrawn
+                  from Cluster. Setting StopMatchingBehavior to LeavePolicies will
+                  instead leave ClusterProfile deployed policies in the Cluster.
+                type: string
               syncMode:
                 default: Continuous
                 description: SyncMode specifies how features are synced in a matching
@@ -334,7 +342,11 @@ spec:
                   the matching workload clusters; - Continuous means first time a
                   workload cluster matches the ClusterProfile, features will be deployed
                   in such a cluster. Any subsequent feature configuration change will
-                  be applied into the matching workload clusters.
+                  be applied into the matching workload clusters. - DryRun means no
+                  change will be propagated to any matching cluster. A report instead
+                  will be generated summarizing what would happen in any matching
+                  cluster because of the changes made to ClusterProfile while in DryRun
+                  mode.
                 enum:
                 - OneTime
                 - Continuous
@@ -747,6 +759,14 @@ spec:
                       - namespace
                       type: object
                     type: array
+                  stopMatchingBehavior:
+                    default: WithdrawPolicies
+                    description: StopMatchingBehavior indicates what behavior should
+                      be when a Cluster stop matching the ClusterProfile. By default
+                      all deployed Helm charts and Kubernetes resources will be withdrawn
+                      from Cluster. Setting StopMatchingBehavior to LeavePolicies
+                      will instead leave ClusterProfile deployed policies in the Cluster.
+                    type: string
                   syncMode:
                     default: Continuous
                     description: SyncMode specifies how features are synced in a matching
@@ -757,6 +777,10 @@ spec:
                       first time a workload cluster matches the ClusterProfile, features
                       will be deployed in such a cluster. Any subsequent feature configuration
                       change will be applied into the matching workload clusters.
+                      - DryRun means no change will be propagated to any matching
+                      cluster. A report instead will be generated summarizing what
+                      would happen in any matching cluster because of the changes
+                      made to ClusterProfile while in DryRun mode.
                     enum:
                     - OneTime
                     - Continuous

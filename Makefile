@@ -181,7 +181,7 @@ kind-test: test create-cluster fv ## Build docker image; start kind cluster; loa
 
 .PHONY: fv
 fv: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
-	cd test/fv; ../../$(GINKGO) -nodes $(NUM_NODES) --label-filter='FV1' --v --trace --randomize-all
+	cd test/fv; ../../$(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: create-cluster
 create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
@@ -224,10 +224,13 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 #
 # add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
 # It requires control cluster to exist. So first "make create-control-cluster" then run this target.
+# Once generated, remove
+#      enforce: "{{ .podSecurityStandard.enforce }}"
+#      enforce-version: "latest"
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
-	KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
+	ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-  		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
+  		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
 
 create-control-cluster:
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp

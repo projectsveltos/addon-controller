@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +36,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
@@ -560,6 +562,66 @@ var _ = Describe("HandlersUtils", func() {
 				types.NamespacedName{Name: clusterRoleName2}, currentClusterRole)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("canDelete returns false when ClusterProfile is not referencing the policies anymore", func() {
+		depl := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
+
+		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{})).To(BeTrue())
+
+		name := controllers.GetPolicyInfo(&configv1alpha1.Resource{
+			Kind:      depl.GetObjectKind().GroupVersionKind().Kind,
+			Group:     depl.GetObjectKind().GroupVersionKind().Group,
+			Name:      depl.GetName(),
+			Namespace: depl.GetNamespace(),
+		})
+		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{name: {}})).To(BeFalse())
+	})
+
+	It("handleResourceDelete leaves policies on Cluster when mode is LeavePolicies", func() {
+		randomKey := randomString()
+		randomValue := randomString()
+		depl := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ReferenceLabelKind:      randomString(),
+					controllers.ReferenceLabelName:      randomString(),
+					controllers.ReferenceLabelNamespace: randomString(),
+					randomKey:                           randomValue,
+				},
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
+		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior = configv1alpha1.LeavePolicies
+		initObjects := []client.Object{depl, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+
+		Expect(c.Delete(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+
+		Expect(controllers.HandleResourceDelete(ctx, c, depl, currentClusterSummary, klogr.New())).To(Succeed())
+
+		currentDepl := &appsv1.Deployment{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: depl.Namespace, Name: depl.Name}, currentDepl)).To(Succeed())
+		Expect(len(currentDepl.Labels)).To(Equal(1))
+		v, ok := currentDepl.Labels[randomKey]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(randomValue))
 	})
 })
 

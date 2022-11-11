@@ -135,45 +135,10 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
-	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	var releaseReports []configv1alpha1.ReleaseReport
+	releaseReports, err = uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
 		return err
-	}
-
-	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
-	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		if chartManager.CanManageChart(clusterSummary, currentChart) {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
-				currentChart.ChartName,
-				currentChart.RepositoryURL,
-				currentChart.RepositoryName))
-
-			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
-			// Let the other ClusterSummary take it over.
-			if chartManager.GetNumberOfRegisteredClusterSummaries(clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, currentChart) > 1 {
-				// Immediately unregister so next inline ClusterSummary can take this over
-				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
-			} else {
-				err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
-				if err != nil {
-					if !errors.Is(err, driver.ErrReleaseNotFound) {
-						return err
-					}
-				}
-			}
-
-			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
-				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
-				Action: string(configv1alpha1.UninstallHelmAction),
-			})
-		} else {
-			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
-				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
-				Action: string(configv1alpha1.NoHelmAction), Message: "Currently managed by another ClusterProfile",
-			})
-		}
 	}
 
 	// First get the helm releases currently managed and uninstall all the ones
@@ -201,6 +166,11 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
 	// In dry-run mode nothing gets deployed/undeployed. So if this instance used to manage
 	// an helm release and it is now not referencing anymore, do not unsubscribe.
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
@@ -209,6 +179,60 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 
 	return &configv1alpha1.DryRunReconciliationError{}
+}
+
+func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kubeconfig string, logger logr.Logger) ([]configv1alpha1.ReleaseReport, error) {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	releaseReports := make([]configv1alpha1.ReleaseReport, 0)
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		if chartManager.CanManageChart(clusterSummary, currentChart) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("Uninstalling chart %s from repo %s %s)",
+				currentChart.ChartName,
+				currentChart.RepositoryURL,
+				currentChart.RepositoryName))
+
+			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
+			// Let the other ClusterSummary take it over.
+			if chartManager.GetNumberOfRegisteredClusterSummaries(clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, currentChart) > 1 {
+				// Immediately unregister so next inline ClusterSummary can take this over
+				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+			} else {
+				// If StopMatchingBehavior is LeavePolicies, do not uninstall helm charts
+				if !clusterSummary.DeletionTimestamp.IsZero() &&
+					clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1alpha1.LeavePolicies {
+
+					logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
+				} else {
+					err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+					if err != nil {
+						if !errors.Is(err, driver.ErrReleaseNotFound) {
+							return nil, err
+						}
+					}
+				}
+			}
+
+			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
+				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+				Action: string(configv1alpha1.UninstallHelmAction),
+			})
+		} else {
+			releaseReports = append(releaseReports, configv1alpha1.ReleaseReport{
+				ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+				Action: string(configv1alpha1.NoHelmAction), Message: "Currently managed by another ClusterProfile",
+			})
+		}
+	}
+
+	return releaseReports, nil
 }
 
 func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -364,8 +388,13 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 	if err != nil {
 		return nil, err
 	}
-	message := fmt.Sprintf("Current version: %s. Would move to version: %s",
-		currentRelease.ChartVersion, currentChart.ChartVersion)
+	var message string
+	if currentRelease.ChartVersion != currentChart.ChartVersion {
+		message = fmt.Sprintf("Current version: %s. Would move to version: %s",
+			currentRelease.ChartVersion, currentChart.ChartVersion)
+	} else {
+		message = fmt.Sprintf("No op, already at version: %s", currentRelease.ChartVersion)
+	}
 	report = &configv1alpha1.ReleaseReport{
 		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.UpgradeHelmAction),

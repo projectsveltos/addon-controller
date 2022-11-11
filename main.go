@@ -62,7 +62,7 @@ var (
 
 const (
 	defaultReconcilers = 10
-	defaultWorkers     = 10
+	defaultWorkers     = 20
 )
 
 func main() {

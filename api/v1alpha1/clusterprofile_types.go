@@ -115,6 +115,18 @@ type HelmChart struct {
 	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
 }
 
+// StopMatchingBehavior indicates what will happen when Cluster stops matching
+// a ClusterProfile. By default, withdrawpolicies, deployed Helm charts and Kubernetes
+// resources will be removed from Cluster. LeavePolicy instead leaves Helm charts
+// and Kubernetes policies in the Cluster.
+type StopMatchingBehavior string
+
+// Define the StopMatchingBehavior constants.
+const (
+	WithdrawPolicies StopMatchingBehavior = "WithdrawPolicies"
+	LeavePolicies    StopMatchingBehavior = "LeavePolicies"
+)
+
 // ClusterProfileSpec defines the desired state of ClusterProfile
 type ClusterProfileSpec struct {
 	// ClusterSelector identifies ClusterAPI clusters to associate to.
@@ -127,9 +139,20 @@ type ClusterProfileSpec struct {
 	// - Continuous means first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such a cluster. Any subsequent feature configuration
 	// change will be applied into the matching workload clusters.
+	// - DryRun means no change will be propagated to any matching cluster. A report
+	// instead will be generated summarizing what would happen in any matching cluster
+	// because of the changes made to ClusterProfile while in DryRun mode.
 	// +kubebuilder:default:=Continuous
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
+
+	// StopMatchingBehavior indicates what behavior should be when a Cluster stop matching
+	// the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
+	// be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
+	// leave ClusterProfile deployed policies in the Cluster.
+	// +kubebuilder:default:=WithdrawPolicies
+	// +optional
+	StopMatchingBehavior StopMatchingBehavior `json:"stopMatchingBehavior,omitempty"`
 
 	// PolicyRefs references all the ConfigMaps containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.

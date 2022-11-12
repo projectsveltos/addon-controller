@@ -489,7 +489,9 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 			// policy would be withdrawn
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) {
+				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) &&
+					!isLeavePolicies(clusterSummary, logger) {
+
 					undeployed = append(undeployed, configv1alpha1.ResourceReport{
 						Resource: configv1alpha1.Resource{
 							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
@@ -509,7 +511,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 				}
 
 				if canDelete(&r, currentPolicies) {
-					err = remoteClient.Delete(ctx, &r)
+					err = handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
 					if err != nil {
 						return nil, err
 					}
@@ -519,6 +521,23 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 	}
 
 	return undeployed, nil
+}
+
+func handleResourceDelete(ctx context.Context, remoteClient client.Client, policy client.Object,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+
+	// If mode is set to LeavePolicies, leave policies in the workload cluster.
+	// Remove all labels added by Sveltos.
+	if isLeavePolicies(clusterSummary, logger) {
+		labels := policy.GetLabels()
+		delete(labels, ReferenceLabelKind)
+		delete(labels, ReferenceLabelName)
+		delete(labels, ReferenceLabelNamespace)
+		policy.SetLabels(labels)
+		return remoteClient.Update(ctx, policy)
+	}
+
+	return remoteClient.Delete(ctx, policy)
 }
 
 // canDelete returns true if a policy can be deleted. For a policy to be deleted:
@@ -533,7 +552,21 @@ func canDelete(policy client.Object, currentReferencedPolicies map[string]config
 	if _, ok := currentReferencedPolicies[name]; ok {
 		return false
 	}
+
 	return true
+}
+
+// isLeavePolicies returns true if:
+// - ClusterSummary is marked for deletion
+// - StopMatchingBehavior is set to LeavePolicies
+func isLeavePolicies(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) bool {
+	if !clusterSummary.DeletionTimestamp.IsZero() &&
+		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1alpha1.LeavePolicies {
+
+		logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
+		return true
+	}
+	return false
 }
 
 // hasLabel search if key is one of the label.

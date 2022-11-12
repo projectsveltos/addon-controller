@@ -116,7 +116,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -133,7 +133,7 @@ var _ = Describe("DryRun", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "mysql", ChartVersion: "9.3.3", Namespace: "mysql"},
+			{ReleaseName: "mysql", ChartVersion: "9.4.3", Namespace: "mysql"},
 		}
 
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
@@ -173,7 +173,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -267,7 +267,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -312,7 +312,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,

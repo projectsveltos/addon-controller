@@ -69,6 +69,8 @@ var (
 	GetPolicyInfo                = getPolicyInfo
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
+	CanDelete                    = canDelete
+	HandleResourceDelete         = handleResourceDelete
 
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs

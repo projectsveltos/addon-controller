@@ -28,9 +28,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
@@ -50,22 +51,22 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	defer r.PolicyMux.Unlock()
 
 	// Following is needed as o.GetObjectKind().GroupVersionKind().Kind is not set
-	var key configv1alpha1.PolicyRef
+	var key libsveltosv1alpha1.PolicyRef
 	switch o.(type) {
 	case *corev1.ConfigMap:
-		key = configv1alpha1.PolicyRef{
+		key = libsveltosv1alpha1.PolicyRef{
 			Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 			Namespace: o.GetNamespace(),
 			Name:      o.GetName(),
 		}
 	case *corev1.Secret:
-		key = configv1alpha1.PolicyRef{
+		key = libsveltosv1alpha1.PolicyRef{
 			Kind:      string(configv1alpha1.SecretReferencedResourceKind),
 			Namespace: o.GetNamespace(),
 			Name:      o.GetName(),
 		}
 	default:
-		key = configv1alpha1.PolicyRef{
+		key = libsveltosv1alpha1.PolicyRef{
 			Kind:      o.GetObjectKind().GroupVersionKind().Kind,
 			Namespace: o.GetNamespace(),
 			Name:      o.GetName(),
@@ -74,9 +75,9 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("referenced key: %s", key))
 
-	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).len())
+	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).Len())
 
-	consumers := r.getReferenceMapForEntry(&key).items()
+	consumers := r.getReferenceMapForEntry(&key).Items()
 	for i := range consumers {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("requeue consumer: %s", consumers[i]))
 		requests[i] = ctrl.Request{

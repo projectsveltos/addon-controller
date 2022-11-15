@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= v0.2.0
 
 # Get cluster-api version and build ldflags
 clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
@@ -35,6 +35,7 @@ clusterapi_major := $(word 1,$(clusterapi_version_tuple))
 clusterapi_minor := $(word 2,$(clusterapi_version_tuple))
 clusterapi_patch := $(word 3,$(clusterapi_version_tuple))
 CLUSTERAPI_LDFLAGS := "-X 'sigs.k8s.io/cluster-api/version.gitMajor=$(clusterapi_major)' -X 'sigs.k8s.io/cluster-api/version.gitMinor=$(clusterapi_minor)' -X 'sigs.k8s.io/cluster-api/version.gitVersion=$(clusterapi_version)'"
+
 
 .PHONY: all
 all: build
@@ -173,7 +174,7 @@ NUM_NODES ?= 5
 
 .PHONY: test
 test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v pkg/deployer/fake |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
 
 .PHONY: kind-test
 kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv
@@ -223,10 +224,13 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 #
 # add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
 # It requires control cluster to exist. So first "make create-control-cluster" then run this target.
+# Once generated, remove
+#      enforce: "{{ .podSecurityStandard.enforce }}"
+#      enforce-version: "latest"
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
-	KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
+	ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-  		--worker-machine-count=1 > $(KIND_CLUSTER_YAML)
+  		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
 
 create-control-cluster:
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
@@ -239,6 +243,9 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Load projectsveltos image into cluster'
 	$(MAKE) load-image
 	
+	@echo 'Install libsveltos CRDs'
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+
 	# Install projectsveltos controller-manager components
 	@echo 'Install projectsveltos controller-manager components'
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}

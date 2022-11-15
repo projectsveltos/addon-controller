@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 // ClusterPredicates predicates for v1Cluster. ClusterProfileReconciler watches v1Cluster events

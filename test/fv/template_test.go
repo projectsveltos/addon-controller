@@ -29,7 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 const (
@@ -47,7 +48,7 @@ data:
 
 var _ = Describe("Template", func() {
 	const (
-		namePrefix = "template"
+		namePrefix = "template-"
 	)
 
 	It("Deploy a template correctly", Label("FV"), func() {
@@ -65,9 +66,9 @@ var _ = Describe("Template", func() {
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -107,7 +108,7 @@ var _ = Describe("Template", func() {
 		Byf("Changing clusterprofile to not reference configmap anymore")
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

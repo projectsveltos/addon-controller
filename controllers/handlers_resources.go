@@ -29,8 +29,10 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 func deployResources(ctx context.Context, c client.Client,
@@ -39,7 +41,7 @@ func deployResources(ctx context.Context, c client.Client,
 
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
@@ -121,12 +123,17 @@ func undeployResources(ctx context.Context, c client.Client,
 
 	logger = logger.WithValues("clustersummary", clusterSummary.Name)
 
-	remoteClient, err := getKubernetesClient(ctx, logger, c, clusterNamespace, clusterName)
+	s, err := InitScheme()
 	if err != nil {
 		return err
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s, clusterNamespace, clusterName)
+	if err != nil {
+		return err
+	}
+
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
 	if err != nil {
 		return err
 	}
@@ -201,7 +208,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	return h.Sum(nil), nil
 }
 
-func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
+func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []libsveltosv1alpha1.PolicyRef {
 	return clusterSummary.Spec.ClusterProfileSpec.PolicyRefs
 }
 

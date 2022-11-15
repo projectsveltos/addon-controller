@@ -26,7 +26,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {

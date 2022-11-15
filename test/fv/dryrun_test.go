@@ -26,7 +26,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 const (
@@ -69,7 +70,7 @@ rules:
 
 var _ = Describe("DryRun", func() {
 	const (
-		namePrefix = "drynrun"
+		namePrefix = "dry-run-"
 	)
 
 	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts", Label("FV"), func() {
@@ -87,7 +88,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Create(context.TODO(), kongSAConfigMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile in Continuous syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
@@ -99,7 +100,7 @@ var _ = Describe("DryRun", func() {
 			clusterProfile.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: kongSAConfigMap.Namespace,
@@ -115,7 +116,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -132,7 +133,7 @@ var _ = Describe("DryRun", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "mysql", ChartVersion: "9.3.3", Namespace: "mysql"},
+			{ReleaseName: "mysql", ChartVersion: "9.4.3", Namespace: "mysql"},
 		}
 
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
@@ -149,7 +150,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Create(context.TODO(), kongRoleConfigMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		dryRunClusterProfile := getClusterprofile(namePrefix, map[string]string{key: value})
+		dryRunClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		dryRunClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(k8sClient.Create(context.TODO(), dryRunClusterProfile)).To(Succeed())
 
@@ -159,7 +160,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Update ClusterProfile %s to reference configMaps with Kong's configuration", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongSAConfigMap.Name},
 		}
@@ -172,7 +173,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -266,7 +267,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -303,7 +304,7 @@ var _ = Describe("DryRun", func() {
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 		}
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
@@ -311,7 +312,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "9.3.3",
+				ChartVersion:     "9.4.3",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,

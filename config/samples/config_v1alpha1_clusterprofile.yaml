@@ -32,6 +32,6 @@ spec:
     releaseNamespace: projectcontour
     helmChartAction: Install
   policyRefs:
-  - name: kyverno-disallow-gateway-2
+  - name: kyverno-disallow-gateway-update
     namespace: default
-
+    kind: ConfigMap

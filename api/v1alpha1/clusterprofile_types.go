@@ -22,6 +22,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 const (
@@ -43,26 +45,6 @@ const (
 	SecretReferencedResourceKind    ReferencedResourceKind = "Secret"
 	ConfigMapReferencedResourceKind ReferencedResourceKind = "ConfigMap"
 )
-
-// PolicyRef specifies a resource containing one or more policy
-// to deploy in matching CAPI Clusters.
-type PolicyRef struct {
-	// Namespace of the referenced resource.
-	// +kubebuilder:validation:MinLength=1
-	Namespace string `json:"namespace"`
-
-	// Name of the rreferenced resource.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// Kind of the resource. Supported kinds are: Secrets and ConfigMaps.
-	// +kubebuilder:validation:Enum=Secret;ConfigMap
-	Kind string `json:"kind"`
-}
-
-func (r PolicyRef) String() string {
-	return r.Kind + "-" + r.Namespace + "-" + r.Name
-}
 
 type DryRunReconciliationError struct{}
 
@@ -133,6 +115,18 @@ type HelmChart struct {
 	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
 }
 
+// StopMatchingBehavior indicates what will happen when Cluster stops matching
+// a ClusterProfile. By default, withdrawpolicies, deployed Helm charts and Kubernetes
+// resources will be removed from Cluster. LeavePolicy instead leaves Helm charts
+// and Kubernetes policies in the Cluster.
+type StopMatchingBehavior string
+
+// Define the StopMatchingBehavior constants.
+const (
+	WithdrawPolicies StopMatchingBehavior = "WithdrawPolicies"
+	LeavePolicies    StopMatchingBehavior = "LeavePolicies"
+)
+
 // ClusterProfileSpec defines the desired state of ClusterProfile
 type ClusterProfileSpec struct {
 	// ClusterSelector identifies ClusterAPI clusters to associate to.
@@ -145,14 +139,25 @@ type ClusterProfileSpec struct {
 	// - Continuous means first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such a cluster. Any subsequent feature configuration
 	// change will be applied into the matching workload clusters.
+	// - DryRun means no change will be propagated to any matching cluster. A report
+	// instead will be generated summarizing what would happen in any matching cluster
+	// because of the changes made to ClusterProfile while in DryRun mode.
 	// +kubebuilder:default:=Continuous
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
+	// StopMatchingBehavior indicates what behavior should be when a Cluster stop matching
+	// the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
+	// be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
+	// leave ClusterProfile deployed policies in the Cluster.
+	// +kubebuilder:default:=WithdrawPolicies
+	// +optional
+	StopMatchingBehavior StopMatchingBehavior `json:"stopMatchingBehavior,omitempty"`
+
 	// PolicyRefs references all the ConfigMaps containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional
-	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
+	PolicyRefs []libsveltosv1alpha1.PolicyRef `json:"policyRefs,omitempty"`
 
 	// Helm charts
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`

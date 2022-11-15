@@ -5,10 +5,11 @@
 
 # Sveltos
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/main/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/logos/logo.png" width="200">
 
 ## What it is
-Sveltos is tool for policy driven management of kubernetes resources and helm charts in [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) powered Kubernetes clusters. Sveltos provides declarative APIs to provision  features like Helm charts, ingress controllers, CNIs, storage classes and other resources in a given set of Kubernetes clusters. Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
+Sveltos provides declarative APIs allowing you to deploy applications across multiple Kubernetes clusters.
+Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
 
 ## How it works
 The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 
@@ -67,12 +68,35 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 ## Features List
 1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))
 2. Sync Modes: OneTime, Continuous or DryRun  (see [video](https://youtu.be/gfWN_QJAL6k))
-3. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
-4. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
-5. Conflict detection
-6. Declaritive API and CLI [sveltosctl](https://github.com/projectsveltos/sveltosctl)
+3. Cluster classification
+4. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
+5. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
+6. Conflict detection
+7. Declaritive API and CLI [sveltosctl](https://github.com/projectsveltos/sveltosctl)
 
-## Install Sveltos on your laptop using the make cmd
+## Install Sveltos on any local or remote Kubernetes cluster.
+
+First, install ClusterAPI
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
+```
+
+Second, initialize the management cluster
+```
+https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
+```
+
+Third, install Sveltos applying following manifest YAMLs
+
+```
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+```
+
+```
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/manifest.yaml
+```
+
+## Install Sveltos on your laptop using the make targets
 Just execute `make create-cluster` 
 The command will:
 - create a [KIND](https://sigs.k8s.io/kind) cluster on your laptop;
@@ -103,30 +127,12 @@ clusterctl init --infrastructure docker
 
 Fourth, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/manifest.yaml
 ```
 
 Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/service_monitor.yaml
-```
-
-
-## Install Sveltos on any local or remote Kubernetes cluster.
-
-First, install ClusterAPI
-```
-https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
-```
-
-Second, initialize the management cluster
-```
-https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
-```
-
-Third, install Sveltos applying this manifest YAML
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/cluster-api-feature-manager/main/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/service_monitor.yaml
 ```
 
 # Understanding how to configure and use Sveltos

@@ -1,12 +1,9 @@
 /*
 Copyright 2022. projectsveltos.io. All rights reserved.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,18 +11,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package deployer
+package controllers
 
 import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 var (
@@ -119,5 +118,27 @@ func newChartHistogram(clusterNamespace, clusterName string,
 }
 
 func logCollectorError(err error, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info(fmt.Sprint("failed to register collector: %w", err))
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to register collector: %s", err))
+}
+
+func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
+	logger logr.Logger) {
+
+	if featureID == string(configv1alpha1.FeatureResources) {
+		programResourceDurationHistogram.Observe(elapsed.Seconds())
+		clusterHistogram := newResourceHistogram(clusterNamespace, clusterName, logger)
+		if clusterHistogram != nil {
+			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
+				clusterNamespace, clusterName, featureID))
+			clusterHistogram.Observe(elapsed.Seconds())
+		}
+	} else {
+		programChartDurationHistogram.Observe(elapsed.Seconds())
+		clusterHistogram := newChartHistogram(clusterNamespace, clusterName, logger)
+		if clusterHistogram != nil {
+			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
+				clusterNamespace, clusterName, featureID))
+			clusterHistogram.Observe(elapsed.Seconds())
+		}
+	}
 }

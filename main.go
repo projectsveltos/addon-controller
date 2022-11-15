@@ -36,10 +36,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
+	"github.com/projectsveltos/sveltos-manager/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -59,7 +62,7 @@ var (
 
 const (
 	defaultReconcilers = 10
-	defaultWorkers     = 10
+	defaultWorkers     = 20
 )
 
 func main() {
@@ -109,12 +112,16 @@ func main() {
 
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
+	logsettings.RegisterForLogSettings(ctx,
+		libsveltosv1alpha1.ComponentSveltosManager, ctrl.Log.WithName("log-setter"),
+		ctrl.GetConfigOrDie())
+
 	if err = (&controllers.ClusterProfileReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
-		ClusterMap:           make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterProfileMap:    make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterProfiles:      make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterMap:           make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterProfileMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterProfiles:      make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
@@ -126,8 +133,8 @@ func main() {
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		Deployer:             d,
-		ReferenceMap:         make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterSummaryMap:    make(map[types.NamespacedName]*controllers.Set),
+		ReferenceMap:         make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {

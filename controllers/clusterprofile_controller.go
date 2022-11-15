@@ -41,9 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 // ClusterProfileReconciler reconciles a ClusterProfile object
@@ -54,11 +57,11 @@ type ClusterProfileReconciler struct {
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
 	// key: CAPI Cluster namespace/name; value: set of all ClusterProfiles matching the Cluster
-	ClusterMap map[configv1alpha1.PolicyRef]*Set
+	ClusterMap map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set
 	// key: ClusterProfile; value: set of CAPI Clusters matched
-	ClusterProfileMap map[configv1alpha1.PolicyRef]*Set
+	ClusterProfileMap map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set
 	// key: ClusterProfile; value ClusterProfile Selector
-	ClusterProfiles map[configv1alpha1.PolicyRef]configv1alpha1.Selector
+	ClusterProfiles map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector
 
 	// Reason for the two maps:
 	// ClusterProfile, via ClusterSelector, matches CAPI Clusters based on Cluster labels.
@@ -420,7 +423,7 @@ func (r *ClusterProfileReconciler) cleanClusterReports(ctx context.Context,
 func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		ready, err := r.isClusterReadyToBeConfigured(ctx, clusterProfileScope, &cluster)
+		ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, &cluster, clusterProfileScope.Logger)
 		if err != nil {
 			return err
 		}
@@ -487,6 +490,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 		return err
 	}
 
+	foundClusterSummaries := false
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterProfileScope.ClusterProfile) {
@@ -497,6 +501,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 						cs.Namespace, cs.Name))
 					return err
 				}
+				foundClusterSummaries = true
 			}
 			// update SyncMode
 			err := r.updateClusterSummarySyncMode(ctx, clusterProfileScope.ClusterProfile, cs)
@@ -504,6 +509,10 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 				return err
 			}
 		}
+	}
+
+	if foundClusterSummaries {
+		return fmt.Errorf("clusterSummaries still present")
 	}
 
 	return nil
@@ -842,81 +851,35 @@ func (r *ClusterProfileReconciler) updateClusterConfigurationClusterProfileResou
 	return err
 }
 
-// isClusterReadyToBeConfigured gets all Machines for a given CAPI Cluster and returns true
-// if at least one control plane machine is in running phase
-func (r *ClusterProfileReconciler) isClusterReadyToBeConfigured(
-	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-	cluster *corev1.ObjectReference,
-) (bool, error) {
-
-	machineList, err := r.getMachinesForCluster(ctx, clusterProfileScope, cluster)
-	if err != nil {
-		return false, err
-	}
-
-	for i := range machineList.Items {
-		if util.IsControlPlaneMachine(&machineList.Items[i]) &&
-			machineList.Items[i].Status.GetTypedPhase() == clusterv1.MachinePhaseRunning {
-
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-// getMachinesForCluster find all Machines for a given CAPI Cluster.
-func (r *ClusterProfileReconciler) getMachinesForCluster(
-	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-	cluster *corev1.ObjectReference,
-) (*clusterv1.MachineList, error) {
-
-	listOptions := []client.ListOption{
-		client.InNamespace(cluster.Namespace),
-		client.MatchingLabels{clusterv1.ClusterLabelName: cluster.Name},
-	}
-	var machineList clusterv1.MachineList
-	if err := r.Client.List(ctx, &machineList, listOptions...); err != nil {
-		clusterProfileScope.Error(err, fmt.Sprintf("unable to list Machines for CAPI Cluster %s/%s",
-			cluster.Namespace, cluster.Name))
-		return nil, err
-	}
-	clusterProfileScope.V(logs.LogDebug).Info(fmt.Sprintf("Found %d machine", len(machineList.Items)))
-
-	return &machineList, nil
-}
-
 func (r *ClusterProfileReconciler) updatesMaps(clusterProfileScope *scope.ClusterProfileScope) {
-	currentClusters := &Set{}
+	currentClusters := &libsveltosset.Set{}
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterInfo := &configv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
-		currentClusters.insert(clusterInfo)
+		clusterInfo := &libsveltosv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
+		currentClusters.Insert(clusterInfo)
 	}
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterProfileInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfileScope.Name()}
+	clusterProfileInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfileScope.Name()}
 	// Get list of Clusters not matched anymore by ClusterProfile
-	var toBeRemoved []configv1alpha1.PolicyRef
+	var toBeRemoved []libsveltosv1alpha1.PolicyRef
 	if v, ok := r.ClusterProfileMap[clusterProfileInfo]; ok {
-		toBeRemoved = v.difference(currentClusters)
+		toBeRemoved = v.Difference(currentClusters)
 	}
 
 	// For each currently matching Cluster, add ClusterProfile as consumer
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterInfo := &configv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
-		r.getClusterMapForEntry(clusterInfo).insert(&clusterProfileInfo)
+		clusterInfo := &libsveltosv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
+		r.getClusterMapForEntry(clusterInfo).Insert(&clusterProfileInfo)
 	}
 
 	// For each Cluster not matched anymore, remove ClusterProfile as consumer
 	for i := range toBeRemoved {
 		clusterName := toBeRemoved[i]
-		r.getClusterMapForEntry(&clusterName).erase(&clusterProfileInfo)
+		r.getClusterMapForEntry(&clusterName).Erase(&clusterProfileInfo)
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
@@ -924,10 +887,10 @@ func (r *ClusterProfileReconciler) updatesMaps(clusterProfileScope *scope.Cluste
 	r.ClusterProfiles[clusterProfileInfo] = clusterProfileScope.ClusterProfile.Spec.ClusterSelector
 }
 
-func (r *ClusterProfileReconciler) getClusterMapForEntry(entry *configv1alpha1.PolicyRef) *Set {
+func (r *ClusterProfileReconciler) getClusterMapForEntry(entry *libsveltosv1alpha1.PolicyRef) *libsveltosset.Set {
 	s := r.ClusterMap[*entry]
 	if s == nil {
-		s = &Set{}
+		s = &libsveltosset.Set{}
 		r.ClusterMap[*entry] = s
 	}
 	return s

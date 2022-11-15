@@ -155,8 +155,6 @@ spec:
                     apiVersion: pod-security.admission.config.k8s.io/v1beta1
                     kind: PodSecurityConfiguration
                     defaults:
-                      enforce: "{{ .podSecurityStandard.enforce }}"
-                      enforce-version: "latest"
                       audit: "{{ .podSecurityStandard.audit }}"
                       audit-version: "latest"
                       warn: "{{ .podSecurityStandard.warn }}"

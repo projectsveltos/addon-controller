@@ -43,8 +43,11 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/utils"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 const (
@@ -200,7 +203,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 		// If policy already exists, just get current version and update it by overridding
 		// all metadata and spec.
 		// If policy does not exist already, create it
-		dr, err := getDynamicResourceInterface(remoteConfig, policy)
+		dr, err := utils.GetDynamicResourceInterface(remoteConfig, policy)
 		if err != nil {
 			return nil, err
 		}
@@ -265,7 +268,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				continue
 			}
 
-			policy, err := getUnstructured([]byte(elements[i]))
+			policy, err := utils.GetUnstructured([]byte(elements[i]))
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 				return nil, err
@@ -282,7 +285,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 					return nil, err
 				}
 
-				policy, err = getUnstructured([]byte(instance))
+				policy, err = utils.GetUnstructured([]byte(instance))
 				if err != nil {
 					logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 					return nil, err
@@ -343,7 +346,12 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	clusterClient, err := getKubernetesClient(ctx, logger, c,
+	s, err := InitScheme()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
 	if err != nil {
 		return nil, nil, err
@@ -354,7 +362,7 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
 func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client,
-	references []configv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
+	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
 
 	objects := make([]client.Object, 0)
 	for i := range references {
@@ -481,7 +489,9 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 			// policy would be withdrawn
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) {
+				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) &&
+					!isLeavePolicies(clusterSummary, logger) {
+
 					undeployed = append(undeployed, configv1alpha1.ResourceReport{
 						Resource: configv1alpha1.Resource{
 							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
@@ -501,7 +511,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 				}
 
 				if canDelete(&r, currentPolicies) {
-					err = remoteClient.Delete(ctx, &r)
+					err = handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
 					if err != nil {
 						return nil, err
 					}
@@ -511,6 +521,23 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 	}
 
 	return undeployed, nil
+}
+
+func handleResourceDelete(ctx context.Context, remoteClient client.Client, policy client.Object,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+
+	// If mode is set to LeavePolicies, leave policies in the workload cluster.
+	// Remove all labels added by Sveltos.
+	if isLeavePolicies(clusterSummary, logger) {
+		labels := policy.GetLabels()
+		delete(labels, ReferenceLabelKind)
+		delete(labels, ReferenceLabelName)
+		delete(labels, ReferenceLabelNamespace)
+		policy.SetLabels(labels)
+		return remoteClient.Update(ctx, policy)
+	}
+
+	return remoteClient.Delete(ctx, policy)
 }
 
 // canDelete returns true if a policy can be deleted. For a policy to be deleted:
@@ -525,7 +552,21 @@ func canDelete(policy client.Object, currentReferencedPolicies map[string]config
 	if _, ok := currentReferencedPolicies[name]; ok {
 		return false
 	}
+
 	return true
+}
+
+// isLeavePolicies returns true if:
+// - ClusterSummary is marked for deletion
+// - StopMatchingBehavior is set to LeavePolicies
+func isLeavePolicies(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) bool {
+	if !clusterSummary.DeletionTimestamp.IsZero() &&
+		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1alpha1.LeavePolicies {
+
+		logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
+		return true
+	}
+	return false
 }
 
 // hasLabel search if key is one of the label.

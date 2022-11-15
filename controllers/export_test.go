@@ -22,8 +22,6 @@ var (
 	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
 	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary
 	DeleteClusterSummary         = (*ClusterProfileReconciler).deleteClusterSummary
-	GetMachinesForCluster        = (*ClusterProfileReconciler).getMachinesForCluster
-	IsClusterReadyToBeConfigured = (*ClusterProfileReconciler).isClusterReadyToBeConfigured
 	UpdateClusterConfiguration   = (*ClusterProfileReconciler).updateClusterConfiguration
 	CleanClusterConfiguration    = (*ClusterProfileReconciler).cleanClusterConfiguration
 	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports
@@ -60,8 +58,6 @@ var (
 	GenericUndeploy         = genericUndeploy
 
 	GetClusterSummary            = getClusterSummary
-	GetSecretData                = getSecretData
-	GetKubernetesClient          = getKubernetesClient
 	AddLabel                     = addLabel
 	CreateNamespace              = createNamespace
 	GetEntryKey                  = getEntryKey
@@ -73,6 +69,8 @@ var (
 	GetPolicyInfo                = getPolicyInfo
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
+	CanDelete                    = canDelete
+	HandleResourceDelete         = handleResourceDelete
 
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
@@ -94,7 +92,6 @@ type (
 )
 
 var (
-	GetUnstructured      = getUnstructured
 	AddOwnerReference    = addOwnerReference
 	RemoveOwnerReference = removeOwnerReference
 )
@@ -107,14 +104,5 @@ var (
 )
 
 var (
-	Insert = (*Set).insert
-	Erase  = (*Set).erase
-	Len    = (*Set).len
-	Items  = (*Set).items
-	Has    = (*Set).has
-)
-
-var (
 	GetClusterReportName = getClusterReportName
-	CreateKubeconfig     = createKubeconfig
 )

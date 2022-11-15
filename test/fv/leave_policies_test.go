@@ -23,47 +23,76 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 const (
-	devNamespace = `apiVersion: v1
-kind: Namespace
+	nginxDeployment = `apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: %s
+  namespace: %s
   labels:
-    name: fv`
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.14.2
+        ports:
+        - containerPort: 80`
 )
 
-var _ = Describe("Feature", Serial, func() {
+var _ = Describe("LeavePolicies", func() {
 	const (
-		namePrefix = "paused-"
+		namePrefix = "leave-policies-"
 	)
 
-	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV"), func() {
-		Byf("Setting Cluster as paused")
-		setClusterPausedField(true)
-
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Deploy resources referenced in ResourceRef. When Cluster stops matching, policies are left on Cluster.", Label("FV"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s. StopMatchingBehavior set to LeavePolicies",
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.StopMatchingBehavior = configv1alpha1.LeavePolicies
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
 
 		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		devNamespaceName := randomString()
-		Byf("Create a configMap with a Namespace")
-		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), fmt.Sprintf(devNamespace, devNamespaceName))
+		configMapNs := randomString()
+		Byf("Create configMap's namespace %s", configMapNs)
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNs,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
+		deploymentName := "nginx-deployment-" + randomString()
+		deploymentNamespace := "default"
+
+		Byf("Create a configMap with a nginx Deployment")
+		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(nginxDeployment, deploymentName, deploymentNamespace))
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+		currentConfigMap := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -84,48 +113,38 @@ var _ = Describe("Feature", Serial, func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying namespace is not created in the workload cluster as cluster is paused")
-		Consistently(func() bool {
-			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
-			return apierrors.IsNotFound(err)
-		}, timeout/2, pollingInterval).Should(BeTrue())
-
-		Byf("Setting Cluster as unpaused")
-		setClusterPausedField(false)
-
-		Byf("Verifying namespace is created in the workload cluster as cluster is not paused anymore")
+		Byf("Verifying proper Nginx Deployment is created in the workload cluster")
 		Eventually(func() error {
-			currentNamespace := &corev1.Namespace{}
-			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
+			currentDeployment := &appsv1.Deployment{}
+			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: deploymentName, Namespace: deploymentNamespace}, currentDeployment)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
-		Byf("Changing clusterprofile to not reference configmap anymore")
+		policies := []policy{
+			{kind: "Deployment", name: deploymentName, namespace: deploymentNamespace, group: "apps"},
+		}
+		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+
+		Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.ClusterSelector = configv1alpha1.Selector(fmt.Sprintf("%s=%s", key, value+randomString()))
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-
-		Byf("Verifying policy is removed in the workload cluster")
+		Byf("Verifying ClusterSummary is gone")
 		Eventually(func() bool {
-			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: devNamespaceName}, currentNamespace)
-			return err != nil &&
-				apierrors.IsNotFound(err)
+			_, err = getClusterSummary(context.TODO(),
+				clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying nginx deployment is still in the workload cluster")
+		currentDeployment := &appsv1.Deployment{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Name: deploymentName, Namespace: deploymentNamespace}, currentDeployment)).To(Succeed())
 
 		deleteClusterProfile(clusterProfile)
 	})
 })
-
-func setClusterPausedField(paused bool) {
-	cluster := &clusterv1.Cluster{}
-	Expect(k8sClient.Get(context.TODO(),
-		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name}, cluster)).To(Succeed())
-	cluster.Spec.Paused = paused
-	Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
-}

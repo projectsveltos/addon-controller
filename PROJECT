@@ -1,8 +1,8 @@
 domain: projectsveltos.io
 layout:
 - go.kubebuilder.io/v3
-projectName: cluster-api-feature-manager
-repo: github.com/projectsveltos/cluster-api-feature-manager
+projectName: sveltos-manager
+repo: github.com/projectsveltos/sveltos-manager
 resources:
 - api:
     crdVersion: v1
@@ -10,7 +10,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterProfile
-  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -18,7 +18,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterSummary
-  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -26,7 +26,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterConfiguration
-  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -34,7 +34,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: SubstitutionRule
-  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -42,6 +42,6 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterReport
-  path: github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1
+  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
   version: v1alpha1
 version: "3"

@@ -30,11 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
-	"github.com/projectsveltos/cluster-api-feature-manager/internal/test/helpers"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
+	"github.com/projectsveltos/sveltos-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/internal/test/helpers"
 )
 
 var (
@@ -95,8 +97,8 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		Client:            c,
 		Scheme:            scheme,
 		Deployer:          dep,
-		ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+		ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:         sync.Mutex{},
 	}
 }
@@ -105,9 +107,9 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 	return &controllers.ClusterProfileReconciler{
 		Client:            c,
 		Scheme:            scheme,
-		ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-		ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterProfileMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterProfiles:   make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
 		Mux:               sync.Mutex{},
 	}
 }

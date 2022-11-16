@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
@@ -47,11 +47,11 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
-	consumers := r.getClusterMapForEntry(&clusterInfo).items()
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
+	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{
@@ -101,11 +101,11 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
+	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).len())
-	consumers := r.getClusterMapForEntry(&clusterInfo).items()
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
+	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{

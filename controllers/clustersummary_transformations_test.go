@@ -29,8 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 var _ = Describe("ClustersummaryTransformations map functions", func() {
@@ -58,7 +60,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
@@ -77,7 +79,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      randomString(),
@@ -99,22 +101,22 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
-		set := controllers.Set{}
-		key := configv1alpha1.PolicyRef{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
+		set := libsveltosset.Set{}
+		key := libsveltosv1alpha1.PolicyRef{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
 
-		controllers.Insert(&set, &configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
+		set.Insert(&libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests := controllers.RequeueClusterSummaryForReference(reconciler, configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
-		controllers.Insert(&set, &configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
+		set.Insert(&libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests = controllers.RequeueClusterSummaryForReference(reconciler, configMap)

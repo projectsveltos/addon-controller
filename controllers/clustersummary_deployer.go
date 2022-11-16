@@ -32,16 +32,17 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
-type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef
+type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []libsveltosv1alpha1.PolicyRef
 
 type feature struct {
 	id          configv1alpha1.FeatureID
@@ -129,7 +130,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Feature must be (re)deployed.
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), false, genericDeploy); err != nil {
+		clusterSummary.Name, string(f.id), false, genericDeploy, programDuration); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
@@ -210,7 +211,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), true, genericUndeploy); err != nil {
+		clusterSummary.Name, string(f.id), true, genericUndeploy, programDuration); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
@@ -370,7 +371,7 @@ func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *
 
 func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, featureID configv1alpha1.FeatureID,
-	references []configv1alpha1.PolicyRef, logger logr.Logger) error {
+	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
 	// Collect  all referenced configMaps/secrets.

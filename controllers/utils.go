@@ -19,37 +19,22 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"os"
 
-	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/kubectl/pkg/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/logs"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
-const (
-	//nolint: gosec // CAPI secret postfix
-	kubeconfigSecretNamePostfix = "-kubeconfig"
-)
+// +kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 
 type conflictError struct {
 	message string
@@ -125,158 +110,6 @@ func getClusterConfiguration(ctx context.Context, c client.Client,
 	}
 
 	return clusterConfiguration, nil
-}
-
-func getKubernetesRestConfig(ctx context.Context, logger logr.Logger, c client.Client,
-	clusterNamespace, clusterName string) (*rest.Config, error) {
-
-	kubeconfigContent, err := getSecretData(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	kubeconfig, err := createKubeconfig(logger, kubeconfigContent)
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(kubeconfig)
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		logger.Error(err, "BuildConfigFromFlags")
-		return nil, errors.Wrap(err, "BuildConfigFromFlags")
-	}
-
-	return config, nil
-}
-
-// getKubernetesClient returns a client to access CAPI Cluster
-func getKubernetesClient(ctx context.Context, logger logr.Logger, c client.Client,
-	clusterNamespace, clusterName string) (client.Client, error) {
-
-	config, err := getKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
-	if err != nil {
-		return nil, err
-	}
-	logger.V(logs.LogVerbose).Info("return new client")
-	s, err := InitScheme()
-	if err != nil {
-		return nil, err
-	}
-	return client.New(config, client.Options{Scheme: s})
-}
-
-// getSecretData verifies Cluster exists and returns the content of secret containing
-// the kubeconfig for CAPI cluster
-func getSecretData(ctx context.Context, logger logr.Logger, c client.Client,
-	clusterNamespace, clusterName string) ([]byte, error) {
-
-	logger.WithValues("namespace", clusterNamespace, "cluster", clusterName)
-	logger.V(logs.LogVerbose).Info("Get secret")
-	key := client.ObjectKey{
-		Namespace: clusterNamespace,
-		Name:      clusterName,
-	}
-
-	cluster := clusterv1.Cluster{}
-	if err := c.Get(ctx, key, &cluster); err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.Info("Cluster does not exist")
-			return nil, errors.Wrap(err,
-				fmt.Sprintf("Cluster %s/%s does not exist",
-					clusterNamespace,
-					clusterName,
-				))
-		}
-		return nil, err
-	}
-
-	secretName := cluster.Name + kubeconfigSecretNamePostfix
-	logger = logger.WithValues("secret", secretName)
-
-	secret := &corev1.Secret{}
-	key = client.ObjectKey{
-		Namespace: clusterNamespace,
-		Name:      secretName,
-	}
-
-	if err := c.Get(ctx, key, secret); err != nil {
-		logger.Error(err, "failed to get secret")
-		return nil, errors.Wrap(err,
-			fmt.Sprintf("Failed to get secret %s/%s",
-				clusterNamespace, secretName))
-	}
-
-	for k, contents := range secret.Data {
-		logger.V(logs.LogVerbose).Info("Reading secret", "key", k)
-		return contents, nil
-	}
-
-	return nil, nil
-}
-
-// createKubeconfig creates a temporary file with the Kubeconfig to access CAPI cluster
-func createKubeconfig(logger logr.Logger, kubeconfigContent []byte) (string, error) {
-	tmpfile, err := os.CreateTemp("", "kubeconfig")
-	if err != nil {
-		logger.Error(err, "failed to create temporary file")
-		return "", errors.Wrap(err, "os.CreateTemp")
-	}
-	defer tmpfile.Close()
-
-	if _, err := tmpfile.Write(kubeconfigContent); err != nil {
-		logger.Error(err, "failed to write to temporary file")
-		return "", errors.Wrap(err, "failed to write to temporary file")
-	}
-
-	return tmpfile.Name(), nil
-}
-
-// getUnstructured returns an unstructured given a []bytes containing it
-func getUnstructured(object []byte) (*unstructured.Unstructured, error) {
-	request := &unstructured.Unstructured{}
-	universalDeserializer := scheme.Codecs.UniversalDeserializer()
-	_, _, err := universalDeserializer.Decode(object, nil, request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode k8s resource %.50s. Err: %w",
-			string(object), err)
-	}
-
-	return request, nil
-}
-
-// getDynamicResourceInterface returns a dynamic ResourceInterface for the policy's GroupVersionKind
-func getDynamicResourceInterface(config *rest.Config, policy *unstructured.Unstructured) (dynamic.ResourceInterface, error) {
-	if config == nil {
-		return nil, fmt.Errorf("rest.Config is nil")
-	}
-
-	dynClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	gvk := policy.GroupVersionKind()
-
-	dc, err := discovery.NewDiscoveryClientForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
-	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
-		return nil, err
-	}
-	var dr dynamic.ResourceInterface
-	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		// namespaced resources should specify the namespace
-		dr = dynClient.Resource(mapping.Resource).Namespace(policy.GetNamespace())
-	} else {
-		// for cluster-wide resources
-		dr = dynClient.Resource(mapping.Resource)
-	}
-
-	return dr, nil
 }
 
 // validateObjectForUpdate finds if object currently exists. If object exists:

@@ -34,10 +34,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("HandlersHelm", func() {
@@ -494,7 +495,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
 
-		kubeconfig, err := controllers.CreateKubeconfig(klogr.New(), testEnv.Kubeconfig)
+		kubeconfig, err := clusterproxy.CreateKubeconfig(klogr.New(), testEnv.Kubeconfig)
 		Expect(err).To(BeNil())
 
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced

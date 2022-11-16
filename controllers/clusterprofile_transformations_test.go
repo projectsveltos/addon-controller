@@ -30,8 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 var _ = Describe("ClusterProfileReconciler map functions", func() {
@@ -81,30 +83,30 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			ClusterMap:        make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterProfileMap: make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterProfiles:   make(map[configv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterProfileMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterProfiles:   make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		By("Setting ClusterProfileReconciler internal structures")
-		matchingInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: matchingClusterProfile.Name}
+		matchingInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: matchingClusterProfile.Name}
 		reconciler.ClusterProfiles[matchingInfo] = matchingClusterProfile.Spec.ClusterSelector
-		nonMatchingInfo := configv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
+		nonMatchingInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
 
 		// ClusterMap contains, per ClusterName, list of ClusterProfiles matching it.
-		clusterProfileSet := &controllers.Set{}
-		controllers.Insert(clusterProfileSet, &matchingInfo)
-		clusterInfo := configv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+		clusterProfileSet := &libsveltosset.Set{}
+		clusterProfileSet.Insert(&matchingInfo)
+		clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
 
 		// ClusterProfileMap contains, per ClusterProfile, list of matched Clusters.
-		clusterSet1 := &controllers.Set{}
+		clusterSet1 := &libsveltosset.Set{}
 		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
 
-		clusterSet2 := &controllers.Set{}
-		controllers.Insert(clusterSet2, &clusterInfo)
+		clusterSet2 := &libsveltosset.Set{}
+		clusterSet2.Insert(&clusterInfo)
 		reconciler.ClusterProfileMap[matchingInfo] = clusterSet2
 
 		By("Expect only matchingClusterProfile to be requeued")
@@ -118,10 +120,10 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
 
-		controllers.Insert(clusterSet1, &clusterInfo)
+		clusterSet1.Insert(&clusterInfo)
 		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
 
-		controllers.Insert(clusterProfileSet, &nonMatchingInfo)
+		clusterProfileSet.Insert(&nonMatchingInfo)
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
 
 		requests = controllers.RequeueClusterProfileForCluster(reconciler, cluster)
@@ -136,7 +138,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		nonMatchingClusterProfile.Spec.ClusterSelector = matchingClusterProfile.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
-		emptySet := &controllers.Set{}
+		emptySet := &libsveltosset.Set{}
 		reconciler.ClusterProfileMap[matchingInfo] = emptySet
 		reconciler.ClusterProfileMap[nonMatchingInfo] = emptySet
 		reconciler.ClusterMap[clusterInfo] = emptySet

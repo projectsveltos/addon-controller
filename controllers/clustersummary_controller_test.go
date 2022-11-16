@@ -37,11 +37,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
-	fakedeployer "github.com/projectsveltos/cluster-api-feature-manager/pkg/deployer/fake"
-	"github.com/projectsveltos/cluster-api-feature-manager/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers"
+	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
+	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("ClustersummaryController", func() {
@@ -106,8 +108,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -135,8 +137,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -166,8 +168,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -199,8 +201,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -234,7 +236,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -261,8 +263,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -298,8 +300,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -311,7 +313,7 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -339,8 +341,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -362,8 +364,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -407,8 +409,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -465,8 +467,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -527,8 +529,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -586,8 +588,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -644,8 +646,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[configv1alpha1.PolicyRef]*controllers.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*controllers.Set),
+			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
 
@@ -714,7 +716,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
@@ -735,7 +737,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name + randomString(),
@@ -779,7 +781,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
-		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Namespace: namespace,
 				Name:      configMap.Name,

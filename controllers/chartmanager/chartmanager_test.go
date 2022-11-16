@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/cluster-api-feature-manager/api/v1alpha1"
-	"github.com/projectsveltos/cluster-api-feature-manager/controllers/chartmanager"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
 )
 
 const (
@@ -90,20 +90,36 @@ var _ = Describe("Chart manager", func() {
 		removeSubscriptions(c, clusterSummary)
 	})
 
-	It("registerClusterSummaryForCharts registers clusterSummary for all referenced helm charts",
-		func() {
-			manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
-			Expect(err).To(BeNil())
+	It("registerClusterSummaryForCharts registers clusterSummary for all referenced helm charts", func() {
+		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) > 0).To(BeTrue())
 
-			manager.RegisterClusterSummaryForCharts(clusterSummary)
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
 
-			for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-				chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-				By(fmt.Sprintf("Verifying ClusterSummary %s manages helm release %s/%s",
-					clusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
-				Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
-			}
-		})
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+			By(fmt.Sprintf("Verifying ClusterSummary %s manages helm release %s/%s",
+				clusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
+			Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
+		}
+	})
+
+	It("UnregisterClusterSummaryForChart unregisters clusterSummary for specific helm chart", func() {
+		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) > 0).To(BeTrue())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0]
+		Expect(manager.CanManageChart(clusterSummary, chart)).To(BeTrue())
+
+		manager.UnregisterClusterSummaryForChart(clusterSummary, chart)
+		Expect(manager.CanManageChart(clusterSummary, chart)).To(BeFalse())
+	})
 
 	It("canManageChart return true only for the first registered ClusterSummary", func() {
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)

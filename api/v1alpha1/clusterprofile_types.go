@@ -17,10 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"encoding/json"
-
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
@@ -106,8 +103,13 @@ type HelmChart struct {
 	ReleaseNamespace string `json:"releaseNamespace"`
 
 	// Values holds the values for this Helm release.
+	// Go templating with the values from the referenced CAPI Cluster.
+	// Currently following can be referenced:
+	// Cluster => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}
+	// KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+	// InfrastructureProvider => the CAPI cluster infrastructure provider
 	// +optional
-	Values *apiextensionsv1.JSON `json:"values,omitempty"`
+	Values string `json:"values,omitempty"`
 
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install
@@ -194,16 +196,4 @@ type ClusterProfileList struct {
 
 func init() {
 	SchemeBuilder.Register(&ClusterProfile{}, &ClusterProfileList{})
-}
-
-// GetValues unmarshals the raw values to a map[string]interface{} and returns
-// the result.
-func (in *HelmChart) GetValues() (map[string]interface{}, error) {
-	var values map[string]interface{}
-	if in.Values != nil {
-		if err := json.Unmarshal(in.Values.Raw, &values); err != nil {
-			return nil, err
-		}
-	}
-	return values, nil
 }

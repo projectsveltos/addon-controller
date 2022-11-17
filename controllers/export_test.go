@@ -85,6 +85,8 @@ var (
 	CreateReportForUnmanagedHelmRelease      = createReportForUnmanagedHelmRelease
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
 	HandleCharts                             = handleCharts
+
+	InstantiateTemplateValues = instantiateTemplateValues
 )
 
 type (
@@ -94,13 +96,6 @@ type (
 var (
 	AddOwnerReference    = addOwnerReference
 	RemoveOwnerReference = removeOwnerReference
-)
-
-var (
-	IsTemplate          = isTemplate
-	PropValue           = propValue
-	GetObject           = getObject
-	InstantiateTemplate = instantiateTemplate
 )
 
 var (

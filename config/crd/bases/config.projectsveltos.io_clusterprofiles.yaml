@@ -77,8 +77,14 @@ spec:
                       minLength: 1
                       type: string
                     values:
-                      description: Values holds the values for this Helm release.
-                      x-kubernetes-preserve-unknown-fields: true
+                      description: 'Values holds the values for this Helm release.
+                        Go templating with the values from the referenced CAPI Cluster.
+                        Currently following can be referenced: Cluster => CAPI Cluster
+                        for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
+                        0 }} KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                        InfrastructureProvider => the CAPI cluster infrastructure
+                        provider'
+                      type: string
                   required:
                   - chartName
                   - chartVersion

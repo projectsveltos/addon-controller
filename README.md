@@ -5,7 +5,7 @@
 
 # Sveltos
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/logos/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/logos/logo.png" width="200">
 
 ## What it is
 Sveltos provides declarative APIs allowing you to deploy applications across multiple Kubernetes clusters.
@@ -48,6 +48,8 @@ spec:
     releaseName: kyverno-latest
     releaseNamespace: kyverno
     helmChartAction: Install
+    values: |
+      replicaCount: "{{ .Cluster.Spec.Topology.ControlPlane.Replicas }}"
  policyRefs:
   - name: storage-class
     namespace: default
@@ -58,6 +60,8 @@ spec:
 ```
 
 As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+
+Refer to [examples](./examples/) for more complex examples
 
 ## Sveltos in action
 
@@ -89,11 +93,11 @@ https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-
 Third, install Sveltos applying following manifest YAMLs
 
 ```
-kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/v0.2.0/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 ```
 
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```
 
 ## Install Sveltos on your laptop using the make targets
@@ -127,12 +131,12 @@ clusterctl init --infrastructure docker
 
 Fourth, install Sveltos applying this manifest YAML
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/manifest.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```
 
 Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
 ```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/v0.2.0/manifest/service_monitor.yaml
+kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/service_monitor.yaml
 ```
 
 # Understanding how to configure and use Sveltos

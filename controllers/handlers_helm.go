@@ -913,7 +913,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	}
 
 	var values chartutil.Values
-	values, err = requestedChart.GetValues()
+	values, err = getInstantiatedValues(ctx, clusterSummary, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -983,8 +983,8 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	var values map[string]interface{}
-	values, err = requestedChart.GetValues()
+	var values chartutil.Values
+	values, err = getInstantiatedValues(ctx, clusterSummary, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1277,4 +1277,17 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 	})
 
 	return err
+}
+
+func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	requestedChart *configv1alpha1.HelmChart, logger logr.Logger) (chartutil.Values, error) {
+
+	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, requestedChart.ChartName,
+		requestedChart.Values, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	return chartutil.ReadValues([]byte(instantiatedValues))
 }

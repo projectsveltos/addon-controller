@@ -43,7 +43,7 @@ metadata:
     projectsveltos.io/template: "ok"  
 data:
   info: |
-    cidr="{{ Cluster:/spec/clusterNetwork/pods/cidrBlocks/0 }}"`
+    cidr="{{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}"`
 )
 
 var _ = Describe("Template", func() {

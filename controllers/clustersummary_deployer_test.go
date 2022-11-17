@@ -9,9 +9,12 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -27,6 +30,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	var logger logr.Logger
 	var clusterProfile *configv1alpha1.ClusterProfile
 	var clusterSummary *configv1alpha1.ClusterSummary
+	var cluster *clusterv1.Cluster
 	var namespace string
 	var clusterName string
 
@@ -59,6 +63,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, namespace, clusterName)
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      clusterSummary.Spec.ClusterName,
+			},
+		}
 	})
 
 	It("isFeatureDeployed returns false when feature is not deployed", func() {
@@ -261,17 +272,25 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		initObjects := []client.Object{
-			configMap,
-			clusterSummary,
-			clusterProfile,
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cluster.Namespace,
+			},
 		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, klogr.New())
+		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
+
+		ResourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, klogr.New())
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
@@ -281,15 +300,25 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Client.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
-		// Change clusterRole so the configuration that now needs to be deployed does not match the hash in ClusterSummary Status anymore
+		// Change clusterRole so the configuration that now needs to be deployed does not match
+		// the hash in ClusterSummary Status anymore
 		updateConfigMapWithPolicy(configMap, fmt.Sprintf(modifyClusterRole, clusterRoleName))
-		Expect(c.Update(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Client.Update(context.TODO(), configMap)).To(Succeed())
+		Eventually(func() bool {
+			clusterConfigMap := &corev1.ConfigMap{}
+			err = testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, clusterConfigMap)
+			if err != nil {
+				return false
+			}
+			return reflect.DeepEqual(configMap.Data, clusterConfigMap.Data)
+		}, timeout, pollingInterval).Should(BeTrue())
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
 
-		reconciler := getClusterSummaryReconciler(c, dep)
+		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
@@ -307,15 +336,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature when feature is not deployed, calls Deploy", func() {
-		clusterRole := rbacv1.ClusterRole{
-			Rules: []rbacv1.PolicyRule{
-				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
-			},
-		}
-		Expect(addTypeInformationToObject(scheme, &clusterRole)).To(Succeed())
-
-		configMap := createConfigMapWithPolicy(namespace, render.AsCode(clusterRole))
+		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
+		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
@@ -325,19 +347,27 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		initObjects := []client.Object{
-			configMap,
-			clusterSummary,
-			clusterProfile,
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMap.Namespace,
+			},
 		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
-		reconciler := getClusterSummaryReconciler(c, dep)
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+
+		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
@@ -357,6 +387,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterProfile,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -402,6 +433,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterProfile,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -434,6 +466,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterProfile,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -464,6 +497,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterProfile,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
@@ -496,19 +530,37 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
-		initObjects := []client.Object{
-			clusterSummary,
-			clusterProfile,
-			configMap1,
-			configMap2,
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNs,
+			},
 		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), configMap1)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), configMap2)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, configMap2)).To(Succeed())
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
-		reconciler := getClusterSummaryReconciler(c, dep)
+		ns = &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cluster.Namespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
+
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
+
+		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.UpdateDeployedGroupVersionKind(reconciler, context.TODO(), clusterSummaryScope,
 			configv1alpha1.FeatureResources, clusterSummary.Spec.ClusterProfileSpec.PolicyRefs,

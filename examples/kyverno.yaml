@@ -1,0 +1,77 @@
+# This shows how to deploy Kyverno on any cluster having label env:production
+# Kyverno helm chart version is v2.6.0 and number of replicas is a template
+# value taken from CAPI cluster and set to be same of number of control plane nodes
+# Following ClusterProfile it will also deploy the content of the referenced
+# ConfigMap default/disallow-latest-tagy. Such ConfigMap contains a Kyverno
+# ClusterPolicy that create an audit for every Pod whose image tag set to latest
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: deploy-kyverno
+spec:
+  clusterSelector: env=fv
+  syncMode: Continuous
+  helmCharts:
+  - repositoryURL:    https://kyverno.github.io/kyverno/
+    repositoryName:   kyverno
+    chartName:        kyverno/kyverno
+    chartVersion:     v2.6.0
+    releaseName:      kyverno-latest
+    releaseNamespace: kyverno
+    helmChartAction:  Install
+    values: |
+      replicaCount: "{{ .Cluster.Spec.Topology.ControlPlane.Replicas }}"
+  policyRefs:
+  - name: disallow-latest-tag # contains Kyverno ClusterPolicy
+    namespace: default
+    kind: ConfigMap
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: disallow-latest-tag
+  namespace: default
+data:
+  kyverno.yaml: |
+    apiVersion: kyverno.io/v1
+    kind: ClusterPolicy
+    metadata:
+      name: disallow-latest-tag
+      annotations:
+        policies.kyverno.io/title: Disallow Latest Tag
+        policies.kyverno.io/category: Best Practices
+        policies.kyverno.io/severity: medium
+        policies.kyverno.io/subject: Pod
+        policies.kyverno.io/description: >-
+          The ':latest' tag is mutable and can lead to unexpected errors if the
+          image changes. A best practice is to use an immutable tag that maps to
+          a specific version of an application Pod. This policy validates that the image
+          specifies a tag and that it is not called `latest`.      
+    spec:
+      validationFailureAction: audit
+      background: true
+      rules:
+      - name: require-image-tag
+        match:
+          resources:
+            kinds:
+            - Pod
+        validate:
+          message: "An image tag is required."
+          pattern:
+            spec:
+              containers:
+              - image: "*:*"
+      - name: validate-image-tag
+        match:
+          resources:
+            kinds:
+            - Pod
+        validate:
+          message: "Using a mutable image tag e.g. 'latest' is not allowed."
+          pattern:
+            spec:
+              containers:
+              - image: "!*:latest"

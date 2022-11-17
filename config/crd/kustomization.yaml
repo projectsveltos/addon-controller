@@ -5,7 +5,6 @@ resources:
 - bases/config.projectsveltos.io_clusterprofiles.yaml
 - bases/config.projectsveltos.io_clustersummaries.yaml
 - bases/config.projectsveltos.io_clusterconfigurations.yaml
-- bases/config.projectsveltos.io_substitutionrules.yaml
 - bases/config.projectsveltos.io_clusterreports.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
@@ -15,7 +14,6 @@ patchesStrategicMerge:
 #- patches/webhook_in_clusterprofiles.yaml
 #- patches/webhook_in_clustersummaries.yaml
 #- patches/webhook_in_clusterconfigurations.yaml
-#- patches/webhook_in_substitutionrules.yaml
 #- patches/webhook_in_clusterreports.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
@@ -24,7 +22,6 @@ patchesStrategicMerge:
 #- patches/cainjection_in_clusterprofiles.yaml
 #- patches/cainjection_in_clustersummaries.yaml
 #- patches/cainjection_in_clusterconfigurations.yaml
-#- patches/cainjection_in_substitutionrules.yaml
 #- patches/cainjection_in_clusterreports.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 

@@ -3,6 +3,7 @@ module github.com/projectsveltos/sveltos-manager
 go 1.19
 
 require (
+	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/TwinProduction/go-color v1.0.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.2.3
@@ -10,7 +11,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.1.6
 	github.com/onsi/gomega v1.20.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.0.0-20221110001102-ffa4c1113682
+	github.com/projectsveltos/libsveltos v0.2.1-0.20221116214821-15a52d41bf58
 	github.com/prometheus/client_golang v1.12.2
 	github.com/spf13/pflag v1.0.5
 	github.com/totherme/unstructured v0.0.0-20170821094912-3faf2d56d8b8
@@ -42,6 +43,7 @@ require (
 	github.com/BurntSushi/toml v1.0.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Masterminds/semver/v3 v3.1.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.2.2 // indirect
 	github.com/Masterminds/squirrel v1.5.3 // indirect

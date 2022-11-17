@@ -286,8 +286,14 @@ spec:
                       minLength: 1
                       type: string
                     values:
-                      description: Values holds the values for this Helm release.
-                      x-kubernetes-preserve-unknown-fields: true
+                      description: 'Values holds the values for this Helm release.
+                        Go templating with the values from the referenced CAPI Cluster.
+                        Currently following can be referenced: Cluster => CAPI Cluster
+                        for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
+                        0 }} KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                        InfrastructureProvider => the CAPI cluster infrastructure
+                        provider'
+                      type: string
                   required:
                   - chartName
                   - chartVersion
@@ -719,8 +725,14 @@ spec:
                           minLength: 1
                           type: string
                         values:
-                          description: Values holds the values for this Helm release.
-                          x-kubernetes-preserve-unknown-fields: true
+                          description: 'Values holds the values for this Helm release.
+                            Go templating with the values from the referenced CAPI
+                            Cluster. Currently following can be referenced: Cluster
+                            => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
+                            0 }} KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                            InfrastructureProvider => the CAPI cluster infrastructure
+                            provider'
+                          type: string
                       required:
                       - chartName
                       - chartVersion
@@ -882,72 +894,6 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
-            type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
-  name: substitutionrules.config.projectsveltos.io
-spec:
-  group: config.projectsveltos.io
-  names:
-    kind: SubstitutionRule
-    listKind: SubstitutionRuleList
-    plural: substitutionrules
-    singular: substitutionrule
-  scope: Cluster
-  versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: SubstitutionRule is the Schema for the substitutionrules API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: SubstitutionRuleSpec defines the desired state of SubstitutionRule
-            properties:
-              apiVersion:
-                description: API version of the resource.
-                type: string
-              kind:
-                description: Kind of the resource
-                type: string
-              name:
-                description: Name of the resource.
-                type: string
-              namespace:
-                description: Namespace of the resource
-                type: string
-            required:
-            - name
-            type: object
-          status:
-            description: SubstitutionRuleStatus defines the observed state of SubstitutionRule
             type: object
         type: object
     served: true
@@ -1150,9 +1096,17 @@ rules:
   - patch
   - update
 - apiGroups:
-  - config.projectsveltos.io
+  - controlplane.cluster.x-k8s.io
   resources:
-  - substitutionrules
+  - kubeadmcontrolplanes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - infrastructure.cluster.x-k8s.io
+  resources:
+  - '*'
   verbs:
   - get
   - list
@@ -1306,7 +1260,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: gianlucam76/sveltos-manager-amd64:v0.2.0
+        image: gianlucam76/sveltos-manager-amd64:v0.2.1
         livenessProbe:
           httpGet:
             path: /healthz

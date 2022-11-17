@@ -203,7 +203,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 		// If policy already exists, just get current version and update it by overridding
 		// all metadata and spec.
 		// If policy does not exist already, create it
-		dr, err := utils.GetDynamicResourceInterface(remoteConfig, policy)
+		dr, err := utils.GetDynamicResourceInterface(remoteConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -274,22 +274,18 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				return nil, err
 			}
 
-			if isTemplate(policy) {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s/%s is a template",
-					policy.GetNamespace(), policy.GetName()))
-				var instance string
-				// If policy is a template, instantiate it given current state of system, then deploy
-				instance, err = instantiateTemplate(ctx, getManagementClusterClient(), getManagementClusterConfig(),
-					clusterSummary, elements[i], logger)
-				if err != nil {
-					return nil, err
-				}
+			var instance string
+			instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				policy.GetName(), elements[i], logger)
+			if err != nil {
+				return nil, err
+			}
 
-				policy, err = utils.GetUnstructured([]byte(instance))
-				if err != nil {
-					logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
-					return nil, err
-				}
+			policy, err = utils.GetUnstructured([]byte(instance))
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+				return nil, err
 			}
 
 			if policy == nil {

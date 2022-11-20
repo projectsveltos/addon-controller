@@ -277,7 +277,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 			var instance string
 			instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				policy.GetName(), elements[i], logger)
+				policy.GetName(), elements[i], nil, logger)
 			if err != nil {
 				return nil, err
 			}

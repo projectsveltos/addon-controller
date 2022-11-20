@@ -105,11 +105,16 @@ type HelmChart struct {
 	// Values holds the values for this Helm release.
 	// Go templating with the values from the referenced CAPI Cluster.
 	// Currently following can be referenced:
-	// Cluster => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}
-	// KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-	// InfrastructureProvider => the CAPI cluster infrastructure provider
+	// - Cluster => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}
+	// - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+	// - InfrastructureProvider => the CAPI cluster infrastructure provider
+	// - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+	// for instance password: "{{ printf "%s" .SecretRef.Data.password | b64dec }}"
 	// +optional
 	Values string `json:"values,omitempty"`
+
+	// SecretRef contains confidential data that needs to be used as values for templates
+	SecretRef *corev1.ObjectReference `json:"secretRef,omitempty"`
 
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install

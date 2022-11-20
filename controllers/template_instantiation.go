@@ -168,8 +168,6 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		}
 	}
 
-	logger.Info(fmt.Sprintf("MGIANLUC %s", values))
-
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
 	tmpl, err := template.New(templateName).Funcs(sprig.TxtFuncMap()).Parse(values)
 	if err != nil {

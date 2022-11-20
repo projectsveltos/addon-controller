@@ -1284,7 +1284,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.C
 
 	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, requestedChart.ChartName,
-		requestedChart.Values, logger)
+		requestedChart.Values, requestedChart.SecretRef, logger)
 	if err != nil {
 		return nil, err
 	}

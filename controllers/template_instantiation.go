@@ -22,6 +22,8 @@ import (
 	"github.com/Masterminds/sprig"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -39,6 +41,7 @@ type currentClusterObjects struct {
 	Cluster                *clusterv1.Cluster
 	KubeadmControlPlane    client.Object
 	InfrastructureProvider client.Object
+	SecretRef              client.Object
 }
 
 func fetchResource(ctx context.Context, config *rest.Config, namespace, name, apiVersion, kind string,
@@ -130,13 +133,42 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	}, nil
 }
 
+func fetchSecretRef(ctx context.Context, c client.Client, secretRef *corev1.ObjectReference) (*corev1.Secret, error) {
+	secret := &corev1.Secret{}
+	err := c.Get(ctx, types.NamespacedName{Namespace: secretRef.Namespace, Name: secretRef.Name}, secret)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return secret, nil
+}
+
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName, requestorName, values string, logger logr.Logger) (string, error) {
+	clusterNamespace, clusterName, requestorName, values string,
+	secretRef *corev1.ObjectReference, logger logr.Logger) (string, error) {
 
 	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, logger)
 	if err != nil {
 		return "", err
 	}
+
+	if secretRef != nil {
+		var secret *corev1.Secret
+		secret, err = fetchSecretRef(ctx, c, secretRef)
+		if err != nil {
+			return "", err
+		}
+		if secret != nil {
+			objects.SecretRef = secret
+		} else {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("secret %s/%s not found", secretRef.Namespace, secretRef.Name))
+		}
+	}
+
+	logger.Info(fmt.Sprintf("MGIANLUC %s", values))
 
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
 	tmpl, err := template.New(templateName).Funcs(sprig.TxtFuncMap()).Parse(values)

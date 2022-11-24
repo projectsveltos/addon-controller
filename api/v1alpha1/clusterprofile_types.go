@@ -174,7 +174,7 @@ type ClusterProfileSpec struct {
 type ClusterProfileStatus struct {
 	// MatchingClusterRefs reference all the cluster-api Cluster currently matching
 	// ClusterProfile ClusterSelector
-	MatchingClusterRefs []corev1.ObjectReference `json:"matchinClusters,omitempty"`
+	MatchingClusterRefs []corev1.ObjectReference `json:"matchingClusters,omitempty"`
 }
 
 //+kubebuilder:object:root=true

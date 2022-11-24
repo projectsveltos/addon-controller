@@ -405,7 +405,7 @@ spec:
           status:
             description: ClusterProfileStatus defines the observed state of ClusterProfile
             properties:
-              matchinClusters:
+              matchingClusters:
                 description: MatchingClusterRefs reference all the cluster-api Cluster
                   currently matching ClusterProfile ClusterSelector
                 items:

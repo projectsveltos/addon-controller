@@ -8,7 +8,8 @@
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/logos/logo.png" width="200">
 
 ## What it is
-Sveltos provides declarative APIs allowing you to deploy applications across multiple Kubernetes clusters.
+Kubernetes itself is not a complete solution. To build a production cluster, you need various additional addons like CNI or CoreDNS. Addon management has been a problem for a long time. Sveltos wants to figure out the best way to install, manage and deliver cluster addons. It does so by providing declarative APIs allowing you to deploy Kubernetes addons across multiple Kubernetes clusters.
+
 Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
 
 ## How it works
@@ -109,35 +110,6 @@ The command will:
 - install CRD and the Deployment from this project;
 - create a ClusterProfile instance;
 - modify CAPI Cluster labels so to match ClusterProfile selector.
-
-## Install Sveltos on Docker Desktop
-First, enable Kubernetes in Docker Desktop
-```
-1. from the Docker Dashboard, select the Setting icon, or Preferences icon if you use a macOS.
-2. select Kubernetes from the left sidebar.
-3. next to Enable Kubernetes, select the checkbox.
-4. select Apply & Restart to save the settings and then click Install to confirm.
-```
-
-Second, install ClusterAPI
-```
-https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
-```
-
-Third, initialize the management cluster
-```
-clusterctl init --infrastructure docker
-```
-
-Fourth, install Sveltos applying this manifest YAML
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
-```
-
-Finally, if you have prometheus operator installed in your management cluster, you can apply following ServiceMonitor
-```
-kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/service_monitor.yaml
-```
 
 # Understanding how to configure and use Sveltos
 
@@ -442,20 +414,6 @@ Sveltos exposes following metrics:
 3. *clusterNamespace*_*clusterName*_program_resources_time_seconds: time to deploy resources in a specific CAPI clusters (all ClusterProfiles considered);
 4. *clusterNamespace*_*clusterName*_program_charts_time_seconds: time to deploy Helm charts in a specific CAPI clusters (all ClusterProfiles considered);
 
-### Uninstall CRDs
-To delete the CRDs from the cluster:
-
-```sh
-make uninstall
-```
-
-### Undeploy controller
-UnDeploy the controller to the cluster:
-
-```sh
-make undeploy
-```
-
 ## Compatibility with Cluster API and Kubernetes Versions
 
 Sveltos is compatible with the following versions of Cluster API:
@@ -477,9 +435,11 @@ Test status:
 * `✓` tested
 
 ## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
+:heart: Your contributions are always welcome!
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
-2. Chat with us on the Slack in the [#projectsveltos](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q) channel
+2. Chat with us on the Slack in the [#projectsveltos](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q) channel;
+3. Submit a pull request.
 
 ## License
 

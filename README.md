@@ -72,14 +72,17 @@ Refer to [examples](./examples/) for more complex examples
 To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr9haWKM)
 
 ## Features List
-1. Flexible cluster selection (see [video](https://youtu.be/Ai5Mr9haWKM))
-2. Sync Modes: OneTime, Continuous or DryRun  (see [video](https://youtu.be/gfWN_QJAL6k))
-3. Cluster classification
-4. Snapshotting (see [video](https://youtu.be/ALcp1_Nj9r4))
-5. Rollback (see [video](https://youtu.be/sTo6RcWP1BQ))
-6. Conflict detection
-7. Declaritive API and CLI [sveltosctl](https://github.com/projectsveltos/sveltosctl)
-
+-   [Flexible cluster selection](#clusterselector)
+-   [Sync Modes](#syncmode)
+    -   [OneTime](#onetime)
+    -   [Continuous](#continuous)
+    -   [DryRun](#dryrun)
+-   [Cluster classification](https://github.com/projectsveltos/classifier#classifier)
+-   [Snapshotting](https://github.com/projectsveltos/sveltosctl#snapshot)
+-   [Rollback](https://github.com/projectsveltos/sveltosctl#rollback)
+-   [Conflict detection](#detecting-conflicts)
+-   [Declaritive API and CLI](https://github.com/projectsveltos/sveltosctl#sveltosctl)
+  
 ## Install Sveltos on any local or remote Kubernetes cluster.
 
 First, install ClusterAPI
@@ -116,6 +119,7 @@ The command will:
 
 ## ClusterSelector
 The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
+See [video](https://youtu.be/Ai5Mr9haWKM)
 
 ## SyncMode 
 
@@ -224,6 +228,7 @@ spec:
 that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any matching CAPI cluster.
 
 ### DryRun
+See [video](https://youtu.be/gfWN_QJAL6k).
 In a dry-run execution, you can execute a workflow so that the entire flow of the execution (all the operations that are executed in an actual run) is shown, but no actual code is executed and there are no side effects. 
 
 Same applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.

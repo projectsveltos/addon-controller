@@ -275,17 +275,23 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 			}
 
 			var instance string
-			instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				policy.GetName(), elements[i], nil, logger)
-			if err != nil {
-				return nil, err
-			}
-
-			policy, err = utils.GetUnstructured([]byte(instance))
-			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
-				return nil, err
+			annotations := policy.GetAnnotations()
+			if annotations != nil {
+				if _, ok := annotations[PolicyTemplate]; ok {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s %s/%s is a template",
+						policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+					instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+						clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+						policy.GetName(), elements[i], nil, logger)
+					if err != nil {
+						return nil, err
+					}
+					policy, err = utils.GetUnstructured([]byte(instance))
+					if err != nil {
+						logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+						return nil, err
+					}
+				}
 			}
 
 			if policy == nil {

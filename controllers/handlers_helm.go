@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/gofrs/flock"
@@ -389,8 +390,18 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 		return nil, err
 	}
 	var message string
-	if currentRelease.ChartVersion != currentChart.ChartVersion {
-		message = fmt.Sprintf("Current version: %s. Would move to version: %s",
+	current, err := semver.NewVersion(currentRelease.ChartVersion)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
+		return nil, err
+	}
+	expected, err := semver.NewVersion(currentChart.ChartVersion)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
+		return nil, err
+	}
+	if current.Compare(expected) != 0 {
+		message = fmt.Sprintf("Current version: %q. Would move to version: %q",
 			currentRelease.ChartVersion, currentChart.ChartVersion)
 	} else {
 		message = fmt.Sprintf("No op, already at version: %s", currentRelease.ChartVersion)

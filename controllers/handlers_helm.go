@@ -52,6 +52,7 @@ import (
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
@@ -85,16 +86,15 @@ type releaseInfo struct {
 
 func deployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, clusterNamespace, applicant, c, logger)
+	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
 	if err != nil {
 		return err
 	}
 
-	var kubeconfigContent []byte
-	kubeconfigContent, err = clusterproxy.GetSecretData(ctx, logger, c, clusterNamespace, clusterName)
+	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1alpha1.ClusterSummary{}
@@ -123,8 +123,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var kubeconfigContent []byte
-	kubeconfigContent, err = clusterproxy.GetSecretData(ctx, logger, c, clusterNamespace, clusterName)
+	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -202,7 +201,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
 			// Let the other ClusterSummary take it over.
 			if chartManager.GetNumberOfRegisteredClusterSummaries(clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, currentChart) > 1 {
+				clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, currentChart) > 1 {
 				// Immediately unregister so next inline ClusterSummary can take this over
 				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
 			} else {
@@ -1126,7 +1125,7 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 			} else {
 				var managerName string
 				managerName, err = chartManager.GetManagerForChart(currentClusterSummary.Spec.ClusterNamespace,
-					currentClusterSummary.Spec.ClusterName, currentChart)
+					currentClusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, currentChart)
 				if err != nil {
 					return err
 				}
@@ -1244,7 +1243,7 @@ func createReportForUnmanagedHelmRelease(ctx context.Context, c client.Client, c
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
 	}
 	if clusterSummaryManagerName, err := chartManager.GetManagerForChart(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, currentChart); err == nil {
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, currentChart); err == nil {
 		report.Message = getHelmChartConflictManager(ctx, c, clusterSummary.Spec.ClusterNamespace,
 			clusterSummaryManagerName, logger)
 		report.Action = string(configv1alpha1.ConflictHelmAction)
@@ -1294,8 +1293,8 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.C
 	requestedChart *configv1alpha1.HelmChart, logger logr.Logger) (chartutil.Values, error) {
 
 	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, requestedChart.ChartName,
-		requestedChart.Values, requestedChart.SecretRef, logger)
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		requestedChart.ChartName, requestedChart.Values, requestedChart.SecretRef, logger)
 	if err != nil {
 		return nil, err
 	}

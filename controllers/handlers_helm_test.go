@@ -72,6 +72,7 @@ var _ = Describe("HandlersHelm", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: clusterNamespace,
 				ClusterName:      randomString(),
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 			},
 		}
 	})
@@ -575,6 +576,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						kyvernoChart,

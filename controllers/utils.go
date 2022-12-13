@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -31,6 +32,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
@@ -55,6 +57,9 @@ func InitScheme() (*runtime.Scheme, error) {
 	if err := configv1alpha1.AddToScheme(s); err != nil {
 		return nil, err
 	}
+	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -62,9 +67,12 @@ func InitScheme() (*runtime.Scheme, error) {
 // CAPI cluster Namespace/Name.
 // This method does not guarantee that name is not already in use. Caller of this method needs
 // to handle that scenario
-func GetClusterSummaryName(clusterProfileName, clusterName string) string {
-	// generate random name.
-	return fmt.Sprintf("%s-%s", clusterProfileName, clusterName)
+func GetClusterSummaryName(clusterProfileName, clusterName string, isSveltosCluster bool) string {
+	prefix := "capi"
+	if isSveltosCluster {
+		prefix = "sveltos"
+	}
+	return fmt.Sprintf("%s-%s-%s", clusterProfileName, prefix, clusterName)
 }
 
 // getClusterSummary returns the ClusterSummary instance created by a specific ClusterProfile for a specific
@@ -289,4 +297,34 @@ func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 
 func getClusterReportName(clusterProfileName, clusterName string) string {
 	return clusterProfileName + "--" + clusterName
+}
+
+// getKeyFromObject returns the Key that can be used in the internal reconciler maps.
+func getKeyFromObject(scheme *runtime.Scheme, obj client.Object) *corev1.ObjectReference {
+	addTypeInformationToObject(scheme, obj)
+
+	return &corev1.ObjectReference{
+		Namespace:  obj.GetNamespace(),
+		Name:       obj.GetName(),
+		Kind:       obj.GetObjectKind().GroupVersionKind().Kind,
+		APIVersion: obj.GetObjectKind().GroupVersionKind().String(),
+	}
+}
+
+func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
+	gvks, _, err := scheme.ObjectKinds(obj)
+	if err != nil {
+		panic(1)
+	}
+
+	for _, gvk := range gvks {
+		if gvk.Kind == "" {
+			continue
+		}
+		if gvk.Version == "" || gvk.Version == runtime.APIVersionInternal {
+			continue
+		}
+		obj.GetObjectKind().SetGroupVersionKind(gvk)
+		break
+	}
 }

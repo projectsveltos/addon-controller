@@ -30,24 +30,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	// Get ClusterSummary that requested this
+	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
 	if err != nil {
 		return err
 	}
 
-	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, clusterNamespace, applicant, c, logger)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -110,7 +111,7 @@ func deployResources(ctx context.Context, c client.Client,
 
 func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1alpha1.ClusterSummary{}
@@ -128,12 +129,12 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s, clusterNamespace, clusterName)
+	remoteClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -194,7 +195,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.Info(fmt.Sprintf("%s %s/%s does not exist yet",
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
 					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}

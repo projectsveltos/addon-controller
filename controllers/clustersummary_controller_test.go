@@ -76,7 +76,7 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -85,6 +85,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -108,7 +109,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -137,7 +139,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -168,7 +171,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -201,7 +205,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -263,7 +268,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -300,7 +306,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -341,7 +348,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -364,7 +372,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -409,7 +418,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -467,7 +477,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -529,7 +540,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -588,7 +600,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -646,7 +659,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -715,6 +729,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -736,6 +751,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -778,6 +794,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
@@ -847,9 +864,11 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, nonReferencingClusterSummary, clusterProfile)
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      referencingClusterSummary.Name,
@@ -865,22 +884,20 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() bool {
-			clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
-			result := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: referencingClusterSummary.Namespace,
-					Name:      referencingClusterSummary.Name,
-				},
+		clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
+		result := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: referencingClusterSummary.Namespace,
+				Name:      referencingClusterSummary.Name,
+			},
+		}
+		found := false
+		for i := range clusterSummaryList {
+			if clusterSummaryList[i] == result {
+				found = true
 			}
-			for i := range clusterSummaryList {
-				if clusterSummaryList[i] == result {
-					return true
-				}
-			}
-			return false
-		}, timeout, pollingInterval).Should(BeTrue())
+		}
+		Expect(found).To(BeTrue())
 
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})

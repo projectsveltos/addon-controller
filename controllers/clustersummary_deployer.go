@@ -28,8 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
@@ -37,6 +35,11 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
+)
+
+const (
+	clusterTypeKey        = "clusterType"
+	unknownClusterTypeMsg = "clusterType is unknown"
 )
 
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -128,9 +131,14 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
+	options := deployer.Options{
+		HandlerOptions: map[string]string{
+			clusterTypeKey: string(clusterSummary.Spec.ClusterType),
+		},
+	}
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), false, genericDeploy, programDuration); err != nil {
+		clusterSummary.Name, string(f.id), false, genericDeploy, programDuration, options); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
@@ -140,7 +148,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 func genericDeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
 	// Feature specific code (featureHandler.deploy is invoked)
@@ -150,7 +158,7 @@ func genericDeploy(ctx context.Context, c client.Client,
 
 	// Invoking per feature specific code
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
-	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger)
+	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, o, logger)
 	if err != nil {
 		return err
 	}
@@ -210,8 +218,13 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	}
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
+	options := deployer.Options{
+		HandlerOptions: map[string]string{
+			clusterTypeKey: string(clusterSummary.Spec.ClusterType),
+		},
+	}
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), true, genericUndeploy, programDuration); err != nil {
+		clusterSummary.Name, string(f.id), true, genericUndeploy, programDuration, options); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
@@ -221,19 +234,29 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 func genericUndeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	logger logr.Logger) error {
+	o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
 	// Feature specific code (featureHandler.undeploy is invoked)
 	// Code common to all features
 
 	// Before any per feature specific code
+	clusterTypeValue, ok := o.HandlerOptions[clusterTypeKey]
+	if !ok {
+		logger.V(logs.LogInfo).Info(unknownClusterTypeMsg)
+		return fmt.Errorf("%s", unknownClusterTypeMsg)
+	}
 
-	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster); err != nil {
+	var err error
+	if clusterTypeValue == string(configv1alpha1.ClusterTypeCapi) {
+		_, err = getCluster(ctx, c, clusterNamespace, clusterName, configv1alpha1.ClusterTypeCapi)
+	} else {
+		_, err = getCluster(ctx, c, clusterNamespace, clusterName, configv1alpha1.ClusterTypeSveltos)
+	}
+
+	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("Cluster %s/%s not found. Nothing to cleanup", clusterNamespace, clusterName))
 			return nil
 		}
 		return err
@@ -241,7 +264,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 
 	// Invoking per feature specific code
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
-	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, logger); err != nil {
+	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, o, logger); err != nil {
 		return err
 	}
 

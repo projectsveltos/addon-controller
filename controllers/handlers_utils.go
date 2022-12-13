@@ -39,12 +39,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -281,7 +279,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 					logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s %s/%s is a template",
 						policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 					instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-						clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+						clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 						policy.GetName(), elements[i], nil, logger)
 					if err != nil {
 						return nil, err
@@ -314,11 +312,11 @@ func getPolicyInfo(policy *configv1alpha1.Resource) string {
 		policy.Name)
 }
 
-// getClusterSummaryAndCAPIClusterClient gets ClusterSummary and the client to access the associated
-// CAPI Cluster.
+// getClusterSummaryAndClusterClient gets ClusterSummary and the client to access the associated
+// CAPI/Sveltos Cluster.
 // Returns an err if ClusterSummary or associated CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
-func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace, clusterSummaryName string,
+func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, clusterSummaryName string,
 	c client.Client, logger logr.Logger) (*configv1alpha1.ClusterSummary, client.Client, error) {
 
 	// Get ClusterSummary that requested this
@@ -335,14 +333,12 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 	}
 
 	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx,
-		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName},
-		cluster); err != nil {
+	cluster, err := getCluster(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
 		return nil, nil, err
 	}
 
-	if !cluster.DeletionTimestamp.IsZero() {
+	if !cluster.GetDeletionTimestamp().IsZero() {
 		logger.V(logs.LogInfo).Info("cluster is marked for deletion. Nothing to do.")
 		// if cluster is marked for deletion, there is nothing to deploy
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
@@ -353,8 +349,8 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 		return nil, nil, err
 	}
 
-	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s,
-		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+	clusterClient, err := getKubernetesClient(ctx, c, s, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}

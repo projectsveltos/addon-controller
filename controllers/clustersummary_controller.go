@@ -66,12 +66,15 @@ type ClusterSummaryReconciler struct {
 	Scheme               *runtime.Scheme
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
-	PolicyMux            sync.Mutex                                          // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
-	ReferenceMap         map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
-	ClusterSummaryMap    map[types.NamespacedName]*libsveltosset.Set         // key: ClusterSummary namespace/name; value: set of referenced resources
+	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
+	ReferenceMap         map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
+	ClusterSummaryMap    map[types.NamespacedName]*libsveltosset.Set   // key: ClusterSummary namespace/name; value: set of referenced resources
+
+	// key: Sveltos/CAPI Cluster; value: set of all ClusterSummaries for that Cluster
+	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
 
 	// Reason for the two maps:
-	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a CAPI Cluster.
+	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a Sveltos/CAPI Cluster.
 	// When a ConfigMap/Secret changes, all the ClusterSummaries referencing it need to be reconciled.
 	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps/Secrets. When a ConfigMap/Secret spec changes,
 	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
@@ -109,7 +112,7 @@ type ClusterSummaryReconciler struct {
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("Reconciling")
+	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the clusterSummary instance
 	clusterSummary := &configv1alpha1.ClusterSummary{}
@@ -180,7 +183,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	logger logr.Logger,
 ) (reconcile.Result, error) {
 
-	logger.Info("Reconciling ClusterSummary delete")
+	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -206,7 +209,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	}
 
 	// Cluster is deleted so remove the finalizer.
-	logger.Info("Removing finalizer")
+	logger.V(logs.LogInfo).Info("Removing finalizer")
 	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
 		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
 			configv1alpha1.ClusterSummaryFinalizer); !finalizersUpdated {
@@ -218,7 +221,9 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		return reconcile.Result{}, err
 	}
 
-	logger.Info("Reconcile delete success")
+	r.cleanMaps(clusterSummaryScope)
+
+	logger.V(logs.LogInfo).Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
 }
@@ -229,7 +234,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	logger logr.Logger,
 ) (reconcile.Result, error) {
 
-	logger.Info("Reconciling ClusterSummary")
+	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary")
 
 	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
 		if err := r.addFinalizer(ctx, clusterSummaryScope); err != nil {
@@ -239,11 +244,14 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	}
 
 	if !r.shouldReconcile(clusterSummaryScope, logger) {
-		logger.Info("ClusterSummary does not need a reconciliation")
+		logger.V(logs.LogInfo).Info("ClusterSummary does not need a reconciliation")
 		return reconcile.Result{}, nil
 	}
 
-	r.updatePolicyMaps(clusterSummaryScope, logger)
+	if err := r.updateMaps(ctx, clusterSummaryScope, logger); err != nil {
+		logger.V(logs.LogInfo).Info("Failed to update maps")
+		return reconcile.Result{}, nil
+	}
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -263,7 +271,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	logger.Info("Reconciling ClusterSummary success")
+	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary success")
 	return reconcile.Result{}, nil
 }
 
@@ -284,6 +292,15 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
 		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+	); err != nil {
+		return err
+	}
+
+	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
+	// need to be reconciled.
+	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
+		SveltosClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return err
 	}
@@ -367,18 +384,30 @@ func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummar
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	clusterSummary := clusterSummaryScope.ClusterSummary
+func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) (bool, error) {
+	var err error
+	cs := clusterSummaryScope.ClusterSummary
+	if cs.Spec.ClusterType == configv1alpha1.ClusterTypeSveltos {
+		_, err = getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	}
 
-	// If CAPI Cluster is not found, there is nothing to clean up.
-	cluster := &clusterv1.Cluster{}
-	err := r.Client.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.", clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
-			return nil
+			return false, nil
 		}
+	}
+
+	return true, err
+}
+
+func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	// If Sveltos/CAPI Cluster is not found, there is nothing to clean up.
+	isPresent, err := r.isClusterPresent(ctx, clusterSummaryScope)
+	if err != nil {
 		return err
+	}
+	if !isPresent {
+		return nil
 	}
 
 	resourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
@@ -431,7 +460,7 @@ func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSu
 	chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
 
 	// Registration for helm chart not referenced anymore, are cleaned only after such helm
-	// chart are removed from CAPI Cluster. That is done as part of deployHelmCharts and
+	// chart are removed from Sveltos/CAPI Cluster. That is done as part of deployHelmCharts and
 	// undeployHelmCharts (RemoveStaleRegistrations).
 	// That is because we need to make sure managed helm charts are successfully uninstalled
 	// before any registration with chartManager is cleared.
@@ -455,20 +484,53 @@ func (r *ClusterSummaryReconciler) deleteChartMap(ctx context.Context, clusterSu
 	return nil
 }
 
-func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime {
-		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
-		return
+func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterSummaryScope) {
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	delete(r.ClusterSummaryMap, types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()})
+
+	clusterSummaryInfo := getKeyFromObject(r.Scheme, clusterSummaryScope.ClusterSummary)
+
+	for i := range r.ClusterMap {
+		clusterSummarySet := r.ClusterMap[i]
+		clusterSummarySet.Erase(clusterSummaryInfo)
 	}
 
+	for i := range r.ReferenceMap {
+		clusterSummarySet := r.ReferenceMap[i]
+		clusterSummarySet.Erase(clusterSummaryInfo)
+	}
+}
+
+func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
+
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime {
+		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
+		return nil
+	}
 	logger.V(logs.LogDebug).Info("update policy map")
 	currentReferences := r.getCurrentReferences(clusterSummaryScope)
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
 
+	cs := clusterSummaryScope.ClusterSummary
+	clusterObject, err := getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	if err != nil {
+		return err
+	}
+
+	clusterInfo := getKeyFromObject(r.Scheme, clusterObject)
+
+	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.Group,
+		Kind: configv1alpha1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
+		Name: clusterSummaryScope.Name()}
+	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
+
 	// Get list of References not referenced anymore by ClusterSummary
-	var toBeRemoved []libsveltosv1alpha1.PolicyRef
+	var toBeRemoved []corev1.ObjectReference
 	clusterSummaryName := types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()}
 	if v, ok := r.ClusterSummaryMap[clusterSummaryName]; ok {
 		toBeRemoved = v.Difference(currentReferences)
@@ -478,10 +540,11 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 	for _, referencedResource := range currentReferences.Items() {
 		tmpResource := referencedResource
 		r.getReferenceMapForEntry(&tmpResource).Insert(
-			&libsveltosv1alpha1.PolicyRef{
-				Kind:      configv1alpha1.ClusterSummaryKind,
-				Namespace: clusterSummaryScope.Namespace(),
-				Name:      clusterSummaryScope.Name(),
+			&corev1.ObjectReference{
+				APIVersion: configv1alpha1.GroupVersion.Group,
+				Kind:       configv1alpha1.ClusterSummaryKind,
+				Namespace:  clusterSummaryScope.Namespace(),
+				Name:       clusterSummaryScope.Name(),
 			},
 		)
 	}
@@ -490,16 +553,27 @@ func (r *ClusterSummaryReconciler) updatePolicyMaps(clusterSummaryScope *scope.C
 	for i := range toBeRemoved {
 		referencedResource := toBeRemoved[i]
 		r.getReferenceMapForEntry(&referencedResource).Erase(
-			&libsveltosv1alpha1.PolicyRef{
-				Kind:      configv1alpha1.ClusterSummaryKind,
-				Namespace: clusterSummaryScope.Namespace(),
-				Name:      clusterSummaryScope.Name(),
+			&corev1.ObjectReference{
+				APIVersion: configv1alpha1.GroupVersion.Group,
+				Kind:       configv1alpha1.ClusterSummaryKind,
+				Namespace:  clusterSummaryScope.Namespace(),
+				Name:       clusterSummaryScope.Name(),
 			},
 		)
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
 	r.ClusterSummaryMap[clusterSummaryName] = currentReferences
+	return nil
+}
+
+func (r *ClusterSummaryReconciler) getClusterMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
+	s := r.ClusterMap[*entry]
+	if s == nil {
+		s = &libsveltosset.Set{}
+		r.ClusterMap[*entry] = s
+	}
+	return s
 }
 
 // shouldReconcile returns true if a reconciliation is needed.
@@ -539,16 +613,17 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name
-		currentReferences.Insert(&libsveltosv1alpha1.PolicyRef{
-			Kind:      clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
-			Namespace: referencedNamespace,
-			Name:      referencedName,
+		currentReferences.Insert(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(), // the only resources that can be referenced are Secret and ConfigMap
+			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+			Namespace:  referencedNamespace,
+			Name:       referencedName,
 		})
 	}
 	return currentReferences
 }
 
-func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *libsveltosv1alpha1.PolicyRef) *libsveltosset.Set {
+func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
 	s := r.ReferenceMap[*entry]
 	if s == nil {
 		s = &libsveltosset.Set{}
@@ -557,13 +632,13 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *libsveltosv1al
 	return s
 }
 
-// isPaused returns true if CAPI Cluster is paused or ClusterSummary has paused annotation.
+// isPaused returns true if Sveltos/CAPI Cluster is paused or ClusterSummary has paused annotation.
 func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
-	cluster := &clusterv1.Cluster{}
-	err := r.Client.Get(ctx,
-		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
+	isClusterPaused, err := isClusterPaused(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
@@ -571,8 +646,11 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 		return false, err
 	}
 
-	// If CAPI Cluster is paused (Spec.Paused) or ClusterSummary has Paused annotation
-	return annotations.IsPaused(cluster, clusterSummary), nil
+	if isClusterPaused {
+		return true, nil
+	}
+
+	return annotations.HasPaused(clusterSummary), nil
 }
 
 // canRemoveFinalizer returns true if finalizer can be removed.
@@ -588,10 +666,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		return false
 	}
 
-	// If CAPI cluster is gone, finalizer can be removed
-	cluster := &clusterv1.Cluster{}
-	err := r.Client.Get(ctx,
-		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName}, cluster)
+	_, err := getCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.",
@@ -627,7 +702,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
 		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
 		if fs.Status != configv1alpha1.FeatureStatusRemoved {
-			logger.Info("Not all features marked as removed")
+			logger.V(logs.LogInfo).Info("Not all features marked as removed")
 			return false
 		}
 	}

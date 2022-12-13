@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -121,6 +122,9 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := gatewayapi.AddToScheme(s); err != nil {
 		return nil, err
 	}
+	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -157,7 +161,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -166,6 +170,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
@@ -239,6 +244,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      configv1alpha1.ClusterTypeCapi,
 			},
 		}
 

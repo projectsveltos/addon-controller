@@ -17,21 +17,16 @@ limitations under the License.
 package controllers
 
 import (
-	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2/klogr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
@@ -51,25 +46,28 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	defer r.PolicyMux.Unlock()
 
 	// Following is needed as o.GetObjectKind().GroupVersionKind().Kind is not set
-	var key libsveltosv1alpha1.PolicyRef
+	var key corev1.ObjectReference
 	switch o.(type) {
 	case *corev1.ConfigMap:
-		key = libsveltosv1alpha1.PolicyRef{
-			Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
-			Namespace: o.GetNamespace(),
-			Name:      o.GetName(),
+		key = corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       string(configv1alpha1.ConfigMapReferencedResourceKind),
+			Namespace:  o.GetNamespace(),
+			Name:       o.GetName(),
 		}
 	case *corev1.Secret:
-		key = libsveltosv1alpha1.PolicyRef{
-			Kind:      string(configv1alpha1.SecretReferencedResourceKind),
-			Namespace: o.GetNamespace(),
-			Name:      o.GetName(),
+		key = corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       string(configv1alpha1.SecretReferencedResourceKind),
+			Namespace:  o.GetNamespace(),
+			Name:       o.GetName(),
 		}
 	default:
-		key = libsveltosv1alpha1.PolicyRef{
-			Kind:      o.GetObjectKind().GroupVersionKind().Kind,
-			Namespace: o.GetNamespace(),
-			Name:      o.GetName(),
+		key = corev1.ObjectReference{
+			APIVersion: o.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+			Kind:       o.GetObjectKind().GroupVersionKind().Kind,
+			Namespace:  o.GetNamespace(),
+			Name:       o.GetName(),
 		}
 	}
 
@@ -92,31 +90,41 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 }
 
 // requeueClusterSummaryForCluster is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
-// for ClusterSummary to update when its own CAPI Cluster gets updated.
+// for ClusterSummary to update when its own Sveltos/CAPI Cluster gets updated.
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
 	o client.Object,
 ) []reconcile.Request {
 
-	cluster, ok := o.(*clusterv1.Cluster)
-	if !ok {
-		panic(fmt.Sprintf("Expected a Cluster but got a %T", o))
+	cluster := o
+	logger := klogr.New().WithValues(
+		"objectMapper",
+		"requeueClusterSummaryForCluster",
+		"namespace",
+		cluster.GetNamespace(),
+		"cluster",
+		cluster.GetName(),
+	)
+
+	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
+
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	clusterInfo := getKeyFromObject(r.Scheme, cluster)
+	// Get all ClusterSummaries for this cluster and reconcile those
+	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterInfo).Len())
+	consumers := r.getClusterMapForEntry(clusterInfo).Items()
+
+	for i := range consumers {
+		l := logger.WithValues("clusterSummary", fmt.Sprintf("%s/%s", consumers[i].Namespace, consumers[i].Name))
+		l.V(logs.LogDebug).Info("queuing ClusterSummary")
+		requests[i] = ctrl.Request{
+			NamespacedName: client.ObjectKey{
+				Namespace: consumers[i].Namespace,
+				Name:      consumers[i].Name,
+			},
+		}
 	}
 
-	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
-	if err := r.Client.List(
-		context.TODO(),
-		clusterSummaryList,
-		client.MatchingFields{index.ClusterNamespaceField: cluster.Namespace},
-		client.MatchingFields{index.ClusterNameField: cluster.Name},
-	); err != nil {
-		return nil
-	}
-
-	// There can be more than one cluster using the same cluster class.
-	// create a request for each of the clusters.
-	requests := []ctrl.Request{}
-	for i := range clusterSummaryList.Items {
-		requests = append(requests, ctrl.Request{NamespacedName: util.ObjectKey(&clusterSummaryList.Items[i])})
-	}
 	return requests
 }

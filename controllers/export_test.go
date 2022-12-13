@@ -101,3 +101,12 @@ var (
 var (
 	GetClusterReportName = getClusterReportName
 )
+
+const (
+	ClusterTypeKey = clusterTypeKey
+)
+
+var (
+	IsClusterPaused = isClusterPaused
+	GetSecretData   = getSecretData
+)

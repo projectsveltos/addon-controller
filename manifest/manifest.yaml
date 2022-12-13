@@ -884,9 +884,13 @@ spec:
                 required:
                 - clusterSelector
                 type: object
+              clusterType:
+                description: ClusterType is the type of Cluster
+                type: string
             required:
             - clusterName
             - clusterNamespace
+            - clusterType
             type: object
           status:
             description: ClusterSummaryStatus defines the observed state of ClusterSummary
@@ -1198,6 +1202,22 @@ rules:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters/status
   verbs:
   - get
   - list

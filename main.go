@@ -29,6 +29,7 @@ import (
 	_ "embed"
 
 	"github.com/spf13/pflag"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -119,9 +120,9 @@ func main() {
 	if err = (&controllers.ClusterProfileReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
-		ClusterMap:           make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClusterProfileMap:    make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClusterProfiles:      make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfiles:      make(map[corev1.ObjectReference]configv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}).SetupWithManager(mgr); err != nil {
@@ -133,7 +134,8 @@ func main() {
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		Deployer:             d,
-		ReferenceMap:         make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,

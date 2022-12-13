@@ -33,12 +33,15 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
+	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 type currentClusterObjects struct {
 	Cluster                *clusterv1.Cluster
+	SveltosCluster         *libsveltosv1alpha1.SveltosCluster
 	KubeadmControlPlane    client.Object
 	InfrastructureProvider client.Object
 	SecretRef              client.Object
@@ -103,31 +106,37 @@ func fetchKubeadmControlPlane(ctx context.Context, config *rest.Config, cluster 
 // All fetched objects are in the management cluster.
 // Currently limited to Cluster and Infrastructure Provider
 func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName string, logger logr.Logger) (*currentClusterObjects, error) {
+	clusterNamespace, clusterName string, clusterType configv1alpha1.ClusterType, logger logr.Logger) (*currentClusterObjects, error) {
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch %s/%s", clusterNamespace, clusterName))
-	cluster := &clusterv1.Cluster{}
-	err := c.Get(ctx,
-		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, cluster)
+
+	genericCluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch cluster %v", err))
 		return nil, err
 	}
 
+	var cluster *clusterv1.Cluster
+	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
 	var provider *unstructured.Unstructured
-	provider, err = fetchInfrastructureProvider(ctx, config, cluster, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	var kubeadmControlPlane *unstructured.Unstructured
-	kubeadmControlPlane, err = fetchKubeadmControlPlane(ctx, config, cluster, logger)
-	if err != nil {
-		return nil, err
-	}
+	if clusterType == configv1alpha1.ClusterTypeCapi {
+		cluster = genericCluster.(*clusterv1.Cluster)
+		provider, err = fetchInfrastructureProvider(ctx, config, cluster, logger)
+		if err != nil {
+			return nil, err
+		}
 
+		kubeadmControlPlane, err = fetchKubeadmControlPlane(ctx, config, cluster, logger)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		sveltosCluster = genericCluster.(*libsveltosv1alpha1.SveltosCluster)
+	}
 	return &currentClusterObjects{
 		Cluster:                cluster,
+		SveltosCluster:         sveltosCluster,
 		InfrastructureProvider: provider,
 		KubeadmControlPlane:    kubeadmControlPlane,
 	}, nil
@@ -147,10 +156,10 @@ func fetchSecretRef(ctx context.Context, c client.Client, secretRef *corev1.Obje
 }
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName, requestorName, values string,
+	clusterType configv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
 	secretRef *corev1.ObjectReference, logger logr.Logger) (string, error) {
 
-	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, logger)
+	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return "", err
 	}

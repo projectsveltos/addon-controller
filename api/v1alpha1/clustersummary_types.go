@@ -136,6 +136,16 @@ type HelmChartSummary struct {
 	ConflictMessage string `json:"conflictMessage,omitempty"`
 }
 
+type ClusterType string
+
+const (
+	// ClusterTypeCapi indicates type is CAPI Cluster
+	ClusterTypeCapi = ClusterType("Capi")
+
+	// ClusterTypeSveltos indicates type is Sveltos Cluster
+	ClusterTypeSveltos = ClusterType("Sveltos")
+)
+
 // ClusterSummarySpec defines the desired state of ClusterSummary
 type ClusterSummarySpec struct {
 	// ClusterNamespace is the namespace of the workload Cluster this
@@ -144,6 +154,9 @@ type ClusterSummarySpec struct {
 
 	// ClusterName is the name of the workload Cluster this ClusterSummary is for.
 	ClusterName string `json:"clusterName"`
+
+	// ClusterType is the type of Cluster
+	ClusterType ClusterType `json:"clusterType"`
 
 	// ClusterProfileSpec represent the configuration that will be applied to
 	// the workload cluster.

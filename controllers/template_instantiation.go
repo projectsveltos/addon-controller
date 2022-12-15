@@ -36,7 +36,6 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 type currentClusterObjects struct {
@@ -106,7 +105,7 @@ func fetchKubeadmControlPlane(ctx context.Context, config *rest.Config, cluster 
 // All fetched objects are in the management cluster.
 // Currently limited to Cluster and Infrastructure Provider
 func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName string, clusterType configv1alpha1.ClusterType, logger logr.Logger) (*currentClusterObjects, error) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) (*currentClusterObjects, error) {
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch %s/%s", clusterNamespace, clusterName))
 
@@ -120,7 +119,7 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
 	var provider *unstructured.Unstructured
 	var kubeadmControlPlane *unstructured.Unstructured
-	if clusterType == configv1alpha1.ClusterTypeCapi {
+	if clusterType == libsveltosv1alpha1.ClusterTypeCapi {
 		cluster = genericCluster.(*clusterv1.Cluster)
 		provider, err = fetchInfrastructureProvider(ctx, config, cluster, logger)
 		if err != nil {
@@ -156,7 +155,7 @@ func fetchSecretRef(ctx context.Context, c client.Client, secretRef *corev1.Obje
 }
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
-	clusterType configv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
+	clusterType libsveltosv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
 	secretRef *corev1.ObjectReference, logger logr.Logger) (string, error) {
 
 	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)

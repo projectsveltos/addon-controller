@@ -26,7 +26,6 @@ import (
 	"k8s.io/klog/v2/klogr"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -71,12 +70,12 @@ var _ = Describe("Cluster utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		paused, err := controllers.IsClusterPaused(context.TODO(), c, cluster.Namespace,
-			cluster.Name, configv1alpha1.ClusterTypeCapi)
+			cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 		Expect(err).To(BeNil())
 		Expect(paused).To(BeTrue())
 
 		paused, err = controllers.IsClusterPaused(context.TODO(), c, sveltosCluster.Namespace,
-			sveltosCluster.Name, configv1alpha1.ClusterTypeSveltos)
+			sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
 		Expect(err).To(BeNil())
 		Expect(paused).To(BeTrue())
 	})
@@ -91,12 +90,12 @@ var _ = Describe("Cluster utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		paused, err := controllers.IsClusterPaused(context.TODO(), c, cluster.Namespace,
-			cluster.Name, configv1alpha1.ClusterTypeCapi)
+			cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 		Expect(err).To(BeNil())
 		Expect(paused).To(BeFalse())
 
 		paused, err = controllers.IsClusterPaused(context.TODO(), c, sveltosCluster.Namespace,
-			sveltosCluster.Name, configv1alpha1.ClusterTypeSveltos)
+			sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
 		Expect(err).To(BeNil())
 		Expect(paused).To(BeFalse())
 	})
@@ -133,12 +132,12 @@ var _ = Describe("Cluster utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		data, err := controllers.GetSecretData(context.TODO(), c, cluster.Namespace, cluster.Name,
-			configv1alpha1.ClusterTypeCapi, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(data).To(Equal(randomData))
 
 		data, err = controllers.GetSecretData(context.TODO(), c, sveltosCluster.Namespace, sveltosCluster.Name,
-			configv1alpha1.ClusterTypeSveltos, klogr.New())
+			libsveltosv1alpha1.ClusterTypeSveltos, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(data).To(Equal(randomData))
 	})

@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 const (
@@ -136,16 +138,6 @@ type HelmChartSummary struct {
 	ConflictMessage string `json:"conflictMessage,omitempty"`
 }
 
-type ClusterType string
-
-const (
-	// ClusterTypeCapi indicates type is CAPI Cluster
-	ClusterTypeCapi = ClusterType("Capi")
-
-	// ClusterTypeSveltos indicates type is Sveltos Cluster
-	ClusterTypeSveltos = ClusterType("Sveltos")
-)
-
 // ClusterSummarySpec defines the desired state of ClusterSummary
 type ClusterSummarySpec struct {
 	// ClusterNamespace is the namespace of the workload Cluster this
@@ -156,7 +148,7 @@ type ClusterSummarySpec struct {
 	ClusterName string `json:"clusterName"`
 
 	// ClusterType is the type of Cluster
-	ClusterType ClusterType `json:"clusterType"`
+	ClusterType libsveltosv1alpha1.ClusterType `json:"clusterType"`
 
 	// ClusterProfileSpec represent the configuration that will be applied to
 	// the workload cluster.

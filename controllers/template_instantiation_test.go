@@ -29,7 +29,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
@@ -84,7 +84,7 @@ var _ = Describe("Template instantiation", func() {
       name: "{{ .Cluster.Name }}-test"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			configv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -97,7 +97,7 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			configv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
@@ -132,7 +132,7 @@ var _ = Describe("Template instantiation", func() {
     password: "{{ printf "%s" .SecretRef.Data.password | b64dec }}"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			configv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
 			&corev1.ObjectReference{Namespace: secret.Namespace, Name: secret.Name}, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))

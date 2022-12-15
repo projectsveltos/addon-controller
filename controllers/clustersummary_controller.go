@@ -387,7 +387,7 @@ func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummar
 func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) (bool, error) {
 	var err error
 	cs := clusterSummaryScope.ClusterSummary
-	if cs.Spec.ClusterType == configv1alpha1.ClusterTypeSveltos {
+	if cs.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
 		_, err = getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 	}
 

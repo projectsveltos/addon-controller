@@ -80,7 +80,7 @@ var _ = Describe("HandlersResource", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -115,7 +115,7 @@ var _ = Describe("HandlersResource", func() {
 		// Eventual loop so testEnv Cache is synced
 		options := deployer.Options{
 			HandlerOptions: map[string]string{
-				controllers.ClusterTypeKey: string(configv1alpha1.ClusterTypeCapi),
+				controllers.ClusterTypeKey: string(libsveltosv1alpha1.ClusterTypeCapi),
 			},
 		}
 		Eventually(func() error {
@@ -203,7 +203,7 @@ var _ = Describe("HandlersResource", func() {
 
 		options := deployer.Options{
 			HandlerOptions: map[string]string{
-				controllers.ClusterTypeKey: string(configv1alpha1.ClusterTypeCapi),
+				controllers.ClusterTypeKey: string(libsveltosv1alpha1.ClusterTypeCapi),
 			},
 		}
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
@@ -268,7 +268,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},

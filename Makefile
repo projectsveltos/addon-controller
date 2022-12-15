@@ -252,6 +252,9 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
+	# Install sveltoscluster-manager
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/dev/manifest/manifest.yaml
+
 	@echo "Waiting for projectsveltos controller-manager to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/fm-controller-manager -n projectsveltos --timeout=$(TIMEOUT)
 

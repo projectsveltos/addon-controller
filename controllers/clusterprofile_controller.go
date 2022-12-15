@@ -510,7 +510,6 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-
 		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -710,7 +709,7 @@ func (r *ClusterProfileReconciler) cleanClusterConfigurationClusterProfileResour
 func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterSummaryName := GetClusterSummaryName(clusterProfileScope.Name(), cluster.Name, cluster.APIVersion == libsveltosv1alpha1.GroupVersion.Group)
+	clusterSummaryName := GetClusterSummaryName(clusterProfileScope.Name(), cluster.Name, cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String())
 
 	clusterSummary := &configv1alpha1.ClusterSummary{
 		ObjectMeta: metav1.ObjectMeta{
@@ -734,7 +733,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
-	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.Group {
+	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
 		clusterSummary.Spec.ClusterType = configv1alpha1.ClusterTypeSveltos
 	} else {
 		clusterSummary.Spec.ClusterType = configv1alpha1.ClusterTypeCapi

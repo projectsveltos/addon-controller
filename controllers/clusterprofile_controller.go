@@ -734,9 +734,9 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 	}
 
 	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
-		clusterSummary.Spec.ClusterType = configv1alpha1.ClusterTypeSveltos
+		clusterSummary.Spec.ClusterType = libsveltosv1alpha1.ClusterTypeSveltos
 	} else {
-		clusterSummary.Spec.ClusterType = configv1alpha1.ClusterTypeCapi
+		clusterSummary.Spec.ClusterType = libsveltosv1alpha1.ClusterTypeCapi
 	}
 
 	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())

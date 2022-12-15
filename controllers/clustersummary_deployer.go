@@ -248,10 +248,10 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	}
 
 	var err error
-	if clusterTypeValue == string(configv1alpha1.ClusterTypeCapi) {
-		_, err = getCluster(ctx, c, clusterNamespace, clusterName, configv1alpha1.ClusterTypeCapi)
+	if clusterTypeValue == string(libsveltosv1alpha1.ClusterTypeCapi) {
+		_, err = getCluster(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
 	} else {
-		_, err = getCluster(ctx, c, clusterNamespace, clusterName, configv1alpha1.ClusterTypeSveltos)
+		_, err = getCluster(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeSveltos)
 	}
 
 	if err != nil {

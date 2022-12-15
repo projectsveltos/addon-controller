@@ -259,7 +259,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterType: configv1alpha1.ClusterTypeCapi,
+				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -434,7 +434,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeOneTime,
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
@@ -525,7 +525,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				ClusterNamespace:   matchingCluster.Namespace,
 				ClusterName:        matchingCluster.Name,
 				ClusterProfileSpec: clusterProfile.Spec,
-				ClusterType:        configv1alpha1.ClusterTypeCapi,
+				ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
@@ -610,7 +610,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				ClusterNamespace:   nonMatchingCluster.Namespace,
 				ClusterName:        nonMatchingCluster.Name,
 				ClusterProfileSpec: clusterProfile.Spec,
-				ClusterType:        configv1alpha1.ClusterTypeCapi,
+				ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Namespace, matchingCluster.Name)
@@ -772,7 +772,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeContinuous,
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
@@ -976,7 +976,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeDryRun,
 				},
-				ClusterType: configv1alpha1.ClusterTypeCapi,
+				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 

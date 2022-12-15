@@ -60,7 +60,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      clusterName,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, namespace, clusterName)

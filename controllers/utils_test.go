@@ -170,7 +170,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
@@ -244,7 +244,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 

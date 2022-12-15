@@ -133,7 +133,7 @@ var _ = Describe("HandlersUtils", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 

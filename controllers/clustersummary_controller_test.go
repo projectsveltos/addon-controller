@@ -85,7 +85,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -729,7 +729,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -751,7 +751,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{

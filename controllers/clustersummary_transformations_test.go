@@ -59,7 +59,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -79,7 +79,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{

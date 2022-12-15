@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
 )
@@ -53,7 +54,7 @@ var _ = Describe("Chart manager", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: randomString(),
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      configv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{

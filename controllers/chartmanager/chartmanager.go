@@ -24,6 +24,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
@@ -235,7 +236,7 @@ func (m *instance) GetManagedHelmReleases(clusterSummary *configv1alpha1.Cluster
 // GetNumberOfRegisteredClusterSummaries returns number of ClusterSummaries currently registered
 // for managing a chart in a given cluster
 func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clusterName string,
-	clusterType configv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) int {
+	clusterType libsveltosv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) int {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
@@ -266,7 +267,7 @@ func (m *instance) CanManageChart(clusterSummary *configv1alpha1.ClusterSummary,
 // helm chart
 // Returns an error if no CLusterSummary is currently managing the chart
 func (m *instance) GetManagerForChart(clusterNamespace, clusterName string,
-	clusterType configv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) (string, error) {
+	clusterType libsveltosv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) (string, error) {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
@@ -292,7 +293,7 @@ func (m *instance) GetManagerForChart(clusterNamespace, clusterName string,
 // GetRegisteredClusterSummaries returns all ClusterSummary currently registered for at
 // at least one helm chart in the provided CAPI cluster
 func (m *instance) GetRegisteredClusterSummaries(clusterNamespace, clusterName string,
-	clusterType configv1alpha1.ClusterType) []string {
+	clusterType libsveltosv1alpha1.ClusterType) []string {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 
@@ -342,9 +343,9 @@ func (m *instance) isCurrentlyManager(clusterKey, releaseKey, clusterSummaryKey 
 }
 
 // getClusterKey returns the Key representing a CAPI Cluster
-func (m *instance) getClusterKey(clusterNamespace, clusterName string, clusterType configv1alpha1.ClusterType) string {
+func (m *instance) getClusterKey(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
 	prefix := "capi"
-	if clusterType == configv1alpha1.ClusterTypeSveltos {
+	if clusterType == libsveltosv1alpha1.ClusterTypeSveltos {
 		prefix = "sveltos"
 	}
 

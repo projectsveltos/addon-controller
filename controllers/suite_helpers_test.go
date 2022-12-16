@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -252,7 +253,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      cluster.Name,
+			Name:      controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1alpha1.ClusterTypeCapi),
 		},
 	}
 
@@ -282,8 +283,9 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	// So add this logic in a Retry
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		clusterConfigurationName := controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 		err := testEnv.Client.Get(context.TODO(),
-			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)
+			types.NamespacedName{Namespace: cluster.Namespace, Name: clusterConfigurationName}, currentClusterConfiguration)
 		if err != nil {
 			return err
 		}
@@ -291,7 +293,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 		addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterProfile)
 
 		err = testEnv.Client.Get(context.TODO(),
-			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentClusterConfiguration)
+			types.NamespacedName{Namespace: cluster.Namespace, Name: clusterConfigurationName}, currentClusterConfiguration)
 		if err != nil {
 			return err
 		}

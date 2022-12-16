@@ -99,11 +99,8 @@ var (
 )
 
 var (
-	GetClusterReportName = getClusterReportName
-)
-
-const (
-	ClusterTypeKey = clusterTypeKey
+	GetClusterReportName        = getClusterReportName
+	GetClusterConfigurationName = getClusterConfigurationName
 )
 
 var (

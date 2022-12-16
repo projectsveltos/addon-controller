@@ -438,12 +438,16 @@ func (r *ClusterProfileReconciler) createClusterReports(ctx context.Context, clu
 func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clusterProfile *configv1alpha1.ClusterProfile,
 	cluster *corev1.ObjectReference) error {
 
+	clusterType := getClusterType(cluster)
+
 	clusterReport := &configv1alpha1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      getClusterReportName(clusterProfile.Name, cluster.Name),
+			Name:      getClusterReportName(clusterProfile.Name, cluster.Name, clusterType),
 			Labels: map[string]string{
 				ClusterProfileLabelName: clusterProfile.Name,
+				ClusterLabelName:        cluster.Name,
+				ClusterTypeLabelName:    string(getClusterType(cluster)),
 			},
 		},
 		Spec: configv1alpha1.ClusterReportSpec{
@@ -591,21 +595,21 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 }
 
 // cleanClusterConfigurations finds all ClusterConfigurations currently owned by ClusterProfile.
-// For each such ClusterConfigurations:
+// For each such ClusterConfigurations, if corresponding Cluster is not a match anymore:
 // - remove ClusterProfile as OwnerReference
-// -if no more OwnerReferences are left, delete ClusterConfigurations
+// - if no more OwnerReferences are left, delete ClusterConfigurations
 func (r *ClusterProfileReconciler) cleanClusterConfigurations(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
 
 	matchingClusterMap := make(map[string]bool)
 
-	info := func(namespace, name string) string {
-		return fmt.Sprintf("%s--%s", namespace, name)
+	info := func(namespace, clusterConfigurationName string) string {
+		return fmt.Sprintf("%s--%s", namespace, clusterConfigurationName)
 	}
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		ref := &clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		matchingClusterMap[info(ref.Namespace, ref.Name)] = true
+		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, getClusterType(ref)))] = true
 	}
 
 	err := r.List(ctx, clusterConfiguratioList)
@@ -733,11 +737,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
-	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
-		clusterSummary.Spec.ClusterType = libsveltosv1alpha1.ClusterTypeSveltos
-	} else {
-		clusterSummary.Spec.ClusterType = libsveltosv1alpha1.ClusterTypeCapi
-	}
+	clusterSummary.Spec.ClusterType = getClusterType(cluster)
 
 	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
 	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
@@ -825,7 +825,11 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      cluster.Name,
+			Name:      getClusterConfigurationName(cluster.Name, getClusterType(cluster)),
+			Labels: map[string]string{
+				ClusterLabelName:     cluster.Name,
+				ClusterTypeLabelName: string(getClusterType(cluster)),
+			},
 		},
 	}
 
@@ -846,7 +850,8 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 func (r *ClusterProfileReconciler) updateClusterConfiguration(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace, cluster.Name)
+	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace,
+		getClusterConfigurationName(cluster.Name, getClusterType(cluster)))
 	if err != nil {
 		return err
 	}

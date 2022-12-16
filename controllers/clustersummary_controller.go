@@ -387,9 +387,8 @@ func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummar
 func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) (bool, error) {
 	var err error
 	cs := clusterSummaryScope.ClusterSummary
-	if cs.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
-		_, err = getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
-	}
+
+	_, err = getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -524,7 +523,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 
 	clusterInfo := getKeyFromObject(r.Scheme, clusterObject)
 
-	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.Group,
+	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
 		Kind: configv1alpha1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
 		Name: clusterSummaryScope.Name()}
 	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
@@ -541,7 +540,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 		tmpResource := referencedResource
 		r.getReferenceMapForEntry(&tmpResource).Insert(
 			&corev1.ObjectReference{
-				APIVersion: configv1alpha1.GroupVersion.Group,
+				APIVersion: configv1alpha1.GroupVersion.String(),
 				Kind:       configv1alpha1.ClusterSummaryKind,
 				Namespace:  clusterSummaryScope.Namespace(),
 				Name:       clusterSummaryScope.Name(),
@@ -554,7 +553,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 		referencedResource := toBeRemoved[i]
 		r.getReferenceMapForEntry(&referencedResource).Erase(
 			&corev1.ObjectReference{
-				APIVersion: configv1alpha1.GroupVersion.Group,
+				APIVersion: configv1alpha1.GroupVersion.String(),
 				Kind:       configv1alpha1.ClusterSummaryKind,
 				Namespace:  clusterSummaryScope.Namespace(),
 				Name:       clusterSummaryScope.Name(),

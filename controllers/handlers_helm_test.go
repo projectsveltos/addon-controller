@@ -319,7 +319,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterSummary.Spec.ClusterName,
+				Name:      controllers.GetClusterConfigurationName(clusterSummary.Spec.ClusterName, libsveltosv1alpha1.ClusterTypeCapi),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
@@ -340,7 +340,10 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
 			currentClusterConfiguration)).To(Succeed())
 
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources).ToNot(BeNil())
@@ -404,7 +407,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
+				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
+					clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -466,7 +470,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
+				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
+					clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{

@@ -86,6 +86,7 @@ type releaseInfo struct {
 
 func deployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
+	clusterType libsveltosv1alpha1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
@@ -111,6 +112,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
+	clusterType libsveltosv1alpha1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
@@ -1272,7 +1274,8 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
+	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1alpha1.ClusterReport{}

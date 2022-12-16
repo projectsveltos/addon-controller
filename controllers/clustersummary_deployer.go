@@ -37,11 +37,6 @@ import (
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
-const (
-	clusterTypeKey        = "clusterType"
-	unknownClusterTypeMsg = "clusterType is unknown"
-)
-
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
@@ -70,7 +65,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(f.id), true) {
+		string(f.id), clusterSummary.Spec.ClusterType, true) {
 
 		logger.V(logs.LogDebug).Info("cleanup is in progress")
 		return fmt.Errorf("cleanup of %s still in progress. Wait before redeploying", string(f.id))
@@ -100,7 +95,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if isConfigSame {
 		logger.V(logs.LogDebug).Info("hash has not changed")
 		result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(f.id), false)
+			clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, false)
 		status = r.convertResultStatus(result)
 		resultError = result.Err
 	}
@@ -131,14 +126,10 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
-	options := deployer.Options{
-		HandlerOptions: map[string]string{
-			clusterTypeKey: string(clusterSummary.Spec.ClusterType),
-		},
-	}
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), false, genericDeploy, programDuration, options); err != nil {
+		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, false,
+		genericDeploy, programDuration, deployer.Options{}); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}
@@ -148,6 +139,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 func genericDeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
+	clusterType libsveltosv1alpha1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
@@ -158,7 +150,7 @@ func genericDeploy(ctx context.Context, c client.Client,
 
 	// Invoking per feature specific code
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
-	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, o, logger)
+	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger)
 	if err != nil {
 		return err
 	}
@@ -183,7 +175,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
 	// parallel some resources might be left over.
 	if r.Deployer.IsInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(f.id), false) {
+		string(f.id), clusterSummary.Spec.ClusterType, false) {
 
 		logger.V(logs.LogDebug).Info("provisioning is in progress")
 		return fmt.Errorf("deploying %s still in progress. Wait before cleanup", string(f.id))
@@ -196,7 +188,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	}
 
 	result := r.Deployer.GetResult(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummaryScope.Name(), string(f.id), true)
+		clusterSummaryScope.Name(), string(f.id), clusterSummary.Spec.ClusterType, true)
 	status := r.convertResultStatus(result)
 
 	if status != nil {
@@ -218,13 +210,8 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	}
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
-	options := deployer.Options{
-		HandlerOptions: map[string]string{
-			clusterTypeKey: string(clusterSummary.Spec.ClusterType),
-		},
-	}
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), true, genericUndeploy, programDuration, options); err != nil {
+		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, true, genericUndeploy, programDuration, deployer.Options{}); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
@@ -234,25 +221,16 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 func genericUndeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	o deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1alpha1.ClusterType, o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
 	// Feature specific code (featureHandler.undeploy is invoked)
 	// Code common to all features
 
 	// Before any per feature specific code
-	clusterTypeValue, ok := o.HandlerOptions[clusterTypeKey]
-	if !ok {
-		logger.V(logs.LogInfo).Info(unknownClusterTypeMsg)
-		return fmt.Errorf("%s", unknownClusterTypeMsg)
-	}
 
 	var err error
-	if clusterTypeValue == string(libsveltosv1alpha1.ClusterTypeCapi) {
-		_, err = getCluster(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
-	} else {
-		_, err = getCluster(ctx, c, clusterNamespace, clusterName, libsveltosv1alpha1.ClusterTypeSveltos)
-	}
+	_, err = getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -264,7 +242,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 
 	// Invoking per feature specific code
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
-	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, o, logger); err != nil {
+	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger); err != nil {
 		return err
 	}
 

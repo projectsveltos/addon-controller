@@ -38,6 +38,7 @@ import (
 
 func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
+	clusterType libsveltosv1alpha1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
@@ -111,6 +112,7 @@ func deployResources(ctx context.Context, c client.Client,
 
 func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
+	clusterType libsveltosv1alpha1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
@@ -229,7 +231,8 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
+	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1alpha1.ClusterReport{}

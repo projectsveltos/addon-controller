@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -109,11 +110,15 @@ func getClusterSummary(ctx context.Context, c client.Client,
 
 // getClusterConfiguration returns the ClusterConfiguration instance for a specific CAPI Cluster
 func getClusterConfiguration(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName string) (*configv1alpha1.ClusterConfiguration, error) {
+	clusterNamespace, clusterConfigurationName string) (*configv1alpha1.ClusterConfiguration, error) {
 
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 	if err := c.Get(ctx,
-		types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, clusterConfiguration); err != nil {
+		types.NamespacedName{
+			Namespace: clusterNamespace,
+			Name:      clusterConfigurationName,
+		},
+		clusterConfiguration); err != nil {
 		return nil, err
 	}
 
@@ -295,8 +300,14 @@ func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
 }
 
-func getClusterReportName(clusterProfileName, clusterName string) string {
-	return clusterProfileName + "--" + clusterName
+func getClusterReportName(clusterProfileName, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+	// TODO: shorten this value
+	return clusterProfileName + "--" + strings.ToLower(string(clusterType)) + "--" + clusterName
+}
+
+func getClusterConfigurationName(clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+	// TODO: shorten this value
+	return strings.ToLower(string(clusterType)) + "--" + clusterName
 }
 
 // getKeyFromObject returns the Key that can be used in the internal reconciler maps.

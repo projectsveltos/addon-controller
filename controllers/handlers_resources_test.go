@@ -113,14 +113,9 @@ var _ = Describe("HandlersResource", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
-		options := deployer.Options{
-			HandlerOptions: map[string]string{
-				controllers.ClusterTypeKey: string(libsveltosv1alpha1.ClusterTypeCapi),
-			},
-		}
 		Eventually(func() error {
 			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-				string(configv1alpha1.FeatureResources), options, klogr.New())
+				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())
 		}, timeout, pollingInterval).Should(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -201,13 +196,8 @@ var _ = Describe("HandlersResource", func() {
 				currentClusterSummary.Status.FeatureSummaries != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		options := deployer.Options{
-			HandlerOptions: map[string]string{
-				controllers.ClusterTypeKey: string(libsveltosv1alpha1.ClusterTypeCapi),
-			},
-		}
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureResources), options, klogr.New())).To(Succeed())
+			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect role0 and cluster0 to be deleted. role1 should remain as ConfigLabelName is not set on it

@@ -113,7 +113,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		key := corev1.ObjectReference{APIVersion: configMap.APIVersion,
 			Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
 
-		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.Group,
+		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
 			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
 		reconciler.ReferenceMap[key] = &set
 
@@ -121,7 +121,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
-		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.Group,
+		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
 			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
 		reconciler.ReferenceMap[key] = &set
 

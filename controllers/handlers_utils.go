@@ -618,7 +618,10 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		// Get ClusterConfiguration for CAPI Cluster
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName},
+			types.NamespacedName{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      getClusterConfigurationName(clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
+			},
 			clusterConfiguration)
 		if err != nil {
 			if apierrors.IsNotFound(err) && !clusterSummary.DeletionTimestamp.IsZero() {

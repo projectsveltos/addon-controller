@@ -202,7 +202,7 @@ var _ = Describe("DryRun", func() {
 		dryRunClusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Verifying ClusterReport for helm reports")
-		clusterReportName := fmt.Sprintf("%s--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
+		clusterReportName := fmt.Sprintf("%s--capi--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
 			err := k8sClient.Get(context.TODO(),

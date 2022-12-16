@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -132,4 +133,19 @@ func getKubernetesClient(ctx context.Context, c client.Client, s *runtime.Scheme
 		return clusterproxy.GetSveltosKubernetesClient(ctx, logger, c, s, clusterNamespace, clusterName)
 	}
 	return clusterproxy.GetCAPIKubernetesClient(ctx, logger, c, s, clusterNamespace, clusterName)
+}
+
+func getClusterType(cluster *corev1.ObjectReference) libsveltosv1alpha1.ClusterType {
+	// TODO: remove this
+	if cluster.APIVersion != libsveltosv1alpha1.GroupVersion.String() &&
+		cluster.APIVersion != clusterv1.GroupVersion.String() {
+
+		panic(1)
+	}
+
+	clusterType := libsveltosv1alpha1.ClusterTypeCapi
+	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
+		clusterType = libsveltosv1alpha1.ClusterTypeSveltos
+	}
+	return clusterType
 }

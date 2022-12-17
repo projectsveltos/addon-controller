@@ -545,13 +545,13 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	matching := make(map[string]bool)
 
-	getClusterInfo := func(clusterNamespace, clusterName string) string {
-		return fmt.Sprintf("%s-%s", clusterNamespace, clusterName)
+	getClusterInfo := func(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+		return fmt.Sprintf("%s-%s-%s", clusterType, clusterNamespace, clusterName)
 	}
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		reference := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterName := getClusterInfo(reference.Namespace, reference.Name)
+		clusterName := getClusterInfo(reference.Namespace, reference.Name, getClusterType(&reference))
 		matching[clusterName] = true
 	}
 
@@ -570,7 +570,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterProfileScope.ClusterProfile) {
-			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName)]; !ok {
+			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
 				err := r.deleteClusterSummary(ctx, cs)
 				if err != nil {
 					clusterProfileScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",

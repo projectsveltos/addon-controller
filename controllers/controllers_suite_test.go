@@ -85,7 +85,7 @@ var _ = BeforeSuite(func() {
 	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
 
 	var sveltosCRD *unstructured.Unstructured
-	sveltosCRD, err = utils.GetUnstructured(libsveltoscrd.GetClusterCRDYAML())
+	sveltosCRD, err = utils.GetUnstructured(libsveltoscrd.GetSveltosClusterCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), sveltosCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, sveltosCRD)).To(Succeed())

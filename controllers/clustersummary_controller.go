@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -276,7 +275,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterSummary{}).
 		WithOptions(controller.Options{
@@ -284,41 +283,48 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return nil, errors.Wrap(err, "error creating controller")
 	}
 
-	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
-		return err
-	}
+	// At this point we don't know yet whether CAPI is present in the cluster.
+	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
 	// need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+	err = c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		SveltosClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
-		return err
+		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		ConfigMapPredicates(klogr.New().WithValues("predicate", "configmappredicate")),
-	); err != nil {
-		return err
+		ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	// When Secret changes, according to SecretPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	return c.Watch(&source.Kind{Type: &corev1.Secret{}},
+	err = c.Watch(&source.Kind{Type: &corev1.Secret{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		SecretPredicates(klogr.New().WithValues("predicate", "secretpredicate")),
+		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+	)
+
+	return c, err
+}
+
+func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
+	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
+	// need to be reconciled.
+	return c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
+		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	)
 }
 

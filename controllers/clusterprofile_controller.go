@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -253,7 +252,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterProfile{}).
 		WithOptions(controller.Options{
@@ -261,33 +260,41 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return nil, errors.Wrap(err, "error creating controller")
 	}
 
+	// At this point we don't know yet whether CAPI is present in the cluster.
+	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
+
+	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	err = c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
+		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+	)
+
+	return c, err
+}
+
+func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When cluster-api cluster changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
 	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
-		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
 		return err
 	}
-
-	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
-		SveltosClusterPredicates(klogr.New().WithValues("predicate", "sveltosclusterpredicate")),
-	); err != nil {
-		return err
-	}
-
 	// When cluster-api machine changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
+	if err := c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
-		MachinePredicates(klogr.New().WithValues("predicate", "machinepredicate")),
-	)
+		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterProfileReconciler) addFinalizer(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {

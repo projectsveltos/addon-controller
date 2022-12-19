@@ -22,22 +22,32 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"syscall"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 
 	_ "embed"
 
+	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -117,7 +127,8 @@ func main() {
 		libsveltosv1alpha1.ComponentSveltosManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
-	if err = (&controllers.ClusterProfileReconciler{
+	var clusterProfileController controller.Controller
+	clusterProfileReconciler := &controllers.ClusterProfileReconciler{
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
@@ -125,11 +136,15 @@ func main() {
 		ClusterProfiles:      make(map[corev1.ObjectReference]configv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
-	}).SetupWithManager(mgr); err != nil {
+	}
+	clusterProfileController, err = clusterProfileReconciler.SetupWithManager(mgr)
+	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
 		os.Exit(1)
 	}
-	if err = (&controllers.ClusterSummaryReconciler{
+
+	var clusterSummaryController controller.Controller
+	clusterSummaryReconciler := &controllers.ClusterSummaryReconciler{
 		Config:               mgr.GetConfig(),
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
@@ -139,7 +154,9 @@ func main() {
 		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
-	}).SetupWithManager(mgr); err != nil {
+	}
+	clusterSummaryController, err = clusterSummaryReconciler.SetupWithManager(mgr)
+	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)
 		os.Exit(1)
 	}
@@ -148,6 +165,11 @@ func main() {
 	setupChecks(mgr)
 
 	setupIndexes(ctx, mgr)
+
+	go capiWatchers(ctx, mgr,
+		clusterProfileReconciler, clusterProfileController,
+		clusterSummaryReconciler, clusterSummaryController,
+		setupLog)
 
 	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
 	if err := mgr.Start(ctx); err != nil {
@@ -199,5 +221,64 @@ func setupChecks(mgr ctrl.Manager) {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+}
+
+// capiCRDHandler restarts process if a CAPI CRD is updated
+func capiCRDHandler(gvk *schema.GroupVersionKind) {
+	if gvk.Group == clusterv1.GroupVersion.Group {
+		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
+			panic("kill -TERM failed")
+		}
+	}
+}
+
+// isCAPIInstalled returns true if CAPI is installed, false otherwise
+func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
+	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, clusterCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+func capiWatchers(ctx context.Context, mgr ctrl.Manager,
+	clusterProfileReconciler *controllers.ClusterProfileReconciler, clusterProfileController controller.Controller,
+	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller,
+	logger logr.Logger) {
+
+	const maxRetries = 20
+	retries := 0
+	for {
+		capiPresent, err := isCAPIInstalled(ctx, mgr.GetClient())
+		if err != nil {
+			if retries < maxRetries {
+				logger.Info(fmt.Sprintf("failed to verify if CAPI is present: %v", err))
+				time.Sleep(time.Second)
+			}
+			retries++
+		} else {
+			if !capiPresent {
+				setupLog.V(logsettings.LogInfo).Info("CAPI currently not present. Starting CRD watcher")
+				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), capiCRDHandler, setupLog)
+			} else {
+				setupLog.V(logsettings.LogInfo).Info("CAPI present.")
+				err = clusterProfileReconciler.WatchForCAPI(mgr, clusterProfileController)
+				if err != nil {
+					continue
+				}
+				err = clusterSummaryReconciler.WatchForCAPI(mgr, clusterSummaryController)
+				if err != nil {
+					continue
+				}
+			}
+			return
+		}
 	}
 }

@@ -424,7 +424,7 @@ Sveltos exposes following metrics:
 
 Sveltos is compatible with the following versions of Cluster API:
 
-|  | Cluster API `v1beta1` (`v1.0.x`) | Cluster API `v1beta1` (`v1.1.x`)  | Cluster API `v1beta1` (`v1.2.x`) |
+|  | Cluster API `v1beta1` (`v1.1.x`) | Cluster API `v1beta1` (`v1.2.x`) | Cluster API `v1beta1` (`v1.3.x`) |
 |---|---|---|---|
 |Sveltos `v0.1.0` | ✓ | ✓ | ✓ |
 

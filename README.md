@@ -9,28 +9,29 @@
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/logos/logo.png" width="200">
 
 ## What it is
-Kubernetes itself is not a complete solution. To build a production cluster, you need various additional addons like CNI or CoreDNS. Addon management has been a problem for a long time. Sveltos wants to figure out the best way to install, manage and deliver cluster addons. It does so by providing declarative APIs allowing you to deploy Kubernetes addons across multiple Kubernetes clusters.
+Today, it's very common for organizations to run and manage multiple Kubernetes clusters across different cloud providers or infrastructures. With an increasing number of clusters, consistently managing addons is not an easy task.
 
-Sveltos is a freely available and open source. Sveltos is very lightweight and can be installed onto any Kubernetes clusters in minutes.
+Sveltos is a lightweight application designed to manage hundreds of clusters. It does so by providing declarative APIs to deploy Kubernetes addons across multiple clusters.
+Sveltos focuses not only on the ability to scale the number of clusters it can manage, but also to give visibility to exactly what addons are installed on each cluster.
+
+![Sveltos in action](doc/multi-clusters.png)
+
+Sveltos is a freely available and open source. Sveltos can be installed onto any Kubernetes clusters in seconds.
 
 ## How it works
-The project follows the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/) and it uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) which provides a reconcile function responsible for synchronizing resources until the desired state is reached on the cluster. 
 
-The project requires [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) to be installed in such cluster. [ClusterAPI](https://github.com/kubernetes-sigs/cluster-api) is a Kubernetes sub-project focused on providing declarative APIs and tooling to simplify provisioning, upgrading, and operating multiple Kubernetes clusters.
-
-## Description 
 ![sveltos logo](./doc/sveltos.png)
 
 The idea is simple:
 1. from the management cluster, selects one or more `clusters` with a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#label-selectors);
-2. lists which `features` need to be deployed on such clusters.
+2. lists which `addons` need to be deployed on such clusters.
 
 where term:
-1. `clusters` represents [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/cluster_types.go);
-2. `features` represents either an [helm release](https://helm.sh) or a Kubernetes resource.
+1. `clusters` represents both [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/cluster_types.go) or any other Kubernetes cluster registered with Sveltos;
+2. `addons` represents either an [helm release](https://helm.sh) or a Kubernetes resource.
 
 Here is an example of how to require that any CAPI Cluster with label *env: prod* has following features deployed:
-1. Kyverno helm chart (version v2.5.0)
+1. Kyverno helm chart (version v2.6.0)
 2. kubernetes resource(s) contained in the referenced Secret: *default/storage-class*
 3. kubernetes resource(s) contained in the referenced ConfigMap: *default/contour*.
 
@@ -46,7 +47,7 @@ spec:
   - repositoryURL: https://kyverno.github.io/kyverno/
     repositoryName: kyverno
     chartName: kyverno/kyverno
-    chartVersion: v2.5.0
+    chartVersion: v2.6.0
     releaseName: kyverno-latest
     releaseNamespace: kyverno
     helmChartAction: Install
@@ -61,7 +62,7 @@ spec:
     kind: ConfigMap
 ```
 
-As soon as a CAPI cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+As soon as a cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
 Refer to [examples](./examples/) for more complex examples
 
@@ -85,17 +86,7 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
   
 ## Install Sveltos on any local or remote Kubernetes cluster.
 
-First, install ClusterAPI
-```
-https://cluster-api.sigs.k8s.io/user/quick-start.html#install-clusterctl
-```
-
-Second, initialize the management cluster
-```
-https://cluster-api.sigs.k8s.io/user/quick-start.html#initialize-the-management-cluster
-```
-
-Third, install Sveltos applying following manifest YAMLs
+Install Sveltos applying following manifest YAMLs
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
@@ -105,20 +96,10 @@ kubectl apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/dev
 kubectl create -f  https://raw.githubusercontent.com/projectsveltos/sveltos-manager/dev/manifest/manifest.yaml
 ```
 
-## Install Sveltos on your laptop using the make targets
-Just execute `make create-cluster` 
-The command will:
-- create a [KIND](https://sigs.k8s.io/kind) cluster on your laptop;
-- install ClusterAPI;
-- create a CAPI Cluster with Docker as infrastructure provider;
-- install CRD and the Deployment from this project;
-- create a ClusterProfile instance;
-- modify CAPI Cluster labels so to match ClusterProfile selector.
-
 # Understanding how to configure and use Sveltos
 
 ## ClusterSelector
-The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI clusters.
+The clusterSelector field is a Kubernetes [label selector](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#resources-that-support-set-based-requirements) that matches against labels on CAPI/Sveltos clusters.
 See [video](https://youtu.be/Ai5Mr9haWKM)
 
 ## SyncMode 
@@ -126,13 +107,13 @@ See [video](https://youtu.be/Ai5Mr9haWKM)
 SyncMode has three possible options: `Continuous`, `OneTime` and `DryRun`.
 
 ### OneTime
-OneTime means that when a CAPI Cluster matches a ClusterProfile instance, all the ClusterProfile's helm charts and Kubernetes resources at that point in time will be installed into the CAPI Cluster.
-Any change to ClusterProfile (for instance adding one more helm chart or referencing a new ConfigMap/Secret) will not be deployed into the already matching CAPI Clusters.
+OneTime means that when a Cluster matches a ClusterProfile instance, all the ClusterProfile's helm charts and Kubernetes resources at that point in time will be installed into the Cluster.
+Any change to ClusterProfile (for instance adding one more helm chart or referencing a new ConfigMap/Secret) will not be deployed into the already matching Clusters.
 
 ### Continuous
-Continuous means that any change to ClusterProfiles (referencing a new helm chart or a new ConfigMap) will be immediately reconciled into the matching CAPI Clusters.
+Continuous means that any change to ClusterProfiles (referencing a new helm chart or a new ConfigMap) will be immediately reconciled into the matching Clusters.
 Reconciled can mean three things: 
-1. deploy (when CAPI Cluster matches a ClusterProfile) 
+1. deploy (when Cluster matches a ClusterProfile) 
 2. update (when ClusterProfile configuration changes and/or any of the referenced ConfigMap/Secret changes);
 3. withdraw (when ClusterProfile stops listing an helm release and/or referencing to a ConfigMap/Secret or any of the referenced ConfigMap/Secret is deleted).
 
@@ -182,11 +163,11 @@ data:
                 - DELETE
 ```
 
-Because ClusterProfile is referencing above ConfigMap, such Kyverno ClusterPolicy *no-gateway* will be deployed in any matching CAPI Clusters.
+Because ClusterProfile is referencing above ConfigMap, such Kyverno ClusterPolicy *no-gateway* will be deployed in any matching Clusters.
 Because the ClusterProfile syncMode is set to Continuous, any modifications to:
 1. ClusterProfiles;
 2. the content of the referenced ConfigMaps/Secret 
-will result in an update in any of the matching CAPI Clusters.
+will result in an update in any of the matching Clusters.
 
 For instance, continuing with above example, if we modify the content of the ConfigMap by changing the validate part to (note we are adding UPDATE on top of CREATE/DELETE):
 
@@ -209,7 +190,7 @@ metadata:
                 - UPDATE
 ```
 
-the Kyverno policy  *no-gateway* in each matching CAPI clusters will be update accordingly.
+the Kyverno policy  *no-gateway* in each matching clusters will be update accordingly.
 
 If we modify the ClusterProfile to not reference this policy anymore:
 
@@ -225,15 +206,15 @@ spec:
     namespace: default
 ```
 
-that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any matching CAPI cluster.
+that will cause the Kyverno ClusterPolicy *no-gateway* to be withdrawn from any matching cluster.
 
 ### DryRun
 See [video](https://youtu.be/gfWN_QJAL6k).
 In a dry-run execution, you can execute a workflow so that the entire flow of the execution (all the operations that are executed in an actual run) is shown, but no actual code is executed and there are no side effects. 
 
-Same applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching CAPI clusters can be seen, validated and only then eventually applied.
+Same applies here. Sometimes it is useful to see what will happen if a ClusterProfile is added/modified/deleted. So potential changes in matching clusters can be seen, validated and only then eventually applied.
 
-A ClusterProfile in DryRun mode will make no changes to matching clusters. It will though generate a report indicating, per CAPI Cluster, what those changes would be. 
+A ClusterProfile in DryRun mode will make no changes to matching clusters. It will though generate a report indicating, per Cluster, what those changes would be. 
 
 There is a CRD for that, called *ClusterReport*.
 But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much easier to see what those changes would be.
@@ -256,19 +237,19 @@ But using [sveltosctl](https://github.com/projectsveltos/sveltosctl) is much eas
 To see DryRun mode in action, have a look at this [video](https://youtu.be/gfWN_QJAL6k)
 
 ## Secrets and ConfigMaps
-When, for instance, we want to deploy a `StorageClass` in a subset of CAPI Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
+When, for instance, we want to deploy a `StorageClass` in a subset of Clusters, we create a `ClusterProfile` instance, with an appropriate cluster selector and then we need to have this ClusterProfile reference the kubernetes resource we want to deploy in each matching cluster.
 
-In this example, we need the StorageClass instance deployed in matching CAPI cluster. We don't need such resource in the management cluster. So where do we put the StorageClass instance in the management class so that ClusterProfile can reference it? We use `Secrets` and `ConfigMaps`.
+In this example, we need the StorageClass instance deployed in matching cluster. We don't need such resource in the management cluster. So where do we put the StorageClass instance in the management class so that ClusterProfile can reference it? We use `Secrets` and `ConfigMaps`.
 
 Both *Secrets* and *ConfigMaps* data fields can be a list of key-value pairs. Any key is acceptable, and as value, there can be multiple objects in yaml or json format.
 
 Secrets are preferred if the data includes sensitive information.
 
-ClusterProfile can reference a ConfigMap and/or Secret, and the ConfigMap/Secret contains the Kubernetes resources we want to deploy in matching CAPI Clusters.
+ClusterProfile can reference a ConfigMap and/or Secret, and the ConfigMap/Secret contains the Kubernetes resources we want to deploy in matching Clusters.
 
 ClusterProfile's PolicyRefs section, is then a list of ConfigMaps/Secrets (identified by name and namespace and kind).
 
-For instance by referecing following *contour-gateway* ConfigMap, a GatewayClass and Gateway instance will be automatically deployed in each matching CAPI clusters.
+For instance by referecing following *contour-gateway* ConfigMap, a GatewayClass and Gateway instance will be automatically deployed in each matching clusters.
 
 ```
 apiVersion: v1
@@ -307,18 +288,18 @@ data:
 ```
 
 ## Helm charts
-HelmCharts section in above CRD instance, is a list of Helm charts we want to deploy in each CAPI  matching clusters.
+HelmCharts section in above CRD instance, is a list of Helm charts we want to deploy in each  matching clusters.
 
 [Helm](https://helm.sh) is a CNCF graduated project that serves as a package manager widely used in the community. This project uses [Helm golang SDK](helm.sh/helm/v3/pkg) to deploy all helm charts listed in above ClusterProfile instance.
 
 
-### List helm charts and resources deployed in a CAPI Cluster.
+### List helm charts and resources deployed in a Cluster.
 
 There is many-to-many mapping between Clusters and ClusterProfile: 
-- Multiple ClusterProfiles can match with a CAPI cluster; 
-- Multiple CAPI clusters can match with a single ClusterProfile.
+- Multiple ClusterProfiles can match with a cluster; 
+- Multiple clusters can match with a single ClusterProfile.
 
-As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be used to properly list all deployed features per CAPI cluster:
+As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be used to properly list all deployed features per cluster:
 
 ```
 ./bin/sveltosctl show features
@@ -333,10 +314,10 @@ As for DryRun, [sveltosctl](https://github.com/projectsveltos/sveltosctl) can be
 +-------------------------------------+--------------------------+-----------+----------------+---------+-------------------------------+------------------+
 ```
 
-Otherwise, a new CRD is introduced to easily summarize which features (either helm charts or kubernetes resources) are deployed in a given CAPI cluster because of one or more ClusterProfiles.
+Otherwise, a new CRD is introduced to easily summarize which features (either helm charts or kubernetes resources) are deployed in a given cluster because of one or more ClusterProfiles.
 Such CRD is called *ClusterConfiguration*.
 
-There is exactly only one ClusterConfiguration for each CAPI Cluster.
+There is exactly only one ClusterConfiguration for each Cluster.
 
 Following example shows us that because of ClusterProfile *demo* three helm charts and one Kyverno ClusterPolicy were deployed.
 
@@ -396,7 +377,7 @@ items:
 
 
 ## Detecting conflicts
-Multiple ClusterProfiles can match same CAPI cluster. Because of that misconfiguration can happen and need to be detected.
+Multiple ClusterProfiles can match same cluster. Because of that misconfiguration can happen and need to be detected.
 
 For instance:
 1. ClusterProfile A references ConfigMap A containing a Kyverno ClusterPolicy called *no-gateway"
@@ -408,17 +389,17 @@ Please note that in following example there is no conflict since both ClusterPro
 1. ClusterProfile A references ConfigMap A containing a Kyverno ClusterPolicy called *no-gateway"
 2. ClusterProfile B references ConfigMap A containing a Kyverno ClusterPolicy called *no-gateway"
 
-Another example of misconfiguration is when two different ClusterProfiles match same CAPI Cluster(s) and both want to deploy same Helm chart in the same namespace.
+Another example of misconfiguration is when two different ClusterProfiles match same Cluster(s) and both want to deploy same Helm chart in the same namespace.
 
-In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given CAPI cluster. Other ClusterProfiles will report such misconfiguration.
+In such a case, only one ClusterProfile will be elected and given permission to manage a specific helm release in a given cluster. Other ClusterProfiles will report such misconfiguration.
 
 
 ## Metrics
 Sveltos exposes following metrics:
-1. projectsveltos_program_resources_time_seconds: time to deploy resources in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
-2. projectsveltos_program_charts_time_seconds: time to deploy Helm charts in a CAPI clusters (all ClusterProfiles and all CAPI clusters considered);
-3. *clusterNamespace*_*clusterName*_program_resources_time_seconds: time to deploy resources in a specific CAPI clusters (all ClusterProfiles considered);
-4. *clusterNamespace*_*clusterName*_program_charts_time_seconds: time to deploy Helm charts in a specific CAPI clusters (all ClusterProfiles considered);
+1. projectsveltos_program_resources_time_seconds: time to deploy resources in a clusters (all ClusterProfiles and all clusters considered);
+2. projectsveltos_program_charts_time_seconds: time to deploy Helm charts in a clusters (all ClusterProfiles and all clusters considered);
+3. *clusterNamespace*_*clusterName*_program_resources_time_seconds: time to deploy resources in a specific clusters (all ClusterProfiles considered);
+4. *clusterNamespace*_*clusterName*_program_charts_time_seconds: time to deploy Helm charts in a specific clusters (all ClusterProfiles considered);
 
 ## Compatibility with Cluster API and Kubernetes Versions
 

@@ -295,11 +295,11 @@ var _ = Describe("DryRun", func() {
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
-
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", dryRunClusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureResources)
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())

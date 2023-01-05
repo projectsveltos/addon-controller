@@ -242,7 +242,8 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 
 // IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterSummaryScope) IsContinuousSync() bool {
-	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous ||
+		s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
 }
 
 // IsOneTimeSync returns true if ClusterProfile sync mod is set to one time

@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ const (
 
 	// ClusterProfileLabelName is added to all ClusterSummary instances created
 	// by a ClusterProfile instance
-	ClusterProfileLabelName = "projectsveltos.io/cluster-feature-name"
+	ClusterProfileLabelName = "projectsveltos.io/cluster-profile-name"
 
 	// ReferenceLabelKind is added to each policy deployed by a ClusterSummary
 	// instance to a CAPI Cluster. Indicates the Kind (ConfigMap or Secret)

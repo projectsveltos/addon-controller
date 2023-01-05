@@ -90,17 +90,18 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
 	})
 
-	It("shouldInstall returns false requested version matches installed version", func() {
-		currentRelease := &controllers.ReleaseInfo{
-			Status:       release.StatusDeployed.String(),
-			ChartVersion: "v2.5.3",
-		}
-		requestChart := &configv1alpha1.HelmChart{
-			ChartVersion:    "v2.5.3",
-			HelmChartAction: configv1alpha1.HelmChartActionInstall,
-		}
-		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
-	})
+	It("shouldInstall returns false when requested version matches installed version",
+		func() {
+			currentRelease := &controllers.ReleaseInfo{
+				Status:       release.StatusDeployed.String(),
+				ChartVersion: "v2.5.3",
+			}
+			requestChart := &configv1alpha1.HelmChart{
+				ChartVersion:    "v2.5.3",
+				HelmChartAction: configv1alpha1.HelmChartActionInstall,
+			}
+			Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
+		})
 
 	It("shouldInstall returns true when there is no current installed version", func() {
 		requestChart := &configv1alpha1.HelmChart{
@@ -147,7 +148,7 @@ var _ = Describe("HandlersHelm", func() {
 			ChartVersion:    "v2.5.3",
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
-		Expect(controllers.ShouldUpgrade(currentRelease, requestChart)).To(BeTrue())
+		Expect(controllers.ShouldUpgrade(currentRelease, requestChart, clusterSummary)).To(BeTrue())
 	})
 
 	It("UpdateStatusForReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {

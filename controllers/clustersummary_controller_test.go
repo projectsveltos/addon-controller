@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -452,73 +452,6 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryScope.ClusterSummary = currentClusterSummary
 		// In SyncMode != DryRun and if config is same (input for ShouldRedeploy) result is do not redeploy
 		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeFalse())
-	})
-
-	It("Reconciliation of deleted ClusterSummary removes finalizer only when all features are removed", func() {
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoving},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-		}
-
-		now := metav1.NewTime(time.Now())
-		clusterSummary.DeletionTimestamp = &now
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-
-		initObjects := []client.Object{
-			clusterSummary,
-			clusterProfile,
-			cluster,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
-		}
-
-		clusterSummaryName := client.ObjectKey{
-			Name:      clusterSummary.Name,
-			Namespace: clusterSummary.Namespace,
-		}
-
-		// Since FeatureHelm is still marked to be removed, reconciliation won't
-		// remove finalizer
-
-		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterSummaryName,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
-		Expect(err).ToNot(HaveOccurred())
-
-		// Mark all features as removed
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-		}
-
-		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
-
-		// Since all features are now marked as removed, reconciliation will
-		// remove finalizer
-
-		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterSummaryName,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
-		Expect(err).To(HaveOccurred())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
 	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {

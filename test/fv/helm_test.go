@@ -52,7 +52,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v2.5.0",
+				ChartVersion:     "v2.6.5",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -76,7 +76,7 @@ var _ = Describe("Helm", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying Kyverno deployment is created in the workload cluster")
+		Byf("Verifying kyverno deployment is created in the workload cluster")
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
@@ -94,7 +94,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.0", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "2.6.5", Namespace: "kyverno"},
 			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
@@ -108,7 +108,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v2.5.3",
+				ChartVersion:     "v2.6.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -127,7 +127,7 @@ var _ = Describe("Helm", func() {
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying Kyverno deployment is still present in the workload cluster")
+		Byf("Verifying kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
@@ -145,7 +145,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts = []configv1alpha1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "2.6.4", Namespace: "kyverno"},
 			{ReleaseName: "nginx-latest", ChartVersion: "0.14.0", Namespace: "nginx"},
 		}
 
@@ -159,7 +159,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v2.5.3",
+				ChartVersion:     "v2.6.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -169,7 +169,7 @@ var _ = Describe("Helm", func() {
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying Kyverno deployment is still present in the workload cluster")
+		Byf("Verifying kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
@@ -185,7 +185,7 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1alpha1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "v2.5.3", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "2.6.4", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
@@ -193,7 +193,7 @@ var _ = Describe("Helm", func() {
 
 		deleteClusterProfile(clusterProfile)
 
-		Byf("Verifying Kyverno deployment is removed from workload cluster")
+		Byf("Verifying kyverno deployment is removed from workload cluster")
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),

@@ -154,7 +154,7 @@ spec:
                       CAPI clusters.
                     items:
                       description: PolicyRef specifies a resource containing one or
-                        more policy to deploy in matching CAPI Clusters.
+                        more policy to deploy in matching Clusters.
                       properties:
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
@@ -202,6 +202,7 @@ spec:
                     enum:
                     - OneTime
                     - Continuous
+                    - ContinuousWithDriftDetection
                     - DryRun
                     type: string
                 required:

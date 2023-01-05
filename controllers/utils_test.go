@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -48,7 +49,7 @@ const (
 const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
-	clusterProfileNamePrefix  = "cluster-feature"
+	clusterProfileNamePrefix  = "cluster-profile"
 )
 
 const (
@@ -280,3 +281,13 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })
+
+func getClusterRef(cluster client.Object) *corev1.ObjectReference {
+	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+	return &corev1.ObjectReference{
+		Namespace:  cluster.GetNamespace(),
+		Name:       cluster.GetName(),
+		APIVersion: apiVersion,
+		Kind:       kind,
+	}
+}

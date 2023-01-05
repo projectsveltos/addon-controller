@@ -1,5 +1,5 @@
 /*
-Copyright 2022.
+Copyright 2022-23 projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -69,11 +69,14 @@ var (
 	probeAddr            string
 	workers              int
 	concurrentReconciles int
+	reportMode           controllers.ReportMode
+	tmpReportMode        int
 )
 
 const (
 	defaultReconcilers = 10
 	defaultWorkers     = 20
+	defaulReportMode   = int(controllers.CollectFromManagementCluster)
 )
 
 func main() {
@@ -89,6 +92,8 @@ func main() {
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 
+	reportMode = controllers.ReportMode(tmpReportMode)
+
 	ctrl.SetLogger(klog.Background())
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -98,17 +103,6 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "86dad58d.projectsveltos.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -148,6 +142,7 @@ func main() {
 		Config:               mgr.GetConfig(),
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
+		ReportMode:           reportMode,
 		Deployer:             d,
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
@@ -155,7 +150,7 @@ func main() {
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}
-	clusterSummaryController, err = clusterSummaryReconciler.SetupWithManager(mgr)
+	clusterSummaryController, err = clusterSummaryReconciler.SetupWithManager(ctx, mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)
 		os.Exit(1)
@@ -179,6 +174,11 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&tmpReportMode,
+		"report-mode",
+		defaulReportMode,
+		"Indicates how ClassifierReport needs to be collected")
+
 	fs.StringVar(&metricsAddr,
 		"metrics-bind-address",
 		":8080",

@@ -102,6 +102,21 @@ var _ = Describe("ClusterProfileScope", func() {
 		Expect(scope.IsContinuousSync()).To(BeTrue())
 	})
 
+	It("IsContinuousSync returns true when SyncMode is ContinuousWithDriftDetection", func() {
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
+		params := scope.ClusterProfileScopeParams{
+			Client:         c,
+			ClusterProfile: clusterProfile,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterProfileScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		Expect(scope.IsContinuousSync()).To(BeTrue())
+	})
+
 	It("Name returns ClusterProfile Name", func() {
 		params := scope.ClusterProfileScopeParams{
 			Client:         c,

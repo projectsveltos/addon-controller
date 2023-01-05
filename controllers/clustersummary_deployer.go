@@ -61,6 +61,9 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		"feature", string(f.id))
 	logger.V(logs.LogDebug).Info("request to deploy")
 
+	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+		string(f.id), clusterSummary.Spec.ClusterType, true)
+
 	// If undeploying feature is in progress, wait for it to complete.
 	// Otherwise, if we redeploy feature while same feature is still being cleaned up, if two workers process those request in
 	// parallel some resources might end up missing.
@@ -79,7 +82,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	hash := r.getHash(clusterSummaryScope, f.id)
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("configuration has changed. Current hash %q. Previous hash %q",
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("configuration has changed. Current hash %x. Previous hash %x",
 			currentHash, hash))
 	}
 
@@ -170,6 +173,9 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		"applicant", clusterSummary.Name,
 		"feature", string(f.id))
 	logger.V(logs.LogDebug).Info("request to un-deploy")
+
+	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+		string(f.id), clusterSummary.Spec.ClusterType, false)
 
 	// If deploying feature is in progress, wait for it to complete.
 	// Otherwise, if we cleanup feature while same feature is still being provisioned, if two workers process those request in
@@ -326,7 +332,7 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	if status == nil {
 		return
 	}
-	logger = logger.WithValues("hash", hash, "status", *status)
+	logger = logger.WithValues("hash", fmt.Sprintf("%x", hash), "status", *status)
 	logger.V(logs.LogDebug).Info("updating clustersummary status")
 	now := metav1.NewTime(time.Now())
 	switch *status {

@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -47,6 +47,15 @@ func deployResources(ctx context.Context, c client.Client,
 	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
 	if err != nil {
 		return err
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
+		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
+			clusterType, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
@@ -102,6 +111,15 @@ func deployResources(ctx context.Context, c client.Client,
 	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports)
 	if err != nil {
 		return err
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// deploy ResourceSummary
+		err = deployResourceSummary(ctx, c, clusterNamespace, clusterName,
+			applicant, clusterType, deployed, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
@@ -246,4 +264,25 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err
+}
+
+func deployResourceSummary(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant string,
+	clusterType libsveltosv1alpha1.ClusterType,
+	deployed []configv1alpha1.Resource, logger logr.Logger) error {
+
+	resources := make([]libsveltosv1alpha1.Resource, len(deployed))
+
+	for i := range deployed {
+		resources[i] = libsveltosv1alpha1.Resource{
+			Namespace: deployed[i].Namespace,
+			Name:      deployed[i].Name,
+			Group:     deployed[i].Group,
+			Kind:      deployed[i].Kind,
+			Version:   deployed[i].Version,
+		}
+	}
+
+	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, applicant,
+		clusterType, resources, nil, logger)
 }

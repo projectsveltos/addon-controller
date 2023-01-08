@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
@@ -95,6 +96,15 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
+		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
+			clusterType, logger)
+		if err != nil {
+			return err
+		}
+	}
+
 	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
@@ -107,7 +117,21 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
-	return handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, logger)
+	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, logger)
+	if err != nil {
+		return err
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy resourceSummary
+		err = deployResourceSummaryWithHelmResources(ctx, c, clusterNamespace, clusterName,
+			clusterType, clusterSummary, kubeconfig, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
@@ -448,7 +472,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		if err != nil {
 			return nil, nil, err
 		}
-	} else if shouldUpgrade(currentRelease, currentChart) {
+	} else if shouldUpgrade(currentRelease, currentChart, clusterSummary) {
 		report, err = handleUpgrade(ctx, clusterSummary, currentChart, currentRelease, remoteClient, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
@@ -818,6 +842,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, logger log
 	if err != nil {
 		return nil, err
 	}
+
 	element := &releaseInfo{
 		ReleaseName:      results.Name,
 		ReleaseNamespace: results.Namespace,
@@ -862,18 +887,20 @@ func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1alpha1.H
 
 // shouldUpgrade returns true if action is not uninstall and current installed chart is different
 // than what currently requested by customer
-func shouldUpgrade(currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart) bool {
-	if requestedChart.HelmChartAction == configv1alpha1.HelmChartActionUninstall {
-		return false
+func shouldUpgrade(currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary) bool {
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// With drift detection mode, there is reconciliation due to configuration drift even
+		// when version is same. So skip this check in SyncModeContinuousWithDriftDetection
+		if currentRelease != nil &&
+			currentRelease.ChartVersion == requestedChart.ChartVersion {
+
+			return false
+		}
 	}
 
-	if currentRelease != nil &&
-		currentRelease.ChartVersion == requestedChart.ChartVersion {
-
-		return false
-	}
-
-	return true
+	return requestedChart.HelmChartAction != configv1alpha1.HelmChartActionUninstall
 }
 
 // shouldUninstall returns true if action is uninstall there is a release installed currently
@@ -1303,4 +1330,83 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.C
 	}
 
 	return chartutil.ReadValues([]byte(instantiatedValues))
+}
+
+func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger) error {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	helmResources := make([]libsveltosv1alpha1.HelmResources, 0)
+
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		l := logger.WithValues("chart", currentChart.ChartName, "releaseNamespace", currentChart.ReleaseNamespace)
+		l.V(logs.LogDebug).Info("collecting resources for helm chart")
+		if chartManager.CanManageChart(clusterSummary, currentChart) {
+			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig, logger)
+
+			if err != nil {
+				return err
+			}
+
+			statusObject := action.NewStatus(actionConfig)
+			results, err := statusObject.Run(currentChart.ReleaseName)
+			if err != nil {
+				return err
+			}
+
+			resources, err := collectHelmContent(results.Manifest, logger)
+			if err != nil {
+				return err
+			}
+
+			l.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
+
+			helmInfo := libsveltosv1alpha1.HelmResources{
+				ChartName:        currentChart.ChartName,
+				ReleaseName:      currentChart.ReleaseName,
+				ReleaseNamespace: currentChart.ReleaseNamespace,
+				Resources:        resources,
+			}
+
+			helmResources = append(helmResources, helmInfo)
+		}
+	}
+
+	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+		clusterType, nil, helmResources, logger)
+}
+
+func collectHelmContent(manifest string, logger logr.Logger) ([]libsveltosv1alpha1.Resource, error) {
+	resources := make([]libsveltosv1alpha1.Resource, 0)
+
+	elements := strings.Split(manifest, separator)
+	for i := range elements {
+		if elements[i] == "" {
+			continue
+		}
+
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+			return nil, err
+		}
+
+		r := libsveltosv1alpha1.Resource{
+			Namespace: policy.GetNamespace(),
+			Name:      policy.GetName(),
+			Kind:      policy.GetKind(),
+			Group:     policy.GetObjectKind().GroupVersionKind().Group,
+			Version:   policy.GetObjectKind().GroupVersionKind().Version,
+		}
+
+		resources = append(resources, r)
+	}
+
+	return resources, nil
 }

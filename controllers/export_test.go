@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -106,4 +106,18 @@ var (
 var (
 	IsClusterPaused = isClusterPaused
 	GetSecretData   = getSecretData
+)
+
+var (
+	DeployDebuggingConfigurationCRD = deployDebuggingConfigurationCRD
+	DeployResourceSummaryCRD        = deployResourceSummaryCRD
+	DeployResourceSummaryInCluster  = deployResourceSummaryInCluster
+	DeployResourceSummaryInstance   = deployResourceSummaryInstance
+
+	GetResourceSummaryNamespace = getResourceSummaryNamespace
+	GetResourceSummaryName      = getResourceSummaryName
+)
+
+var (
+	CollectResourceSummariesFromCluster = collectResourceSummariesFromCluster
 )

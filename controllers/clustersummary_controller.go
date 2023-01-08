@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -58,11 +59,25 @@ const (
 	normalRequeueAfter = 20 * time.Second
 )
 
+type ReportMode int
+
+const (
+	// Default mode. In this mode, sveltos-manager running
+	// in the management cluster periodically collects/processes
+	// ResourceSummaries from Sveltos/CAPI clusters
+	CollectFromManagementCluster ReportMode = iota
+
+	// In this mode, drift detection manager sends ResourceSummaries
+	// updates to management cluster.
+	AgentSendUpdatesNoGateway
+)
+
 // ClusterSummaryReconciler reconciles a ClusterSummary object
 type ClusterSummaryReconciler struct {
 	*rest.Config
 	client.Client
 	Scheme               *runtime.Scheme
+	ReportMode           ReportMode
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
@@ -193,6 +208,12 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		return reconcile.Result{}, nil
 	}
 
+	err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info("failed to remove ResourceSummary.")
+		return reconcile.Result{}, nil
+	}
+
 	err = r.undeploy(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		// In DryRun mode it is expected to always get an error back
@@ -275,7 +296,9 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
+func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager,
+) (controller.Controller, error) {
+
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterSummary{}).
 		WithOptions(controller.Options{
@@ -315,6 +338,10 @@ func (r *ClusterSummaryReconciler) SetupWithManager(mgr ctrl.Manager) (controlle
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
 		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
 	)
+
+	if r.ReportMode == CollectFromManagementCluster {
+		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), mgr.GetLogger())
+	}
 
 	return c, err
 }
@@ -586,8 +613,11 @@ func (r *ClusterSummaryReconciler) getClusterMapForEntry(entry *corev1.ObjectRef
 func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous {
-		logger.V(logs.LogDebug).Info("Mode set to continuous. Reconciliation is needed.")
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous ||
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Mode set to %s. Reconciliation is needed.",
+			clusterSummary.Spec.ClusterProfileSpec.SyncMode))
 		return true
 	}
 
@@ -712,4 +742,35 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		}
 	}
 	return true
+}
+
+// removeResourceSummary removes, if still present, ResourceSummary corresponding
+// to this ClusterSummary instance
+func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+
+	s, err := InitScheme()
+	if err != nil {
+		return err
+	}
+
+	cs := clusterSummaryScope.ClusterSummary
+	remoteClient, err := getKubernetesClient(ctx, r.Client, s, cs.Spec.ClusterNamespace,
+		cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	err = unDeployResourceSummaryInstance(ctx, remoteClient, cs.Spec.ClusterNamespace,
+		cs.Name, logger)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		// ResourceSummaries are only installed when in ContinuousWithDriftDetection mode
+		if meta.IsNoMatchError(err) {
+			return nil
+		}
+	}
+	return err
 }

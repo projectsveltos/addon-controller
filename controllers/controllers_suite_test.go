@@ -74,6 +74,8 @@ var _ = BeforeSuite(func() {
 	controllers.SetManagementClusterAccess(testEnv.Client, testEnv.Config)
 	controllers.CreatFeatureHandlerMaps()
 
+	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
+
 	go func() {
 		By("Starting the manager")
 		err = testEnv.StartManager(ctx)
@@ -82,13 +84,23 @@ var _ = BeforeSuite(func() {
 		}
 	}()
 
-	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
-
 	var sveltosCRD *unstructured.Unstructured
 	sveltosCRD, err = utils.GetUnstructured(libsveltoscrd.GetSveltosClusterCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), sveltosCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, sveltosCRD)).To(Succeed())
+
+	var resourceSummaryCRD *unstructured.Unstructured
+	resourceSummaryCRD, err = utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), resourceSummaryCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, resourceSummaryCRD)).To(Succeed())
+
+	var dcCRD *unstructured.Unstructured
+	dcCRD, err = utils.GetUnstructured(libsveltoscrd.GetDebuggingConfigurationCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)

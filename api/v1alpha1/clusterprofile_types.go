@@ -50,7 +50,7 @@ func (m *DryRunReconciliationError) Error() string {
 }
 
 // SyncMode specifies how features are synced in a workload cluster.
-// +kubebuilder:validation:Enum:=OneTime;Continuous;DryRun
+// +kubebuilder:validation:Enum:=OneTime;Continuous;ContinuousWithDriftDetection;DryRun
 type SyncMode string
 
 const (
@@ -59,6 +59,10 @@ const (
 
 	// SyncModeContinuous indicates feature sync should continuously happen
 	SyncModeContinuous = SyncMode("Continuous")
+
+	// SyncModeContinuousWithDriftDetection indicates feature sync should continuously happen
+	// if configuration drift is detected in the managed cluster, it will be overrid
+	SyncModeContinuousWithDriftDetection = SyncMode("ContinuousWithDriftDetection")
 
 	// SyncModeDryRun indicates feature sync should continuously happen
 	// no feature will be updated in the CAPI Cluster though.

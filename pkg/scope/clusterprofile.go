@@ -104,7 +104,8 @@ func (s *ClusterProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.O
 
 // IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterProfileScope) IsContinuousSync() bool {
-	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuous
+	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuous ||
+		s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
 }
 
 // IsOneTimeSync returns true if ClusterProfile sync mod is set to one time

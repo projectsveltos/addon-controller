@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -173,6 +173,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 			Namespace: policy.GetNamespace(),
 			Kind:      policy.GetKind(),
 			Group:     policy.GetObjectKind().GroupVersionKind().Group,
+			Version:   policy.GetObjectKind().GroupVersionKind().Version,
 			Owner: corev1.ObjectReference{
 				Namespace: referencedObject.GetNamespace(),
 				Name:      referencedObject.GetName(),
@@ -224,12 +225,9 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 
 		addOwnerReference(policy, clusterProfile)
 
-		// Update only if object does not exist yet or hash is different
-		if !exist || currentHash != policyHash {
-			err = updateResource(ctx, dr, clusterSummary, policy, logger)
-			if err != nil {
-				return nil, err
-			}
+		err = updateResource(ctx, dr, clusterSummary, policy, logger)
+		if err != nil {
+			return nil, err
 		}
 
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
@@ -493,7 +491,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 					undeployed = append(undeployed, configv1alpha1.ResourceReport{
 						Resource: configv1alpha1.Resource{
 							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
-							Group: r.GroupVersionKind().Group,
+							Group: r.GroupVersionKind().Group, Version: r.GroupVersionKind().Version,
 						},
 						Action: string(configv1alpha1.DeleteResourceAction),
 					})
@@ -544,6 +542,7 @@ func canDelete(policy client.Object, currentReferencedPolicies map[string]config
 	name := getPolicyInfo(&configv1alpha1.Resource{
 		Kind:      policy.GetObjectKind().GroupVersionKind().Kind,
 		Group:     policy.GetObjectKind().GroupVersionKind().Group,
+		Version:   policy.GetObjectKind().GroupVersionKind().Version,
 		Name:      policy.GetName(),
 		Namespace: policy.GetNamespace(),
 	})

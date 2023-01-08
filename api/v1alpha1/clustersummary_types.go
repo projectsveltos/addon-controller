@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -108,15 +108,15 @@ type FeatureSummary struct {
 // HelChartStatus specifies whether ClusterSummary is successfully managing
 // an helm chart or not
 // +kubebuilder:validation:Enum:=Managing;Conflict
-type HelChartStatus string
+type HelmChartStatus string
 
 const (
 	// HelChartStatusManaging indicates helm chart is successfully being managed
-	HelChartStatusManaging = HelChartStatus("Managing")
+	HelChartStatusManaging = HelmChartStatus("Managing")
 
 	// HelChartStatusConflict indicates there is a conflict with another
 	// ClusterSummary to manage the helm chart
-	HelChartStatusConflict = HelChartStatus("Conflict")
+	HelChartStatusConflict = HelmChartStatus("Conflict")
 )
 
 type HelmChartSummary struct {
@@ -130,7 +130,7 @@ type HelmChartSummary struct {
 
 	// Status indicates whether ClusterSummary can manage the helm
 	// chart or there is a conflict
-	Status HelChartStatus `json:"status"`
+	Status HelmChartStatus `json:"status"`
 
 	// Status indicates whether ClusterSummary can manage the helm
 	// chart or there is a conflict

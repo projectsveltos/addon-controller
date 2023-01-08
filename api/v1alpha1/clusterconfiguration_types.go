@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,21 +28,25 @@ const (
 )
 
 type Resource struct {
-	// Name of the resource deployed in the CAPI Cluster.
+	// Name of the resource deployed in the Cluster.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Namespace of the resource deployed in the CAPI Cluster.
+	// Namespace of the resource deployed in the Cluster.
 	// Empty for resources scoped at cluster level.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// Group of the resource deployed in the CAPI Cluster.
+	// Group of the resource deployed in the Cluster.
 	Group string `json:"group"`
 
-	// Kind of the resource deployed in the CAPI Cluster.
+	// Kind of the resource deployed in the Cluster.
 	// +kubebuilder:validation:MinLength=1
 	Kind string `json:"kind"`
+
+	// Version of the resource deployed in the Cluster.
+	// +kubebuilder:validation:MinLength=1
+	Version string `json:"version"`
 
 	// LastAppliedTime identifies when this resource was last applied to the cluster.
 	// +optional
@@ -54,22 +58,22 @@ type Resource struct {
 
 type Chart struct {
 	// RepoURL URL of the repo containing the helm chart deployed
-	// in the CAPI Cluster.
+	// in the Cluster.
 	// +kubebuilder:validation:MinLength=1
 	RepoURL string `json:"repoURL"`
 
-	// ReleaseName name of the release deployed in the CAPI Cluster.
+	// ReleaseName name of the release deployed in the Cluster.
 	// +kubebuilder:validation:MinLength=1
 	ReleaseName string `json:"releaseName"`
 
-	// Namespace where chart is deployed in the CAPI Cluster.
+	// Namespace where chart is deployed in the Cluster.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// ChartVersion is the version of the helm chart deployed in the CAPI Cluster.
+	// ChartVersion is the version of the helm chart deployed in the Cluster.
 	ChartVersion string `json:"chartVersion"`
 
-	// AppVersion is the version of the app deployed in the CAPI Cluster.
+	// AppVersion is the version of the app deployed in the Cluster.
 	// +optional
 	AppVersion string `json:"appVersion,omitempty"`
 
@@ -81,22 +85,22 @@ type Feature struct {
 	// FeatureID is an indentifier of the feature whose status is reported
 	FeatureID FeatureID `json:"featureID"`
 
-	// Resources is a list of resources deployed in the CAPI Cluster.
+	// Resources is a list of resources deployed in the Cluster.
 	// +optional
 	Resources []Resource `json:"resources,omitempty"`
 
-	// Charts is a list of helm charts deployed in the CAPI Cluster.
+	// Charts is a list of helm charts deployed in the Cluster.
 	// +optional
 	Charts []Chart `json:"charts,omitempty"`
 }
 
-// ClusterProfileResource keeps info on all of the resources deployed in this CAPI Cluster
+// ClusterProfileResource keeps info on all of the resources deployed in this Cluster
 // due to a given ClusterProfile
 type ClusterProfileResource struct {
-	// ClusterProfileName is the name of the ClusterProfile matching the CAPI Cluster.
+	// ClusterProfileName is the name of the ClusterProfile matching the Cluster.
 	ClusterProfileName string `json:"clusterProfileName"`
 
-	// Features contains the list of policies deployed in the CAPI Cluster because
+	// Features contains the list of policies deployed in the Cluster because
 	// of a given feature
 	// +optional
 	Features []Feature `json:"Features,omitempty"`
@@ -104,7 +108,7 @@ type ClusterProfileResource struct {
 
 // ClusterConfigurationStatus defines the observed state of ClusterConfiguration
 type ClusterConfigurationStatus struct {
-	// ClusterProfileResources is the list of resources currently deployed in a CAPI Cluster due
+	// ClusterProfileResources is the list of resources currently deployed in a Cluster due
 	// to ClusterProfiles
 	// +optional
 	ClusterProfileResources []ClusterProfileResource `json:"clusterProfileResources,omitempty"`

@@ -45,28 +45,28 @@ spec:
             properties:
               clusterProfileResources:
                 description: ClusterProfileResources is the list of resources currently
-                  deployed in a CAPI Cluster due to ClusterProfiles
+                  deployed in a Cluster due to ClusterProfiles
                 items:
                   description: ClusterProfileResource keeps info on all of the resources
-                    deployed in this CAPI Cluster due to a given ClusterProfile
+                    deployed in this Cluster due to a given ClusterProfile
                   properties:
                     Features:
                       description: Features contains the list of policies deployed
-                        in the CAPI Cluster because of a given feature
+                        in the Cluster because of a given feature
                       items:
                         properties:
                           charts:
                             description: Charts is a list of helm charts deployed
-                              in the CAPI Cluster.
+                              in the Cluster.
                             items:
                               properties:
                                 appVersion:
                                   description: AppVersion is the version of the app
-                                    deployed in the CAPI Cluster.
+                                    deployed in the Cluster.
                                   type: string
                                 chartVersion:
                                   description: ChartVersion is the version of the
-                                    helm chart deployed in the CAPI Cluster.
+                                    helm chart deployed in the Cluster.
                                   type: string
                                 lastAppliedTime:
                                   description: LastAppliedTime identifies when this
@@ -75,16 +75,16 @@ spec:
                                   type: string
                                 namespace:
                                   description: Namespace where chart is deployed in
-                                    the CAPI Cluster.
+                                    the Cluster.
                                   type: string
                                 releaseName:
                                   description: ReleaseName name of the release deployed
-                                    in the CAPI Cluster.
+                                    in the Cluster.
                                   minLength: 1
                                   type: string
                                 repoURL:
                                   description: RepoURL URL of the repo containing
-                                    the helm chart deployed in the CAPI Cluster.
+                                    the helm chart deployed in the Cluster.
                                   minLength: 1
                                   type: string
                               required:
@@ -103,16 +103,16 @@ spec:
                             type: string
                           resources:
                             description: Resources is a list of resources deployed
-                              in the CAPI Cluster.
+                              in the Cluster.
                             items:
                               properties:
                                 group:
                                   description: Group of the resource deployed in the
-                                    CAPI Cluster.
+                                    Cluster.
                                   type: string
                                 kind:
                                   description: Kind of the resource deployed in the
-                                    CAPI Cluster.
+                                    Cluster.
                                   minLength: 1
                                   type: string
                                 lastAppliedTime:
@@ -122,13 +122,13 @@ spec:
                                   type: string
                                 name:
                                   description: Name of the resource deployed in the
-                                    CAPI Cluster.
+                                    Cluster.
                                   minLength: 1
                                   type: string
                                 namespace:
                                   description: Namespace of the resource deployed
-                                    in the CAPI Cluster. Empty for resources scoped
-                                    at cluster level.
+                                    in the Cluster. Empty for resources scoped at
+                                    cluster level.
                                   type: string
                                 owner:
                                   description: Owner is the list of ConfigMap/Secret
@@ -176,11 +176,17 @@ spec:
                                         https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                                       type: string
                                   type: object
+                                version:
+                                  description: Version of the resource deployed in
+                                    the Cluster.
+                                  minLength: 1
+                                  type: string
                               required:
                               - group
                               - kind
                               - name
                               - owner
+                              - version
                               type: object
                             type: array
                         required:
@@ -189,7 +195,7 @@ spec:
                       type: array
                     clusterProfileName:
                       description: ClusterProfileName is the name of the ClusterProfile
-                        matching the CAPI Cluster.
+                        matching the Cluster.
                       type: string
                   required:
                   - clusterProfileName
@@ -349,7 +355,7 @@ spec:
                   resources that need to be deployed in the matching CAPI clusters.
                 items:
                   description: PolicyRef specifies a resource containing one or more
-                    policy to deploy in matching CAPI Clusters.
+                    policy to deploy in matching Clusters.
                   properties:
                     kind:
                       description: 'Kind of the resource. Supported kinds are: Secrets
@@ -397,6 +403,7 @@ spec:
                 enum:
                 - OneTime
                 - Continuous
+                - ContinuousWithDriftDetection
                 - DryRun
                 type: string
             required:
@@ -594,11 +601,10 @@ spec:
                         Resource
                       properties:
                         group:
-                          description: Group of the resource deployed in the CAPI
-                            Cluster.
+                          description: Group of the resource deployed in the Cluster.
                           type: string
                         kind:
-                          description: Kind of the resource deployed in the CAPI Cluster.
+                          description: Kind of the resource deployed in the Cluster.
                           minLength: 1
                           type: string
                         lastAppliedTime:
@@ -607,12 +613,12 @@ spec:
                           format: date-time
                           type: string
                         name:
-                          description: Name of the resource deployed in the CAPI Cluster.
+                          description: Name of the resource deployed in the Cluster.
                           minLength: 1
                           type: string
                         namespace:
-                          description: Namespace of the resource deployed in the CAPI
-                            Cluster. Empty for resources scoped at cluster level.
+                          description: Namespace of the resource deployed in the Cluster.
+                            Empty for resources scoped at cluster level.
                           type: string
                         owner:
                           description: Owner is the list of ConfigMap/Secret containing
@@ -653,11 +659,16 @@ spec:
                               description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                               type: string
                           type: object
+                        version:
+                          description: Version of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
                       required:
                       - group
                       - kind
                       - name
                       - owner
+                      - version
                       type: object
                   required:
                   - resource
@@ -831,7 +842,7 @@ spec:
                       CAPI clusters.
                     items:
                       description: PolicyRef specifies a resource containing one or
-                        more policy to deploy in matching CAPI Clusters.
+                        more policy to deploy in matching Clusters.
                       properties:
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
@@ -879,6 +890,7 @@ spec:
                     enum:
                     - OneTime
                     - Continuous
+                    - ContinuousWithDriftDetection
                     - DryRun
                     type: string
                 required:

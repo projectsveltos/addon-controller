@@ -1383,7 +1383,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: gianlucam76/sveltos-manager-amd64:v0.3.0
+        image: gianlucam76/sveltos-manager-amd64:main
         livenessProbe:
           httpGet:
             path: /healthz

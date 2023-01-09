@@ -242,7 +242,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: gianlucam76/drift-detection-manager-amd64:v0.3.0
+        image: gianlucam76/drift-detection-manager-amd64:main
         livenessProbe:
           httpGet:
             path: /healthz

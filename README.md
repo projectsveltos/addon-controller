@@ -6,7 +6,7 @@
 
 # Sveltos
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos/dev/docs/assets/logo.png" width="200">
+<img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
 
 Please refere to sveltos [documentation](https://projectsveltos.github.io/sveltos/).
 

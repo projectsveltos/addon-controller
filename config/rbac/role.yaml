@@ -22,6 +22,14 @@ rules:
   - list
   - watch
 - apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - cluster.x-k8s.io
   resources:
   - clusters
@@ -163,6 +171,22 @@ rules:
   - lib.projectsveltos.io
   resources:
   - debuggingconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters/status
   verbs:
   - get
   - list

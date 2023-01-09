@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -72,6 +73,7 @@ var _ = Describe("HandlersHelm", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: clusterNamespace,
 				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 	})
@@ -88,17 +90,18 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
 	})
 
-	It("shouldInstall returns false requested version matches installed version", func() {
-		currentRelease := &controllers.ReleaseInfo{
-			Status:       release.StatusDeployed.String(),
-			ChartVersion: "v2.5.3",
-		}
-		requestChart := &configv1alpha1.HelmChart{
-			ChartVersion:    "v2.5.3",
-			HelmChartAction: configv1alpha1.HelmChartActionInstall,
-		}
-		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
-	})
+	It("shouldInstall returns false when requested version matches installed version",
+		func() {
+			currentRelease := &controllers.ReleaseInfo{
+				Status:       release.StatusDeployed.String(),
+				ChartVersion: "v2.5.3",
+			}
+			requestChart := &configv1alpha1.HelmChart{
+				ChartVersion:    "v2.5.3",
+				HelmChartAction: configv1alpha1.HelmChartActionInstall,
+			}
+			Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
+		})
 
 	It("shouldInstall returns true when there is no current installed version", func() {
 		requestChart := &configv1alpha1.HelmChart{
@@ -145,7 +148,7 @@ var _ = Describe("HandlersHelm", func() {
 			ChartVersion:    "v2.5.3",
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
-		Expect(controllers.ShouldUpgrade(currentRelease, requestChart)).To(BeTrue())
+		Expect(controllers.ShouldUpgrade(currentRelease, requestChart, clusterSummary)).To(BeTrue())
 	})
 
 	It("UpdateStatusForReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
@@ -317,7 +320,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      clusterSummary.Spec.ClusterName,
+				Name:      controllers.GetClusterConfigurationName(clusterSummary.Spec.ClusterName, libsveltosv1alpha1.ClusterTypeCapi),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
@@ -338,7 +341,10 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
 			currentClusterConfiguration)).To(Succeed())
 
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources).ToNot(BeNil())
@@ -402,7 +408,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
+				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
+					clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -464,7 +471,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName),
+				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
+					clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -575,6 +583,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						kyvernoChart,

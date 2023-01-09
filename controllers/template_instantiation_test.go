@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	"encoding/base64"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -27,6 +29,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
@@ -81,7 +84,7 @@ var _ = Describe("Template instantiation", func() {
       name: "{{ .Cluster.Name }}-test"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			cluster.Namespace, cluster.Name, randomString(), values, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -94,9 +97,44 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			cluster.Namespace, cluster.Name, randomString(), values, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
+	})
+
+	It("instantiateTemplateValues returns correct values (spec section)", func() {
+		namespace := randomString()
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
+
+		pwd := randomString()
+		sEnc := base64.StdEncoding.EncodeToString([]byte(pwd))
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"password": []byte(sEnc),
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
+
+		values := `valuesTemplate: |
+    password: "{{ printf "%s" .SecretRef.Data.password | b64dec }}"`
+
+		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			&corev1.ObjectReference{Namespace: secret.Namespace, Name: secret.Name}, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(result).To(ContainSubstring(pwd))
 	})
 })

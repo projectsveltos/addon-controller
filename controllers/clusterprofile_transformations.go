@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -24,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -32,14 +32,14 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	o client.Object,
 ) []reconcile.Request {
 
-	cluster := o.(*clusterv1.Cluster)
+	cluster := o
 	logger := klogr.New().WithValues(
 		"objectMapper",
 		"requeueClusterProfileForCluster",
 		"namespace",
-		cluster.Namespace,
+		cluster.GetNamespace(),
 		"cluster",
-		cluster.Name,
+		cluster.GetName(),
 	)
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
@@ -47,13 +47,16 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+	clusterInfo := corev1.ObjectReference{APIVersion: cluster.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		Kind: cluster.GetObjectKind().GroupVersionKind().Kind, Namespace: cluster.GetNamespace(), Name: cluster.GetName()}
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(&clusterInfo).Items()
 
 	for i := range consumers {
+		l := logger.WithValues("clusterProfile", consumers[i].Name)
+		l.V(logs.LogDebug).Info("queuing ClusterProfile")
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
@@ -66,7 +69,9 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	for k := range r.ClusterProfiles {
 		clusterProfileSelector := r.ClusterProfiles[k]
 		parsedSelector, _ := labels.Parse(string(clusterProfileSelector))
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
+		if parsedSelector.Matches(labels.Set(cluster.GetLabels())) {
+			l := logger.WithValues("clusterProfile", k.Name)
+			l.V(logs.LogDebug).Info("queuing ClusterProfile")
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
 					Name: k.Name,
@@ -101,7 +106,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
+	clusterInfo := corev1.ObjectReference{APIVersion: machine.APIVersion, Kind: "Cluster", Namespace: machine.Namespace, Name: clusterLabelName}
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())

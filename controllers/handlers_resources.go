@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,24 +30,35 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	clusterType libsveltosv1alpha1.ClusterType,
+	o deployer.Options, logger logr.Logger) error {
 
 	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	// Get ClusterSummary that requested this
+	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
 	if err != nil {
 		return err
 	}
 
-	// Get ClusterSummary that requested this
-	clusterSummary, remoteClient, err := getClusterSummaryAndCAPIClusterClient(ctx, clusterNamespace, applicant, c, logger)
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
+		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
+			clusterType, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -102,6 +113,15 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// deploy ResourceSummary
+		err = deployResourceSummary(ctx, c, clusterNamespace, clusterName,
+			applicant, clusterType, deployed, logger)
+		if err != nil {
+			return err
+		}
+	}
+
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
@@ -110,7 +130,8 @@ func deployResources(ctx context.Context, c client.Client,
 
 func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	logger logr.Logger) error {
+	clusterType libsveltosv1alpha1.ClusterType,
+	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1alpha1.ClusterSummary{}
@@ -128,12 +149,12 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s, clusterNamespace, clusterName)
+	remoteClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, logger, c, clusterNamespace, clusterName)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -194,7 +215,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.Info(fmt.Sprintf("%s %s/%s does not exist yet",
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
 					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}
@@ -228,7 +249,8 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name, clusterSummary.Spec.ClusterName)
+	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1alpha1.ClusterReport{}
@@ -242,4 +264,25 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err
+}
+
+func deployResourceSummary(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName, applicant string,
+	clusterType libsveltosv1alpha1.ClusterType,
+	deployed []configv1alpha1.Resource, logger logr.Logger) error {
+
+	resources := make([]libsveltosv1alpha1.Resource, len(deployed))
+
+	for i := range deployed {
+		resources[i] = libsveltosv1alpha1.Resource{
+			Namespace: deployed[i].Namespace,
+			Name:      deployed[i].Name,
+			Group:     deployed[i].Group,
+			Kind:      deployed[i].Kind,
+			Version:   deployed[i].Version,
+		}
+	}
+
+	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, applicant,
+		clusterType, resources, nil, logger)
 }

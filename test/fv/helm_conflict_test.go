@@ -57,8 +57,8 @@ var _ = Describe("Helm with conflicts", func() {
 
 		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		influxDBVersion := "5.4.5"
-		addInfluxdbHelmChart(clusterProfile.Name, influxDBVersion)
+		sparkVersion := "6.3.10"
+		addSparkHelmChart(clusterProfile.Name, sparkVersion)
 
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -69,15 +69,15 @@ var _ = Describe("Helm with conflicts", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying Influxdb deployment is created in the workload cluster")
+		Byf("Verifying Spark statefuleset is created in the workload cluster")
 		Eventually(func() error {
-			depl := &appsv1.Deployment{}
+			statefulSet := &appsv1.StatefulSet{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "influxdb", Name: "influxdb"}, depl)
+				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "influxdb", ChartVersion: influxDBVersion, Namespace: "influxdb"},
+			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
@@ -88,7 +88,7 @@ var _ = Describe("Helm with conflicts", func() {
 		Expect(k8sClient.Create(context.TODO(), clusterProfile2)).To(Succeed())
 		Byf("Created ClusterProfile %s", clusterProfile2.Name)
 
-		addInfluxdbHelmChart(clusterProfile2.Name, influxDBVersion)
+		addSparkHelmChart(clusterProfile2.Name, sparkVersion)
 
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile2.Name}, currentClusterProfile)).To(Succeed())
 		clusterSummary = verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -98,15 +98,15 @@ var _ = Describe("Helm with conflicts", func() {
 
 		// Since second ClusterProfile is waiting to manage same helm chart, it should not be ever
 		// uninstalled when first ClusterProfile is deleted
-		Byf("Verifying influxdb deployment is still in the workload cluster")
+		Byf("Verifying spark statefulset is still in the workload cluster")
 		Consistently(func() error {
-			depl := &appsv1.Deployment{}
+			statefulSet := &appsv1.StatefulSet{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "influxdb", Name: "influxdb"}, depl)
+				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout/2, pollingInterval).Should(BeNil())
 
 		charts = []configv1alpha1.Chart{
-			{ReleaseName: "influxdb", ChartVersion: influxDBVersion, Namespace: "influxdb"},
+			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
 		verifyClusterConfiguration(clusterProfile2.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
@@ -114,18 +114,18 @@ var _ = Describe("Helm with conflicts", func() {
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
 		deleteClusterProfile(clusterProfile2)
 
-		Byf("Verifying influxdb deployment is removed from workload cluster")
+		Byf("Verifying spark deployment is removed from workload cluster")
 		Eventually(func() bool {
-			depl := &appsv1.Deployment{}
+			statefulSet := &appsv1.StatefulSet{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "influxdb", Name: "influxdb"}, depl)
+				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
 
-func addInfluxdbHelmChart(clusterProfileName, version string) {
-	Byf("Update ClusterProfile %s to deploy influxdb helm charts", clusterProfileName)
+func addSparkHelmChart(clusterProfileName, version string) {
+	Byf("Update ClusterProfile %s to deploy spark helm charts", clusterProfileName)
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -134,10 +134,10 @@ func addInfluxdbHelmChart(clusterProfileName, version string) {
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/influxdb",
+				ChartName:        "bitnami/spark",
 				ChartVersion:     version,
-				ReleaseName:      "influxdb",
-				ReleaseNamespace: "influxdb",
+				ReleaseName:      "spark",
+				ReleaseNamespace: "spark",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}

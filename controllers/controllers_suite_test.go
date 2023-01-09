@@ -26,13 +26,16 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -71,14 +74,33 @@ var _ = BeforeSuite(func() {
 	controllers.SetManagementClusterAccess(testEnv.Client, testEnv.Config)
 	controllers.CreatFeatureHandlerMaps()
 
+	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
+
 	go func() {
 		By("Starting the manager")
-		if err := testEnv.StartManager(ctx); err != nil {
+		err = testEnv.StartManager(ctx)
+		if err != nil {
 			panic(fmt.Sprintf("Failed to start the envtest manager: %v", err))
 		}
 	}()
 
-	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())
+	var sveltosCRD *unstructured.Unstructured
+	sveltosCRD, err = utils.GetUnstructured(libsveltoscrd.GetSveltosClusterCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), sveltosCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, sveltosCRD)).To(Succeed())
+
+	var resourceSummaryCRD *unstructured.Unstructured
+	resourceSummaryCRD, err = utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), resourceSummaryCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, resourceSummaryCRD)).To(Succeed())
+
+	var dcCRD *unstructured.Unstructured
+	dcCRD, err = utils.GetUnstructured(libsveltoscrd.GetDebuggingConfigurationCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)
@@ -97,7 +119,8 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		Client:            c,
 		Scheme:            scheme,
 		Deployer:          dep,
-		ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+		ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:         sync.Mutex{},
 	}
@@ -107,9 +130,9 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 	return &controllers.ClusterProfileReconciler{
 		Client:            c,
 		Scheme:            scheme,
-		ClusterMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClusterProfileMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-		ClusterProfiles:   make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
+		ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
 		Mux:               sync.Mutex{},
 	}
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -76,7 +76,7 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -85,6 +85,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -108,7 +109,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -137,7 +139,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -168,7 +171,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -201,7 +205,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -263,7 +268,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -300,7 +306,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -341,7 +348,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          nil,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -364,7 +372,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -409,7 +418,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -444,72 +454,6 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeFalse())
 	})
 
-	It("Reconciliation of deleted ClusterSummary removes finalizer only when all features are removed", func() {
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoving},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-		}
-
-		now := metav1.NewTime(time.Now())
-		clusterSummary.DeletionTimestamp = &now
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-
-		initObjects := []client.Object{
-			clusterSummary,
-			clusterProfile,
-			cluster,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
-		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
-		}
-
-		clusterSummaryName := client.ObjectKey{
-			Name:      clusterSummary.Name,
-			Namespace: clusterSummary.Namespace,
-		}
-
-		// Since FeatureHelm is still marked to be removed, reconciliation won't
-		// remove finalizer
-
-		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterSummaryName,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
-		Expect(err).ToNot(HaveOccurred())
-
-		// Mark all features as removed
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
-		}
-
-		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
-
-		// Since all features are now marked as removed, reconciliation will
-		// remove finalizer
-
-		_, err = reconciler.Reconcile(context.TODO(), ctrl.Request{
-			NamespacedName: clusterSummaryName,
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
-		Expect(err).To(HaveOccurred())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
-	})
-
 	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
 		controllerutil.AddFinalizer(clusterProfile, configv1alpha1.ClusterProfileFinalizer)
@@ -529,7 +473,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -588,7 +533,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -646,7 +592,8 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:            c,
 			Scheme:            scheme,
 			Deployer:          deployer,
-			ReferenceMap:      make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
 			PolicyMux:         sync.Mutex{},
 		}
@@ -715,6 +662,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -736,6 +684,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
@@ -778,6 +727,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
 		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
@@ -847,9 +797,11 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, nonReferencingClusterSummary, clusterProfile)
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      referencingClusterSummary.Name,
@@ -865,22 +817,20 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() bool {
-			clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
-			result := reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: referencingClusterSummary.Namespace,
-					Name:      referencingClusterSummary.Name,
-				},
+		clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
+		result := reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Namespace: referencingClusterSummary.Namespace,
+				Name:      referencingClusterSummary.Name,
+			},
+		}
+		found := false
+		for i := range clusterSummaryList {
+			if clusterSummaryList[i] == result {
+				found = true
 			}
-			for i := range clusterSummaryList {
-				if clusterSummaryList[i] == result {
-					return true
-				}
-			}
-			return false
-		}, timeout, pollingInterval).Should(BeTrue())
+		}
+		Expect(found).To(BeTrue())
 
 		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
 	})

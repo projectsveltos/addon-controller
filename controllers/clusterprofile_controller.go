@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -56,24 +55,24 @@ type ClusterProfileReconciler struct {
 	ConcurrentReconciles int
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
-	// key: CAPI Cluster namespace/name; value: set of all ClusterProfiles matching the Cluster
-	ClusterMap map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set
-	// key: ClusterProfile; value: set of CAPI Clusters matched
-	ClusterProfileMap map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set
+	// key: Sveltos/CAPI Cluster; value: set of all ClusterProfiles matching the Cluster
+	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
+	// key: ClusterProfile; value: set of Sveltos/CAPI Clusters matched
+	ClusterProfileMap map[corev1.ObjectReference]*libsveltosset.Set
 	// key: ClusterProfile; value ClusterProfile Selector
-	ClusterProfiles map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector
+	ClusterProfiles map[corev1.ObjectReference]configv1alpha1.Selector
 
 	// Reason for the two maps:
-	// ClusterProfile, via ClusterSelector, matches CAPI Clusters based on Cluster labels.
-	// When a CAPI Cluster labels change, one or more ClusterProfile needs to be reconciled.
-	// In order to achieve so, ClusterProfile reconciler watches for CAPI Clusters. When a CAPI Cluster label changes,
-	// find all the ClusterProfiles currently referencing it and reconcile those.
-	// Problem is no I/O should be present inside a MapFunc (given a CAPI Cluster, return all the ClusterProfiles matching it).
+	// ClusterProfile, via ClusterSelector, matches Sveltos/CAPI Clusters based on Cluster labels.
+	// When a Sveltos/CAPI Cluster labels change, one or more ClusterProfile needs to be reconciled.
+	// In order to achieve so, ClusterProfile reconciler watches for Sveltos/CAPI Clusters. When a Sveltos/CAPI Cluster
+	// label changes, find all the ClusterProfiles currently referencing it and reconcile those.
+	// Problem is no I/O should be present inside a MapFunc (given a Sveltos/CAPI Cluster, return all the ClusterProfiles matching it).
 	// In the MapFunc, if the list ClusterProfiles operation failed, we would be unable to retry or re-enqueue the rigth set of
 	// ClusterProfiles.
 	// Instead the approach taken is following:
 	// - when a ClusterProfile is reconciled, update the ClusterProfiles amd the ClusterMap;
-	// - in the MapFunc, given the CAPI Cluster that changed:
+	// - in the MapFunc, given the Sveltos/CAPI Cluster that changed:
 	//		* use ClusterProfiles to find all ClusterProfile matching the Cluster and reconcile those;
 	// - in order to reconcile ClusterProfiles previously matching the Cluster and not anymore, use ClusterMap.
 	//
@@ -82,9 +81,10 @@ type ClusterProfileReconciler struct {
 	// and ClusterProfileMap A => 1,2
 	// 2. Cluster 2 label changes and now ClusterProfile matches Cluster 1 only. We ned to remove the entry 2 => A in ClusterMap. But
 	// when we reconcile ClusterProfile we have its current version we don't have its previous version. So we know ClusterProfile A
-	// now matches CAPI Cluster 1, but we don't know it used to match CAPI Cluster 2.
+	// now matches Sveltos/CAPI Cluster 1, but we don't know it used to match Sveltos/CAPI Cluster 2.
 	// So we use ClusterProfileMap (at this point value stored here corresponds to reconciliation #1. We know currently
-	// ClusterProfile matches CAPI Cluster 1 only and looking at ClusterProfileMap we know it used to reference CAPI Cluster 1 and 2.
+	// ClusterProfile matches Sveltos/CAPI Cluster 1 only and looking at ClusterProfileMap we know it used to reference
+	// Svetos/CAPI Cluster 1 and 2.
 	// So we can remove 2 => A from ClusterMap. Only after this update, we update ClusterProfileMap (so new value will be A => 1)
 }
 
@@ -98,10 +98,12 @@ type ClusterProfileReconciler struct {
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters/status,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines,verbs=get;watch;list
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=sveltosclusters,verbs=get;watch;list
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=sveltosclusters/status,verbs=get;watch;list
 
 func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.Info("Reconciling")
+	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the ClusterProfile instance
 	clusterProfile := &configv1alpha1.ClusterProfile{}
@@ -155,7 +157,7 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger := clusterProfileScope.Logger
-	logger.Info("Reconciling ClusterProfile delete")
+	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile delete")
 
 	clusterProfileScope.SetMatchingClusterRefs(nil)
 
@@ -188,7 +190,9 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 		controllerutil.RemoveFinalizer(clusterProfileScope.ClusterProfile, configv1alpha1.ClusterProfileFinalizer)
 	}
 
-	logger.Info("Reconcile delete success")
+	r.cleanMaps(clusterProfileScope)
+
+	logger.V(logs.LogInfo).Info("Reconcile delete success")
 	return reconcile.Result{}, nil
 }
 
@@ -198,7 +202,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 ) (reconcile.Result, error) {
 
 	logger := clusterProfileScope.Logger
-	logger.Info("Reconciling ClusterProfile")
+	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile")
 
 	if !controllerutil.ContainsFinalizer(clusterProfileScope.ClusterProfile, configv1alpha1.ClusterProfileFinalizer) {
 		if err := r.addFinalizer(ctx, clusterProfileScope); err != nil {
@@ -213,42 +217,42 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 
 	clusterProfileScope.SetMatchingClusterRefs(matchingCluster)
 
-	r.updatesMaps(clusterProfileScope)
+	r.updateMaps(clusterProfileScope)
 
-	// For each matching CAPI Cluster, create/update corresponding ClusterConfiguration
+	// For each matching Sveltos/CAPI Cluster, create/update corresponding ClusterConfiguration
 	if err := r.updateClusterConfigurations(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
-	// For each matching CAPI Cluster, create or delete corresponding ClusterReport if needed
+	// For each matching Sveltos/CAPI Cluster, create or delete corresponding ClusterReport if needed
 	if err := r.updateClusterReports(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterReports")
 		return reconcile.Result{}, err
 	}
-	// For each matching CAPI Cluster, create/update corresponding ClusterSummary
+	// For each matching Sveltos/CAPI Cluster, create/update corresponding ClusterSummary
 	if err := r.updateClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummaries")
 		return reconcile.Result{}, err
 	}
 
-	// For CAPI Cluster not matching ClusterProfile, deletes corresponding ClusterSummary
+	// For Sveltos/CAPI Cluster not matching ClusterProfile, deletes corresponding ClusterSummary
 	if err := r.cleanClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
 		return reconcile.Result{}, err
 	}
-	// For CAPI Cluster not matching ClusterProfile, removes ClusterProfile as OwnerReference
+	// For Sveltos/CAPI Cluster not matching ClusterProfile, removes ClusterProfile as OwnerReference
 	// from corresponding ClusterConfiguration
 	if err := r.cleanClusterConfigurations(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return reconcile.Result{}, err
 	}
 
-	logger.Info("Reconcile success")
+	logger.V(logs.LogInfo).Info("Reconcile success")
 	return reconcile.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterProfile{}).
 		WithOptions(controller.Options{
@@ -256,24 +260,41 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return nil, errors.Wrap(err, "error creating controller")
 	}
 
+	// At this point we don't know yet whether CAPI is present in the cluster.
+	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
+
+	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	err = c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
+		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+	)
+
+	return c, err
+}
+
+func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When cluster-api cluster changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
 	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
-		ClusterPredicates(klogr.New().WithValues("predicate", "clusterpredicate")),
+		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
+	); err != nil {
+		return err
+	}
+	// When cluster-api machine changes, according to ClusterPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
+		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
 	); err != nil {
 		return err
 	}
 
-	// When cluster-api machine changes, according to ClusterPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	return c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
-		MachinePredicates(klogr.New().WithValues("predicate", "machinepredicate")),
-	)
+	return nil
 }
 
 func (r *ClusterProfileReconciler) addFinalizer(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
@@ -291,8 +312,34 @@ func (r *ClusterProfileReconciler) addFinalizer(ctx context.Context, clusterProf
 	return nil
 }
 
-// getMatchingClusters returns all CAPI Clusters currently matching ClusterProfile.Spec.ClusterSelector
-func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) ([]corev1.ObjectReference, error) {
+// getMatchingClusters returns all Sveltos/CAPI Clusters currently matching ClusterProfile.Spec.ClusterSelector
+func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
+) ([]corev1.ObjectReference, error) {
+
+	matching := make([]corev1.ObjectReference, 0)
+
+	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
+
+	tmpMatching, err := r.getMatchingCAPIClusters(ctx, clusterProfileScope, parsedSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	matching = append(matching, tmpMatching...)
+
+	tmpMatching, err = r.getMatchingSveltosClusters(ctx, clusterProfileScope, parsedSelector)
+	if err != nil {
+		return nil, err
+	}
+
+	matching = append(matching, tmpMatching...)
+
+	return matching, nil
+}
+
+func (r *ClusterProfileReconciler) getMatchingCAPIClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
+	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
+
 	clusterList := &clusterv1.ClusterList{}
 	if err := r.List(ctx, clusterList); err != nil {
 		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
@@ -300,8 +347,6 @@ func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clus
 	}
 
 	matching := make([]corev1.ObjectReference, 0)
-
-	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
 
 	for i := range clusterList.Items {
 		cluster := &clusterList.Items[i]
@@ -311,11 +356,13 @@ func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clus
 			continue
 		}
 
+		addTypeInformationToObject(r.Scheme, cluster)
 		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
 			matching = append(matching, corev1.ObjectReference{
-				Kind:      cluster.Kind,
-				Namespace: cluster.Namespace,
-				Name:      cluster.Name,
+				Kind:       cluster.Kind,
+				Namespace:  cluster.Namespace,
+				Name:       cluster.Name,
+				APIVersion: cluster.APIVersion,
 			})
 		}
 	}
@@ -323,9 +370,42 @@ func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clus
 	return matching, nil
 }
 
-// updateClusterReports for each CAPI Cluster currently matching ClusterProfile:
+func (r *ClusterProfileReconciler) getMatchingSveltosClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
+	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
+
+	clusterList := &libsveltosv1alpha1.SveltosClusterList{}
+	if err := r.List(ctx, clusterList); err != nil {
+		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
+		return nil, err
+	}
+
+	matching := make([]corev1.ObjectReference, 0)
+
+	for i := range clusterList.Items {
+		cluster := &clusterList.Items[i]
+
+		if !cluster.DeletionTimestamp.IsZero() {
+			// Only existing cluster can match
+			continue
+		}
+
+		addTypeInformationToObject(r.Scheme, cluster)
+		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
+			matching = append(matching, corev1.ObjectReference{
+				Kind:       cluster.Kind,
+				Namespace:  cluster.Namespace,
+				Name:       cluster.Name,
+				APIVersion: cluster.APIVersion,
+			})
+		}
+	}
+
+	return matching, nil
+}
+
+// updateClusterReports for each Sveltos/CAPI Cluster currently matching ClusterProfile:
 // - if syncMode is DryRun, creates corresponding ClusterReport if one does not exist already;
-// - if syncMode is DryRun, deletes ClusterReports for any CAPI Cluster not matching anymore;
+// - if syncMode is DryRun, deletes ClusterReports for any Sveltos/CAPI Cluster not matching anymore;
 // - if syncMode is not DryRun, deletes ClusterReports created by this ClusterProfile instance
 func (r *ClusterProfileReconciler) updateClusterReports(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	if clusterProfileScope.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeDryRun {
@@ -360,17 +440,21 @@ func (r *ClusterProfileReconciler) createClusterReports(ctx context.Context, clu
 	return nil
 }
 
-// createClusterReport creates ClusterReport given a CAPI Cluster.
+// createClusterReport creates ClusterReport given a Sveltos/CAPI Cluster.
 // If already existing, return nil
 func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clusterProfile *configv1alpha1.ClusterProfile,
 	cluster *corev1.ObjectReference) error {
 
+	clusterType := getClusterType(cluster)
+
 	clusterReport := &configv1alpha1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      getClusterReportName(clusterProfile.Name, cluster.Name),
+			Name:      getClusterReportName(clusterProfile.Name, cluster.Name, clusterType),
 			Labels: map[string]string{
 				ClusterProfileLabelName: clusterProfile.Name,
+				ClusterLabelName:        cluster.Name,
+				ClusterTypeLabelName:    string(getClusterType(cluster)),
 			},
 		},
 		Spec: configv1alpha1.ClusterReportSpec{
@@ -417,7 +501,7 @@ func (r *ClusterProfileReconciler) cleanClusterReports(ctx context.Context,
 	return nil
 }
 
-// updateClusterSummaries for each CAPI Cluster currently matching ClusterProfile:
+// updateClusterSummaries for each Sveltos/CAPI Cluster currently matching ClusterProfile:
 // - creates corresponding ClusterSummary if one does not exist already
 // - updates (eventually) corresponding ClusterSummary if one already exists
 func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
@@ -437,7 +521,6 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-
 		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -465,17 +548,17 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 }
 
 // cleanClusterSummaries finds all ClusterSummary currently owned by ClusterProfile.
-// For each such ClusterSummary, if corresponding CAPI Cluster is not a match anymore, deletes ClusterSummary
+// For each such ClusterSummary, if corresponding Sveltos/CAPI Cluster is not a match anymore, deletes ClusterSummary
 func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	matching := make(map[string]bool)
 
-	getClusterInfo := func(clusterNamespace, clusterName string) string {
-		return fmt.Sprintf("%s-%s", clusterNamespace, clusterName)
+	getClusterInfo := func(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+		return fmt.Sprintf("%s-%s-%s", clusterType, clusterNamespace, clusterName)
 	}
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		reference := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterName := getClusterInfo(reference.Namespace, reference.Name)
+		clusterName := getClusterInfo(reference.Namespace, reference.Name, getClusterType(&reference))
 		matching[clusterName] = true
 	}
 
@@ -494,7 +577,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 		if util.IsOwnedByObject(cs, clusterProfileScope.ClusterProfile) {
-			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName)]; !ok {
+			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
 				err := r.deleteClusterSummary(ctx, cs)
 				if err != nil {
 					clusterProfileScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
@@ -519,21 +602,21 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 }
 
 // cleanClusterConfigurations finds all ClusterConfigurations currently owned by ClusterProfile.
-// For each such ClusterConfigurations:
+// For each such ClusterConfigurations, if corresponding Cluster is not a match anymore:
 // - remove ClusterProfile as OwnerReference
-// -if no more OwnerReferences are left, delete ClusterConfigurations
+// - if no more OwnerReferences are left, delete ClusterConfigurations
 func (r *ClusterProfileReconciler) cleanClusterConfigurations(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
 	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
 
 	matchingClusterMap := make(map[string]bool)
 
-	info := func(namespace, name string) string {
-		return fmt.Sprintf("%s--%s", namespace, name)
+	info := func(namespace, clusterConfigurationName string) string {
+		return fmt.Sprintf("%s--%s", namespace, clusterConfigurationName)
 	}
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		ref := &clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		matchingClusterMap[info(ref.Namespace, ref.Name)] = true
+		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, getClusterType(ref)))] = true
 	}
 
 	err := r.List(ctx, clusterConfiguratioList)
@@ -544,7 +627,7 @@ func (r *ClusterProfileReconciler) cleanClusterConfigurations(ctx context.Contex
 	for i := range clusterConfiguratioList.Items {
 		cc := &clusterConfiguratioList.Items[i]
 
-		// If CAPI Cluster is still a match, continue (don't remove ClusterProfile as OwnerReference)
+		// If Sveltos/CAPI Cluster is still a match, continue (don't remove ClusterProfile as OwnerReference)
 		if _, ok := matchingClusterMap[info(cc.Namespace, cc.Name)]; ok {
 			continue
 		}
@@ -633,11 +716,11 @@ func (r *ClusterProfileReconciler) cleanClusterConfigurationClusterProfileResour
 	return err
 }
 
-// createClusterSummary creates ClusterSummary given a ClusterProfile and a matching CAPI Cluster
+// createClusterSummary creates ClusterSummary given a ClusterProfile and a matching Sveltos/CAPI Cluster
 func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterSummaryName := GetClusterSummaryName(clusterProfileScope.Name(), cluster.Name)
+	clusterSummaryName := GetClusterSummaryName(clusterProfileScope.Name(), cluster.Name, cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String())
 
 	clusterSummary := &configv1alpha1.ClusterSummary{
 		ObjectMeta: metav1.ObjectMeta{
@@ -661,6 +744,8 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
+	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+
 	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
 	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
 	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
@@ -668,7 +753,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 	return r.Create(ctx, clusterSummary)
 }
 
-// updateClusterSummary updates if necessary ClusterSummary given a ClusterProfile and a matching CAPI Cluster.
+// updateClusterSummary updates if necessary ClusterSummary given a ClusterProfile and a matching Sveltos/CAPI Cluster.
 // If ClusterProfile.Spec.SyncMode is set to one time, nothing will happen
 func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
 	cluster *corev1.ObjectReference) error {
@@ -693,7 +778,7 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 	return r.Update(ctx, clusterSummary)
 }
 
-// deleteClusterSummary deletes ClusterSummary given a ClusterProfile and a matching CAPI Cluster
+// deleteClusterSummary deletes ClusterSummary given a ClusterProfile and a matching Sveltos/CAPI Cluster
 func (r *ClusterProfileReconciler) deleteClusterSummary(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) error {
 
@@ -713,7 +798,7 @@ func (r *ClusterProfileReconciler) updateClusterSummarySyncMode(ctx context.Cont
 	return r.Update(ctx, currentClusterSummary)
 }
 
-// updateClusterConfigurations for each CAPI Cluster currently matching ClusterProfile:
+// updateClusterConfigurations for each Sveltos/CAPI Cluster currently matching ClusterProfile:
 // - creates corresponding ClusterConfiguration if one does not exist already
 // - updates (eventually) corresponding ClusterConfiguration if one already exists
 // Both create and update only add ClusterProfile as OwnerReference for ClusterConfiguration
@@ -741,13 +826,17 @@ func (r *ClusterProfileReconciler) updateClusterConfigurations(ctx context.Conte
 	return nil
 }
 
-// createClusterConfiguration creates ClusterConfiguration given a CAPI Cluster.
+// createClusterConfiguration creates ClusterConfiguration given a Sveltos/CAPI Cluster.
 // If already existing, return nil
 func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Context, cluster *corev1.ObjectReference) error {
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      cluster.Name,
+			Name:      getClusterConfigurationName(cluster.Name, getClusterType(cluster)),
+			Labels: map[string]string{
+				ClusterLabelName:     cluster.Name,
+				ClusterTypeLabelName: string(getClusterType(cluster)),
+			},
 		},
 	}
 
@@ -761,14 +850,15 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 	return err
 }
 
-// updateClusterConfiguration updates if necessary ClusterConfiguration given a ClusterProfile and a matching CAPI Cluster.
+// updateClusterConfiguration updates if necessary ClusterConfiguration given a ClusterProfile and a matching Sveltos/CAPI Cluster.
 // Update consists in:
 // - adding ClusterProfile as one of OwnerReferences for ClusterConfiguration
 // - adding a section in Status.ClusterProfileResources for this ClusterProfile
 func (r *ClusterProfileReconciler) updateClusterConfiguration(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace, cluster.Name)
+	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace,
+		getClusterConfigurationName(cluster.Name, getClusterType(cluster)))
 	if err != nil {
 		return err
 	}
@@ -851,43 +941,59 @@ func (r *ClusterProfileReconciler) updateClusterConfigurationClusterProfileResou
 	return err
 }
 
-func (r *ClusterProfileReconciler) updatesMaps(clusterProfileScope *scope.ClusterProfileScope) {
+func (r *ClusterProfileReconciler) cleanMaps(clusterProfileScope *scope.ClusterProfileScope) {
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	clusterProfileInfo := getKeyFromObject(r.Scheme, clusterProfileScope.ClusterProfile)
+
+	delete(r.ClusterProfileMap, *clusterProfileInfo)
+	delete(r.ClusterProfiles, *clusterProfileInfo)
+
+	for i := range r.ClusterMap {
+		clusterProfileSet := r.ClusterMap[i]
+		clusterProfileSet.Erase(clusterProfileInfo)
+	}
+}
+
+func (r *ClusterProfileReconciler) updateMaps(clusterProfileScope *scope.ClusterProfileScope) {
 	currentClusters := &libsveltosset.Set{}
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterInfo := &libsveltosv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
+		clusterInfo := &corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name, Kind: cluster.Kind, APIVersion: cluster.APIVersion}
 		currentClusters.Insert(clusterInfo)
 	}
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterProfileInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfileScope.Name()}
+	clusterProfileInfo := getKeyFromObject(r.Scheme, clusterProfileScope.ClusterProfile)
+
 	// Get list of Clusters not matched anymore by ClusterProfile
-	var toBeRemoved []libsveltosv1alpha1.PolicyRef
-	if v, ok := r.ClusterProfileMap[clusterProfileInfo]; ok {
+	var toBeRemoved []corev1.ObjectReference
+	if v, ok := r.ClusterProfileMap[*clusterProfileInfo]; ok {
 		toBeRemoved = v.Difference(currentClusters)
 	}
 
 	// For each currently matching Cluster, add ClusterProfile as consumer
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterInfo := &libsveltosv1alpha1.PolicyRef{Namespace: cluster.Namespace, Name: cluster.Name, Kind: "Cluster"}
-		r.getClusterMapForEntry(clusterInfo).Insert(&clusterProfileInfo)
+		clusterInfo := &corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name, Kind: cluster.Kind, APIVersion: cluster.APIVersion}
+		r.getClusterMapForEntry(clusterInfo).Insert(clusterProfileInfo)
 	}
 
 	// For each Cluster not matched anymore, remove ClusterProfile as consumer
 	for i := range toBeRemoved {
 		clusterName := toBeRemoved[i]
-		r.getClusterMapForEntry(&clusterName).Erase(&clusterProfileInfo)
+		r.getClusterMapForEntry(&clusterName).Erase(clusterProfileInfo)
 	}
 
 	// Update list of WorklaodRoles currently referenced by ClusterSummary
-	r.ClusterProfileMap[clusterProfileInfo] = currentClusters
-	r.ClusterProfiles[clusterProfileInfo] = clusterProfileScope.ClusterProfile.Spec.ClusterSelector
+	r.ClusterProfileMap[*clusterProfileInfo] = currentClusters
+	r.ClusterProfiles[*clusterProfileInfo] = clusterProfileScope.ClusterProfile.Spec.ClusterSelector
 }
 
-func (r *ClusterProfileReconciler) getClusterMapForEntry(entry *libsveltosv1alpha1.PolicyRef) *libsveltosset.Set {
+func (r *ClusterProfileReconciler) getClusterMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
 	s := r.ClusterMap[*entry]
 	if s == nil {
 		s = &libsveltosset.Set{}

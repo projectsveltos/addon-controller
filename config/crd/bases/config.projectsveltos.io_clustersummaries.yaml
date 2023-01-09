@@ -88,14 +88,56 @@ spec:
                           description: RepositoryURL is the URL helm chart repository
                           minLength: 1
                           type: string
+                        secretRef:
+                          description: SecretRef contains confidential data that needs
+                            to be used as values for templates
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: 'If referring to a piece of an object instead
+                                of an entire object, this string should contain a
+                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container
+                                within a pod, this would take on a value like: "spec.containers{name}"
+                                (where "name" refers to the name of the container
+                                that triggered the event) or if no container name
+                                is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to
+                                have some well-defined way of referencing a part of
+                                an object. TODO: this design is not final and this
+                                field is subject to change in the future.'
+                              type: string
+                            kind:
+                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                              type: string
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                              type: string
+                            namespace:
+                              description: 'Namespace of the referent. More info:
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                              type: string
+                            resourceVersion:
+                              description: 'Specific resourceVersion to which this
+                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                              type: string
+                            uid:
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                              type: string
+                          type: object
                         values:
                           description: 'Values holds the values for this Helm release.
                             Go templating with the values from the referenced CAPI
-                            Cluster. Currently following can be referenced: Cluster
+                            Cluster. Currently following can be referenced: - Cluster
                             => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
-                            0 }} KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                            InfrastructureProvider => the CAPI cluster infrastructure
-                            provider'
+                            0 }} - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                            - InfrastructureProvider => the CAPI cluster infrastructure
+                            provider - SecretRef => store any confindetial information
+                            in a Secret, set SecretRef then reference it for instance
+                            password: "{{ printf "%s" .SecretRef.Data.password | b64dec
+                            }}"'
                           type: string
                       required:
                       - chartName
@@ -112,7 +154,7 @@ spec:
                       CAPI clusters.
                     items:
                       description: PolicyRef specifies a resource containing one or
-                        more policy to deploy in matching CAPI Clusters.
+                        more policy to deploy in matching Clusters.
                       properties:
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
@@ -160,14 +202,19 @@ spec:
                     enum:
                     - OneTime
                     - Continuous
+                    - ContinuousWithDriftDetection
                     - DryRun
                     type: string
                 required:
                 - clusterSelector
                 type: object
+              clusterType:
+                description: ClusterType is the type of Cluster
+                type: string
             required:
             - clusterName
             - clusterNamespace
+            - clusterType
             type: object
           status:
             description: ClusterSummaryStatus defines the observed state of ClusterSummary

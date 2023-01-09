@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -266,7 +267,8 @@ func verifyClusterProfileMatches(clusterProfile *configv1alpha1.ClusterProfile) 
 		return err == nil &&
 			len(currentClusterProfile.Status.MatchingClusterRefs) == 1 &&
 			currentClusterProfile.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
-			currentClusterProfile.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name
+			currentClusterProfile.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name &&
+			currentClusterProfile.Status.MatchingClusterRefs[0].APIVersion == clusterv1.GroupVersion.String()
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -336,7 +338,10 @@ func verifyClusterConfiguration(clusterProfileName, clusterNamespace, clusterNam
 	Eventually(func() bool {
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		err := k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterNamespace, Name: clusterName}, currentClusterConfiguration)
+			types.NamespacedName{
+				Namespace: clusterNamespace,
+				Name:      "capi--" + clusterName,
+			}, currentClusterConfiguration)
 		if err != nil {
 			return false
 		}

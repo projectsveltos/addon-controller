@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
@@ -53,10 +54,10 @@ func init() {
 	metrics.Registry.MustRegister(programResourceDurationHistogram, programChartDurationHistogram)
 }
 
-func newResourceHistogram(clusterNamespace, clusterName string,
+func newResourceHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) prometheus.Histogram {
 
-	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s", clusterNamespace, clusterName), "-", "_")
+	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s_%s", clusterType, clusterNamespace, clusterName), "-", "_")
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
@@ -85,10 +86,10 @@ func newResourceHistogram(clusterNamespace, clusterName string,
 	return histogram
 }
 
-func newChartHistogram(clusterNamespace, clusterName string,
+func newChartHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) prometheus.Histogram {
 
-	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s", clusterNamespace, clusterName), "-", "_")
+	clusterInfo := strings.ReplaceAll(fmt.Sprintf("%s_%s_%s", clusterType, clusterNamespace, clusterName), "-", "_")
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
@@ -118,15 +119,15 @@ func newChartHistogram(clusterNamespace, clusterName string,
 }
 
 func logCollectorError(err error, logger logr.Logger) {
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to register collector: %s", err))
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("failed to register collector: %s", err))
 }
 
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
-	logger logr.Logger) {
+	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) {
 
 	if featureID == string(configv1alpha1.FeatureResources) {
 		programResourceDurationHistogram.Observe(elapsed.Seconds())
-		clusterHistogram := newResourceHistogram(clusterNamespace, clusterName, logger)
+		clusterHistogram := newResourceHistogram(clusterNamespace, clusterName, clusterType, logger)
 		if clusterHistogram != nil {
 			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
 				clusterNamespace, clusterName, featureID))
@@ -134,7 +135,7 @@ func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featu
 		}
 	} else {
 		programChartDurationHistogram.Observe(elapsed.Seconds())
-		clusterHistogram := newChartHistogram(clusterNamespace, clusterName, logger)
+		clusterHistogram := newChartHistogram(clusterNamespace, clusterName, clusterType, logger)
 		if clusterHistogram != nil {
 			logger.V(logs.LogVerbose).Info(fmt.Sprintf("register data for %s/%s %s",
 				clusterNamespace, clusterName, featureID))

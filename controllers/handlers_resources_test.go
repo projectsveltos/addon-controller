@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 	"github.com/projectsveltos/sveltos-manager/pkg/scope"
@@ -70,7 +71,7 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -79,6 +80,7 @@ var _ = Describe("HandlersResource", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -113,7 +115,7 @@ var _ = Describe("HandlersResource", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-				string(configv1alpha1.FeatureResources), klogr.New())
+				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())
 		}, timeout, pollingInterval).Should(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -195,7 +197,7 @@ var _ = Describe("HandlersResource", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureResources), klogr.New())).To(Succeed())
+			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect role0 and cluster0 to be deleted. role1 should remain as ConfigLabelName is not set on it
@@ -256,6 +258,7 @@ var _ = Describe("Hash methods", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},

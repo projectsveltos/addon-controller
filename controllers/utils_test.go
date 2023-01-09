@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -47,7 +49,7 @@ const (
 const (
 	upstreamClusterNamePrefix = "upstream-cluster"
 	upstreamMachineNamePrefix = "upstream-machine"
-	clusterProfileNamePrefix  = "cluster-feature"
+	clusterProfileNamePrefix  = "cluster-profile"
 )
 
 const (
@@ -121,6 +123,9 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := gatewayapi.AddToScheme(s); err != nil {
 		return nil, err
 	}
+	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -157,7 +162,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -166,6 +171,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
@@ -239,6 +245,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 
@@ -274,3 +281,13 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })
+
+func getClusterRef(cluster client.Object) *corev1.ObjectReference {
+	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+	return &corev1.ObjectReference{
+		Namespace:  cluster.GetNamespace(),
+		Name:       cluster.GetName(),
+		APIVersion: apiVersion,
+		Kind:       kind,
+	}
+}

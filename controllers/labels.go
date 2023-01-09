@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ const (
 
 	// ClusterProfileLabelName is added to all ClusterSummary instances created
 	// by a ClusterProfile instance
-	ClusterProfileLabelName = "projectsveltos.io/cluster-feature-name"
+	ClusterProfileLabelName = "projectsveltos.io/cluster-profile-name"
 
 	// ReferenceLabelKind is added to each policy deployed by a ClusterSummary
 	// instance to a CAPI Cluster. Indicates the Kind (ConfigMap or Secret)
@@ -48,9 +48,17 @@ const (
 	// by a ClusterProfile instance for a given cluster
 	ClusterLabelNamespace = "projectsveltos.io/cluster-namespace"
 
-	// clusterLabelName is the label set on ClusterSummary instances created
-	// by a ClusterProfile instance for a given cluster
+	// clusterLabelName is the label set on:
+	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
 	ClusterLabelName = "projectsveltos.io/cluster-name"
+
+	// ClusterTypeLabelName is the label set on:
+	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
+	ClusterTypeLabelName = "projectsveltos.io/cluster-type"
 
 	// PolicyTemplate is the annotation that must be set on a policy when the
 	// policy is a template and needs variable sustitution.

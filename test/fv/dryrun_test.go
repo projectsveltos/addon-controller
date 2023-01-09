@@ -202,7 +202,7 @@ var _ = Describe("DryRun", func() {
 		dryRunClusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Verifying ClusterReport for helm reports")
-		clusterReportName := fmt.Sprintf("%s--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
+		clusterReportName := fmt.Sprintf("%s--capi--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
 			err := k8sClient.Get(context.TODO(),
@@ -295,11 +295,11 @@ var _ = Describe("DryRun", func() {
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
-
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", dryRunClusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureResources)
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())

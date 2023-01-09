@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
 )
@@ -53,6 +54,7 @@ var _ = Describe("Chart manager", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: randomString(),
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
@@ -250,7 +252,7 @@ var _ = Describe("Chart manager", func() {
 		defer removeSubscriptions(c, tmpClusterSummary)
 
 		csName, err := manager.GetManagerForChart(
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, &prometheusChart)
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, &prometheusChart)
 		Expect(err).To(BeNil())
 		Expect(csName).To(Equal(tmpClusterSummary.Name))
 	})
@@ -282,7 +284,7 @@ var _ = Describe("Chart manager", func() {
 			defer removeSubscriptions(c, tmpClusterSummary2)
 
 			registered := manager.GetRegisteredClusterSummaries(
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 			Expect(len(registered)).To(Equal(2))
 			Expect(registered).To(ContainElement(clusterSummary.Name))
 			Expect(registered).To(ContainElement(tmpClusterSummary1.Name))

@@ -51,7 +51,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		}
 
 		clusterName = randomString()
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName)
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -60,6 +60,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, namespace, clusterName)
@@ -257,7 +258,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
@@ -331,7 +332,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -379,7 +380,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -417,7 +418,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), true)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
@@ -454,7 +455,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), true)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -475,7 +476,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), true)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, true)
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
 		}
@@ -506,7 +507,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1alpha1.FeatureResources), false)
+			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, false)
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioning},
 		}

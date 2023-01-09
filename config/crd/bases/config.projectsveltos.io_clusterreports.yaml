@@ -111,11 +111,10 @@ spec:
                         Resource
                       properties:
                         group:
-                          description: Group of the resource deployed in the CAPI
-                            Cluster.
+                          description: Group of the resource deployed in the Cluster.
                           type: string
                         kind:
-                          description: Kind of the resource deployed in the CAPI Cluster.
+                          description: Kind of the resource deployed in the Cluster.
                           minLength: 1
                           type: string
                         lastAppliedTime:
@@ -124,12 +123,12 @@ spec:
                           format: date-time
                           type: string
                         name:
-                          description: Name of the resource deployed in the CAPI Cluster.
+                          description: Name of the resource deployed in the Cluster.
                           minLength: 1
                           type: string
                         namespace:
-                          description: Namespace of the resource deployed in the CAPI
-                            Cluster. Empty for resources scoped at cluster level.
+                          description: Namespace of the resource deployed in the Cluster.
+                            Empty for resources scoped at cluster level.
                           type: string
                         owner:
                           description: Owner is the list of ConfigMap/Secret containing
@@ -170,11 +169,16 @@ spec:
                               description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
                               type: string
                           type: object
+                        version:
+                          description: Version of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
                       required:
                       - group
                       - kind
                       - name
                       - owner
+                      - version
                       type: object
                   required:
                   - resource

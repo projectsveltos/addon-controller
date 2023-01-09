@@ -50,7 +50,7 @@ func (m *DryRunReconciliationError) Error() string {
 }
 
 // SyncMode specifies how features are synced in a workload cluster.
-// +kubebuilder:validation:Enum:=OneTime;Continuous;DryRun
+// +kubebuilder:validation:Enum:=OneTime;Continuous;ContinuousWithDriftDetection;DryRun
 type SyncMode string
 
 const (
@@ -59,6 +59,10 @@ const (
 
 	// SyncModeContinuous indicates feature sync should continuously happen
 	SyncModeContinuous = SyncMode("Continuous")
+
+	// SyncModeContinuousWithDriftDetection indicates feature sync should continuously happen
+	// if configuration drift is detected in the managed cluster, it will be overrid
+	SyncModeContinuousWithDriftDetection = SyncMode("ContinuousWithDriftDetection")
 
 	// SyncModeDryRun indicates feature sync should continuously happen
 	// no feature will be updated in the CAPI Cluster though.
@@ -105,11 +109,16 @@ type HelmChart struct {
 	// Values holds the values for this Helm release.
 	// Go templating with the values from the referenced CAPI Cluster.
 	// Currently following can be referenced:
-	// Cluster => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}
-	// KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-	// InfrastructureProvider => the CAPI cluster infrastructure provider
+	// - Cluster => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}
+	// - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+	// - InfrastructureProvider => the CAPI cluster infrastructure provider
+	// - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+	// for instance password: "{{ printf "%s" .SecretRef.Data.password | b64dec }}"
 	// +optional
 	Values string `json:"values,omitempty"`
+
+	// SecretRef contains confidential data that needs to be used as values for templates
+	SecretRef *corev1.ObjectReference `json:"secretRef,omitempty"`
 
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install
@@ -169,7 +178,7 @@ type ClusterProfileSpec struct {
 type ClusterProfileStatus struct {
 	// MatchingClusterRefs reference all the cluster-api Cluster currently matching
 	// ClusterProfile ClusterSelector
-	MatchingClusterRefs []corev1.ObjectReference `json:"matchinClusters,omitempty"`
+	MatchingClusterRefs []corev1.ObjectReference `json:"matchingClusters,omitempty"`
 }
 
 //+kubebuilder:object:root=true

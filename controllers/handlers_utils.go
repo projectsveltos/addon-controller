@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,12 +39,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -175,6 +173,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 			Namespace: policy.GetNamespace(),
 			Kind:      policy.GetKind(),
 			Group:     policy.GetObjectKind().GroupVersionKind().Group,
+			Version:   policy.GetObjectKind().GroupVersionKind().Version,
 			Owner: corev1.ObjectReference{
 				Namespace: referencedObject.GetNamespace(),
 				Name:      referencedObject.GetName(),
@@ -226,12 +225,9 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 
 		addOwnerReference(policy, clusterProfile)
 
-		// Update only if object does not exist yet or hash is different
-		if !exist || currentHash != policyHash {
-			err = updateResource(ctx, dr, clusterSummary, policy, logger)
-			if err != nil {
-				return nil, err
-			}
+		err = updateResource(ctx, dr, clusterSummary, policy, logger)
+		if err != nil {
+			return nil, err
 		}
 
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
@@ -275,17 +271,23 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 			}
 
 			var instance string
-			instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				policy.GetName(), elements[i], logger)
-			if err != nil {
-				return nil, err
-			}
-
-			policy, err = utils.GetUnstructured([]byte(instance))
-			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
-				return nil, err
+			annotations := policy.GetAnnotations()
+			if annotations != nil {
+				if _, ok := annotations[PolicyTemplate]; ok {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s %s/%s is a template",
+						policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+					instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+						clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+						policy.GetName(), elements[i], nil, logger)
+					if err != nil {
+						return nil, err
+					}
+					policy, err = utils.GetUnstructured([]byte(instance))
+					if err != nil {
+						logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+						return nil, err
+					}
+				}
 			}
 
 			if policy == nil {
@@ -308,11 +310,11 @@ func getPolicyInfo(policy *configv1alpha1.Resource) string {
 		policy.Name)
 }
 
-// getClusterSummaryAndCAPIClusterClient gets ClusterSummary and the client to access the associated
-// CAPI Cluster.
+// getClusterSummaryAndClusterClient gets ClusterSummary and the client to access the associated
+// CAPI/Sveltos Cluster.
 // Returns an err if ClusterSummary or associated CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
-func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace, clusterSummaryName string,
+func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, clusterSummaryName string,
 	c client.Client, logger logr.Logger) (*configv1alpha1.ClusterSummary, client.Client, error) {
 
 	// Get ClusterSummary that requested this
@@ -329,14 +331,12 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 	}
 
 	// Get CAPI Cluster
-	cluster := &clusterv1.Cluster{}
-	if err := c.Get(ctx,
-		types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName},
-		cluster); err != nil {
+	cluster, err := getCluster(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
 		return nil, nil, err
 	}
 
-	if !cluster.DeletionTimestamp.IsZero() {
+	if !cluster.GetDeletionTimestamp().IsZero() {
 		logger.V(logs.LogInfo).Info("cluster is marked for deletion. Nothing to do.")
 		// if cluster is marked for deletion, there is nothing to deploy
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
@@ -347,8 +347,8 @@ func getClusterSummaryAndCAPIClusterClient(ctx context.Context, clusterNamespace
 		return nil, nil, err
 	}
 
-	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, logger, c, s,
-		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+	clusterClient, err := getKubernetesClient(ctx, c, s, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -491,7 +491,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 					undeployed = append(undeployed, configv1alpha1.ResourceReport{
 						Resource: configv1alpha1.Resource{
 							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
-							Group: r.GroupVersionKind().Group,
+							Group: r.GroupVersionKind().Group, Version: r.GroupVersionKind().Version,
 						},
 						Action: string(configv1alpha1.DeleteResourceAction),
 					})
@@ -542,6 +542,7 @@ func canDelete(policy client.Object, currentReferencedPolicies map[string]config
 	name := getPolicyInfo(&configv1alpha1.Resource{
 		Kind:      policy.GetObjectKind().GroupVersionKind().Kind,
 		Group:     policy.GetObjectKind().GroupVersionKind().Group,
+		Version:   policy.GetObjectKind().GroupVersionKind().Version,
 		Name:      policy.GetName(),
 		Namespace: policy.GetNamespace(),
 	})
@@ -616,7 +617,10 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		// Get ClusterConfiguration for CAPI Cluster
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName},
+			types.NamespacedName{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      getClusterConfigurationName(clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
+			},
 			clusterConfiguration)
 		if err != nil {
 			if apierrors.IsNotFound(err) && !clusterSummary.DeletionTimestamp.IsZero() {

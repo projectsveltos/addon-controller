@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -30,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -83,22 +83,22 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
 			Scheme:            scheme,
-			ClusterMap:        make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClusterProfileMap: make(map[libsveltosv1alpha1.PolicyRef]*libsveltosset.Set),
-			ClusterProfiles:   make(map[libsveltosv1alpha1.PolicyRef]configv1alpha1.Selector),
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
 		By("Setting ClusterProfileReconciler internal structures")
-		matchingInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: matchingClusterProfile.Name}
+		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ClusterProfileKind, Name: matchingClusterProfile.Name}
 		reconciler.ClusterProfiles[matchingInfo] = matchingClusterProfile.Spec.ClusterSelector
-		nonMatchingInfo := libsveltosv1alpha1.PolicyRef{Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
+		nonMatchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
 
 		// ClusterMap contains, per ClusterName, list of ClusterProfiles matching it.
 		clusterProfileSet := &libsveltosset.Set{}
 		clusterProfileSet.Insert(&matchingInfo)
-		clusterInfo := libsveltosv1alpha1.PolicyRef{Kind: "Cluster", Namespace: cluster.Namespace, Name: cluster.Name}
+		clusterInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name}
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
 
 		// ClusterProfileMap contains, per ClusterProfile, list of matched Clusters.

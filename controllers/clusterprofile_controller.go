@@ -60,7 +60,7 @@ type ClusterProfileReconciler struct {
 	// key: ClusterProfile; value: set of Sveltos/CAPI Clusters matched
 	ClusterProfileMap map[corev1.ObjectReference]*libsveltosset.Set
 	// key: ClusterProfile; value ClusterProfile Selector
-	ClusterProfiles map[corev1.ObjectReference]configv1alpha1.Selector
+	ClusterProfiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
 	// Reason for the two maps:
 	// ClusterProfile, via ClusterSelector, matches Sveltos/CAPI Clusters based on Cluster labels.

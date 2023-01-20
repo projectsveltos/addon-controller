@@ -127,7 +127,7 @@ func main() {
 		Scheme:               mgr.GetScheme(),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles:      make(map[corev1.ObjectReference]configv1alpha1.Selector),
+		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 	}

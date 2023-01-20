@@ -31,8 +31,6 @@ const (
 	ClusterProfileKind = "ClusterProfile"
 )
 
-type Selector string
-
 // ReferencedResourceKind is a string representation of allowed kind of resources
 // that can be referenced in a ClusterProfile
 type ReferencedResourceKind string
@@ -140,8 +138,8 @@ const (
 
 // ClusterProfileSpec defines the desired state of ClusterProfile
 type ClusterProfileSpec struct {
-	// ClusterSelector identifies ClusterAPI clusters to associate to.
-	ClusterSelector Selector `json:"clusterSelector"`
+	// ClusterSelector identifies clusters to associate to.
+	ClusterSelector libsveltosv1alpha1.Selector `json:"clusterSelector"`
 
 	// SyncMode specifies how features are synced in a matching workload cluster.
 	// - OneTime means, first time a workload cluster matches the ClusterProfile,
@@ -165,7 +163,7 @@ type ClusterProfileSpec struct {
 	// +optional
 	StopMatchingBehavior StopMatchingBehavior `json:"stopMatchingBehavior,omitempty"`
 
-	// PolicyRefs references all the ConfigMaps containing kubernetes resources
+	// PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional
 	PolicyRefs []libsveltosv1alpha1.PolicyRef `json:"policyRefs,omitempty"`

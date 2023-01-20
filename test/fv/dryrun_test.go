@@ -396,7 +396,7 @@ var _ = Describe("DryRun", func() {
 		Byf("Changing clusterSelector for ClusterProfile %s so to not match any CAPI cluster", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		selector := "bar=foo"
-		currentClusterProfile.Spec.ClusterSelector = configv1alpha1.Selector(selector)
+		currentClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector(selector)
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		// Since ClusterProfile is in DryRun mode, ClusterSummary should be marked as deleted but not removed

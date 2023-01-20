@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	selector    = configv1alpha1.Selector("env=qa,zone=west")
+	selector    = libsveltosv1alpha1.Selector("env=qa,zone=west")
 	clusterKind = "Cluster"
 )
 
@@ -104,7 +104,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -154,7 +154,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -237,7 +237,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -291,7 +291,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -366,7 +366,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -411,7 +411,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -497,7 +497,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -574,7 +574,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -641,7 +641,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -675,7 +675,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -730,7 +730,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -821,7 +821,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -867,7 +867,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -917,7 +917,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -970,7 +970,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -1029,7 +1029,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -1087,7 +1087,7 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 				Name: clusterProfileNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: configv1alpha1.Selector("env=production"),
+				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
 			},
 		}
 	})

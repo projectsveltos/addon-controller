@@ -130,7 +130,7 @@ var _ = Describe("LeavePolicies", func() {
 
 		Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.ClusterSelector = configv1alpha1.Selector(fmt.Sprintf("%s=%s", key, value+randomString()))
+		currentClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", key, value+randomString()))
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		Byf("Verifying ClusterSummary is gone")

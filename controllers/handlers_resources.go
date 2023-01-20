@@ -200,7 +200,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		var err error
-		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
 			if err == nil {

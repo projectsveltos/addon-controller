@@ -70,7 +70,7 @@ var _ = Describe("Feature", Serial, func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},

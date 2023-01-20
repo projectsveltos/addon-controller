@@ -365,7 +365,7 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var err error
 		var object client.Object
 		reference := &references[i]
-		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
 		} else {
@@ -398,7 +398,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 
 	for i := range referencedObject {
 		var tmpResourceReports []configv1alpha1.ResourceReport
-		if referencedObject[i].GetObjectKind().GroupVersionKind().Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if referencedObject[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			configMap := referencedObject[i].(*corev1.ConfigMap)
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")

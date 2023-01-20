@@ -392,7 +392,7 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
-			controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+			controllers.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			controllers.ReferenceLabelName:      configMap.Name,
 			controllers.ReferenceLabelNamespace: configMap.Namespace,
 		})
@@ -431,8 +431,8 @@ var _ = Describe("HandlersUtils", func() {
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
-			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 

@@ -452,7 +452,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 					SyncMode: configv1alpha1.SyncModeOneTime,
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
-							Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 							Namespace: "c-" + randomString(),
 							Name:      "c-" + randomString(),
 						},
@@ -465,12 +465,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 				Namespace: "b-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
-				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 				Namespace: "d-" + randomString(),
 				Name:      "d-" + randomString(),
 			},
@@ -517,12 +517,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "c-" + randomString(),
 				Name:      "d-" + randomString(),
 			},
@@ -553,7 +553,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
@@ -595,12 +595,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "c-" + randomString(),
 				Name:      "d-" + randomString(),
 			},
@@ -775,7 +775,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		}
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "x-" + randomString(),
 				Name:      "y-" + randomString(),
 			},
@@ -796,7 +796,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 					SyncMode: configv1alpha1.SyncModeContinuous,
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
 						{
-							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 							Namespace: "c-" + randomString(),
 							Name:      "c-" + randomString(),
 						},

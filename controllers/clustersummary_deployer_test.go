@@ -216,7 +216,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			},
 		}
 
@@ -269,7 +269,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			},
 		}
 
@@ -344,7 +344,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			},
 		}
 
@@ -427,7 +427,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			{
 				Namespace: randomString(),
 				Name:      randomString(),
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			},
 		}
 
@@ -461,7 +461,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
@@ -492,7 +492,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("undeployFeatures returns an error if deploying is in progress", func() {
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		initObjects := []client.Object{
@@ -527,8 +527,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
-			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		ns := &corev1.Namespace{
@@ -576,7 +576,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()

@@ -102,7 +102,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: kongSAConfigMap.Namespace,
 				Name:      kongSAConfigMap.Name,
 			},
@@ -161,8 +161,8 @@ var _ = Describe("DryRun", func() {
 		Byf("Update ClusterProfile %s to reference configMaps with Kong's configuration", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
-			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongSAConfigMap.Name},
+			{Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
+			{Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongSAConfigMap.Name},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
@@ -305,7 +305,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
+			{Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMapNs, Name: kongRoleConfigMap.Name},
 		}
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{

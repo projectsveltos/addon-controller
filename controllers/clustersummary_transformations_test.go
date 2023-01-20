@@ -65,7 +65,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
-							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 						},
 					},
 				},
@@ -85,7 +85,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 						{
 							Namespace: configMap.Namespace,
 							Name:      randomString(),
-							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 						},
 					},
 				},
@@ -111,7 +111,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 
 		set := libsveltosset.Set{}
 		key := corev1.ObjectReference{APIVersion: configMap.APIVersion,
-			Kind: string(configv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
+			Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
 
 		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
 			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})

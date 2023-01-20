@@ -31,16 +31,6 @@ const (
 	ClusterProfileKind = "ClusterProfile"
 )
 
-// ReferencedResourceKind is a string representation of allowed kind of resources
-// that can be referenced in a ClusterProfile
-type ReferencedResourceKind string
-
-// Define the ReferencedResourceKind constants.
-const (
-	SecretReferencedResourceKind    ReferencedResourceKind = "Secret"
-	ConfigMapReferencedResourceKind ReferencedResourceKind = "ConfigMap"
-)
-
 type DryRunReconciliationError struct{}
 
 func (m *DryRunReconciliationError) Error() string {

@@ -394,7 +394,7 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 		var data map[string]string
 
 		kind := referencedObjects[i].GetObjectKind().GroupVersionKind().Kind
-		if kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			cm := referencedObjects[i].(*corev1.ConfigMap)
 			data = cm.Data
 		} else {

@@ -29,21 +29,6 @@ const (
 	// by a ClusterProfile instance
 	ClusterProfileLabelName = "projectsveltos.io/cluster-profile-name"
 
-	// ReferenceLabelKind is added to each policy deployed by a ClusterSummary
-	// instance to a CAPI Cluster. Indicates the Kind (ConfigMap or Secret)
-	// containing the policy.
-	ReferenceLabelKind = "projectsveltos.io/reference-kind"
-
-	// ReferenceLabelName is added to each policy deployed by a ClusterSummary
-	// instance to a CAPI Cluster. Indicates the name of the ConfigMap/Secret
-	// containing the policy.
-	ReferenceLabelName = "projectsveltos.io/reference-name"
-
-	// ReferenceLabelNamespace is added to each policy deployed by a ClusterSummary
-	// instance to a CAPI Cluster. Indicates the namespace of the ConfigMap/Secret
-	// containing the policy.
-	ReferenceLabelNamespace = "projectsveltos.io/reference-namespace"
-
 	// clusterLabelNamespace is the label set on ClusterSummary instances created
 	// by a ClusterProfile instance for a given cluster
 	ClusterLabelNamespace = "projectsveltos.io/cluster-namespace"
@@ -63,10 +48,6 @@ const (
 	// PolicyTemplate is the annotation that must be set on a policy when the
 	// policy is a template and needs variable sustitution.
 	PolicyTemplate = "projectsveltos.io/template"
-
-	// PolicyHash is the annotation set on a policy when deployed in a CAPI
-	// cluster.
-	PolicyHash = "projectsveltos.io/hash"
 )
 
 // addLabel adds label to an object

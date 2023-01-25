@@ -94,11 +94,6 @@ type (
 )
 
 var (
-	AddOwnerReference    = addOwnerReference
-	RemoveOwnerReference = removeOwnerReference
-)
-
-var (
 	GetClusterReportName        = getClusterReportName
 	GetClusterConfigurationName = getClusterConfigurationName
 )

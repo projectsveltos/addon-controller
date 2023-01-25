@@ -137,9 +137,9 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-					controllers.ReferenceLabelName:      randomString(),
-					controllers.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceLabelName:      randomString(),
+					deployer.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}
@@ -155,9 +155,9 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-					controllers.ReferenceLabelName:      randomString(),
-					controllers.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceLabelName:      randomString(),
+					deployer.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}

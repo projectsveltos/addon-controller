@@ -745,7 +745,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 	}
 
 	clusterSummary.Spec.ClusterType = getClusterType(cluster)
-
+	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
 	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
 	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
 	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
@@ -775,6 +775,12 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 
 	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
+	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
+	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
+	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
+	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
+
 	return r.Update(ctx, clusterSummary)
 }
 

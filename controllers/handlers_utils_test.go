@@ -149,6 +149,13 @@ var _ = Describe("HandlersUtils", func() {
 		deleteResources(namespace, clusterProfile, clusterSummary)
 	})
 
+	It("getClusterSummaryAdmin returns the admin for a given ClusterSummary", func() {
+		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
+		admin := randomString()
+		clusterSummary.Labels[configv1alpha1.AdminLabel] = admin
+		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(Equal(admin))
+	})
+
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{

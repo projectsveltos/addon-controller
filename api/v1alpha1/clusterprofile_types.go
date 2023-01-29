@@ -29,6 +29,10 @@ const (
 	ClusterProfileFinalizer = "clusterprofilefinalizer.projectsveltos.io"
 
 	ClusterProfileKind = "ClusterProfile"
+
+	// AdminLabel can be set on ClusterProfile to indicate which admin is creating it.
+	// AdminLabel used along with RoleRequest is Sveltos solution for multi tenancy.
+	AdminLabel = "projectsveltos.io/admin-name"
 )
 
 type DryRunReconciliationError struct{}

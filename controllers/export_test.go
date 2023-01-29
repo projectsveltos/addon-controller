@@ -64,6 +64,7 @@ var (
 	DeployContentOfConfigMap     = deployContentOfConfigMap
 	DeployContentOfSecret        = deployContentOfSecret
 	DeployContent                = deployContent
+	GetClusterSummaryAdmin       = getClusterSummaryAdmin
 	AddAnnotation                = addAnnotation
 	ComputePolicyHash            = computePolicyHash
 	GetPolicyInfo                = getPolicyInfo

@@ -105,7 +105,12 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		}
 	}
 
-	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
+	logger = logger.WithValues("admin", getClusterSummaryAdmin(clusterSummary))
+
+	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
+		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -149,7 +154,12 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
+	logger = logger.WithValues("admin", getClusterSummaryAdmin(clusterSummary))
+
+	kubeconfigContent, err := getSecretData(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
+		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}

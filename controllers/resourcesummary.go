@@ -49,13 +49,14 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("clustersummary", applicant)
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	// Sveltos resources are deployed using cluster-admin role.
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "", clusterType, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
 	}
 
-	err = deployDriftDetectionCRDs(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	err = deployDriftDetectionCRDs(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -78,12 +79,10 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("clustersummary", applicant)
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
 
-	s, err := InitScheme()
-	if err != nil {
-		return err
-	}
-
-	remoteClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterType, logger)
+	// ResourceSummary is a Sveltos resource created in managed clusters.
+	// Sveltos resources are always created using cluster-admin so that admin does not need to be
+	// given such permissions.
+	remoteClient, err := getKubernetesClient(ctx, c, clusterNamespace, clusterName, "", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -98,19 +97,10 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	return nil
 }
 
-func deployDriftDetectionCRDs(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
-
-	// Deploy DebuggingConfiguration/ResourceSummary CRD
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterType, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get CAPI cluster rest config")
-		return err
-	}
-
+func deployDriftDetectionCRDs(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
 	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
 	// Deploy DebuggingConfiguration CRD
-	err = deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
+	err := deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
 	if err != nil {
 		return err
 	}

@@ -77,13 +77,9 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	scheme, err := InitScheme()
-	if err != nil {
-		return err
-	}
-
+	// Use cluster-admin role to collect Sveltos resources from managed clusters
 	var remoteClient client.Client
-	remoteClient, err = getKubernetesClient(ctx, c, scheme, cluster.Namespace, cluster.Name, getClusterType(clusterRef), logger)
+	remoteClient, err = getKubernetesClient(ctx, c, cluster.Namespace, cluster.Name, "", getClusterType(clusterRef), logger)
 	if err != nil {
 		return err
 	}

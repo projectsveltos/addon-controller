@@ -204,6 +204,16 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return fmt.Errorf("feature is still being removed")
 		}
+
+		// Failure to undeploy because of missing permission is ignored.
+		if apierrors.IsForbidden(result.Err) {
+			logger.V(logs.LogInfo).Info("undeploying failing because of missing permission.")
+			tmpStatus := configv1alpha1.FeatureStatusRemoved
+			status = &tmpStatus
+			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
+			return nil
+		}
+
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 		if *status == configv1alpha1.FeatureStatusRemoved {
 			return nil

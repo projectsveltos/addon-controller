@@ -502,7 +502,9 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		}
 
 		err = controllers.UpdateClusterSummary(reconciler, context.TODO(),
-			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+			clusterProfileScope, &corev1.ObjectReference{
+				Namespace: matchingCluster.Namespace, Name: matchingCluster.Name,
+				Kind: clusterKind, APIVersion: clusterv1.GroupVersion.String()})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}

@@ -749,14 +749,11 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 
-	s, err := InitScheme()
-	if err != nil {
-		return err
-	}
-
+	// ResourceSummary is a Sveltos resource deployed in managed clusters.
+	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
-	remoteClient, err := getKubernetesClient(ctx, r.Client, s, cs.Spec.ClusterNamespace,
-		cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	remoteClient, err := getKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
+		cs.Spec.ClusterName, "", cs.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}

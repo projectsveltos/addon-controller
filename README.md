@@ -69,7 +69,8 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 1. Open a bug/feature enhancement on github;
 2. Chat with us on the Slack in the [#projectsveltos](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q) channel;
-3. Submit a pull request.
+3. Submit a pull request;
+4. [Contact Us](mailto:support@projectsveltos.io)
 
 ## License
 

@@ -103,7 +103,7 @@ var _ = Describe("HandlersResource", func() {
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -137,9 +137,9 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
-					controllers.ReferenceLabelName:      randomString(),
-					controllers.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceLabelName:      randomString(),
+					deployer.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}
@@ -155,9 +155,9 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
-					controllers.ReferenceLabelName:      randomString(),
-					controllers.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceLabelName:      randomString(),
+					deployer.ReferenceLabelNamespace: randomString(),
 				},
 			},
 		}
@@ -261,9 +261,9 @@ var _ = Describe("Hash methods", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
-						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
-						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
-						{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+						{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 					},
 				},
 			},

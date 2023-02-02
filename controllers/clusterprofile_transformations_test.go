@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -59,7 +60,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 				Name: clusterProfileNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: configv1alpha1.Selector("env=production"),
+				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
 			},
 		}
 
@@ -68,7 +69,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 				Name: clusterProfileNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: configv1alpha1.Selector("env=qa"),
+				ClusterSelector: libsveltosv1alpha1.Selector("env=qa"),
 			},
 		}
 
@@ -85,7 +86,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			Scheme:            scheme,
 			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			Mux:               sync.Mutex{},
 		}
 
@@ -133,7 +134,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		Expect(requests).To(ContainElement(expected))
 
 		By("Changing clusterProfile ClusterSelector again to have no ClusterProfile match")
-		matchingClusterProfile.Spec.ClusterSelector = configv1alpha1.Selector("env=qa")
+		matchingClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector("env=qa")
 		Expect(c.Update(context.TODO(), matchingClusterProfile)).To(Succeed())
 		nonMatchingClusterProfile.Spec.ClusterSelector = matchingClusterProfile.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterProfile)).To(Succeed())

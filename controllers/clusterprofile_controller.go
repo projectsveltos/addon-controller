@@ -60,7 +60,7 @@ type ClusterProfileReconciler struct {
 	// key: ClusterProfile; value: set of Sveltos/CAPI Clusters matched
 	ClusterProfileMap map[corev1.ObjectReference]*libsveltosset.Set
 	// key: ClusterProfile; value ClusterProfile Selector
-	ClusterProfiles map[corev1.ObjectReference]configv1alpha1.Selector
+	ClusterProfiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
 	// Reason for the two maps:
 	// ClusterProfile, via ClusterSelector, matches Sveltos/CAPI Clusters based on Cluster labels.
@@ -745,7 +745,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 	}
 
 	clusterSummary.Spec.ClusterType = getClusterType(cluster)
-
+	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
 	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
 	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
 	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
@@ -775,6 +775,12 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 
 	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
+	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
+	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
+	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
+	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
+
 	return r.Update(ctx, clusterSummary)
 }
 

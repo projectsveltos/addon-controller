@@ -251,8 +251,7 @@ spec:
             description: ClusterProfileSpec defines the desired state of ClusterProfile
             properties:
               clusterSelector:
-                description: ClusterSelector identifies ClusterAPI clusters to associate
-                  to.
+                description: ClusterSelector identifies clusters to associate to.
                 type: string
               helmCharts:
                 description: Helm charts
@@ -351,8 +350,9 @@ spec:
                   type: object
                 type: array
               policyRefs:
-                description: PolicyRefs references all the ConfigMaps containing kubernetes
-                  resources that need to be deployed in the matching CAPI clusters.
+                description: PolicyRefs references all the ConfigMaps/Secrets containing
+                  kubernetes resources that need to be deployed in the matching CAPI
+                  clusters.
                 items:
                   description: PolicyRef specifies a resource containing one or more
                     policy to deploy in matching Clusters.
@@ -736,8 +736,8 @@ spec:
                   be applied to the workload cluster.
                 properties:
                   clusterSelector:
-                    description: ClusterSelector identifies ClusterAPI clusters to
-                      associate to.
+                    description: ClusterSelector identifies clusters to associate
+                      to.
                     type: string
                   helmCharts:
                     description: Helm charts
@@ -837,9 +837,9 @@ spec:
                       type: object
                     type: array
                   policyRefs:
-                    description: PolicyRefs references all the ConfigMaps containing
-                      kubernetes resources that need to be deployed in the matching
-                      CAPI clusters.
+                    description: PolicyRefs references all the ConfigMaps/Secrets
+                      containing kubernetes resources that need to be deployed in
+                      the matching CAPI clusters.
                     items:
                       description: PolicyRef specifies a resource containing one or
                         more policy to deploy in matching Clusters.

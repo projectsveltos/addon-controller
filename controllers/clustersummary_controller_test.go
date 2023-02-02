@@ -242,7 +242,7 @@ var _ = Describe("ClustersummaryController", func() {
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioning},
@@ -321,7 +321,7 @@ var _ = Describe("ClustersummaryController", func() {
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
@@ -668,7 +668,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
-							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 						},
 					},
 					SyncMode: configv1alpha1.SyncModeContinuous,
@@ -690,7 +690,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name + randomString(),
-							Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 						},
 					},
 					SyncMode: configv1alpha1.SyncModeContinuous,
@@ -735,7 +735,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			{
 				Namespace: namespace,
 				Name:      configMap.Name,
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			},
 		}
 

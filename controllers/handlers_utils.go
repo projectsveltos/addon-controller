@@ -43,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -188,10 +189,10 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 		}
 
 		// Get policy hash of referenced policy
-		addLabel(policy, ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
-		addLabel(policy, ReferenceLabelName, referencedObject.GetName())
-		addLabel(policy, ReferenceLabelNamespace, referencedObject.GetNamespace())
-		addAnnotation(policy, PolicyHash, policyHash)
+		addLabel(policy, deployer.ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
+		addLabel(policy, deployer.ReferenceLabelName, referencedObject.GetName())
+		addLabel(policy, deployer.ReferenceLabelNamespace, referencedObject.GetNamespace())
+		addAnnotation(policy, deployer.PolicyHash, policyHash)
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, remoteClient, clusterSummary, policy.GetNamespace())
@@ -209,10 +210,10 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 
 		var exist bool
 		var currentHash string
-		exist, currentHash, err = validateObjectForUpdate(ctx, dr, policy,
+		exist, currentHash, err = deployer.ValidateObjectForUpdate(ctx, dr, policy,
 			referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName())
 		if err != nil {
-			var conflictErr *conflictError
+			var conflictErr *deployer.ConflictError
 			ok := errors.As(err, &conflictErr)
 			// In DryRun mode do not stop here, but report the conflict.
 			if ok && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
@@ -223,7 +224,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 			return nil, err
 		}
 
-		addOwnerReference(policy, clusterProfile)
+		deployer.AddOwnerReference(policy, clusterProfile)
 
 		err = updateResource(ctx, dr, clusterSummary, policy, logger)
 		if err != nil {
@@ -310,6 +311,16 @@ func getPolicyInfo(policy *configv1alpha1.Resource) string {
 		policy.Name)
 }
 
+// getClusterSummaryAdmin returns the name of the admin that created the ClusterProfile
+// instance owing this ClusterProfile instance
+func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) string {
+	if clusterSummary.Labels == nil {
+		return ""
+	}
+
+	return clusterSummary.Labels[configv1alpha1.AdminLabel]
+}
+
 // getClusterSummaryAndClusterClient gets ClusterSummary and the client to access the associated
 // CAPI/Sveltos Cluster.
 // Returns an err if ClusterSummary or associated CAPI Cluster are marked for deletion, or if an
@@ -342,13 +353,8 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	s, err := InitScheme()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	clusterClient, err := getKubernetesClient(ctx, c, s, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	clusterClient, err := getKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -365,7 +371,7 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var err error
 		var object client.Object
 		reference := &references[i]
-		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
 		} else {
@@ -388,24 +394,32 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 
 // deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	referencedObject []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
+	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,
 	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
+
+	refs := featureHandler.getRefs(clusterSummary)
+
+	var referencedObjects []client.Object
+	referencedObjects, err = collectReferencedObjects(ctx, c, refs, logger)
+	if err != nil {
+		return nil, err
+	}
 
 	remoteClient, err := client.New(remoteConfig, client.Options{})
 	if err != nil {
 		return nil, err
 	}
 
-	for i := range referencedObject {
+	for i := range referencedObjects {
 		var tmpResourceReports []configv1alpha1.ResourceReport
-		if referencedObject[i].GetObjectKind().GroupVersionKind().Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
-			configMap := referencedObject[i].(*corev1.ConfigMap)
+		if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+			configMap := referencedObjects[i].(*corev1.ConfigMap)
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
 				deployContentOfConfigMap(ctx, remoteConfig, c, remoteClient, configMap, clusterSummary, l)
 		} else {
-			secret := referencedObject[i].(*corev1.Secret)
+			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
@@ -477,7 +491,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			logger.V(logs.LogVerbose).Info("considering %s/%s", r.GetNamespace(), r.GetName())
 			// Verify if this policy was deployed because of a clustersummary (ReferenceLabelName
 			// is present as label in such a case).
-			if !hasLabel(&r, ReferenceLabelName, "") {
+			if !hasLabel(&r, deployer.ReferenceLabelName, "") {
 				continue
 			}
 
@@ -485,7 +499,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 			// policy would be withdrawn
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-				if canDelete(&r, currentPolicies) && isOnlyhOwnerReference(&r, clusterProfile) &&
+				if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, clusterProfile) &&
 					!isLeavePolicies(clusterSummary, logger) {
 
 					undeployed = append(undeployed, configv1alpha1.ResourceReport{
@@ -499,7 +513,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 			} else {
 				logger.V(logs.LogVerbose).Info("remove owner reference %s/%s", r.GetNamespace(), r.GetName())
 
-				removeOwnerReference(&r, clusterProfile)
+				deployer.RemoveOwnerReference(&r, clusterProfile)
 
 				if len(r.GetOwnerReferences()) != 0 {
 					// Other ClusterSummary are still deploying this very same policy
@@ -526,9 +540,9 @@ func handleResourceDelete(ctx context.Context, remoteClient client.Client, polic
 	// Remove all labels added by Sveltos.
 	if isLeavePolicies(clusterSummary, logger) {
 		labels := policy.GetLabels()
-		delete(labels, ReferenceLabelKind)
-		delete(labels, ReferenceLabelName)
-		delete(labels, ReferenceLabelNamespace)
+		delete(labels, deployer.ReferenceLabelKind)
+		delete(labels, deployer.ReferenceLabelName)
+		delete(labels, deployer.ReferenceLabelNamespace)
 		policy.SetLabels(labels)
 		return remoteClient.Update(ctx, policy)
 	}
@@ -724,7 +738,7 @@ func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInte
 		Resource: *resource,
 		Action:   string(configv1alpha1.ConflictResourceAction),
 	}
-	message, err := getOwnerMessage(ctx, dr, resource.Name)
+	message, err := deployer.GetOwnerMessage(ctx, dr, resource.Name)
 	if err == nil {
 		conflictReport.Message = message
 	}

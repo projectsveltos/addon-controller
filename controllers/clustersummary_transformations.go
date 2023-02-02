@@ -25,8 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
@@ -51,14 +51,14 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	case *corev1.ConfigMap:
 		key = corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       string(configv1alpha1.ConfigMapReferencedResourceKind),
+			Kind:       string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *corev1.Secret:
 		key = corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       string(configv1alpha1.SecretReferencedResourceKind),
+			Kind:       string(libsveltosv1alpha1.SecretReferencedResourceKind),
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}

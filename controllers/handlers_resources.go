@@ -49,6 +49,10 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
+	logger = logger.WithValues("admin", getClusterSummaryAdmin(clusterSummary))
+
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
@@ -58,24 +62,16 @@ func deployResources(ctx context.Context, c client.Client,
 		}
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
+		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
-
-	logger = logger.WithValues("clustersummary", clusterSummary.Name)
 
 	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
-	refs := featureHandler.getRefs(clusterSummary)
-
-	var referencedObjects []client.Object
-	referencedObjects, err = collectReferencedObjects(ctx, c, refs, logger)
-	if err != nil {
-		return err
-	}
 
 	var resourceReports []configv1alpha1.ResourceReport
-	resourceReports, err = deployReferencedObjects(ctx, c, remoteRestConfig, referencedObjects, clusterSummary, logger)
+	resourceReports, err = deployReferencedObjects(ctx, c, remoteRestConfig, clusterSummary, featureHandler, logger)
 	if err != nil {
 		return err
 	}
@@ -134,27 +130,26 @@ func undeployResources(ctx context.Context, c client.Client,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary); err != nil {
+	clusterSummary, err := configv1alpha1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
+	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		return err
 	}
 
-	logger = logger.WithValues("clustersummary", clusterSummary.Name)
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
+	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
+	logger = logger.WithValues("admin", getClusterSummaryAdmin(clusterSummary))
 
-	s, err := InitScheme()
+	remoteClient, err := getKubernetesClient(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
+		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteClient, err := getKubernetesClient(ctx, c, s, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
+		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -200,7 +195,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		var err error
-		if reference.Kind == string(configv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
 			if err == nil {

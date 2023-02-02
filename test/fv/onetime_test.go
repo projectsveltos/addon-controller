@@ -76,7 +76,7 @@ var _ = Describe("SyncMode one time", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},

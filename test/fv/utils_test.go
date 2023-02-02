@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -64,7 +65,7 @@ func getClusterProfile(namePrefix string, clusterLabels map[string]string) *conf
 			Name: namePrefix + randomString(),
 		},
 		Spec: configv1alpha1.ClusterProfileSpec{
-			ClusterSelector: configv1alpha1.Selector(selector),
+			ClusterSelector: libsveltosv1alpha1.Selector(selector),
 		},
 	}
 

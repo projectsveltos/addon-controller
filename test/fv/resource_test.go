@@ -120,12 +120,12 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
-				Kind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},
 			{
-				Kind:      string(configv1alpha1.SecretReferencedResourceKind),
+				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 				Namespace: secret.Namespace,
 				Name:      secret.Name,
 			},

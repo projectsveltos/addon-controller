@@ -32,11 +32,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/utils"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 	"github.com/projectsveltos/sveltos-manager/internal/test/helpers"
@@ -132,7 +132,7 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 		Scheme:            scheme,
 		ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles:   make(map[corev1.ObjectReference]configv1alpha1.Selector),
+		ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		Mux:               sync.Mutex{},
 	}
 }

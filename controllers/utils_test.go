@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,7 +35,6 @@ import (
 	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
 )
@@ -261,24 +259,6 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
-	})
-
-	It("addOwnerReference adds an OwnerReference to an object. removeOwnerReference removes it", func() {
-		policy, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
-		Expect(err).To(BeNil())
-		Expect(policy.GetKind()).To(Equal("ClusterRole"))
-
-		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
-
-		controllers.AddOwnerReference(policy, clusterProfile)
-
-		Expect(policy.GetOwnerReferences()).ToNot(BeNil())
-		Expect(len(policy.GetOwnerReferences())).To(Equal(1))
-		Expect(policy.GetOwnerReferences()[0].Kind).To(Equal(configv1alpha1.ClusterProfileKind))
-		Expect(policy.GetOwnerReferences()[0].Name).To(Equal(clusterProfile.Name))
-
-		controllers.RemoveOwnerReference(policy, clusterProfile)
-		Expect(len(policy.GetOwnerReferences())).To(Equal(0))
 	})
 })
 

@@ -64,6 +64,7 @@ var (
 	DeployContentOfConfigMap     = deployContentOfConfigMap
 	DeployContentOfSecret        = deployContentOfSecret
 	DeployContent                = deployContent
+	GetClusterSummaryAdmin       = getClusterSummaryAdmin
 	AddAnnotation                = addAnnotation
 	ComputePolicyHash            = computePolicyHash
 	GetPolicyInfo                = getPolicyInfo
@@ -91,11 +92,6 @@ var (
 
 type (
 	ReleaseInfo = releaseInfo
-)
-
-var (
-	AddOwnerReference    = addOwnerReference
-	RemoveOwnerReference = removeOwnerReference
 )
 
 var (

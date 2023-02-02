@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 	"github.com/projectsveltos/sveltos-manager/controllers"
@@ -148,6 +149,13 @@ var _ = Describe("HandlersUtils", func() {
 		deleteResources(namespace, clusterProfile, clusterSummary)
 	})
 
+	It("getClusterSummaryAdmin returns the admin for a given ClusterSummary", func() {
+		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
+		admin := randomString()
+		clusterSummary.Labels[configv1alpha1.AdminLabel] = admin
+		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(Equal(admin))
+	})
+
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {
 		role := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
@@ -252,10 +260,10 @@ var _ = Describe("HandlersUtils", func() {
 			var policyHash string
 			policyHash, err = controllers.ComputePolicyHash(policy)
 			Expect(err).To(BeNil())
-			controllers.AddLabel(policy, controllers.ReferenceLabelKind, secret.Kind)
-			controllers.AddLabel(policy, controllers.ReferenceLabelName, secret.Name)
-			controllers.AddLabel(policy, controllers.ReferenceLabelNamespace, secret.Namespace)
-			controllers.AddAnnotation(policy, controllers.PolicyHash, policyHash)
+			controllers.AddLabel(policy, deployer.ReferenceLabelKind, secret.Kind)
+			controllers.AddLabel(policy, deployer.ReferenceLabelName, secret.Name)
+			controllers.AddLabel(policy, deployer.ReferenceLabelNamespace, secret.Namespace)
+			controllers.AddAnnotation(policy, deployer.PolicyHash, policyHash)
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
@@ -392,9 +400,9 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
-			controllers.ReferenceLabelKind:      string(configv1alpha1.ConfigMapReferencedResourceKind),
-			controllers.ReferenceLabelName:      configMap.Name,
-			controllers.ReferenceLabelNamespace: configMap.Namespace,
+			deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			deployer.ReferenceLabelName:      configMap.Name,
+			deployer.ReferenceLabelNamespace: configMap.Namespace,
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
 			{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfile.Name,
@@ -431,8 +439,8 @@ var _ = Describe("HandlersUtils", func() {
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
-			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(configv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -452,9 +460,9 @@ var _ = Describe("HandlersUtils", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterRoleName1,
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      configMap1.Kind,
-					controllers.ReferenceLabelNamespace: configMap1.Namespace,
-					controllers.ReferenceLabelName:      configMap1.Name,
+					deployer.ReferenceLabelKind:      configMap1.Kind,
+					deployer.ReferenceLabelNamespace: configMap1.Namespace,
+					deployer.ReferenceLabelName:      configMap1.Name,
 				},
 			},
 		}
@@ -465,9 +473,9 @@ var _ = Describe("HandlersUtils", func() {
 				Name:      clusterRoleName2,
 				Namespace: "default",
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      configMap2.Kind,
-					controllers.ReferenceLabelNamespace: configMap2.Namespace,
-					controllers.ReferenceLabelName:      configMap2.Name,
+					deployer.ReferenceLabelKind:      configMap2.Kind,
+					deployer.ReferenceLabelNamespace: configMap2.Namespace,
+					deployer.ReferenceLabelName:      configMap2.Name,
 				},
 			},
 		}
@@ -593,10 +601,10 @@ var _ = Describe("HandlersUtils", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ReferenceLabelKind:      randomString(),
-					controllers.ReferenceLabelName:      randomString(),
-					controllers.ReferenceLabelNamespace: randomString(),
-					randomKey:                           randomValue,
+					deployer.ReferenceLabelKind:      randomString(),
+					deployer.ReferenceLabelName:      randomString(),
+					deployer.ReferenceLabelNamespace: randomString(),
+					randomKey:                        randomValue,
 				},
 			},
 		}

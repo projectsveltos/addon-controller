@@ -332,13 +332,10 @@ spec:
                       description: 'Values holds the values for this Helm release.
                         Go templating with the values from the referenced CAPI Cluster.
                         Currently following can be referenced: - Cluster => CAPI Cluster
-                        for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
-                        0 }} - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                        for instance - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
                         - InfrastructureProvider => the CAPI cluster infrastructure
                         provider - SecretRef => store any confindetial information
-                        in a Secret, set SecretRef then reference it for instance
-                        password: "{{ printf "%s" .SecretRef.Data.password | b64dec
-                        }}"'
+                        in a Secret, set SecretRef then reference it'
                       type: string
                   required:
                   - chartName
@@ -819,13 +816,11 @@ spec:
                           description: 'Values holds the values for this Helm release.
                             Go templating with the values from the referenced CAPI
                             Cluster. Currently following can be referenced: - Cluster
-                            => CAPI Cluster for instance  {{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks
-                            0 }} - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                            - InfrastructureProvider => the CAPI cluster infrastructure
-                            provider - SecretRef => store any confindetial information
-                            in a Secret, set SecretRef then reference it for instance
-                            password: "{{ printf "%s" .SecretRef.Data.password | b64dec
-                            }}"'
+                            => CAPI Cluster for instance - KubeadmControlPlane =>
+                            the CAPI Cluster controlPlaneRef - InfrastructureProvider
+                            => the CAPI cluster infrastructure provider - SecretRef
+                            => store any confindetial information in a Secret, set
+                            SecretRef then reference it'
                           type: string
                       required:
                       - chartName
@@ -1345,7 +1340,7 @@ kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-  name: fm-controller-manager-metrics-service
+  name: fm-manager-metrics-service
   namespace: projectsveltos
 spec:
   ports:

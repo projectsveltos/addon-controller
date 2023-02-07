@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -105,10 +104,7 @@ func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, c, re
 
 	data := make(map[string]string)
 	for key, value := range secret.Data {
-		data[key], err = decode(value)
-		if err != nil {
-			return nil, err
-		}
+		data[key] = string(value)
 	}
 
 	reports, err =
@@ -680,15 +676,6 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 	return err
 }
 
-func decode(encoded []byte) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(string(encoded))
-	if err != nil {
-		return "", err
-	}
-
-	return string(decoded), nil
-}
-
 // computePolicyHash compute policy hash.
 func computePolicyHash(policy *unstructured.Unstructured) (string, error) {
 	b, err := policy.MarshalJSON()
@@ -726,6 +713,10 @@ func getSecret(ctx context.Context, c client.Client, secretName types.Namespaced
 	}
 	if err := c.Get(ctx, secretKey, secret); err != nil {
 		return nil, err
+	}
+
+	if secret.Type != libsveltosv1alpha1.ClusterProfileSecretType {
+		return nil, libsveltosv1alpha1.ErrSecretTypeNotSupported
 	}
 
 	return secret, nil

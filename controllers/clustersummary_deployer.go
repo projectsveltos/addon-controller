@@ -409,12 +409,9 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 			data = cm.Data
 		} else {
 			secret := referencedObjects[i].(*corev1.Secret)
-			data = make(map[string]string)
+			data = map[string]string{}
 			for key, value := range secret.Data {
-				data[key], err = decode(value)
-				if err != nil {
-					return err
-				}
+				data[key] = string(value)
 			}
 		}
 		policies, err := collectContent(ctx, clusterSummaryScope.ClusterSummary, data, logger)

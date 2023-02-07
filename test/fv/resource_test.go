@@ -18,7 +18,6 @@ package fv_test
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -193,7 +192,7 @@ var _ = Describe("Feature", func() {
 		newPodName := "prod" + randomString()
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
-		currentSecret.Data["policy0.yaml"] = []byte(base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf(demoPod, newPodName))))
+		currentSecret.Data["policy0.yaml"] = []byte(fmt.Sprintf(demoPod, newPodName))
 		Expect(k8sClient.Update(context.TODO(), currentSecret)).To(Succeed())
 
 		Byf("Verifying new Pod is deployed in the workload cluster")

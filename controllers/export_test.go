@@ -72,6 +72,7 @@ var (
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
 	CanDelete                    = canDelete
 	HandleResourceDelete         = handleResourceDelete
+	GetSecret                    = getSecret
 
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs

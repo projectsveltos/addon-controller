@@ -226,6 +226,38 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
 	})
 
+	It("getSecret returns an error when type is different than ClusterProfileSecretType", func() {
+		wrongSecretType := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				randomString(): []byte(randomString()),
+			},
+		}
+
+		Expect(testEnv.Client.Create(context.TODO(), wrongSecretType)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, wrongSecretType)).To(Succeed())
+
+		secretName := types.NamespacedName{Namespace: wrongSecretType.Namespace, Name: wrongSecretType.Name}
+		_, err := controllers.GetSecret(context.TODO(), testEnv.Client, secretName)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal(libsveltosv1alpha1.ErrSecretTypeNotSupported.Error()))
+
+		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
+		depl := fmt.Sprintf(deplTemplate, namespace)
+
+		// Create a secret containing two services.
+		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+		secretName = types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
+		_, err = controllers.GetSecret(context.TODO(), testEnv.Client, secretName)
+		Expect(err).To(BeNil())
+	})
+
 	It("deployContent in DryRun mode returns policies which will be created, updated, no action", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)

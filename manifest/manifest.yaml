@@ -366,8 +366,9 @@ spec:
                       minLength: 1
                       type: string
                     namespace:
-                      description: Namespace of the referenced resource.
-                      minLength: 1
+                      description: Namespace of the referenced resource. Namespace
+                        can be left empty. In such a case, namespace will be implicit
+                        set to cluster's namespace.
                       type: string
                   required:
                   - kind
@@ -851,8 +852,9 @@ spec:
                           minLength: 1
                           type: string
                         namespace:
-                          description: Namespace of the referenced resource.
-                          minLength: 1
+                          description: Namespace of the referenced resource. Namespace
+                            can be left empty. In such a case, namespace will be implicit
+                            set to cluster's namespace.
                           type: string
                       required:
                       - kind

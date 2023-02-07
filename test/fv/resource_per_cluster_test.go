@@ -26,60 +26,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
-const (
-	updateClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: %s
-rules:
-- apiGroups: [""]
-  #
-  # at the HTTP level, the name of the resource for accessing ConfigMap
-  # objects is "configmaps"
-  resources: ["configmaps"]
-  resourceNames: ["my-configmap"]
-  verbs: ["update", "get"]`
-
-	allClusterRole = `apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: %s
-rules:
-- apiGroups: [""]
-  #
-  # at the HTTP level, the name of the resource for accessing ConfigMap
-  # objects is "configmaps"
-  resources: ["configmaps"]
-  resourceNames: ["my-configmap"]
-  verbs: ["*"]`
-
-	demoPod = `apiVersion: v1
-kind: Pod
-metadata:
-  name: %s
-  namespace: default
-  labels:
-    environment: production
-    app: nginx
-spec:
-  containers:
-  - name: nginx
-    image: nginx:1.14.2`
-)
-
 var _ = Describe("Feature", func() {
 	const (
-		namePrefix = "feature-"
+		namePrefix = "pre-cluster-feature-"
 	)
 
-	It("Deploy and updates resources referenced in ResourceRefs correctly", Label("FV"), func() {
+	It("Deploy and updates resources referenced in ResourceRefs correctly. Namespace not set", Label("FV"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -89,18 +47,10 @@ var _ = Describe("Feature", func() {
 
 		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		configMapNs := randomString()
-		Byf("Create configMap's namespace %s", configMapNs)
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+		Byf("Create configMap in cluster namespace %s", kindWorkloadCluster.Namespace)
 
-		Byf("Create a configMap with a ClusterRole")
 		updateClusterRoleName := randomString()
-		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
+		configMap := createConfigMapWithPolicy(kindWorkloadCluster.Namespace, namePrefix+randomString(),
 			fmt.Sprintf(updateClusterRole, updateClusterRoleName))
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 		currentConfigMap := &corev1.ConfigMap{}
@@ -108,26 +58,26 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
 		podName := "demo" + randomString()
-		Byf("Create a secret with a Pod")
-		secret := createSecretWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(demoPod, podName))
+		Byf("Create a secret with a Pod in cluster namespace %s", kindWorkloadCluster.Namespace)
+		secret := createSecretWithPolicy(kindWorkloadCluster.Namespace, namePrefix+randomString(), fmt.Sprintf(demoPod, podName))
 		Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
 		currentSecret := &corev1.Secret{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
 
-		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
-		Byf("Update ClusterProfile %s to reference Secret %s/%s", clusterProfile.Name, secret.Namespace, secret.Name)
+		Byf("Update ClusterProfile %s to reference ConfigMap %s (namespace not set)", clusterProfile.Name, configMap.Name)
+		Byf("Update ClusterProfile %s to reference Secret %s (namespace not set)", clusterProfile.Name, secret.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
+				Namespace: "",
 				Name:      configMap.Name,
 			},
 			{
 				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-				Namespace: secret.Namespace,
+				Namespace: "",
 				Name:      secret.Name,
 			},
 		}

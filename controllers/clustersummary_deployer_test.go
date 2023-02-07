@@ -573,20 +573,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(cs.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
 		Expect(cs.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("ClusterRole.v1.rbac.authorization.k8s.io"))
 	})
-
-	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
-		reconciler := getClusterSummaryReconciler(nil, nil)
-		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
-		expectedLength := len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
-		Expect(set.Len()).To(Equal(expectedLength))
-	})
 })
 
 var _ = Describe("Convert result", func() {

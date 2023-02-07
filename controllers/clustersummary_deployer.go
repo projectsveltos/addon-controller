@@ -392,7 +392,8 @@ func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Co
 
 	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
 	// Collect  all referenced configMaps/secrets.
-	referencedObjects, err := collectReferencedObjects(ctx, r.Client, references, logger)
+	referencedObjects, err := collectReferencedObjects(ctx, r.Client, clusterSummaryScope.Namespace(),
+		references, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps/secrets. Err: %v", err))
 		return err

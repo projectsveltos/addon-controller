@@ -356,6 +356,22 @@ var _ = Describe("HandlersUtils", func() {
 		}
 	})
 
+	It("getReferenceResourceNamespace returns the referenced resource namespace when set. cluster namespace otherwise.", func() {
+		referecedResource := libsveltosv1alpha1.PolicyRef{
+			Namespace: "",
+			Name:      randomString(),
+			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+		}
+
+		clusterNamespace := randomString()
+		Expect(controllers.GetReferenceResourceNamespace(clusterNamespace, referecedResource.Namespace)).To(
+			Equal(clusterNamespace))
+
+		referecedResource.Namespace = randomString()
+		Expect(controllers.GetReferenceResourceNamespace(clusterNamespace, referecedResource.Namespace)).To(
+			Equal(referecedResource.Namespace))
+	})
+
 	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)

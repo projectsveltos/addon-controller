@@ -169,7 +169,7 @@ KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
 TIMEOUT ?= 10m
-KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
+KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 5
 
 .PHONY: test

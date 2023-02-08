@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"unicode/utf8"
 
@@ -115,11 +114,12 @@ func createSecretWithPolicy(namespace, configMapName string, policyStrs ...strin
 			Namespace: namespace,
 			Name:      configMapName,
 		},
+		Type: libsveltosv1alpha1.ClusterProfileSecretType,
 		Data: map[string][]byte{},
 	}
 	for i := range policyStrs {
 		key := fmt.Sprintf("policy%d.yaml", i)
-		secret.Data[key] = []byte(base64.StdEncoding.EncodeToString([]byte(policyStrs[i])))
+		secret.Data[key] = []byte(policyStrs[i])
 	}
 
 	Expect(addTypeInformationToObject(scheme, secret)).To(Succeed())

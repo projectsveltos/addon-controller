@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -105,10 +104,7 @@ func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, c, re
 
 	data := make(map[string]string)
 	for key, value := range secret.Data {
-		data[key], err = decode(value)
-		if err != nil {
-			return nil, err
-		}
+		data[key] = string(value)
 	}
 
 	reports, err =
@@ -362,8 +358,19 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 	return clusterSummary, clusterClient, nil
 }
 
+// getReferenceResourceNamespace returns the namespace to use for a referenced resource.
+// If namespace is set on referencedResource, that namespace will be used.
+// If namespace is not set, cluster namespace will be used
+func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace string) string {
+	if referencedResourceNamespace != "" {
+		return referencedResourceNamespace
+	}
+
+	return clusterNamespace
+}
+
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
-func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client,
+func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client, clusterNamespace string,
 	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
 
 	objects := make([]client.Object, 0)
@@ -371,12 +378,15 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var err error
 		var object client.Object
 		reference := &references[i]
+
+		namespace := getReferenceResourceNamespace(clusterNamespace, references[i].Namespace)
+
 		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
-				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
+				types.NamespacedName{Namespace: namespace, Name: reference.Name})
 		} else {
 			object, err = getSecret(ctx, controlClusterClient,
-				types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name})
+				types.NamespacedName{Namespace: namespace, Name: reference.Name})
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -400,7 +410,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	refs := featureHandler.getRefs(clusterSummary)
 
 	var referencedObjects []client.Object
-	referencedObjects, err = collectReferencedObjects(ctx, c, refs, logger)
+	referencedObjects, err = collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -680,15 +690,6 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 	return err
 }
 
-func decode(encoded []byte) (string, error) {
-	decoded, err := base64.StdEncoding.DecodeString(string(encoded))
-	if err != nil {
-		return "", err
-	}
-
-	return string(decoded), nil
-}
-
 // computePolicyHash compute policy hash.
 func computePolicyHash(policy *unstructured.Unstructured) (string, error) {
 	b, err := policy.MarshalJSON()
@@ -726,6 +727,10 @@ func getSecret(ctx context.Context, c client.Client, secretName types.Namespaced
 	}
 	if err := c.Get(ctx, secretKey, secret); err != nil {
 		return nil, err
+	}
+
+	if secret.Type != libsveltosv1alpha1.ClusterProfileSecretType {
+		return nil, libsveltosv1alpha1.ErrSecretTypeNotSupported
 	}
 
 	return secret, nil

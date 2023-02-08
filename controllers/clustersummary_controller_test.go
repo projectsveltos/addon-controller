@@ -617,6 +617,41 @@ var _ = Describe("ClustersummaryController", func() {
 		// Because CAPI cluster does not exist and ClusterSummary is marked for deletion, finalizer can be removed
 		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
 	})
+
+	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
+		referencedResourceNamespace := randomString()
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+			{
+				Namespace: referencedResourceNamespace,
+				Name:      randomString(),
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope := getClusterSummaryScope(c, klogr.New(), clusterProfile, clusterSummary)
+		reconciler := getClusterSummaryReconciler(nil, nil)
+		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
+		Expect(set.Len()).To(Equal(1))
+		items := set.Items()
+		Expect(items[0].Namespace).To(Equal(referencedResourceNamespace))
+	})
+
+	It("getCurrentReferences collects all ClusterSummary referenced objects using cluster namespace when not set", func() {
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+			{Namespace: "", Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope := getClusterSummaryScope(c, klogr.New(), clusterProfile, clusterSummary)
+		reconciler := getClusterSummaryReconciler(nil, nil)
+		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
+		Expect(set.Len()).To(Equal(1))
+		items := set.Items()
+		Expect(items[0].Namespace).To(Equal(clusterSummary.Namespace))
+	})
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {

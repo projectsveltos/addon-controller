@@ -648,10 +648,13 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name
+
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
 		currentReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(), // the only resources that can be referenced are Secret and ConfigMap
 			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
-			Namespace:  referencedNamespace,
+			Namespace:  namespace,
 			Name:       referencedName,
 		})
 	}

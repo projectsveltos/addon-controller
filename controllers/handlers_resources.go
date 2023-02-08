@@ -194,16 +194,17 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), reference.Namespace)
 		var err error
 		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
+			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, configmap)
 			if err == nil {
 				config += render.AsCode(configmap.Data)
 			}
 		} else {
 			secret := &corev1.Secret{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
+			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, secret)
 			if err == nil {
 				config += render.AsCode(secret.Data)
 			}

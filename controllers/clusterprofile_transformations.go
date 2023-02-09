@@ -42,13 +42,19 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 		cluster.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
+	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	clusterInfo := corev1.ObjectReference{APIVersion: cluster.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-		Kind: cluster.GetObjectKind().GroupVersionKind().Kind, Namespace: cluster.GetNamespace(), Name: cluster.GetName()}
+	addTypeInformationToObject(r.Scheme, cluster)
+
+	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+
+	clusterInfo := corev1.ObjectReference{APIVersion: apiVersion, Kind: kind,
+		Namespace: cluster.GetNamespace(), Name: cluster.GetName()}
+
+	r.ClusterLabels[clusterInfo] = o.GetLabels()
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(&clusterInfo).Len())
@@ -97,6 +103,10 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 		machine.Name,
 	)
 
+	addTypeInformationToObject(r.Scheme, machine)
+
+	logger.V(logs.LogDebug).Info("reacting to CAPI Machine change")
+
 	clusterLabelName, ok := machine.Labels[clusterv1.ClusterLabelName]
 	if !ok {
 		logger.V(logs.LogVerbose).Info("Machine has not ClusterLabelName")
@@ -117,6 +127,25 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
 			},
+		}
+	}
+
+	// Get Cluster labels
+	if clusterLabels, ok := r.ClusterLabels[clusterInfo]; ok {
+		// Iterate over all current ClusterProfile and reconcile the ClusterProfile now
+		// matching the Cluster
+		for k := range r.ClusterProfiles {
+			clusterProfileSelector := r.ClusterProfiles[k]
+			parsedSelector, _ := labels.Parse(string(clusterProfileSelector))
+			if parsedSelector.Matches(labels.Set(clusterLabels)) {
+				l := logger.WithValues("clusterProfile", k.Name)
+				l.V(logs.LogDebug).Info("queuing ClusterProfile")
+				requests = append(requests, ctrl.Request{
+					NamespacedName: client.ObjectKey{
+						Name: k.Name,
+					},
+				})
+			}
 		}
 	}
 

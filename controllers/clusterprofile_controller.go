@@ -62,6 +62,14 @@ type ClusterProfileReconciler struct {
 	// key: ClusterProfile; value ClusterProfile Selector
 	ClusterProfiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
+	// For each cluster contains current labels
+	// This is needed in following scenario:
+	// - ClusterProfile is created
+	// - Cluster is created with labels matching ClusterProfile
+	// - When first control plane machine in such cluster becomes available
+	// we need Cluster labels to know which ClusterProfile to reconcile
+	ClusterLabels map[corev1.ObjectReference]map[string]string
+
 	// Reason for the two maps:
 	// ClusterProfile, via ClusterSelector, matches Sveltos/CAPI Clusters based on Cluster labels.
 	// When a Sveltos/CAPI Cluster labels change, one or more ClusterProfile needs to be reconciled.

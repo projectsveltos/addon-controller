@@ -172,7 +172,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 	})
 
 	It("getClusterProfileOwner returns ClusterProfile owner", func() {
@@ -255,7 +255,8 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterProfile.Name, cluster.Namespace, cluster.Name)
+		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterProfile.Name, cluster.Namespace, cluster.Name,
+			libsveltosv1alpha1.ClusterTypeCapi)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))

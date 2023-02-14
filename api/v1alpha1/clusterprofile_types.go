@@ -35,6 +35,20 @@ const (
 	AdminLabel = "projectsveltos.io/admin-name"
 )
 
+const (
+	// ClusterNameLabel is the label set on:
+	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
+	ClusterNameLabel = "projectsveltos.io/cluster-name"
+
+	// ClusterTypeLabel is the label set on:
+	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
+	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
+	ClusterTypeLabel = "projectsveltos.io/cluster-type"
+)
+
 type DryRunReconciliationError struct{}
 
 func (m *DryRunReconciliationError) Error() string {

@@ -64,13 +64,13 @@ Refer to [examples](./examples/) for more complex examples
 
 To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr9haWKM)
 
-## Contributing [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
-:heart: Your contributions are always welcome!
-If you have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
-1. Open a bug/feature enhancement on github;
-2. Chat with us on the Slack in the [#projectsveltos](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q) channel;
-3. Submit a pull request;
-4. [Contact Us](mailto:support@projectsveltos.io)
+## Contributing 
+
+❤️ Your contributions are always welcome! If you want to contribute, have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
+
+1. Open a bug/feature enhancement on github [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/projectsveltos/sveltos-manager/issues)
+2. Chat with us on the Slack in the #projectsveltos channel [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
+3. [Contact Us](mailto:support@projectsveltos.io)
 
 ## License
 

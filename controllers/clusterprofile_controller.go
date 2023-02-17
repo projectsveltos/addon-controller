@@ -62,6 +62,14 @@ type ClusterProfileReconciler struct {
 	// key: ClusterProfile; value ClusterProfile Selector
 	ClusterProfiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
+	// For each cluster contains current labels
+	// This is needed in following scenario:
+	// - ClusterProfile is created
+	// - Cluster is created with labels matching ClusterProfile
+	// - When first control plane machine in such cluster becomes available
+	// we need Cluster labels to know which ClusterProfile to reconcile
+	ClusterLabels map[corev1.ObjectReference]map[string]string
+
 	// Reason for the two maps:
 	// ClusterProfile, via ClusterSelector, matches Sveltos/CAPI Clusters based on Cluster labels.
 	// When a Sveltos/CAPI Cluster labels change, one or more ClusterProfile needs to be reconciled.
@@ -452,9 +460,9 @@ func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clus
 			Namespace: cluster.Namespace,
 			Name:      getClusterReportName(clusterProfile.Name, cluster.Name, clusterType),
 			Labels: map[string]string{
-				ClusterProfileLabelName: clusterProfile.Name,
-				ClusterLabelName:        cluster.Name,
-				ClusterTypeLabelName:    string(getClusterType(cluster)),
+				ClusterProfileLabelName:         clusterProfile.Name,
+				configv1alpha1.ClusterNameLabel: cluster.Name,
+				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
 			},
 		},
 		Spec: configv1alpha1.ClusterReportSpec{
@@ -521,7 +529,7 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name)
+		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(&cluster))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				err = r.createClusterSummary(ctx, clusterProfileScope, &cluster)
@@ -746,9 +754,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 
 	clusterSummary.Spec.ClusterType = getClusterType(cluster)
 	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
-	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
-	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
-	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
+	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
 	return r.Create(ctx, clusterSummary)
 }
@@ -762,7 +768,7 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 		return nil
 	}
 
-	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name)
+	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(cluster))
 	if err != nil {
 		return err
 	}
@@ -776,12 +782,21 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
 	clusterSummary.Spec.ClusterType = getClusterType(cluster)
-	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
-	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
-	addLabel(clusterSummary, ClusterLabelNamespace, cluster.Namespace)
-	addLabel(clusterSummary, ClusterLabelName, cluster.Name)
+	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
 	return r.Update(ctx, clusterSummary)
+}
+
+func (r *ClusterProfileReconciler) addClusterSummaryLabels(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileScope *scope.ClusterProfileScope,
+	cluster *corev1.ObjectReference) {
+
+	addLabel(clusterSummary, ClusterProfileLabelName, clusterProfileScope.Name())
+	addLabel(clusterSummary, configv1alpha1.ClusterNameLabel, cluster.Name)
+	if cluster.APIVersion == libsveltosv1alpha1.GroupVersion.String() {
+		addLabel(clusterSummary, configv1alpha1.ClusterTypeLabel, string(libsveltosv1alpha1.ClusterTypeSveltos))
+	} else {
+		addLabel(clusterSummary, configv1alpha1.ClusterTypeLabel, string(libsveltosv1alpha1.ClusterTypeCapi))
+	}
 }
 
 // deleteClusterSummary deletes ClusterSummary given a ClusterProfile and a matching Sveltos/CAPI Cluster
@@ -840,8 +855,8 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 			Namespace: cluster.Namespace,
 			Name:      getClusterConfigurationName(cluster.Name, getClusterType(cluster)),
 			Labels: map[string]string{
-				ClusterLabelName:     cluster.Name,
-				ClusterTypeLabelName: string(getClusterType(cluster)),
+				configv1alpha1.ClusterNameLabel: cluster.Name,
+				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
 			},
 		},
 	}

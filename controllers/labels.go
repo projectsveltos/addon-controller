@@ -29,22 +29,6 @@ const (
 	// by a ClusterProfile instance
 	ClusterProfileLabelName = "projectsveltos.io/cluster-profile-name"
 
-	// clusterLabelNamespace is the label set on ClusterSummary instances created
-	// by a ClusterProfile instance for a given cluster
-	ClusterLabelNamespace = "projectsveltos.io/cluster-namespace"
-
-	// clusterLabelName is the label set on:
-	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
-	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
-	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
-	ClusterLabelName = "projectsveltos.io/cluster-name"
-
-	// ClusterTypeLabelName is the label set on:
-	// - ClusterSummary instances created by a ClusterProfile instance for a given cluster;
-	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
-	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
-	ClusterTypeLabelName = "projectsveltos.io/cluster-type"
-
 	// PolicyTemplate is the annotation that must be set on a policy when the
 	// policy is a template and needs variable sustitution.
 	PolicyTemplate = "projectsveltos.io/template"

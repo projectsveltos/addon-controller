@@ -169,11 +169,11 @@ KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
 TIMEOUT ?= 10m
-KIND_CLUSTER_YAML ?= test/sveltos-management-workload.yaml
+KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 5
 
 .PHONY: test
-test: manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
+test: | check-manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
 
 .PHONY: kind-test
@@ -230,9 +230,9 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
 	ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-  		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
+		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
 
-create-control-cluster:
+create-control-cluster: $(KIND) $(CLUSTERCTL)
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
@@ -242,7 +242,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	# Load projectsveltos image into cluster
 	@echo 'Load projectsveltos image into cluster'
 	$(MAKE) load-image
-	
+
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
@@ -270,7 +270,7 @@ set-manifest-pull-policy:
 
 drift-detection-manager:
 	@echo "Downloading drift detection manager yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/main/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
 	cd pkg/drift-detection; go generate
 
 .PHONY: build

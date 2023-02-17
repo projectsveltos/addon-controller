@@ -146,14 +146,16 @@ func randomString() string {
 	return util.RandomString(length)
 }
 
-func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileName, clusterNamespace, clusterName string) {
+func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileName, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) {
+
 	labels := clusterSummary.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 	labels[controllers.ClusterProfileLabelName] = clusterProfileName
-	labels[controllers.ClusterLabelNamespace] = clusterNamespace
-	labels[controllers.ClusterLabelName] = clusterName
+	labels[configv1alpha1.ClusterTypeLabel] = string(clusterType)
+	labels[configv1alpha1.ClusterNameLabel] = clusterName
 
 	clusterSummary.Labels = labels
 }
@@ -227,7 +229,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	cluster *clusterv1.Cluster) {
 
 	By("Add proper labels to ClusterSummary")
-	addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Namespace, cluster.Name)
+	addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 
 	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())

@@ -75,14 +75,15 @@ func GetClusterSummaryName(clusterProfileName, clusterName string, isSveltosClus
 // getClusterSummary returns the ClusterSummary instance created by a specific ClusterProfile for a specific
 // CAPI Cluster
 func getClusterSummary(ctx context.Context, c client.Client,
-	clusterProfileName, clusterNamespace, clusterName string) (*configv1alpha1.ClusterSummary, error) {
+	clusterProfileName, clusterNamespace, clusterName string,
+	clusterType libsveltosv1alpha1.ClusterType) (*configv1alpha1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
-			ClusterProfileLabelName: clusterProfileName,
-			ClusterLabelNamespace:   clusterNamespace,
-			ClusterLabelName:        clusterName,
+			ClusterProfileLabelName:         clusterProfileName,
+			configv1alpha1.ClusterNameLabel: clusterName,
+			configv1alpha1.ClusterTypeLabel: string(clusterType),
 		},
 	}
 

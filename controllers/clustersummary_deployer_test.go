@@ -63,7 +63,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, namespace, clusterName)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, clusterName, libsveltosv1alpha1.ClusterTypeCapi)
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{

@@ -177,8 +177,8 @@ func getClusterSummary(ctx context.Context,
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
 			controllers.ClusterProfileLabelName: clusterProfileName,
-			controllers.ClusterLabelNamespace:   clusterNamespace,
-			controllers.ClusterLabelName:        clusterName,
+			configv1alpha1.ClusterNameLabel:     clusterName,
+			configv1alpha1.ClusterTypeLabel:     string(libsveltosv1alpha1.ClusterTypeCapi),
 		},
 	}
 

@@ -19,7 +19,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 # Define Docker related variables.
-REGISTRY ?= gianlucam76
+REGISTRY ?= projectsveltos
 IMAGE_NAME ?= sveltos-manager
 ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
@@ -244,8 +244,8 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(MAKE) load-image
 
 	@echo 'Install libsveltos CRDs'
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/main/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
 
 	# Install projectsveltos controller-manager components
 	@echo 'Install projectsveltos controller-manager components'
@@ -253,7 +253,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
 	# Install sveltoscluster-manager
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/main/manifest/manifest.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
 
 	@echo "Waiting for projectsveltos controller-manager to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/fm-controller-manager -n projectsveltos --timeout=$(TIMEOUT)

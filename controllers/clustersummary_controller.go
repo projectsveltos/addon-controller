@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -421,7 +422,7 @@ func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, cluster
 	var err error
 	cs := clusterSummaryScope.ClusterSummary
 
-	_, err = getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	_, err = clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -549,7 +550,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 	defer r.PolicyMux.Unlock()
 
 	cs := clusterSummaryScope.ClusterSummary
-	clusterObject, err := getCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	clusterObject, err := clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 	if err != nil {
 		return err
 	}
@@ -674,7 +675,7 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectR
 func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
-	isClusterPaused, err := isClusterPaused(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+	isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	if err != nil {
@@ -704,7 +705,8 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		return false
 	}
 
-	_, err := getCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	_, err := clusterproxy.GetCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("cluster %s/%s not found. Nothing to do.",
@@ -755,7 +757,7 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	// ResourceSummary is a Sveltos resource deployed in managed clusters.
 	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
-	remoteClient, err := getKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
 		cs.Spec.ClusterName, "", cs.Spec.ClusterType, logger)
 	if err != nil {
 		return err

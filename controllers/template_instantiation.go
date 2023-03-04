@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
@@ -109,7 +110,7 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch %s/%s", clusterNamespace, clusterName))
 
-	genericCluster, err := getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	genericCluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch cluster %v", err))
 		return nil, err

@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
@@ -338,7 +339,8 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 	}
 
 	// Get CAPI Cluster
-	cluster, err := getCluster(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -349,7 +351,7 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
-	clusterClient, err := getKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
+	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err

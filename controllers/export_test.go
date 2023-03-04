@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 var (
-	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
 	UpdateClusterSummaries       = (*ClusterProfileReconciler).updateClusterSummaries
 	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
 	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary

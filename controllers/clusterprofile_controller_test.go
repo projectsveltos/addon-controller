@@ -344,56 +344,6 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("getMatchingClusters returns matchin CAPI Cluster", func() {
-		sveltosCluster := &libsveltosv1alpha1.SveltosCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: randomString(),
-				Labels:    matchingCluster.Labels,
-			},
-		}
-
-		initObjects := []client.Object{
-			clusterProfile,
-			matchingCluster,
-			sveltosCluster,
-			nonMatchingCluster,
-		}
-
-		Expect(addTypeInformationToObject(scheme, matchingCluster))
-		Expect(addTypeInformationToObject(scheme, sveltosCluster))
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
-		}
-
-		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
-			Client:         c,
-			Logger:         logger,
-			ClusterProfile: clusterProfile,
-			ControllerName: "clusterprofile",
-		})
-		Expect(err).To(BeNil())
-
-		matches, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope)
-		Expect(err).To(BeNil())
-		Expect(len(matches)).To(Equal(2))
-		Expect(matches).To(ContainElement(
-			corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name,
-				Kind: matchingCluster.Kind, APIVersion: matchingCluster.APIVersion}))
-		Expect(matches).To(ContainElement(
-			corev1.ObjectReference{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
-				Kind: sveltosCluster.Kind, APIVersion: sveltosCluster.APIVersion}))
-	})
-
 	It("CreateClusterSummary creates ClusterSummary with proper fields", func() {
 		initObjects := []client.Object{
 			clusterProfile,

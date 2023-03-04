@@ -218,7 +218,8 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		}
 	}
 
-	matchingCluster, err := r.getMatchingClusters(ctx, clusterProfileScope)
+	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
+	matchingCluster, err := clusterproxy.GetMatchingClusters(ctx, r.Client, parsedSelector, logger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -318,97 +319,6 @@ func (r *ClusterProfileReconciler) addFinalizer(ctx context.Context, clusterProf
 		)
 	}
 	return nil
-}
-
-// getMatchingClusters returns all Sveltos/CAPI Clusters currently matching ClusterProfile.Spec.ClusterSelector
-func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-) ([]corev1.ObjectReference, error) {
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
-
-	tmpMatching, err := r.getMatchingCAPIClusters(ctx, clusterProfileScope, parsedSelector)
-	if err != nil {
-		return nil, err
-	}
-
-	matching = append(matching, tmpMatching...)
-
-	tmpMatching, err = r.getMatchingSveltosClusters(ctx, clusterProfileScope, parsedSelector)
-	if err != nil {
-		return nil, err
-	}
-
-	matching = append(matching, tmpMatching...)
-
-	return matching, nil
-}
-
-func (r *ClusterProfileReconciler) getMatchingCAPIClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
-
-	clusterList := &clusterv1.ClusterList{}
-	if err := r.List(ctx, clusterList); err != nil {
-		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(r.Scheme, cluster)
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
-			matching = append(matching, corev1.ObjectReference{
-				Kind:       cluster.Kind,
-				Namespace:  cluster.Namespace,
-				Name:       cluster.Name,
-				APIVersion: cluster.APIVersion,
-			})
-		}
-	}
-
-	return matching, nil
-}
-
-func (r *ClusterProfileReconciler) getMatchingSveltosClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
-
-	clusterList := &libsveltosv1alpha1.SveltosClusterList{}
-	if err := r.List(ctx, clusterList); err != nil {
-		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(r.Scheme, cluster)
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
-			matching = append(matching, corev1.ObjectReference{
-				Kind:       cluster.Kind,
-				Namespace:  cluster.Namespace,
-				Name:       cluster.Name,
-				APIVersion: cluster.APIVersion,
-			})
-		}
-	}
-
-	return matching, nil
 }
 
 // updateClusterReports for each Sveltos/CAPI Cluster currently matching ClusterProfile:

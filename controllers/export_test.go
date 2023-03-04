@@ -102,11 +102,6 @@ var (
 )
 
 var (
-	IsClusterPaused = isClusterPaused
-	GetSecretData   = getSecretData
-)
-
-var (
 	DeployDebuggingConfigurationCRD = deployDebuggingConfigurationCRD
 	DeployResourceSummaryCRD        = deployResourceSummaryCRD
 	DeployResourceSummaryInCluster  = deployResourceSummaryInCluster

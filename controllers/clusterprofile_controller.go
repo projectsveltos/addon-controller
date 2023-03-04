@@ -453,7 +453,7 @@ func (r *ClusterProfileReconciler) createClusterReports(ctx context.Context, clu
 func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clusterProfile *configv1alpha1.ClusterProfile,
 	cluster *corev1.ObjectReference) error {
 
-	clusterType := getClusterType(cluster)
+	clusterType := clusterproxy.GetClusterType(cluster)
 
 	clusterReport := &configv1alpha1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -462,7 +462,7 @@ func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clus
 			Labels: map[string]string{
 				ClusterProfileLabelName:         clusterProfile.Name,
 				configv1alpha1.ClusterNameLabel: cluster.Name,
-				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
+				configv1alpha1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
 			},
 		},
 		Spec: configv1alpha1.ClusterReportSpec{
@@ -529,7 +529,8 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(&cluster))
+		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name,
+			clusterproxy.GetClusterType(&cluster))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				err = r.createClusterSummary(ctx, clusterProfileScope, &cluster)
@@ -566,7 +567,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		reference := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterName := getClusterInfo(reference.Namespace, reference.Name, getClusterType(&reference))
+		clusterName := getClusterInfo(reference.Namespace, reference.Name, clusterproxy.GetClusterType(&reference))
 		matching[clusterName] = true
 	}
 
@@ -624,7 +625,7 @@ func (r *ClusterProfileReconciler) cleanClusterConfigurations(ctx context.Contex
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		ref := &clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, getClusterType(ref)))] = true
+		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, clusterproxy.GetClusterType(ref)))] = true
 	}
 
 	err := r.List(ctx, clusterConfiguratioList)
@@ -752,7 +753,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
-	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
@@ -768,7 +769,8 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 		return nil
 	}
 
-	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(cluster))
+	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster))
 	if err != nil {
 		return err
 	}
@@ -781,7 +783,7 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 
 	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
-	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
 	return r.Update(ctx, clusterSummary)
@@ -853,10 +855,10 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      getClusterConfigurationName(cluster.Name, getClusterType(cluster)),
+			Name:      getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)),
 			Labels: map[string]string{
 				configv1alpha1.ClusterNameLabel: cluster.Name,
-				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
+				configv1alpha1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
 			},
 		},
 	}
@@ -879,7 +881,7 @@ func (r *ClusterProfileReconciler) updateClusterConfiguration(ctx context.Contex
 	cluster *corev1.ObjectReference) error {
 
 	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace,
-		getClusterConfigurationName(cluster.Name, getClusterType(cluster)))
+		getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)))
 	if err != nil {
 		return err
 	}

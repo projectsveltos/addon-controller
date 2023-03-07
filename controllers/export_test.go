@@ -26,6 +26,7 @@ var (
 	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports
 	UpdateClusterReports         = (*ClusterProfileReconciler).updateClusterReports
 	UpdateClusterSummarySyncMode = (*ClusterProfileReconciler).updateClusterSummarySyncMode
+	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
 
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
 	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine

@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -218,8 +219,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		}
 	}
 
-	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
-	matchingCluster, err := clusterproxy.GetMatchingClusters(ctx, r.Client, parsedSelector, logger)
+	matchingCluster, err := r.getMatchingClusters(ctx, clusterProfileScope, logger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -961,4 +961,24 @@ func (r *ClusterProfileReconciler) allClusterSummariesGone(ctx context.Context,
 	}
 
 	return len(clusterSummaryList.Items) == 0
+}
+
+func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context,
+	clusterProfileScope *scope.ClusterProfileScope, logger logr.Logger) ([]corev1.ObjectReference, error) {
+
+	var matchingCluster []corev1.ObjectReference
+	var err error
+	if clusterProfileScope.GetSelector() != "" {
+		parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
+		matchingCluster, err = clusterproxy.GetMatchingClusters(ctx, r.Client, parsedSelector, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for i := range clusterProfileScope.ClusterProfile.Spec.ClusterRefs {
+		matchingCluster = append(matchingCluster, clusterProfileScope.ClusterProfile.Spec.ClusterRefs[i])
+	}
+
+	return matchingCluster, nil
 }

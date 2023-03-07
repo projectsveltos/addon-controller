@@ -92,6 +92,54 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		}
 	})
 
+	It("getMatchingCluster considers both ClusterSelector and ClusterRefs", func() {
+		initObjects := []client.Object{
+			matchingCluster,
+			nonMatchingCluster,
+			clusterProfile,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterProfileReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
+			Mux:               sync.Mutex{},
+		}
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		// Only clusterSelector is, so only matchingCluster is a match
+		matching, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(matching)).To(Equal(1))
+
+		clusterProfile.Spec.ClusterRefs = []corev1.ObjectReference{
+			{
+				Kind:       clusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+				Name:       nonMatchingCluster.Name,
+				Namespace:  nonMatchingCluster.Namespace,
+			},
+		}
+
+		// Both clusterSelector (matchingCluster is a match) and ClusterRefs (nonMatchingCluster is referenced) are set
+		// So two clusters are now matching
+		matching, err = controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(matching)).To(Equal(2))
+	})
+
 	It("Adds finalizer", func() {
 		initObjects := []client.Object{
 			clusterProfile,

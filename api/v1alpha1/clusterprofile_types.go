@@ -146,7 +146,12 @@ const (
 // ClusterProfileSpec defines the desired state of ClusterProfile
 type ClusterProfileSpec struct {
 	// ClusterSelector identifies clusters to associate to.
-	ClusterSelector libsveltosv1alpha1.Selector `json:"clusterSelector"`
+	// +optional
+	ClusterSelector libsveltosv1alpha1.Selector `json:"clusterSelector,omitempty"`
+
+	// ClusterRefs identifies clusters to associate to.
+	// +optional
+	ClusterRefs []corev1.ObjectReference `json:"clusterRefs,omitempty"`
 
 	// SyncMode specifies how features are synced in a matching workload cluster.
 	// - OneTime means, first time a workload cluster matches the ClusterProfile,

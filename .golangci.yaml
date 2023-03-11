@@ -54,7 +54,7 @@ linters-settings:
   gocyclo:
     min-complexity: 20
   goimports:
-    local-prefixes: golang.cisco.com/cloudstack
+    local-prefixes: github.com/projectsveltos
   gomnd:
     settings:
       mnd:

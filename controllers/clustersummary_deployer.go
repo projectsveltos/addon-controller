@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -246,7 +247,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	// Before any per feature specific code
 
 	var err error
-	_, err = getCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	_, err = clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {

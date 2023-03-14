@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
@@ -62,8 +63,8 @@ func deployResources(ctx context.Context, c client.Client,
 		}
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
-		clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -142,14 +143,14 @@ func undeployResources(ctx context.Context, c client.Client,
 	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
 	logger = logger.WithValues("admin", getClusterSummaryAdmin(clusterSummary))
 
-	remoteClient, err := getKubernetesClient(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
-		clusterSummary.Spec.ClusterType, logger)
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+		getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, getClusterSummaryAdmin(clusterSummary),
-		clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}

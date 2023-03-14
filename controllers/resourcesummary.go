@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 
@@ -50,7 +51,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
 
 	// Sveltos resources are deployed using cluster-admin role.
-	remoteRestConfig, err := getKubernetesRestConfig(ctx, c, clusterNamespace, clusterName, "", clusterType, logger)
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace,
+		clusterName, "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -63,7 +65,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("Deploying classifier agent")
 	// Deploy ClassifierAgent
-	err = deployDriftDetectionManager(ctx, remoteRestConfig, clusterNamespace, clusterName, "do-not-send-reports", clusterType, logger)
+	err = deployDriftDetectionManager(ctx, remoteRestConfig, clusterNamespace,
+		clusterName, "do-not-send-reports", clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -82,7 +85,8 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	// ResourceSummary is a Sveltos resource created in managed clusters.
 	// Sveltos resources are always created using cluster-admin so that admin does not need to be
 	// given such permissions.
-	remoteClient, err := getKubernetesClient(ctx, c, clusterNamespace, clusterName, "", clusterType, logger)
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
+		clusterType, logger)
 	if err != nil {
 		return err
 	}

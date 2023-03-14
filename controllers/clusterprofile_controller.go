@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -218,7 +219,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		}
 	}
 
-	matchingCluster, err := r.getMatchingClusters(ctx, clusterProfileScope)
+	matchingCluster, err := r.getMatchingClusters(ctx, clusterProfileScope, logger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -320,97 +321,6 @@ func (r *ClusterProfileReconciler) addFinalizer(ctx context.Context, clusterProf
 	return nil
 }
 
-// getMatchingClusters returns all Sveltos/CAPI Clusters currently matching ClusterProfile.Spec.ClusterSelector
-func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-) ([]corev1.ObjectReference, error) {
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
-
-	tmpMatching, err := r.getMatchingCAPIClusters(ctx, clusterProfileScope, parsedSelector)
-	if err != nil {
-		return nil, err
-	}
-
-	matching = append(matching, tmpMatching...)
-
-	tmpMatching, err = r.getMatchingSveltosClusters(ctx, clusterProfileScope, parsedSelector)
-	if err != nil {
-		return nil, err
-	}
-
-	matching = append(matching, tmpMatching...)
-
-	return matching, nil
-}
-
-func (r *ClusterProfileReconciler) getMatchingCAPIClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
-
-	clusterList := &clusterv1.ClusterList{}
-	if err := r.List(ctx, clusterList); err != nil {
-		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(r.Scheme, cluster)
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
-			matching = append(matching, corev1.ObjectReference{
-				Kind:       cluster.Kind,
-				Namespace:  cluster.Namespace,
-				Name:       cluster.Name,
-				APIVersion: cluster.APIVersion,
-			})
-		}
-	}
-
-	return matching, nil
-}
-
-func (r *ClusterProfileReconciler) getMatchingSveltosClusters(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope,
-	parsedSelector labels.Selector) ([]corev1.ObjectReference, error) {
-
-	clusterList := &libsveltosv1alpha1.SveltosClusterList{}
-	if err := r.List(ctx, clusterList); err != nil {
-		clusterProfileScope.Logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	matching := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(r.Scheme, cluster)
-		if parsedSelector.Matches(labels.Set(cluster.Labels)) {
-			matching = append(matching, corev1.ObjectReference{
-				Kind:       cluster.Kind,
-				Namespace:  cluster.Namespace,
-				Name:       cluster.Name,
-				APIVersion: cluster.APIVersion,
-			})
-		}
-	}
-
-	return matching, nil
-}
-
 // updateClusterReports for each Sveltos/CAPI Cluster currently matching ClusterProfile:
 // - if syncMode is DryRun, creates corresponding ClusterReport if one does not exist already;
 // - if syncMode is DryRun, deletes ClusterReports for any Sveltos/CAPI Cluster not matching anymore;
@@ -453,7 +363,7 @@ func (r *ClusterProfileReconciler) createClusterReports(ctx context.Context, clu
 func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clusterProfile *configv1alpha1.ClusterProfile,
 	cluster *corev1.ObjectReference) error {
 
-	clusterType := getClusterType(cluster)
+	clusterType := clusterproxy.GetClusterType(cluster)
 
 	clusterReport := &configv1alpha1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -462,7 +372,7 @@ func (r *ClusterProfileReconciler) createClusterReport(ctx context.Context, clus
 			Labels: map[string]string{
 				ClusterProfileLabelName:         clusterProfile.Name,
 				configv1alpha1.ClusterNameLabel: cluster.Name,
-				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
+				configv1alpha1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
 			},
 		},
 		Spec: configv1alpha1.ClusterReportSpec{
@@ -529,7 +439,8 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(&cluster))
+		_, err = getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name,
+			clusterproxy.GetClusterType(&cluster))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				err = r.createClusterSummary(ctx, clusterProfileScope, &cluster)
@@ -566,7 +477,7 @@ func (r *ClusterProfileReconciler) cleanClusterSummaries(ctx context.Context, cl
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		reference := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		clusterName := getClusterInfo(reference.Namespace, reference.Name, getClusterType(&reference))
+		clusterName := getClusterInfo(reference.Namespace, reference.Name, clusterproxy.GetClusterType(&reference))
 		matching[clusterName] = true
 	}
 
@@ -624,7 +535,7 @@ func (r *ClusterProfileReconciler) cleanClusterConfigurations(ctx context.Contex
 
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		ref := &clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
-		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, getClusterType(ref)))] = true
+		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, clusterproxy.GetClusterType(ref)))] = true
 	}
 
 	err := r.List(ctx, clusterConfiguratioList)
@@ -752,7 +663,7 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 		},
 	}
 
-	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
@@ -768,7 +679,8 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 		return nil
 	}
 
-	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name, getClusterType(cluster))
+	clusterSummary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.Name(), cluster.Namespace, cluster.Name,
+		clusterproxy.GetClusterType(cluster))
 	if err != nil {
 		return err
 	}
@@ -781,7 +693,7 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 
 	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
-	clusterSummary.Spec.ClusterType = getClusterType(cluster)
+	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
 
 	return r.Update(ctx, clusterSummary)
@@ -853,10 +765,10 @@ func (r *ClusterProfileReconciler) createClusterConfiguration(ctx context.Contex
 	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      getClusterConfigurationName(cluster.Name, getClusterType(cluster)),
+			Name:      getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)),
 			Labels: map[string]string{
 				configv1alpha1.ClusterNameLabel: cluster.Name,
-				configv1alpha1.ClusterTypeLabel: string(getClusterType(cluster)),
+				configv1alpha1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
 			},
 		},
 	}
@@ -879,7 +791,7 @@ func (r *ClusterProfileReconciler) updateClusterConfiguration(ctx context.Contex
 	cluster *corev1.ObjectReference) error {
 
 	clusterConfiguration, err := getClusterConfiguration(ctx, r.Client, cluster.Namespace,
-		getClusterConfigurationName(cluster.Name, getClusterType(cluster)))
+		getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)))
 	if err != nil {
 		return err
 	}
@@ -1049,4 +961,24 @@ func (r *ClusterProfileReconciler) allClusterSummariesGone(ctx context.Context,
 	}
 
 	return len(clusterSummaryList.Items) == 0
+}
+
+func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context,
+	clusterProfileScope *scope.ClusterProfileScope, logger logr.Logger) ([]corev1.ObjectReference, error) {
+
+	var matchingCluster []corev1.ObjectReference
+	var err error
+	if clusterProfileScope.GetSelector() != "" {
+		parsedSelector, _ := labels.Parse(clusterProfileScope.GetSelector())
+		matchingCluster, err = clusterproxy.GetMatchingClusters(ctx, r.Client, parsedSelector, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for i := range clusterProfileScope.ClusterProfile.Spec.ClusterRefs {
+		matchingCluster = append(matchingCluster, clusterProfileScope.ClusterProfile.Spec.ClusterRefs[i])
+	}
+
+	return matchingCluster, nil
 }

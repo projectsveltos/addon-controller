@@ -17,7 +17,6 @@ limitations under the License.
 package controllers
 
 var (
-	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
 	UpdateClusterSummaries       = (*ClusterProfileReconciler).updateClusterSummaries
 	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
 	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary
@@ -27,6 +26,7 @@ var (
 	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports
 	UpdateClusterReports         = (*ClusterProfileReconciler).updateClusterReports
 	UpdateClusterSummarySyncMode = (*ClusterProfileReconciler).updateClusterSummarySyncMode
+	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
 
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
 	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
@@ -99,11 +99,6 @@ type (
 var (
 	GetClusterReportName        = getClusterReportName
 	GetClusterConfigurationName = getClusterConfigurationName
-)
-
-var (
-	IsClusterPaused = isClusterPaused
-	GetSecretData   = getSecretData
 )
 
 var (

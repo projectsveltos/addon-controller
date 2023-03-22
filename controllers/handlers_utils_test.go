@@ -442,6 +442,7 @@ var _ = Describe("HandlersUtils", func() {
 		configMapNs := randomString()
 		viewClusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, viewClusterRoleName))
+		Expect(configMap).ToNot(BeNil())
 
 		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
 		// of this ClusterSummary (owner is ClusterProfile owning the ClusterSummary)

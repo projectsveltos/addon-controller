@@ -228,7 +228,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 #      enforce: "{{ .podSecurityStandard.enforce }}"
 #      enforce-version: "latest"
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
-	ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
+	CLUSTER_TOPOLOGY=true ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
 		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
 

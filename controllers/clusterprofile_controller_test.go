@@ -719,8 +719,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 				Labels: map[string]string{
-					clusterv1.ClusterLabelName:             matchingCluster.Name,
-					clusterv1.MachineControlPlaneLabelName: "ok",
+					clusterv1.ClusterNameLabel:         matchingCluster.Name,
+					clusterv1.MachineControlPlaneLabel: "ok",
 				},
 			},
 		}
@@ -777,8 +777,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				Namespace: matchingCluster.Namespace,
 				Name:      matchingCluster.Name,
 				Labels: map[string]string{
-					clusterv1.ClusterLabelName:             matchingCluster.Name,
-					clusterv1.MachineControlPlaneLabelName: "ok",
+					clusterv1.ClusterNameLabel:         matchingCluster.Name,
+					clusterv1.MachineControlPlaneLabel: "ok",
 				},
 			},
 		}
@@ -1190,8 +1190,8 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 				Namespace: cluster.Namespace,
 				Name:      cluster.Name + randomString(),
 				Labels: map[string]string{
-					clusterv1.ClusterLabelName:             cluster.Name,
-					clusterv1.MachineControlPlaneLabelName: "ok",
+					clusterv1.ClusterNameLabel:         cluster.Name,
+					clusterv1.MachineControlPlaneLabel: "ok",
 				},
 			},
 		}

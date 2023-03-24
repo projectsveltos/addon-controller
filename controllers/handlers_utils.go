@@ -315,7 +315,7 @@ func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) strin
 		return ""
 	}
 
-	return clusterSummary.Labels[configv1alpha1.AdminLabel]
+	return clusterSummary.Labels[libsveltosv1alpha1.AdminLabel]
 }
 
 // getClusterSummaryAndClusterClient gets ClusterSummary and the client to access the associated

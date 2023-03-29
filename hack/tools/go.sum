@@ -1309,8 +1309,8 @@ mvdan.cc/unparam v0.0.0-20220706161116-678bad134442/go.mod h1:F/Cxw/6mVrNKqrR2Yj
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
-sigs.k8s.io/cluster-api v1.4.0-rc.1 h1:7ZhOTVhHe4GSznOm1lWLnrRmA4J/f+SGRrfjZHY0UYE=
-sigs.k8s.io/cluster-api v1.4.0-rc.1/go.mod h1:6w9nUYSE1Mc0HkyjxyQoaDu8L9YmlpFFFn9n9Zvr9U4=
+sigs.k8s.io/cluster-api v1.4.0 h1:qkFt+yie4kDJQY4qD67rJR/S2dQ1IBZr/B2moYeVzWI=
+sigs.k8s.io/cluster-api v1.4.0/go.mod h1:6w9nUYSE1Mc0HkyjxyQoaDu8L9YmlpFFFn9n9Zvr9U4=
 sigs.k8s.io/controller-runtime v0.14.5 h1:6xaWFqzT5KuAQ9ufgUaj1G/+C4Y1GRkhrxl+BJ9i+5s=
 sigs.k8s.io/controller-runtime v0.14.5/go.mod h1:WqIdsAY6JBsjfc/CqO0CORmNtoCtE4S6qbPc9s68h+0=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230318213517-c3c1f058a9a0 h1:ET2Dk+4GWLPzWjgcbhLHArVMFl2mMzWWhJEl259U6NU=

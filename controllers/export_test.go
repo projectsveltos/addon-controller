@@ -68,6 +68,7 @@ var (
 	AddAnnotation                 = addAnnotation
 	ComputePolicyHash             = computePolicyHash
 	GetPolicyInfo                 = getPolicyInfo
+	CollectContent                = collectContent
 	UndeployStaleResources        = undeployStaleResources
 	GetDeployedGroupVersionKinds  = getDeployedGroupVersionKinds
 	CanDelete                     = canDelete

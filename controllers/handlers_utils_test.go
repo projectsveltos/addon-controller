@@ -681,6 +681,42 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(randomValue))
 	})
+
+	It("collectContent collect contents with no error even when there are section with just comments", func() {
+		content := `# This file is generated from the individual YAML files by generate-provisioner-deployment.sh. Do not
+		# edit this file directly but instead edit the source files and re-render.
+		# 
+		# Generated from:
+		#       examples/contour/01-crds.yaml
+		#       examples/gateway/00-crds.yaml
+		#       examples/gateway/00-namespace.yaml
+		#       examples/gateway/01-admission_webhook.yaml
+		#       examples/gateway/02-certificate_config.yaml
+		#       examples/gateway-provisioner/00-common.yaml
+		#       examples/gateway-provisioner/01-roles.yaml
+		#       examples/gateway-provisioner/02-rolebindings.yaml
+		#       examples/gateway-provisioner/03-gateway-provisioner.yaml
+		  
+		---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: contour-gateway-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: contour-gateway-provisioner
+subjects:
+- kind: ServiceAccount
+  name: contour-gateway-provisioner
+  namespace: projectcontour
+`
+		data := map[string]string{"policy.yaml": content}
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, data, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(u)).To(Equal(1))
+		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
+	})
 })
 
 // validateResourceReports validates that number of resourceResources with certain actions

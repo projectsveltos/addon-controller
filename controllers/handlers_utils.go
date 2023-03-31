@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -246,6 +247,16 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 	return reports, nil
 }
 
+// removeCommentsAndEmptyLines removes any line containing just YAML comments
+// and any empty lines
+func removeCommentsAndEmptyLines(text string) string {
+	commentLine := regexp.MustCompile(`(?m)^\s*#([^#].*?)$`)
+	result := commentLine.ReplaceAllString(text, "")
+	emptyLine := regexp.MustCompile(`(?m)^\s*$`)
+	result = emptyLine.ReplaceAllString(result, "")
+	return result
+}
+
 // collectContent collect policies contained in a ConfigMap/Secret.
 // ConfigMap/Secret Data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
@@ -258,13 +269,15 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	for k := range data {
 		elements := strings.Split(data[k], separator)
 		for i := range elements {
-			if elements[i] == "" {
+			section := removeCommentsAndEmptyLines(elements[i])
+
+			if section == "" {
 				continue
 			}
 
-			policy, err := utils.GetUnstructured([]byte(elements[i]))
+			policy, err := utils.GetUnstructured([]byte(section))
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
 				return nil, err
 			}
 
@@ -276,21 +289,21 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 						policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 					instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 						clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-						policy.GetName(), elements[i], nil, logger)
+						policy.GetName(), section, nil, logger)
 					if err != nil {
 						return nil, err
 					}
 					policy, err = utils.GetUnstructured([]byte(instance))
 					if err != nil {
-						logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+						logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
 						return nil, err
 					}
 				}
 			}
 
 			if policy == nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
-				return nil, fmt.Errorf("failed to get policy from Data %.100s", elements[i])
+				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+				return nil, fmt.Errorf("failed to get policy from Data %.100s", section)
 			}
 
 			policies = append(policies, policy)

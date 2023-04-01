@@ -56,11 +56,11 @@ func generateTestMachineAPICRD(kind, pluralKind string) *apiextensionsv1.CustomR
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"spec": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: pointer.Bool(true),
 								},
 								"status": {
 									Type:                   "object",
-									XPreserveUnknownFields: pointer.BoolPtr(true),
+									XPreserveUnknownFields: pointer.Bool(true),
 								},
 							},
 						},

@@ -152,7 +152,7 @@ var _ = Describe("HandlersUtils", func() {
 	It("getClusterSummaryAdmin returns the admin for a given ClusterSummary", func() {
 		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
 		admin := randomString()
-		clusterSummary.Labels[configv1alpha1.AdminLabel] = admin
+		clusterSummary.Labels[libsveltosv1alpha1.AdminLabel] = admin
 		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(Equal(admin))
 	})
 
@@ -442,6 +442,7 @@ var _ = Describe("HandlersUtils", func() {
 		configMapNs := randomString()
 		viewClusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, viewClusterRoleName))
+		Expect(configMap).ToNot(BeNil())
 
 		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
 		// of this ClusterSummary (owner is ClusterProfile owning the ClusterSummary)
@@ -679,6 +680,42 @@ var _ = Describe("HandlersUtils", func() {
 		v, ok := currentDepl.Labels[randomKey]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(randomValue))
+	})
+
+	It("collectContent collect contents with no error even when there are section with just comments", func() {
+		content := `# This file is generated from the individual YAML files by generate-provisioner-deployment.sh. Do not
+		# edit this file directly but instead edit the source files and re-render.
+		# 
+		# Generated from:
+		#       examples/contour/01-crds.yaml
+		#       examples/gateway/00-crds.yaml
+		#       examples/gateway/00-namespace.yaml
+		#       examples/gateway/01-admission_webhook.yaml
+		#       examples/gateway/02-certificate_config.yaml
+		#       examples/gateway-provisioner/00-common.yaml
+		#       examples/gateway-provisioner/01-roles.yaml
+		#       examples/gateway-provisioner/02-rolebindings.yaml
+		#       examples/gateway-provisioner/03-gateway-provisioner.yaml
+		  
+		---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: contour-gateway-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: contour-gateway-provisioner
+subjects:
+- kind: ServiceAccount
+  name: contour-gateway-provisioner
+  namespace: projectcontour
+`
+		data := map[string]string{"policy.yaml": content}
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, data, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(u)).To(Equal(1))
+		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
 	})
 })
 

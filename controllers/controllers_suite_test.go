@@ -32,14 +32,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/addon-manager/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/internal/test/helpers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/utils"
-	"github.com/projectsveltos/sveltos-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/sveltos-manager/controllers"
-	"github.com/projectsveltos/sveltos-manager/internal/test/helpers"
 )
 
 var (

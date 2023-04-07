@@ -2,7 +2,7 @@ domain: projectsveltos.io
 layout:
 - go.kubebuilder.io/v3
 projectName: sveltos-manager
-repo: github.com/projectsveltos/sveltos-manager
+repo: github.com/projectsveltos/addon-manager
 resources:
 - api:
     crdVersion: v1
@@ -10,7 +10,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterProfile
-  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
+  path: github.com/projectsveltos/addon-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -18,7 +18,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterSummary
-  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
+  path: github.com/projectsveltos/addon-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -26,7 +26,7 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterConfiguration
-  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
+  path: github.com/projectsveltos/addon-manager/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -34,6 +34,6 @@ resources:
   domain: projectsveltos.io
   group: config
   kind: ClusterReport
-  path: github.com/projectsveltos/sveltos-manager/api/v1alpha1
+  path: github.com/projectsveltos/addon-manager/api/v1alpha1
   version: v1alpha1
 version: "3"

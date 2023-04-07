@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
 )
 
 // ClusterSummaryScopeParams defines the input parameters used to create a new ClusterSummary Scope.

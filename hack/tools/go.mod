@@ -1,4 +1,4 @@
-module github.com/projectsveltos/sveltos-manager/hack/tools
+module github.com/projectsveltos/addon-manager/hack/tools
 
 go 1.19
 

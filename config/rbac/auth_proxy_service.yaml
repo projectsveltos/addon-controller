@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: controller-manager
+    control-plane: addon-manager
   name: manager-metrics-service
   namespace: projectsveltos
 spec:
@@ -12,4 +12,4 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    control-plane: controller-manager
+    control-plane: addon-manager

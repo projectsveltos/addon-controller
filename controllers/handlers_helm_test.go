@@ -34,12 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
-	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("HandlersHelm", func() {

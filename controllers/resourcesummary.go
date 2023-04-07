@@ -29,10 +29,10 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 
+	driftdetection "github.com/projectsveltos/addon-manager/pkg/drift-detection"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	driftdetection "github.com/projectsveltos/sveltos-manager/pkg/drift-detection"
 )
 
 func getResourceSummaryNamespace() string {

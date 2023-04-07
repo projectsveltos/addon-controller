@@ -1,4 +1,4 @@
-module github.com/projectsveltos/sveltos-manager
+module github.com/projectsveltos/addon-manager
 
 go 1.19
 

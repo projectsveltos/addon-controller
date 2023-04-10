@@ -118,9 +118,6 @@ type HelmChart struct {
 	// +optional
 	Values string `json:"values,omitempty"`
 
-	// SecretRef contains confidential data that needs to be used as values for templates
-	SecretRef *corev1.ObjectReference `json:"secretRef,omitempty"`
-
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install
 	// +optional
@@ -138,6 +135,52 @@ const (
 	WithdrawPolicies StopMatchingBehavior = "WithdrawPolicies"
 	LeavePolicies    StopMatchingBehavior = "LeavePolicies"
 )
+
+type TemplateResourceRef struct {
+	// Resource references a Kubernetes instance in the management
+	// cluster to fetch and use during template instantiation.
+	Resource corev1.ObjectReference `json:"resource"`
+
+	// Identifier is how the resource will be referred to in the
+	// template
+	Identifier string `json:"identifier"`
+}
+
+// DeploymentType indicates whether resources need to be deployed
+// into the management cluster (local) or the managed cluster (remote)
+// +kubebuilder:validation:Enum:=Local;Remote
+type DeploymentType string
+
+const (
+	// DeploymentTypeLocal indicates resource deployment need to
+	// be in the management cluster
+	DeploymentTypeLocal = DeploymentType("Local")
+
+	// DeploymentTypeRemote indicates resource deployment need to
+	// be in the managed cluster
+	DeploymentTypeRemote = DeploymentType("Remote")
+)
+
+type PolicyRef struct {
+	// Namespace of the referenced resource.
+	// Namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	Namespace string `json:"namespace"`
+
+	// Name of the rreferenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the resource. Supported kinds are: Secrets and ConfigMaps.
+	// +kubebuilder:validation:Enum=Secret;ConfigMap
+	Kind string `json:"kind"`
+
+	// DeploymentType indicates whether resources need to be deployed
+	// into the management cluster (local) or the managed cluster (remote)
+	// +kubebuilder:default:=Remote
+	// +optional
+	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+}
 
 // ClusterProfileSpec defines the desired state of ClusterProfile
 type ClusterProfileSpec struct {
@@ -171,10 +214,18 @@ type ClusterProfileSpec struct {
 	// +optional
 	StopMatchingBehavior StopMatchingBehavior `json:"stopMatchingBehavior,omitempty"`
 
+	// TemplateResourceRefs is a list of resource to collect from the management cluster.
+	// Those resources' values will be used to instantiate templates contained in referenced
+	// PolicyRefs and Helm charts
+	// +patchMergeKey=identifier
+	// +patchStrategy=merge,retainKeys
+	// +optional
+	TemplateResourceRefs []TemplateResourceRef `json:"templateResourceRefs,omitempty"`
+
 	// PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional
-	PolicyRefs []libsveltosv1alpha1.PolicyRef `json:"policyRefs,omitempty"`
+	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
 
 	// Helm charts
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`

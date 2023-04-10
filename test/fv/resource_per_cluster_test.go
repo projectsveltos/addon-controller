@@ -69,7 +69,7 @@ var _ = Describe("Feature", func() {
 		Byf("Update ClusterProfile %s to reference Secret %s (namespace not set)", clusterProfile.Name, secret.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "",
@@ -100,7 +100,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentPod := &corev1.Pod{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: podName}, currentPod)
+				types.NamespacedName{Namespace: defaultNamespace, Name: podName}, currentPod)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
@@ -108,7 +108,7 @@ var _ = Describe("Feature", func() {
 
 		policies := []policy{
 			{kind: "ClusterRole", name: updateClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-			{kind: "Pod", name: podName, namespace: "default", group: ""},
+			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
@@ -136,7 +136,7 @@ var _ = Describe("Feature", func() {
 
 		policies = []policy{
 			{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-			{kind: "Pod", name: podName, namespace: "default", group: ""},
+			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
@@ -152,28 +152,28 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentPod := &corev1.Pod{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: newPodName}, currentPod)
+				types.NamespacedName{Namespace: defaultNamespace, Name: newPodName}, currentPod)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying old Pod is removed from the workload cluster")
 		Eventually(func() bool {
 			currentPod := &corev1.Pod{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: podName}, currentPod)
+				types.NamespacedName{Namespace: defaultNamespace, Name: podName}, currentPod)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		policies = []policy{
 			{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-			{kind: "Pod", name: newPodName, namespace: "default", group: ""},
+			{kind: "Pod", name: newPodName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
 
 		Byf("Changing clusterprofile to not reference configmap/secret anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -190,7 +190,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentPod := &corev1.Pod{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: newPodName}, currentPod)
+				types.NamespacedName{Namespace: defaultNamespace, Name: newPodName}, currentPod)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

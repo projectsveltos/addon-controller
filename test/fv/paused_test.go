@@ -61,14 +61,14 @@ var _ = Describe("Feature", Serial, func() {
 
 		devNamespaceName := randomString()
 		Byf("Create a configMap with a Namespace")
-		configMap := createConfigMapWithPolicy("default", namePrefix+randomString(), fmt.Sprintf(devNamespace, devNamespaceName))
+		configMap := createConfigMapWithPolicy(defaultNamespace, namePrefix+randomString(), fmt.Sprintf(devNamespace, devNamespaceName))
 
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -105,7 +105,7 @@ var _ = Describe("Feature", Serial, func() {
 
 		Byf("Changing clusterprofile to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

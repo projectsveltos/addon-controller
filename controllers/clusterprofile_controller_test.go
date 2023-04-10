@@ -462,7 +462,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeSveltos,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeOneTime,
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 							Namespace: "c-" + randomString(),
@@ -475,7 +475,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
 
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
 				Namespace: "b-" + randomString(),
@@ -530,7 +530,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 	It("UpdateClusterSummary does not update ClusterSummary when ClusterProfile syncmode set to one time", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
@@ -566,7 +566,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
@@ -609,13 +609,14 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 	It("DeleteClusterSummary removes ClusterSummary for non-matching cluster", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "a-" + randomString(),
 				Name:      "b-" + randomString(),
 			},
 			{
+
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "c-" + randomString(),
 				Name:      "d-" + randomString(),
@@ -792,7 +793,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				APIVersion: clusterv1.GroupVersion.String(),
 			},
 		}
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: "x-" + randomString(),
@@ -813,7 +814,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
 					SyncMode: configv1alpha1.SyncModeContinuous,
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 							Namespace: "c-" + randomString(),

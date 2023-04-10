@@ -241,8 +241,10 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioning},
@@ -320,7 +322,7 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -620,7 +622,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
 		referencedResourceNamespace := randomString()
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: referencedResourceNamespace,
 				Name:      randomString(),
@@ -639,7 +641,7 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects using cluster namespace when not set", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{Namespace: "", Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
 		}
 
@@ -699,7 +701,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
@@ -721,7 +723,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name + randomString(),
@@ -766,7 +768,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
-		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: namespace,
 				Name:      configMap.Name,

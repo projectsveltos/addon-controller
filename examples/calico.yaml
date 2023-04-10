@@ -16,7 +16,7 @@ spec:
       installation:
         calicoNetwork:
           ipPools:
-          {{ range $cidr := .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks }}
+          {{ range $cidr := .Cluster.spec.clusterNetwork.pods.cidrBlocks }}
             - cidr: {{ $cidr }}
               encapsulation: VXLAN
           {{ end }}

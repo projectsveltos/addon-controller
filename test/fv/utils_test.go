@@ -42,8 +42,9 @@ import (
 )
 
 const (
-	key   = "env"
-	value = "fv"
+	key              = "env"
+	value            = "fv"
+	defaultNamespace = "default"
 )
 
 // Byf is a simple wrapper around By.
@@ -283,11 +284,7 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 	}
 	for i := range policyStrs {
 		key := fmt.Sprintf("policy%d.yaml", i)
-		if utf8.Valid([]byte(policyStrs[i])) {
-			cm.Data[key] = policyStrs[i]
-		} else {
-			cm.BinaryData[key] = []byte(policyStrs[i])
-		}
+		cm.Data[key] = policyStrs[i]
 	}
 
 	return cm

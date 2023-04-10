@@ -52,7 +52,7 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 
 	// Sveltos resources are deployed using cluster-admin role.
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace,
-		clusterName, "", clusterType, logger)
+		clusterName, "", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
 		return err
@@ -85,7 +85,7 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	// ResourceSummary is a Sveltos resource created in managed clusters.
 	// Sveltos resources are always created using cluster-admin so that admin does not need to be
 	// given such permissions.
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "",
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "", "",
 		clusterType, logger)
 	if err != nil {
 		return err

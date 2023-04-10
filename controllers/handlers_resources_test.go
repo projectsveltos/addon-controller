@@ -102,8 +102,22 @@ var _ = Describe("HandlersResource", func() {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMap.Namespace, Name: configMap.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		// We are using testEnv for both management and managed cluster. So ask Sveltos to deploy same ClusterRole in both
+		// managed and management cluster. If for instance we had deployed ClusterRole just to the managed cluster,
+		// then as part of cleaning stale resources in the management cluster, Sveltos would have removed it.
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace:      configMap.Namespace,
+				Name:           configMap.Name,
+				Kind:           string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				DeploymentType: configv1alpha1.DeploymentTypeLocal,
+			},
+			{
+				Namespace:      configMap.Namespace,
+				Name:           configMap.Name,
+				Kind:           string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				DeploymentType: configv1alpha1.DeploymentTypeRemote,
+			},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -223,6 +237,56 @@ var _ = Describe("HandlersResource", func() {
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
+
+	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
+
+		localReports := []configv1alpha1.ResourceReport{
+			{
+				Resource: configv1alpha1.Resource{
+					Name:      randomString(),
+					Namespace: randomString(),
+					Group:     randomString(),
+					Version:   randomString(),
+					Kind:      randomString(),
+				},
+			},
+		}
+
+		remoteReports := []configv1alpha1.ResourceReport{
+			{
+				Resource: configv1alpha1.Resource{
+					Name:      randomString(),
+					Namespace: randomString(),
+					Group:     randomString(),
+					Version:   randomString(),
+					Kind:      randomString(),
+				},
+			},
+		}
+
+		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary,
+			localReports, remoteReports, klogr.New())).To(Succeed())
+
+		// wait for cache to sync
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				clusterSummary)
+			return err == nil && clusterSummary.Status.FeatureSummaries != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			clusterSummary)).To(Succeed())
+		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
+		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement(
+			fmt.Sprintf("%s.%s.%s", localReports[0].Resource.Kind, localReports[0].Resource.Version, localReports[0].Resource.Group)))
+		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement(
+			fmt.Sprintf("%s.%s.%s", remoteReports[0].Resource.Kind, remoteReports[0].Resource.Version, remoteReports[0].Resource.Group)))
+	})
 })
 
 var _ = Describe("Hash methods", func() {
@@ -260,10 +324,19 @@ var _ = Describe("Hash methods", func() {
 				ClusterName:      randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
-						{Namespace: configMap1.Namespace, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-						{Namespace: configMap2.Namespace, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-						{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: configMap1.Namespace, Name: configMap1.Name,
+							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						},
+						{
+							Namespace: configMap2.Namespace, Name: configMap2.Name,
+							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						},
+						{
+							Namespace: randomString(), Name: randomString(),
+							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						},
 					},
 				},
 			},

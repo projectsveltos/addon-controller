@@ -709,6 +709,18 @@ func (r *ClusterProfileReconciler) addClusterSummaryLabels(clusterSummary *confi
 	} else {
 		addLabel(clusterSummary, configv1alpha1.ClusterTypeLabel, string(libsveltosv1alpha1.ClusterTypeCapi))
 	}
+
+	clusterProfileLabels := clusterProfileScope.ClusterProfile.Labels
+	if clusterProfileLabels != nil {
+		v, ok := clusterProfileLabels[libsveltosv1alpha1.AdminNameLabel]
+		if ok {
+			addLabel(clusterSummary, libsveltosv1alpha1.AdminNameLabel, v)
+		}
+		v, ok = clusterProfileLabels[libsveltosv1alpha1.AdminNamespaceLabel]
+		if ok {
+			addLabel(clusterSummary, libsveltosv1alpha1.AdminNamespaceLabel, v)
+		}
+	}
 }
 
 // deleteClusterSummary deletes ClusterSummary given a ClusterProfile and a matching Sveltos/CAPI Cluster

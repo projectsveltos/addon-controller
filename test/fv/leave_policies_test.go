@@ -85,7 +85,7 @@ var _ = Describe("LeavePolicies", func() {
 		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
 		deploymentName := "nginx-deployment-" + randomString()
-		deploymentNamespace := "default"
+		deploymentNamespace := defaultNamespace
 
 		Byf("Create a configMap with a nginx Deployment")
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(nginxDeployment, deploymentName, deploymentNamespace))
@@ -97,7 +97,7 @@ var _ = Describe("LeavePolicies", func() {
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,

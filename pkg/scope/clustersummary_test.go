@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -327,31 +326,6 @@ var _ = Describe("ClusterSummaryScope", func() {
 			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.FeatureSummaries)).To(Equal(1))
-	})
-
-	It("SetDeployedGroupVersionKind updates featureSummary with  deployed GroupVersionKinds", func() {
-		params := scope.ClusterSummaryScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			ClusterSummary: clusterSummary,
-			Logger:         klogr.New(),
-		}
-
-		scope, err := scope.NewClusterSummaryScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		deployed := []schema.GroupVersionKind{
-			{Group: "kyverno.io", Kind: "ClusterPolicy", Version: "v1"},
-			{Group: "kyverno.io", Kind: "Policy", Version: "v1"},
-		}
-		scope.SetDeployedGroupVersionKind(configv1alpha1.FeatureResources, deployed)
-
-		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
-		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
-		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("Policy.v1.kyverno.io"))
-		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("ClusterPolicy.v1.kyverno.io"))
 	})
 
 	It("SetLastAppliedTime updates featureSummary with time (entry not existing yet)", func() {

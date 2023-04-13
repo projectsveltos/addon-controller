@@ -87,12 +87,14 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
+func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (reports []configv1alpha1.ResourceReport, err error) {
 
 	reports, err =
-		deployContent(ctx, remoteConfig, c, remoteClient, configMap, configMap.Data, clusterSummary, logger)
+		deployContent(ctx, remoteConfig, remoteClient, configMap, configMap.Data, clusterSummary,
+			mgtmResources, logger)
 	return
 }
 
@@ -100,9 +102,10 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, c,
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
+func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
 	secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (reports []configv1alpha1.ResourceReport, err error) {
 
 	data := make(map[string]string)
 	for key, value := range secret.Data {
@@ -110,7 +113,8 @@ func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, c, re
 	}
 
 	reports, err =
-		deployContent(ctx, remoteConfig, c, remoteClient, secret, data, clusterSummary, logger)
+		deployContent(ctx, remoteConfig, remoteClient, secret, data, clusterSummary,
+			mgtmResources, logger)
 	return
 }
 
@@ -143,22 +147,37 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 	return err
 }
 
+func instantiateTemplate(referencedObject client.Object, logger logr.Logger) bool {
+	annotations := referencedObject.GetAnnotations()
+	if annotations != nil {
+		if _, ok := annotations[PolicyTemplate]; ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("referencedObject %s %s/%s is a template",
+				referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName()))
+			return true
+		}
+	}
+
+	return false
+}
+
 // deployContent deploys policies contained in a ConfigMap/Secret.
 // data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
+func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
 	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (reports []configv1alpha1.ResourceReport, err error) {
 
-	referencedPolicies, err := collectContent(ctx, clusterSummary, data, logger)
+	instantiateTemplate := instantiateTemplate(referencedObject, logger)
+	referencedPolicies, err := collectContent(ctx, clusterSummary, mgtmResources, data, instantiateTemplate, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, c, clusterSummary)
+	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +185,9 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, c, remoteClie
 	reports = make([]configv1alpha1.ResourceReport, 0)
 	for i := range referencedPolicies {
 		policy := referencedPolicies[i]
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 
 		resource := &configv1alpha1.Resource{
 			Name:      policy.GetName(),
@@ -262,7 +284,9 @@ func removeCommentsAndEmptyLines(text string) string {
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
 func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	data map[string]string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	mgtmResources map[string]*unstructured.Unstructured, data map[string]string,
+	instantiateTemplate bool, logger logr.Logger,
+) ([]*unstructured.Unstructured, error) {
 
 	policies := make([]*unstructured.Unstructured, 0)
 
@@ -275,30 +299,21 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				continue
 			}
 
+			if instantiateTemplate {
+				instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+					clusterSummary.GetName(), section, mgtmResources, logger)
+				if err != nil {
+					return nil, err
+				}
+
+				section = instance
+			}
+
 			policy, err := utils.GetUnstructured([]byte(section))
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
 				return nil, err
-			}
-
-			var instance string
-			annotations := policy.GetAnnotations()
-			if annotations != nil {
-				if _, ok := annotations[PolicyTemplate]; ok {
-					logger.V(logs.LogInfo).Info(fmt.Sprintf("policy %s %s/%s is a template",
-						policy.GetKind(), policy.GetNamespace(), policy.GetName()))
-					instance, err = instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-						clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-						policy.GetName(), section, nil, logger)
-					if err != nil {
-						return nil, err
-					}
-					policy, err = utils.GetUnstructured([]byte(instance))
-					if err != nil {
-						logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
-						return nil, err
-					}
-				}
 			}
 
 			if policy == nil {
@@ -323,12 +338,14 @@ func getPolicyInfo(policy *configv1alpha1.Resource) string {
 
 // getClusterSummaryAdmin returns the name of the admin that created the ClusterProfile
 // instance owing this ClusterProfile instance
-func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) string {
+func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) (namespace, name string) {
 	if clusterSummary.Labels == nil {
-		return ""
+		return "", ""
 	}
 
-	return clusterSummary.Labels[libsveltosv1alpha1.AdminLabel]
+	namespace = clusterSummary.Labels[libsveltosv1alpha1.AdminNamespaceLabel]
+	name = clusterSummary.Labels[libsveltosv1alpha1.AdminNameLabel]
+	return
 }
 
 // getClusterSummaryAndClusterClient gets ClusterSummary and the client to access the associated
@@ -364,8 +381,9 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 		return nil, nil, fmt.Errorf("cluster is marked for deletion")
 	}
 
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, getClusterSummaryAdmin(clusterSummary), clusterSummary.Spec.ClusterType, logger)
+		clusterSummary.Spec.ClusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -385,12 +403,14 @@ func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace
 }
 
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
+// local contains all configMaps/Secrets whose content need to be deployed locally (in the management cluster)
+// remote contains all configMap/Secrets whose content need to be deployed remotely (in the managed cluster)
 func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client, clusterNamespace string,
-	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) ([]client.Object, error) {
+	references []configv1alpha1.PolicyRef, logger logr.Logger) (local, remote []client.Object, err error) {
 
-	objects := make([]client.Object, 0)
+	local = make([]client.Object, 0)
+	remote = make([]client.Object, 0)
 	for i := range references {
-		var err error
 		var object client.Object
 		reference := &references[i]
 
@@ -409,31 +429,80 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}
-			return nil, err
+			return nil, nil, err
 		}
-		objects = append(objects, object)
+
+		if reference.DeploymentType == configv1alpha1.DeploymentTypeLocal {
+			local = append(local, object)
+		} else {
+			remote = append(remote, object)
+		}
 	}
 
-	return objects, nil
+	return local, remote, nil
 }
 
 // deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
 	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,
-	logger logr.Logger) (reports []configv1alpha1.ResourceReport, err error) {
+	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
 
 	refs := featureHandler.getRefs(clusterSummary)
 
-	var referencedObjects []client.Object
-	referencedObjects, err = collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
+	var objectsToDeployLocally []client.Object
+	var objectsToDeployRemotely []client.Object
+	objectsToDeployLocally, objectsToDeployRemotely, err = collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	remoteClient, err := client.New(remoteConfig, client.Options{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	var mgtmResources map[string]*unstructured.Unstructured
+	mgtmResources, err = collectMgmtResources(ctx, clusterSummary)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var tmpResourceReports []configv1alpha1.ResourceReport
+
+	// Assume that if objects are deployed in the management clusters, those are needed before any resource is deployed
+	// in the managed cluster. So try to deploy those first if any.
+
+	localConfig := rest.CopyConfig(getManagementClusterConfig())
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+	if adminName != "" {
+		localConfig.Impersonate = rest.ImpersonationConfig{
+			UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
+		}
+		logger.Info("MGIANLUC")
+	}
+	tmpResourceReports, err = deployObjects(ctx, c, localConfig, objectsToDeployLocally, clusterSummary,
+		mgtmResources, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	localReports = append(localReports, tmpResourceReports...)
+
+	// Deploy all resources that need to be deployed in the managed cluster
+	tmpResourceReports, err = deployObjects(ctx, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
+		mgtmResources, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	remoteReports = append(remoteReports, tmpResourceReports...)
+
+	return localReports, remoteReports, nil
+}
+
+// deployObjects deploys content of referencedObjects
+func deployObjects(ctx context.Context, destClient client.Client, destConfig *rest.Config,
+	referencedObjects []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (reports []configv1alpha1.ResourceReport, err error) {
 
 	for i := range referencedObjects {
 		var tmpResourceReports []configv1alpha1.ResourceReport
@@ -442,13 +511,15 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
-				deployContentOfConfigMap(ctx, remoteConfig, c, remoteClient, configMap, clusterSummary, l)
+				deployContentOfConfigMap(ctx, destConfig, destClient, configMap,
+					clusterSummary, mgtmResources, l)
 		} else {
 			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
-				deployContentOfSecret(ctx, remoteConfig, c, remoteClient, secret, clusterSummary, l)
+				deployContentOfSecret(ctx, destConfig, destClient, secret,
+					clusterSummary, mgtmResources, l)
 		}
 
 		if err != nil {
@@ -460,9 +531,8 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	return reports, nil
 }
 
-func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, remoteClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary,
-	deployedGVKs []schema.GroupVersionKind,
+func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
 	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
 
 	// Do not use due to metav1.Selector limitation
@@ -473,7 +543,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, c, r
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
-	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, c, clusterSummary)
+	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
@@ -572,6 +642,8 @@ func handleResourceDelete(ctx context.Context, remoteClient client.Client, polic
 		return remoteClient.Update(ctx, policy)
 	}
 
+	logger.V(logs.LogDebug).Info("removing resource %s %s/%s",
+		policy.GetObjectKind().GroupVersionKind().Kind, policy.GetNamespace(), policy.GetName())
 	return remoteClient.Delete(ctx, policy)
 }
 

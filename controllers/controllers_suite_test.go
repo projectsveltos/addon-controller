@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectsveltos/addon-manager/api/v1alpha1/index"
@@ -101,6 +102,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
+
+	controllers.InitializeManager(klogr.New(), testEnv.Config, testEnv.GetClient())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)

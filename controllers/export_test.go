@@ -33,18 +33,17 @@ var (
 )
 
 var (
-	IsFeatureDeployed              = (*ClusterSummaryReconciler).isFeatureDeployed
-	GetHash                        = (*ClusterSummaryReconciler).getHash
-	UpdateFeatureStatus            = (*ClusterSummaryReconciler).updateFeatureStatus
-	DeployFeature                  = (*ClusterSummaryReconciler).deployFeature
-	UndeployFeature                = (*ClusterSummaryReconciler).undeployFeature
-	UpdateDeployedGroupVersionKind = (*ClusterSummaryReconciler).updateDeployedGroupVersionKind
-	GetCurrentReferences           = (*ClusterSummaryReconciler).getCurrentReferences
-	IsPaused                       = (*ClusterSummaryReconciler).isPaused
-	ShouldReconcile                = (*ClusterSummaryReconciler).shouldReconcile
-	UpdateChartMap                 = (*ClusterSummaryReconciler).updateChartMap
-	ShouldRedeploy                 = (*ClusterSummaryReconciler).shouldRedeploy
-	CanRemoveFinalizer             = (*ClusterSummaryReconciler).canRemoveFinalizer
+	IsFeatureDeployed    = (*ClusterSummaryReconciler).isFeatureDeployed
+	GetHash              = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus  = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature        = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature      = (*ClusterSummaryReconciler).undeployFeature
+	GetCurrentReferences = (*ClusterSummaryReconciler).getCurrentReferences
+	IsPaused             = (*ClusterSummaryReconciler).isPaused
+	ShouldReconcile      = (*ClusterSummaryReconciler).shouldReconcile
+	UpdateChartMap       = (*ClusterSummaryReconciler).updateChartMap
+	ShouldRedeploy       = (*ClusterSummaryReconciler).shouldRedeploy
+	CanRemoveFinalizer   = (*ClusterSummaryReconciler).canRemoveFinalizer
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
@@ -107,6 +106,7 @@ var (
 	DeployResourceSummaryCRD        = deployResourceSummaryCRD
 	DeployResourceSummaryInCluster  = deployResourceSummaryInCluster
 	DeployResourceSummaryInstance   = deployResourceSummaryInstance
+	UpdateDeployedGroupVersionKind  = updateDeployedGroupVersionKind
 
 	GetResourceSummaryNamespace = getResourceSummaryNamespace
 	GetResourceSummaryName      = getResourceSummaryName
@@ -114,4 +114,8 @@ var (
 
 var (
 	CollectResourceSummariesFromCluster = collectResourceSummariesFromCluster
+)
+
+var (
+	InitializeManager = initializeManager
 )

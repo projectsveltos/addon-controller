@@ -344,6 +344,8 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), mgr.GetLogger())
 	}
 
+	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
+
 	return c, err
 }
 
@@ -758,7 +760,7 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
 	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
-		cs.Spec.ClusterName, "", cs.Spec.ClusterType, logger)
+		cs.Spec.ClusterName, "", "", cs.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}

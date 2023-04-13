@@ -22,12 +22,10 @@ import (
 	"github.com/Masterminds/sprig"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -40,11 +38,11 @@ import (
 )
 
 type currentClusterObjects struct {
-	Cluster                *clusterv1.Cluster
-	SveltosCluster         *libsveltosv1alpha1.SveltosCluster
-	KubeadmControlPlane    client.Object
-	InfrastructureProvider client.Object
-	SecretRef              client.Object
+	Cluster                map[string]interface{}
+	SveltosCluster         map[string]interface{}
+	KubeadmControlPlane    map[string]interface{}
+	InfrastructureProvider map[string]interface{}
+	MgtmResources          map[string]map[string]interface{}
 }
 
 func fetchResource(ctx context.Context, config *rest.Config, namespace, name, apiVersion, kind string,
@@ -117,7 +115,8 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	}
 
 	var cluster *clusterv1.Cluster
-	var sveltosCluster *libsveltosv1alpha1.SveltosCluster
+	var unstructuredCluster map[string]interface{}
+	var sveltosCluster map[string]interface{}
 	var provider *unstructured.Unstructured
 	var kubeadmControlPlane *unstructured.Unstructured
 	if clusterType == libsveltosv1alpha1.ClusterTypeCapi {
@@ -131,54 +130,50 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		sveltosCluster = genericCluster.(*libsveltosv1alpha1.SveltosCluster)
-	}
-	return &currentClusterObjects{
-		Cluster:                cluster,
-		SveltosCluster:         sveltosCluster,
-		InfrastructureProvider: provider,
-		KubeadmControlPlane:    kubeadmControlPlane,
-	}, nil
-}
-
-func fetchSecretRef(ctx context.Context, c client.Client, secretRef *corev1.ObjectReference) (*corev1.Secret, error) {
-	secret := &corev1.Secret{}
-	err := c.Get(ctx, types.NamespacedName{Namespace: secretRef.Namespace, Name: secretRef.Name}, secret)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
+		unstructuredCluster, err = runtime.DefaultUnstructuredConverter.ToUnstructured(genericCluster)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
+	} else {
+		sveltosCluster, err = runtime.DefaultUnstructuredConverter.ToUnstructured(genericCluster)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return secret, nil
+	result := &currentClusterObjects{
+		Cluster:        unstructuredCluster,
+		SveltosCluster: sveltosCluster,
+	}
+	if provider != nil {
+		result.InfrastructureProvider = provider.UnstructuredContent()
+	}
+	if kubeadmControlPlane != nil {
+		result.KubeadmControlPlane = kubeadmControlPlane.UnstructuredContent()
+	}
+	return result, nil
 }
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
 	clusterType libsveltosv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
-	secretRef *corev1.ObjectReference, logger logr.Logger) (string, error) {
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
 	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return "", err
 	}
 
-	if secretRef != nil {
-		var secret *corev1.Secret
-		secret, err = fetchSecretRef(ctx, c, secretRef)
-		if err != nil {
-			return "", err
-		}
-		if secret != nil {
-			objects.SecretRef = secret
-		} else {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("secret %s/%s not found", secretRef.Namespace, secretRef.Name))
+	if mgtmResources != nil {
+		objects.MgtmResources = make(map[string]map[string]interface{})
+		for k := range mgtmResources {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("using mgmt resource %s %s/%s with identifier %s",
+				mgtmResources[k].GetKind(), mgtmResources[k].GetNamespace(), mgtmResources[k].GetName(), k))
+			objects.MgtmResources[k] = mgtmResources[k].UnstructuredContent()
 		}
 	}
 
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
-	tmpl, err := template.New(templateName).Funcs(sprig.TxtFuncMap()).Parse(values)
+	tmpl, err := template.New(templateName).Funcs(sprig.FuncMap()).Parse(values)
 	if err != nil {
 		return "", err
 	}
@@ -190,7 +185,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	}
 	instantiatedValues := buffer.String()
 
-	logger.V(logs.LogDebug).Info("Values %q", instantiatedValues)
+	logger.V(logs.LogVerbose).Info("Values %q", instantiatedValues)
 	return instantiatedValues, nil
 }
 

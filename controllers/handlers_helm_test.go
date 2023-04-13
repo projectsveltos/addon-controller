@@ -509,7 +509,7 @@ var _ = Describe("HandlersHelm", func() {
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
-		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, nil, kubeconfig, klogr.New())
+		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig, klogr.New())
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1alpha1.DryRunReconciliationError

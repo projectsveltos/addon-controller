@@ -153,8 +153,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
 		adminName := randomString()
 		adminNamespace := randomString()
-		clusterSummary.Labels[libsveltosv1alpha1.AdminNameLabel] = adminName
-		clusterSummary.Labels[libsveltosv1alpha1.AdminNamespaceLabel] = adminNamespace
+		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNameLabel] = adminName
+		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNamespaceLabel] = adminNamespace
 		saNamespace, saName := controllers.GetClusterSummaryAdmin(clusterSummary)
 		Expect(saNamespace).To(Equal(adminNamespace))
 		Expect(saName).To(Equal(adminName))

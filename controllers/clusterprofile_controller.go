@@ -712,13 +712,13 @@ func (r *ClusterProfileReconciler) addClusterSummaryLabels(clusterSummary *confi
 
 	clusterProfileLabels := clusterProfileScope.ClusterProfile.Labels
 	if clusterProfileLabels != nil {
-		v, ok := clusterProfileLabels[libsveltosv1alpha1.AdminNameLabel]
+		v, ok := clusterProfileLabels[libsveltosv1alpha1.ServiceAccountNameLabel]
 		if ok {
-			addLabel(clusterSummary, libsveltosv1alpha1.AdminNameLabel, v)
+			addLabel(clusterSummary, libsveltosv1alpha1.ServiceAccountNameLabel, v)
 		}
-		v, ok = clusterProfileLabels[libsveltosv1alpha1.AdminNamespaceLabel]
+		v, ok = clusterProfileLabels[libsveltosv1alpha1.ServiceAccountNamespaceLabel]
 		if ok {
-			addLabel(clusterSummary, libsveltosv1alpha1.AdminNamespaceLabel, v)
+			addLabel(clusterSummary, libsveltosv1alpha1.ServiceAccountNamespaceLabel, v)
 		}
 	}
 }

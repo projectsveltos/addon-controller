@@ -150,8 +150,8 @@ var _ = Describe("Feature", func() {
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Labels = map[string]string{
-			libsveltosv1alpha1.AdminNameLabel:      tenantServiceAccount.Name,
-			libsveltosv1alpha1.AdminNamespaceLabel: tenantServiceAccount.Namespace,
+			libsveltosv1alpha1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
+			libsveltosv1alpha1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
 		}
 		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{

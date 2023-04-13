@@ -343,8 +343,8 @@ func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) (name
 		return "", ""
 	}
 
-	namespace = clusterSummary.Labels[libsveltosv1alpha1.AdminNamespaceLabel]
-	name = clusterSummary.Labels[libsveltosv1alpha1.AdminNameLabel]
+	namespace = clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNamespaceLabel]
+	name = clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNameLabel]
 	return
 }
 

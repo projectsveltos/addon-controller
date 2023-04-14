@@ -31,21 +31,21 @@ Here is an example of how to require that any CAPI Cluster with label *env: prod
 apiVersion: config.projectsveltos.io/v1alpha1
 kind: ClusterProfile
 metadata:
-  name: demo
+  name: deploy-kyverno
 spec:
   clusterSelector: env=prod
   syncMode: Continuous
   helmCharts:
-  - repositoryURL: https://kyverno.github.io/kyverno/
-    repositoryName: kyverno
-    chartName: kyverno/kyverno
-    chartVersion: v2.6.0
-    releaseName: kyverno-latest
+  - repositoryURL:    https://kyverno.github.io/kyverno/
+    repositoryName:   kyverno
+    chartName:        kyverno/kyverno
+    chartVersion:     v2.6.0
+    releaseName:      kyverno-latest
     releaseNamespace: kyverno
-    helmChartAction: Install
+    helmChartAction:  Install
     values: |
-      replicaCount: "{{ .Cluster.Spec.Topology.ControlPlane.Replicas }}"
- policyRefs:
+      replicaCount: "{{ .Cluster.spec.topology.controlPlane.replicas }}"
+  policyRefs:
   - name: storage-class
     namespace: default
     kind: Secret

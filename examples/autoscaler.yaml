@@ -14,13 +14,17 @@
 # for autoscaler. Then pass corresponding token/ca.crt to the managed cluster
 # allowing autoscaler running in the managed cluster to reach back to managed
 # cluster and  scale up/down nodes.
+#
+# When asking Sveltos to deploy resources in the management cluster, remember
+# to add necessary RBACs.
+# kubectl edit clusterrole addon-manager-role-extra
 apiVersion: config.projectsveltos.io/v1alpha1
 kind: ClusterProfile
 metadata:
   name: deploy-resources
 spec:
-  clusterSelector: env=fv
-  templateResourceRef:
+  clusterSelector: env=prod
+  templateResourceRefs:
   - resource:
       kind: Secret
       name: autoscaler

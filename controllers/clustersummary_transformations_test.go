@@ -29,10 +29,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 var _ = Describe("ClustersummaryTransformations map functions", func() {
@@ -61,7 +61,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
@@ -81,7 +81,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					PolicyRefs: []libsveltosv1alpha1.PolicyRef{
+					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      randomString(),

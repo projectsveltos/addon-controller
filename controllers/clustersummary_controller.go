@@ -40,14 +40,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 const (
@@ -63,7 +63,7 @@ const (
 type ReportMode int
 
 const (
-	// Default mode. In this mode, sveltos-manager running
+	// Default mode. In this mode, addon-manager running
 	// in the management cluster periodically collects/processes
 	// ResourceSummaries from Sveltos/CAPI clusters
 	CollectFromManagementCluster ReportMode = iota
@@ -343,6 +343,8 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	if r.ReportMode == CollectFromManagementCluster {
 		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), mgr.GetLogger())
 	}
+
+	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
 	return c, err
 }
@@ -758,7 +760,7 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
 	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
-		cs.Spec.ClusterName, "", cs.Spec.ClusterType, logger)
+		cs.Spec.ClusterName, "", "", cs.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
 )
 
 var _ = Describe("Helm with conflicts", func() {

@@ -28,7 +28,7 @@ The release-X branches contain stable, backwards compatible code. On every major
 
 ## Reporting Bugs
 
-If you encounter any bugs or issues, please report them by creating a new issue in the [Issues](https://github.com/projectsveltos/sveltos-manager/issues) tab.
+If you encounter any bugs or issues, please report them by creating a new issue in the [Issues](https://github.com/projectsveltos/addon-manager/issues) tab.
 
 ## Contact Us
 

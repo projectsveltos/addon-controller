@@ -36,14 +36,15 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 const (
-	key   = "env"
-	value = "fv"
+	key              = "env"
+	value            = "fv"
+	defaultNamespace = "default"
 )
 
 // Byf is a simple wrapper around By.
@@ -283,11 +284,7 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 	}
 	for i := range policyStrs {
 		key := fmt.Sprintf("policy%d.yaml", i)
-		if utf8.Valid([]byte(policyStrs[i])) {
-			cm.Data[key] = policyStrs[i]
-		} else {
-			cm.BinaryData[key] = []byte(policyStrs[i])
-		}
+		cm.Data[key] = policyStrs[i]
 	}
 
 	return cm

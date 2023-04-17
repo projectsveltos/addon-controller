@@ -20,7 +20,7 @@ SHELL = /usr/bin/env bash -o pipefail
 
 # Define Docker related variables.
 REGISTRY ?= projectsveltos
-IMAGE_NAME ?= sveltos-manager
+IMAGE_NAME ?= addon-manager
 ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
@@ -192,10 +192,10 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 
 	@echo "Create a workload cluster"
 	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
-	
+
 	@echo "Start projectsveltos"
 	$(MAKE) deploy-projectsveltos
-	
+
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
 
@@ -247,16 +247,16 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
 
-	# Install projectsveltos controller-manager components
-	@echo 'Install projectsveltos controller-manager components'
+	# Install projectsveltos addon-manager components
+	@echo 'Install projectsveltos addon-manager components'
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
 
-	@echo "Waiting for projectsveltos controller-manager to be available..."
-	$(KUBECTL) wait --for=condition=Available deployment/fm-controller-manager -n projectsveltos --timeout=$(TIMEOUT)
+	@echo "Waiting for projectsveltos addon-manager to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/addon-manager -n projectsveltos --timeout=$(TIMEOUT)
 
 set-manifest-image:
 	$(info Updating kustomize image patch file for manager resource)

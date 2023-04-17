@@ -24,6 +24,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,12 +35,14 @@ import (
 
 	"github.com/go-logr/logr"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
+//+kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;impersonate
 
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
@@ -255,4 +259,43 @@ func getListOfClusters(ctx context.Context, c client.Client, logger logr.Logger,
 
 	clusters = append(clusters, tmpClusters...)
 	return clusters, nil
+}
+
+// collectMgmtResources collects clusterSummary.Spec.ClusterProfileSpec.MgmtClusterResources
+// from management cluster
+func collectMgmtResources(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+) (map[string]*unstructured.Unstructured, error) {
+
+	if clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs == nil {
+		return nil, nil
+	}
+
+	restConfig := getManagementClusterConfig()
+
+	result := make(map[string]*unstructured.Unstructured)
+	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
+		ref := clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
+		// If namespace is not defined, default to cluster namespace
+		namespace := ref.Resource.Namespace
+		if namespace == "" {
+			namespace = clusterSummary.Namespace
+		}
+		dr, err := utils.GetDynamicResourceInterface(restConfig, ref.Resource.GroupVersionKind(), namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		var u *unstructured.Unstructured
+		u, err = dr.Get(ctx, ref.Resource.Name, metav1.GetOptions{})
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return nil, err
+		}
+
+		result[ref.Identifier] = u
+	}
+
+	return result, nil
 }

@@ -9,7 +9,7 @@ kind: ClusterProfile
 metadata:
   name: deploy-kyverno
 spec:
-  clusterSelector: env=fv
+  clusterSelector: env=prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://kyverno.github.io/kyverno/
@@ -20,7 +20,7 @@ spec:
     releaseNamespace: kyverno
     helmChartAction:  Install
     values: |
-      replicaCount: "{{ .Cluster.Spec.Topology.ControlPlane.Replicas }}"
+      replicaCount: "{{ .Cluster.spec.topology.controlPlane.replicas }}"
   policyRefs:
   - name: disallow-latest-tag # contains Kyverno ClusterPolicy
     namespace: default

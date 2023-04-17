@@ -85,7 +85,8 @@ type FeatureSummary struct {
 	Hash []byte `json:"hash,omitempty"`
 
 	// Status represents the state of the feature in the workload cluster
-	Status FeatureStatus `json:"status"`
+	// +optional
+	Status FeatureStatus `json:"status,omitempty"`
 
 	// FailureReason indicates the type of error that occurred.
 	// +optional
@@ -95,8 +96,9 @@ type FeatureSummary struct {
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
 
-	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in the workload
-	// cluster because of this feature. Each element has format kind.version.group
+	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
+	// the workload cluster or the management cluster because of this feature.
+	// Each element has format kind.version.group
 	// +optional
 	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
 

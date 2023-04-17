@@ -41,12 +41,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 // ClusterProfileReconciler reconciles a ClusterProfile object
@@ -708,6 +708,18 @@ func (r *ClusterProfileReconciler) addClusterSummaryLabels(clusterSummary *confi
 		addLabel(clusterSummary, configv1alpha1.ClusterTypeLabel, string(libsveltosv1alpha1.ClusterTypeSveltos))
 	} else {
 		addLabel(clusterSummary, configv1alpha1.ClusterTypeLabel, string(libsveltosv1alpha1.ClusterTypeCapi))
+	}
+
+	clusterProfileLabels := clusterProfileScope.ClusterProfile.Labels
+	if clusterProfileLabels != nil {
+		v, ok := clusterProfileLabels[libsveltosv1alpha1.ServiceAccountNameLabel]
+		if ok {
+			addLabel(clusterSummary, libsveltosv1alpha1.ServiceAccountNameLabel, v)
+		}
+		v, ok = clusterProfileLabels[libsveltosv1alpha1.ServiceAccountNamespaceLabel]
+		if ok {
+			addLabel(clusterSummary, libsveltosv1alpha1.ServiceAccountNamespaceLabel, v)
+		}
 	}
 }
 

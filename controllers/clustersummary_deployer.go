@@ -23,25 +23,22 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
-type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []libsveltosv1alpha1.PolicyRef
+type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef
 
 type feature struct {
 	id          configv1alpha1.FeatureID
@@ -118,14 +115,6 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		s := configv1alpha1.FeatureStatusProvisioning
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
-	}
-
-	logger.V(logs.LogDebug).Info("updating deployed GVKs")
-	err = r.updateDeployedGroupVersionKind(ctx, clusterSummaryScope, f.id,
-		f.getRefs(clusterSummaryScope.ClusterSummary), logger)
-	if err != nil {
-		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
-		return err
 	}
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
@@ -384,58 +373,6 @@ func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *
 		return nil
 	}
 
-	return nil
-}
-
-func (r *ClusterSummaryReconciler) updateDeployedGroupVersionKind(ctx context.Context,
-	clusterSummaryScope *scope.ClusterSummaryScope, featureID configv1alpha1.FeatureID,
-	references []libsveltosv1alpha1.PolicyRef, logger logr.Logger) error {
-
-	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
-	// Collect  all referenced configMaps/secrets.
-	referencedObjects, err := collectReferencedObjects(ctx, r.Client, clusterSummaryScope.Namespace(),
-		references, logger)
-	if err != nil {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect referenced configMaps/secrets. Err: %v", err))
-		return err
-	}
-
-	// Collect all policies present in each referenced object.
-	referencedPolicies := make([]*unstructured.Unstructured, 0)
-	for i := range referencedObjects {
-		var data map[string]string
-
-		kind := referencedObjects[i].GetObjectKind().GroupVersionKind().Kind
-		if kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-			cm := referencedObjects[i].(*corev1.ConfigMap)
-			data = cm.Data
-		} else {
-			secret := referencedObjects[i].(*corev1.Secret)
-			data = map[string]string{}
-			for key, value := range secret.Data {
-				data[key] = string(value)
-			}
-		}
-		policies, err := collectContent(ctx, clusterSummaryScope.ClusterSummary, data, logger)
-		if err != nil {
-			logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to collect content of configMap. Err: %v", err))
-			return err
-		}
-		referencedPolicies = append(referencedPolicies, policies...)
-	}
-
-	gvks := make([]schema.GroupVersionKind, 0)
-	gvkMap := make(map[schema.GroupVersionKind]bool)
-	for i := range referencedPolicies {
-		policy := referencedPolicies[i]
-		if _, ok := gvkMap[policy.GroupVersionKind()]; !ok {
-			gvks = append(gvks, policy.GroupVersionKind())
-			gvkMap[policy.GroupVersionKind()] = true
-		}
-	}
-
-	// update status with list of GroupVersionKinds deployed in a CAPI Cluster
-	clusterSummaryScope.SetDeployedGroupVersionKind(featureID, gvks)
 	return nil
 }
 

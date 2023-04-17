@@ -34,12 +34,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
-	"github.com/projectsveltos/sveltos-manager/controllers/chartmanager"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("HandlersHelm", func() {
@@ -509,7 +509,7 @@ var _ = Describe("HandlersHelm", func() {
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
-		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, nil, kubeconfig, klogr.New())
+		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig, klogr.New())
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1alpha1.DryRunReconciliationError

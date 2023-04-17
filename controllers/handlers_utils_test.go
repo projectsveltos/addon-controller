@@ -38,11 +38,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/utils"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
 )
 
 const (
@@ -151,9 +151,13 @@ var _ = Describe("HandlersUtils", func() {
 
 	It("getClusterSummaryAdmin returns the admin for a given ClusterSummary", func() {
 		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
-		admin := randomString()
-		clusterSummary.Labels[libsveltosv1alpha1.AdminLabel] = admin
-		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(Equal(admin))
+		adminName := randomString()
+		adminNamespace := randomString()
+		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNameLabel] = adminName
+		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNamespaceLabel] = adminNamespace
+		saNamespace, saName := controllers.GetClusterSummaryAdmin(clusterSummary)
+		Expect(saNamespace).To(Equal(adminNamespace))
+		Expect(saName).To(Equal(adminName))
 	})
 
 	It("addClusterSummaryLabel adds label with clusterSummary name", func() {
@@ -276,8 +280,8 @@ var _ = Describe("HandlersUtils", func() {
 		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(),
-			testEnv.Config, testEnv.Client, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
+			testEnv.Config, testEnv.Client,
+			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
 		validateResourceReports(resourceReports, 2, 0, 0, 0)
@@ -304,8 +308,8 @@ var _ = Describe("HandlersUtils", func() {
 		// the secret referenced by ClusterProfile, both obejcts will be reported as no action
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(),
-			testEnv.Config, testEnv.Client, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, klogr.New())
+			testEnv.Config, testEnv.Client,
+			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
 		validateResourceReports(resourceReports, 0, 0, 2, 0)
@@ -335,8 +339,8 @@ var _ = Describe("HandlersUtils", func() {
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
 		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(),
-			testEnv.Config, testEnv.Client, testEnv.Client,
-			secret, map[string]string{"service": newContent}, clusterSummary, klogr.New())
+			testEnv.Config, testEnv.Client,
+			secret, map[string]string{"service": newContent}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
 		validateResourceReports(resourceReports, 0, 2, 0, 0)
@@ -344,8 +348,8 @@ var _ = Describe("HandlersUtils", func() {
 		// Pass a different secret to DeployContent, which means the services are contained in a different Secret
 		// and that is the one referenced by ClusterSummary. DeployContent will report conflicts in this case.
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
-		resourceReports, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
-			tmpSecret, map[string]string{"service": services}, clusterSummary, klogr.New())
+		resourceReports, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client,
+			tmpSecret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -384,8 +388,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
-			secret, clusterSummary, klogr.New())
+		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client,
+			secret, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
@@ -402,8 +406,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
-			configMap, clusterSummary, klogr.New())
+		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client,
+			configMap, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
@@ -466,7 +470,7 @@ var _ = Describe("HandlersUtils", func() {
 		// Because ClusterSummary is not referencing any ConfigMap/Resource and because test created a ClusterRole
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
-		undeploy, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		undeploy, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
 			currentClusterSummary, deployedGKVs, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
@@ -487,9 +491,15 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: configMapNs, Name: configMap1.Name,
+				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
+			{
+				Namespace: configMapNs, Name: configMap2.Name,
+				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
@@ -575,7 +585,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(deployedGKVs).ToNot(BeEmpty())
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
-		_, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		_, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
 			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
@@ -599,7 +609,7 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource1))
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
-		_, err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client, testEnv.Client,
+		_, err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
 			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
@@ -712,7 +722,7 @@ subjects:
   namespace: projectcontour
 `
 		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, data, klogr.New())
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(1))
 		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))

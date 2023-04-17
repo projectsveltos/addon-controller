@@ -3,7 +3,7 @@ kind: ClusterProfile
 metadata:
   name: deploy-calico
 spec:
-  clusterSelector: env=fv
+  clusterSelector: env=prod
   helmCharts:
   - repositoryURL:    https://projectcalico.docs.tigera.io/charts
     repositoryName:   projectcalico
@@ -16,7 +16,7 @@ spec:
       installation:
         calicoNetwork:
           ipPools:
-          {{ range $cidr := .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks }}
+          {{ range $cidr := .Cluster.spec.clusterNetwork.pods.cidrBlocks }}
             - cidr: {{ $cidr }}
               encapsulation: VXLAN
           {{ end }}

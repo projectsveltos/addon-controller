@@ -18,12 +18,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
-	"github.com/projectsveltos/sveltos-manager/controllers"
-	"github.com/projectsveltos/sveltos-manager/pkg/scope"
 )
 
 var _ = Describe("ClustersummaryDeployer", func() {
@@ -212,7 +212,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy("default", randomString(), render.AsCode(clusterRole))
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -265,7 +265,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -340,7 +340,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
 		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
@@ -423,7 +423,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeature when feature is not removed, calls Deploy", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -460,8 +460,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("deployFeature return an error if cleaning up is in progress", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: randomString(), Name: randomString(),
+				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -491,8 +494,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	})
 
 	It("undeployFeatures returns an error if deploying is in progress", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Namespace: randomString(), Name: randomString(),
+				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
 		}
 
 		initObjects := []client.Object{
@@ -519,59 +525,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, klogr.New())
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Resources still in progress. Wait before cleanup"))
-	})
-
-	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {
-		configMapNs := randomString()
-		configMap1 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(viewClusterRole, randomString()))
-		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, randomString()))
-
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
-			{Namespace: configMapNs, Name: configMap1.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-			{Namespace: configMapNs, Name: configMap2.Name, Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
-		}
-
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
-			},
-		}
-		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
-
-		Expect(testEnv.Create(context.TODO(), configMap1)).To(Succeed())
-		Expect(testEnv.Create(context.TODO(), configMap2)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, configMap2)).To(Succeed())
-
-		ns = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: cluster.Namespace,
-			},
-		}
-		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
-
-		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
-
-		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
-
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
-		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
-
-		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
-
-		Expect(controllers.UpdateDeployedGroupVersionKind(reconciler, context.TODO(), clusterSummaryScope,
-			configv1alpha1.FeatureResources, clusterSummary.Spec.ClusterProfileSpec.PolicyRefs,
-			logger)).To(Succeed())
-
-		cs := clusterSummaryScope.ClusterSummary
-		Expect(cs.Status.FeatureSummaries).ToNot(BeNil())
-		Expect(len(cs.Status.FeatureSummaries)).To(Equal(1))
-		Expect(cs.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
-		Expect(cs.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement("ClusterRole.v1.rbac.authorization.k8s.io"))
 	})
 })
 

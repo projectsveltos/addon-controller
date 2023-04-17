@@ -29,8 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	configv1alpha1 "github.com/projectsveltos/sveltos-manager/api/v1alpha1"
 )
 
 const (
@@ -38,12 +39,10 @@ const (
 kind: ConfigMap
 metadata:
   name: template
-  namespace: default
-  annotations:
-    projectsveltos.io/template: "ok"  
+  namespace: default 
 data:
   info: |
-    cidr="{{ index .Cluster.Spec.ClusterNetwork.Pods.CIDRBlocks 0 }}"`
+    cidr="{{ index .Cluster.spec.clusterNetwork.pods.cidrBlocks 0 }}"`
 )
 
 var _ = Describe("Template", func() {
@@ -63,12 +62,15 @@ var _ = Describe("Template", func() {
 
 		Byf("Add configMap containing a template policy. Policy has annotation to indicate it is a template")
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), templatePolicy)
+		configMap.Annotations = map[string]string{
+			controllers.PolicyTemplate: "ok",
+		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
@@ -97,7 +99,7 @@ var _ = Describe("Template", func() {
 		Eventually(func() bool {
 			cm := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: "template"}, cm)
+				types.NamespacedName{Namespace: defaultNamespace, Name: "template"}, cm)
 			return err == nil &&
 				strings.Contains(cm.Data["info"], currentCluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0])
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -108,7 +110,7 @@ var _ = Describe("Template", func() {
 		Byf("Changing clusterprofile to not reference configmap anymore")
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []libsveltosv1alpha1.PolicyRef{}
+		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -117,7 +119,7 @@ var _ = Describe("Template", func() {
 		Eventually(func() bool {
 			cm := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: "template"}, cm)
+				types.NamespacedName{Namespace: defaultNamespace, Name: "template"}, cm)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

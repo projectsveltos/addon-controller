@@ -478,7 +478,6 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		localConfig.Impersonate = rest.ImpersonationConfig{
 			UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
 		}
-		logger.Info("MGIANLUC")
 	}
 	tmpResourceReports, err = deployObjects(ctx, c, localConfig, objectsToDeployLocally, clusterSummary,
 		mgtmResources, logger)

@@ -211,7 +211,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Info("failed to remove ResourceSummary.")
+		logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 

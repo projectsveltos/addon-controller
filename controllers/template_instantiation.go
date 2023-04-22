@@ -173,7 +173,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	}
 
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
-	tmpl, err := template.New(templateName).Funcs(sprig.FuncMap()).Parse(values)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(values)
 	if err != nil {
 		return "", err
 	}

@@ -478,22 +478,21 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		localConfig.Impersonate = rest.ImpersonationConfig{
 			UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
 		}
-		logger.Info("MGIANLUC")
 	}
 	tmpResourceReports, err = deployObjects(ctx, c, localConfig, objectsToDeployLocally, clusterSummary,
 		mgtmResources, logger)
-	if err != nil {
-		return nil, nil, err
-	}
 	localReports = append(localReports, tmpResourceReports...)
+	if err != nil {
+		return localReports, nil, err
+	}
 
 	// Deploy all resources that need to be deployed in the managed cluster
 	tmpResourceReports, err = deployObjects(ctx, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
 		mgtmResources, logger)
-	if err != nil {
-		return nil, nil, err
-	}
 	remoteReports = append(remoteReports, tmpResourceReports...)
+	if err != nil {
+		return localReports, remoteReports, err
+	}
 
 	return localReports, remoteReports, nil
 }

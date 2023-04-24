@@ -72,16 +72,17 @@ func deployResources(ctx context.Context, c client.Client,
 	var remoteResourceReports []configv1alpha1.ResourceReport
 	localResourceReports, remoteResourceReports, err = deployReferencedObjects(ctx, c, remoteRestConfig,
 		clusterSummary, featureHandler, logger)
+
+	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
+	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
+	}
+	if gvkErr != nil {
+		return gvkErr
 	}
 
 	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
-	if err != nil {
-		return err
-	}
-
-	err = updateDeployedGroupVersionKind(ctx, clusterSummary, localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}

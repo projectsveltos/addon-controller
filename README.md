@@ -56,7 +56,7 @@ spec:
 
 As soon as a cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
 
-Refer to [examples](./examples/) for more complex examples
+Refer to [examples](./examples/) for more complex examples.
 
 ## Sveltos in action
 

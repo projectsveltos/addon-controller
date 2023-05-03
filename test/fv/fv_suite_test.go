@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/TwinProduction/go-color"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -87,6 +88,7 @@ var _ = BeforeSuite(func() {
 	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
 	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(gatewayapi.AddToScheme(scheme)).To(Succeed())
+	Expect(sourcev1.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})

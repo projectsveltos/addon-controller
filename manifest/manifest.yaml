@@ -100,6 +100,7 @@ spec:
                             enum:
                             - Resources
                             - Helm
+                            - Kustomize
                             type: string
                           resources:
                             description: Resources is a list of resources deployed
@@ -367,6 +368,54 @@ spec:
                   - repositoryURL
                   type: object
                 type: array
+              kustomizationRefs:
+                description: Kustomization refs
+                items:
+                  properties:
+                    deploymentType:
+                      default: Remote
+                      description: DeploymentType indicates whether resources need
+                        to be deployed into the management cluster (local) or the
+                        managed cluster (remote)
+                      enum:
+                      - Local
+                      - Remote
+                      type: string
+                    kind:
+                      description: 'Kind of the resource. Supported kinds are: flux
+                        GitRepository;OCIRepository;Bucket'
+                      enum:
+                      - GitRepository
+                      - OCIRepository
+                      - Bucket
+                      type: string
+                    name:
+                      description: Name of the rreferenced resource.
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: Namespace of the referenced resource. Namespace
+                        can be left empty. In such a case, namespace will be implicit
+                        set to cluster's namespace.
+                      type: string
+                    path:
+                      description: Path to the directory containing the kustomization.yaml
+                        file, or the set of plain YAMLs a kustomization.yaml should
+                        be generated for. Defaults to 'None', which translates to
+                        the root path of the SourceRef.
+                      type: string
+                    targetNamespace:
+                      description: TargetNamespace sets or overrides the namespace
+                        in the kustomization.yaml file.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
               policyRefs:
                 description: PolicyRefs references all the ConfigMaps/Secrets containing
                   kubernetes resources that need to be deployed in the matching CAPI
@@ -614,6 +663,104 @@ spec:
           status:
             description: ClusterReportStatus defines the observed state of ClusterReport
             properties:
+              kustomizeResourceReports:
+                description: KustomizeResourceReports contains report on Kubernetes
+                  resources deployed because of KustomizationRefs
+                items:
+                  properties:
+                    action:
+                      description: Action represent the type of operation on the Kubernetes
+                        resource.
+                      enum:
+                      - No Action
+                      - Create
+                      - Update
+                      - Delete
+                      - Conflict
+                      type: string
+                    message:
+                      description: Message is for any message that needs to added
+                        to better explain the action.
+                      type: string
+                    resource:
+                      description: Resource contains information about Kubernetes
+                        Resource
+                      properties:
+                        group:
+                          description: Group of the resource deployed in the Cluster.
+                          type: string
+                        kind:
+                          description: Kind of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                        lastAppliedTime:
+                          description: LastAppliedTime identifies when this resource
+                            was last applied to the cluster.
+                          format: date-time
+                          type: string
+                        name:
+                          description: Name of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: Namespace of the resource deployed in the Cluster.
+                            Empty for resources scoped at cluster level.
+                          type: string
+                        owner:
+                          description: Owner is the list of ConfigMap/Secret containing
+                            this resource.
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: 'If referring to a piece of an object instead
+                                of an entire object, this string should contain a
+                                valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container
+                                within a pod, this would take on a value like: "spec.containers{name}"
+                                (where "name" refers to the name of the container
+                                that triggered the event) or if no container name
+                                is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to
+                                have some well-defined way of referencing a part of
+                                an object. TODO: this design is not final and this
+                                field is subject to change in the future.'
+                              type: string
+                            kind:
+                              description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                              type: string
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                              type: string
+                            namespace:
+                              description: 'Namespace of the referent. More info:
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                              type: string
+                            resourceVersion:
+                              description: 'Specific resourceVersion to which this
+                                reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                              type: string
+                            uid:
+                              description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        version:
+                          description: Version of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                      required:
+                      - group
+                      - kind
+                      - name
+                      - owner
+                      - version
+                      type: object
+                  required:
+                  - resource
+                  type: object
+                type: array
               releaseReports:
                 description: ReleaseReports contains report on helm releases
                 items:
@@ -654,6 +801,7 @@ spec:
                 type: array
               resourceReports:
                 description: ResourceReports contains report on Kubernetes resources
+                  deployed because of PolicyRefs
                 items:
                   properties:
                     action:
@@ -930,6 +1078,54 @@ spec:
                       - repositoryURL
                       type: object
                     type: array
+                  kustomizationRefs:
+                    description: Kustomization refs
+                    items:
+                      properties:
+                        deploymentType:
+                          default: Remote
+                          description: DeploymentType indicates whether resources
+                            need to be deployed into the management cluster (local)
+                            or the managed cluster (remote)
+                          enum:
+                          - Local
+                          - Remote
+                          type: string
+                        kind:
+                          description: 'Kind of the resource. Supported kinds are:
+                            flux GitRepository;OCIRepository;Bucket'
+                          enum:
+                          - GitRepository
+                          - OCIRepository
+                          - Bucket
+                          type: string
+                        name:
+                          description: Name of the rreferenced resource.
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: Namespace of the referenced resource. Namespace
+                            can be left empty. In such a case, namespace will be implicit
+                            set to cluster's namespace.
+                          type: string
+                        path:
+                          description: Path to the directory containing the kustomization.yaml
+                            file, or the set of plain YAMLs a kustomization.yaml should
+                            be generated for. Defaults to 'None', which translates
+                            to the root path of the SourceRef.
+                          type: string
+                        targetNamespace:
+                          description: TargetNamespace sets or overrides the namespace
+                            in the kustomization.yaml file.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      - namespace
+                      type: object
+                    type: array
                   policyRefs:
                     description: PolicyRefs references all the ConfigMaps/Secrets
                       containing kubernetes resources that need to be deployed in
@@ -1092,6 +1288,7 @@ spec:
                       enum:
                       - Resources
                       - Helm
+                      - Kustomize
                       type: string
                     hash:
                       description: Hash represents of a unique value for a feature
@@ -1361,6 +1558,14 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - gitrepositories
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:

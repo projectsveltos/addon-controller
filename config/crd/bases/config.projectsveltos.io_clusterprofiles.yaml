@@ -157,6 +157,54 @@ spec:
                   - repositoryURL
                   type: object
                 type: array
+              kustomizationRefs:
+                description: Kustomization refs
+                items:
+                  properties:
+                    deploymentType:
+                      default: Remote
+                      description: DeploymentType indicates whether resources need
+                        to be deployed into the management cluster (local) or the
+                        managed cluster (remote)
+                      enum:
+                      - Local
+                      - Remote
+                      type: string
+                    kind:
+                      description: 'Kind of the resource. Supported kinds are: flux
+                        GitRepository;OCIRepository;Bucket'
+                      enum:
+                      - GitRepository
+                      - OCIRepository
+                      - Bucket
+                      type: string
+                    name:
+                      description: Name of the rreferenced resource.
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: Namespace of the referenced resource. Namespace
+                        can be left empty. In such a case, namespace will be implicit
+                        set to cluster's namespace.
+                      type: string
+                    path:
+                      description: Path to the directory containing the kustomization.yaml
+                        file, or the set of plain YAMLs a kustomization.yaml should
+                        be generated for. Defaults to 'None', which translates to
+                        the root path of the SourceRef.
+                      type: string
+                    targetNamespace:
+                      description: TargetNamespace sets or overrides the namespace
+                        in the kustomization.yaml file.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
               policyRefs:
                 description: PolicyRefs references all the ConfigMaps/Secrets containing
                   kubernetes resources that need to be deployed in the matching CAPI

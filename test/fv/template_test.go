@@ -50,7 +50,7 @@ var _ = Describe("Template", func() {
 		namePrefix = "template-"
 	)
 
-	It("Deploy a template correctly", Label("FV"), func() {
+	It("Deploy a template correctly", Label("FV", "EXTENDED"), func() {
 		configMapNs := randomString()
 		Byf("Create configMap's namespace %s", configMapNs)
 		ns := &corev1.Namespace{

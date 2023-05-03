@@ -99,8 +99,14 @@ type ClusterReportStatus struct {
 	ReleaseReports []ReleaseReport `json:"releaseReports,omitempty"`
 
 	// ResourceReports contains report on Kubernetes resources
+	// deployed because of PolicyRefs
 	// +optional
 	ResourceReports []ResourceReport `json:"resourceReports,omitempty"`
+
+	// KustomizeResourceReports contains report on Kubernetes resources
+	// deployed because of KustomizationRefs
+	// +optional
+	KustomizeResourceReports []ResourceReport `json:"kustomizeResourceReports,omitempty"`
 }
 
 //+kubebuilder:object:root=true

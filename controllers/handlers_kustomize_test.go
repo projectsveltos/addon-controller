@@ -1,0 +1,269 @@
+/*
+Copyright 2023. projectsveltos.io. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controllers_test
+
+import (
+	"context"
+	"crypto/sha256"
+	"reflect"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2/klogr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/pkg/scope"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+)
+
+var _ = Describe("KustomizeRefs", func() {
+	var clusterProfile *configv1alpha1.ClusterProfile
+	var clusterSummary *configv1alpha1.ClusterSummary
+	var cluster *clusterv1.Cluster
+	var namespace string
+
+	BeforeEach(func() {
+		namespace = "reconcile" + randomString()
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Namespace: namespace,
+				Labels: map[string]string{
+					"dc": "eng",
+				},
+			},
+		}
+
+		clusterProfile = &configv1alpha1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterProfileNamePrefix + randomString(),
+			},
+			Spec: configv1alpha1.ClusterProfileSpec{
+				ClusterSelector: selector,
+			},
+		}
+
+		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
+		clusterSummary = &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummaryName,
+				Namespace: cluster.Namespace,
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+			},
+		}
+
+		prepareForDeployment(clusterProfile, clusterSummary, cluster)
+
+		// Get ClusterSummary so OwnerReference is set
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		deleteResources(namespace, clusterProfile, clusterSummary)
+	})
+
+	It("undeployKustomizeRefs removes all ClusterRole and Role created by a ClusterSummary", func() {
+		serviceAccount := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+				Labels: map[string]string{
+					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameLabel:      randomString(),
+					deployer.ReferenceNamespaceLabel: randomString(),
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureKustomize),
+				},
+			},
+		}
+
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+		}
+
+		clusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+				Labels: map[string]string{
+					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameLabel:      randomString(),
+					deployer.ReferenceNamespaceLabel: randomString(),
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureKustomize),
+				},
+			},
+		}
+
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), serviceAccount)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Client.Create(context.TODO(), clusterRole)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterRole)).To(Succeed())
+		addOwnerReference(ctx, testEnv.Client, serviceAccount, clusterProfile)
+		addOwnerReference(ctx, testEnv.Client, clusterRole, clusterProfile)
+
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureKustomize,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+				DeployedGroupVersionKind: []string{
+					"ServiceAccount.v1.",
+					"ConfigMaps.v1.",
+					"ClusterRole.v1.rbac.authorization.k8s.io",
+				},
+			},
+		}
+		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			return err == nil &&
+				currentClusterSummary.Status.FeatureSummaries != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+			string(configv1alpha1.FeatureKustomize), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())).To(Succeed())
+
+		// undeployKustomizeRefs finds all policies deployed because of a clusterSummary and deletes those.
+		// Expect ServiceAccount and ClusterRole to be deleted. ConfigMap should remain as Labels are not set on it
+
+		currentServiceAccount := &corev1.ServiceAccount{}
+		Eventually(func() bool {
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: serviceAccount.Namespace, Name: serviceAccount.Name}, currentServiceAccount)
+			return err != nil &&
+				apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		currentClusterRole := &rbacv1.ClusterRole{}
+		Eventually(func() bool {
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)
+			return err != nil &&
+				apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		currentConfigMap := &corev1.ConfigMap{}
+		Eventually(func() bool {
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+})
+
+var _ = Describe("Hash methods", func() {
+	It("kustomizationHash returns hash considering all referenced resources", func() {
+		gitRepositories := make([]sourcev1.GitRepository, 0)
+
+		repoNum := 3
+		for i := 0; i < repoNum; i++ {
+			gitRepository := sourcev1.GitRepository{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      randomString(),
+					Namespace: randomString(),
+				},
+				Status: sourcev1.GitRepositoryStatus{
+					Artifact: &sourcev1.Artifact{
+						Revision: randomString(),
+					},
+				},
+			}
+			Expect(addTypeInformationToObject(scheme, &gitRepository)).To(Succeed())
+			gitRepositories = append(gitRepositories, gitRepository)
+		}
+
+		namespace := "reconcile" + randomString()
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: namespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+					KustomizationRefs: make([]configv1alpha1.KustomizationRef, repoNum),
+				},
+			},
+		}
+
+		for i := 0; i < repoNum; i++ {
+			clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i] =
+				configv1alpha1.KustomizationRef{
+					Namespace: gitRepositories[i].Namespace, Name: gitRepositories[i].Name,
+					Kind: sourcev1.GitRepositoryKind,
+				}
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+		}
+		for i := 0; i < repoNum; i++ {
+			initObjects = append(initObjects, &gitRepositories[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		var config string
+		for i := 0; i < repoNum; i++ {
+			config += gitRepositories[i].Status.Artifact.Revision
+		}
+		h := sha256.New()
+		h.Write([]byte(config))
+		expectHash := h.Sum(nil)
+
+		hash, err := controllers.KustomizationHash(context.TODO(), c, clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
+	})
+})

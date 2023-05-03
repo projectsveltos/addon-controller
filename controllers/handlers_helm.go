@@ -1426,7 +1426,7 @@ func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client
 	}
 
 	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
-		clusterType, nil, helmResources, logger)
+		clusterType, nil, nil, helmResources, logger)
 }
 
 func collectHelmContent(manifest string, logger logr.Logger) ([]libsveltosv1alpha1.Resource, error) {

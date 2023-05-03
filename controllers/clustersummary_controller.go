@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -124,6 +126,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
 //+kubebuilder:rbac:groups="infrastructure.cluster.x-k8s.io",resources="*",verbs=get;watch;list
+//+kubebuilder:rbac:groups="config.projectsveltos.io",resources=gitrepositories,verbs=get;watch;list
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -358,6 +361,32 @@ func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 	)
 }
 
+func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.Controller) error {
+	// When a Flux source (GitRepository/OCIRepository/Bucket) changes, one or more ClusterSummaries
+	// need to be reconciled.
+
+	err := c.Watch(&source.Kind{Type: &sourcev1.GitRepository{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	)
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{Type: &sourcev1b2.OCIRepository{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	)
+	if err != nil {
+		return err
+	}
+
+	return c.Watch(&source.Kind{Type: &sourcev1b2.Bucket{}},
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	)
+}
+
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
 	// If the SveltosCluster doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
@@ -381,6 +410,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 	helmErr := r.deployHelm(ctx, clusterSummaryScope, logger)
 
+	kustomizeError := r.deployKustomizeRefs(ctx, clusterSummaryScope, logger)
+
 	if coreResourceErr != nil {
 		return coreResourceErr
 	}
@@ -389,7 +420,25 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 		return helmErr
 	}
 
+	if kustomizeError != nil {
+		return kustomizeError
+	}
+
 	return nil
+}
+
+func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs == nil {
+		logger.V(logs.LogDebug).Info("no policy configuration")
+		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureKustomize) {
+			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
+			return nil
+		}
+	}
+
+	f := getHandlersForFeature(configv1alpha1.FeatureKustomize)
+
+	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
@@ -447,10 +496,16 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 	resourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
 
+	kustomizeResourceErr := r.undeployKustomizeResources(ctx, clusterSummaryScope, logger)
+
 	helmErr := r.undeployHelm(ctx, clusterSummaryScope, logger)
 
 	if resourceErr != nil {
 		return resourceErr
+	}
+
+	if kustomizeResourceErr != nil {
+		return kustomizeResourceErr
 	}
 
 	if helmErr != nil {
@@ -462,6 +517,11 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 
 func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	f := getHandlersForFeature(configv1alpha1.FeatureResources)
+	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
+}
+
+func (r *ClusterSummaryReconciler) undeployKustomizeResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+	f := getHandlersForFeature(configv1alpha1.FeatureKustomize)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
@@ -657,6 +717,19 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		currentReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(), // the only resources that can be referenced are Secret and ConfigMap
 			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+			Namespace:  namespace,
+			Name:       referencedName,
+		})
+	}
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
+		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Namespace
+		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name
+
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		currentReferences.Insert(&corev1.ObjectReference{
+			APIVersion: clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
+			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
 			Namespace:  namespace,
 			Name:       referencedName,
 		})

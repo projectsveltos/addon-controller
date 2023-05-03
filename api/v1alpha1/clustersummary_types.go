@@ -38,7 +38,7 @@ const (
 	ClusterSummaryKind = "ClusterSummary"
 )
 
-// +kubebuilder:validation:Enum:=Resources;Helm
+// +kubebuilder:validation:Enum:=Resources;Helm;Kustomize
 type FeatureID string
 
 const (
@@ -47,6 +47,9 @@ const (
 
 	// FeatureHelm is the identifier for Helm feature
 	FeatureHelm = FeatureID("Helm")
+
+	// FeatureKustomize is the identifier for Kustomize feature
+	FeatureKustomize = FeatureID("Kustomize")
 )
 
 // +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;Removing;Removed

@@ -30,6 +30,7 @@ import (
 
 	_ "embed"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
 	corev1 "k8s.io/api/core/v1"
@@ -167,6 +168,10 @@ func main() {
 		clusterSummaryReconciler, clusterSummaryController,
 		setupLog)
 
+	go fluxWatchers(ctx, mgr,
+		clusterSummaryReconciler, clusterSummaryController,
+		setupLog)
+
 	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -249,6 +254,31 @@ func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
 	return true, nil
 }
 
+// fluxCRDHandler restarts process if a Flux CRD is updated
+func fluxCRDHandler(gvk *schema.GroupVersionKind) {
+	if gvk.Group == sourcev1.GroupVersion.Group {
+		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
+			panic("kill -TERM failed")
+		}
+	}
+}
+
+// isFluxInstalled returns true if Flux is installed, false otherwise
+func isFluxInstalled(ctx context.Context, c client.Client) (bool, error) {
+	gitRepositoryCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: "gitrepositories.source.toolkit.fluxcd.io"},
+		gitRepositoryCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
 func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 	clusterProfileReconciler *controllers.ClusterProfileReconciler, clusterProfileController controller.Controller,
 	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller,
@@ -275,6 +305,36 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 					continue
 				}
 				err = clusterSummaryReconciler.WatchForCAPI(mgr, clusterSummaryController)
+				if err != nil {
+					continue
+				}
+			}
+			return
+		}
+	}
+}
+
+func fluxWatchers(ctx context.Context, mgr ctrl.Manager,
+	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller,
+	logger logr.Logger) {
+
+	const maxRetries = 20
+	retries := 0
+	for {
+		fluxPresent, err := isFluxInstalled(ctx, mgr.GetClient())
+		if err != nil {
+			if retries < maxRetries {
+				logger.Info(fmt.Sprintf("failed to verify if Flux is present: %v", err))
+				time.Sleep(time.Second)
+			}
+			retries++
+		} else {
+			if !fluxPresent {
+				setupLog.V(logsettings.LogInfo).Info("Flux currently not present. Starting CRD watcher")
+				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), fluxCRDHandler, setupLog)
+			} else {
+				setupLog.V(logsettings.LogInfo).Info("Flux present.")
+				err = clusterSummaryReconciler.WatchForFlux(mgr, clusterSummaryController)
 				if err != nil {
 					continue
 				}

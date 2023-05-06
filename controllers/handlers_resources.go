@@ -70,11 +70,12 @@ func deployResources(ctx context.Context, c client.Client,
 
 	var localResourceReports []configv1alpha1.ResourceReport
 	var remoteResourceReports []configv1alpha1.ResourceReport
-	localResourceReports, remoteResourceReports, err = deployReferencedObjects(ctx, c, remoteRestConfig,
+	localResourceReports, remoteResourceReports, err = deployPolicyRefs(ctx, c, remoteRestConfig,
 		clusterSummary, featureHandler, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
-	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, localResourceReports, remoteResourceReports, logger)
+	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
+		localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// If we are here there are no conflicts (and error would have been returned by deployReferencedObjects)
+	// If we are here there are no conflicts (and error would have been returned by deployPolicyRefs)
 	remoteDeployed := make([]configv1alpha1.Resource, 0)
 	for i := range remoteResourceReports {
 		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
@@ -100,14 +101,14 @@ func deployResources(ctx context.Context, c client.Client,
 	}
 
 	// Clean stale resources in the management cluster
-	_, err = cleanResources(ctx, getManagementClusterConfig(), c, clusterSummary, localResourceReports, logger)
+	_, err = cleanPolicyRefResources(ctx, getManagementClusterConfig(), c, clusterSummary, localResourceReports, logger)
 	if err != nil {
 		return err
 	}
 
 	// Clean stale resources in the remote cluster
 	var undeployed []configv1alpha1.ResourceReport
-	undeployed, err = cleanResources(ctx, remoteRestConfig, remoteClient, clusterSummary, remoteResourceReports, logger)
+	undeployed, err = cleanPolicyRefResources(ctx, remoteRestConfig, remoteClient, clusterSummary, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}
@@ -118,7 +119,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, remoteResourceReports)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, remoteResourceReports, featureHandler.id)
 	if err != nil {
 		return err
 	}
@@ -193,7 +194,7 @@ func handleWatchers(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	return nil
 }
 
-func cleanResources(ctx context.Context, destRestConfig *rest.Config, destClient client.Client,
+func cleanPolicyRefResources(ctx context.Context, destRestConfig *rest.Config, destClient client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary, resourceReports []configv1alpha1.ResourceReport,
 	logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
 
@@ -202,8 +203,9 @@ func cleanResources(ctx context.Context, destRestConfig *rest.Config, destClient
 		key := getPolicyInfo(&resourceReports[i].Resource)
 		currentPolicies[key] = resourceReports[i].Resource
 	}
-	undeployed, err := undeployStaleResources(ctx, destRestConfig, destClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources), currentPolicies, logger)
+	undeployed, err := undeployStaleResources(ctx, destRestConfig, destClient, configv1alpha1.FeatureResources,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+		currentPolicies, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +231,8 @@ func undeployResources(ctx context.Context, c client.Client,
 	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
 	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
+	logger.V(logs.LogDebug).Info("undeployResources")
+
 	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
@@ -244,16 +248,16 @@ func undeployResources(ctx context.Context, c client.Client,
 	var resourceReports []configv1alpha1.ResourceReport
 
 	// Undeploy from management cluster
-	_, err = undeployStaleResources(ctx, getManagementClusterConfig(), c, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+	_, err = undeployStaleResources(ctx, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
 
 	// Undeploy from managed cluster
-	resourceReports, err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+	resourceReports, err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, configv1alpha1.FeatureResources,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
 		return err
@@ -270,7 +274,7 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports, configv1alpha1.FeatureResources)
 	if err != nil {
 		return err
 	}
@@ -333,8 +337,8 @@ func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1al
 // updateClusterReportWithResourceReports updates ClusterReport Status with ResourceReports.
 // This is no-op unless mode is DryRun.
 func updateClusterReportWithResourceReports(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary,
-	resourceReports []configv1alpha1.ResourceReport) error {
+	clusterSummary *configv1alpha1.ClusterSummary, resourceReports []configv1alpha1.ResourceReport,
+	featureID configv1alpha1.FeatureID) error {
 
 	// This is no-op unless in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
@@ -357,7 +361,12 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 			return err
 		}
 
-		clusterReport.Status.ResourceReports = resourceReports
+		if featureID == configv1alpha1.FeatureResources {
+			clusterReport.Status.ResourceReports = resourceReports
+		} else if featureID == configv1alpha1.FeatureKustomize {
+			clusterReport.Status.KustomizeResourceReports = resourceReports
+		}
+
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err
@@ -381,84 +390,25 @@ func deployResourceSummary(ctx context.Context, c client.Client,
 	}
 
 	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, applicant,
-		clusterType, resources, nil, logger)
+		clusterType, resources, nil, nil, logger)
 }
 
-func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport, logger logr.Logger) error {
+// deployPolicyRefs deploys in a CAPI Cluster the policies contained in the Data section of each
+// referenced ConfigMap/Secret
+func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.Config,
+	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,
+	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
 
-	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
-	reports := localResourceReports
-	reports = append(reports, remoteResourceReports...)
+	refs := featureHandler.getRefs(clusterSummary)
 
-	gvks := make([]schema.GroupVersionKind, 0)
-	gvkMap := make(map[schema.GroupVersionKind]bool)
-	for i := range reports {
-		gvk := schema.GroupVersionKind{
-			Group:   reports[i].Resource.Group,
-			Version: reports[i].Resource.Version,
-			Kind:    reports[i].Resource.Kind,
-		}
-		if _, ok := gvkMap[gvk]; !ok {
-			gvks = append(gvks, gvk)
-			gvkMap[gvk] = true
-		}
+	var objectsToDeployLocally []client.Object
+	var objectsToDeployRemotely []client.Object
+	objectsToDeployLocally, objectsToDeployRemotely, err =
+		collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	// update status with list of GroupVersionKinds deployed in a Managed and Management Cluster
-	setDeployedGroupVersionKind(clusterSummary, gvks)
-
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return getManagementClusterClient().Status().Update(ctx, clusterSummary)
-	})
-	return err
-}
-
-// setDeployedGroupVersionKind sets the list of deployed GroupVersionKinds
-func setDeployedGroupVersionKind(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind) {
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
-			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
-			return
-		}
-	}
-
-	if clusterSummary.Status.FeatureSummaries == nil {
-		clusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
-	}
-
-	clusterSummary.Status.FeatureSummaries = append(
-		clusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
-			FeatureID: configv1alpha1.FeatureResources,
-		},
-	)
-
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
-			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
-			return
-		}
-	}
-}
-
-func setDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
-	tmp := make([]string, 0)
-
-	// Preserve the order
-	current := make(map[string]bool)
-	for _, k := range fs.DeployedGroupVersionKind {
-		current[k] = true
-		tmp = append(tmp, k)
-	}
-
-	for i := range gvks {
-		key := fmt.Sprintf("%s.%s.%s", gvks[i].Kind, gvks[i].Version, gvks[i].Group)
-		if _, ok := current[key]; !ok {
-			current[key] = true
-			tmp = append(tmp, key)
-		}
-	}
-
-	fs.DeployedGroupVersionKind = tmp
+	return deployReferencedObjects(ctx, c, remoteConfig, clusterSummary,
+		objectsToDeployLocally, objectsToDeployRemotely, logger)
 }

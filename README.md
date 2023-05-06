@@ -20,7 +20,7 @@ The idea is simple:
 
 where term:
 1. `clusters` represents both [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/cluster_types.go) or any other Kubernetes cluster registered with Sveltos;
-2. `addons` represents either an [helm release](https://helm.sh) or a Kubernetes resource YAML.
+2. `addons` represents either an [helm release](https://helm.sh), Kubernetes resource YAMLs or [kustomize](https://github.com/kubernetes-sigs/kustomize) resources.
 
 Here is an example of how to require that any CAPI Cluster with label *env: prod* has following features deployed:
 1. Kyverno helm chart (version v2.6.0)
@@ -55,6 +55,33 @@ spec:
 ```
 
 As soon as a cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+
+Here is an example using Kustomize:
+
+```yaml
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: flux-system
+spec:
+  clusterSelector: env=fv
+  syncMode: Continuous
+  kustomizationRefs:
+  - namespace: flux-system
+    name: flux-system
+    kind: GitRepository
+    path: ./helloWorld/
+    targetNamespace: eng
+```
+
+where GitRepository synced with Flux contains following resources:
+
+```bash
+├── deployment.yaml
+├── kustomization.yaml
+└── service.yaml
+└── configmap.yaml
+```
 
 Refer to [examples](./examples/) for more complex examples.
 

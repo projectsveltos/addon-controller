@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -51,7 +52,8 @@ import (
 )
 
 const (
-	separator = "---\n"
+	separator   = "---\n"
+	reasonLabel = "projectsveltos.io/reason"
 )
 
 // createNamespace creates a namespace if it does not exist already
@@ -87,13 +89,13 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+func deployContentOfConfigMap(ctx context.Context, destConfig *rest.Config, destClient client.Client,
 	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
 	reports, err =
-		deployContent(ctx, remoteConfig, remoteClient, configMap, configMap.Data, clusterSummary,
+		deployContent(ctx, destConfig, destClient, configMap, configMap.Data, clusterSummary,
 			mgtmResources, logger)
 	return
 }
@@ -102,7 +104,7 @@ func deployContentOfConfigMap(ctx context.Context, remoteConfig *rest.Config, re
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+func deployContentOfSecret(ctx context.Context, destConfig *rest.Config, destClient client.Client,
 	secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
@@ -113,7 +115,7 @@ func deployContentOfSecret(ctx context.Context, remoteConfig *rest.Config, remot
 	}
 
 	reports, err =
-		deployContent(ctx, remoteConfig, remoteClient, secret, data, clusterSummary,
+		deployContent(ctx, destConfig, destClient, secret, data, clusterSummary,
 			mgtmResources, logger)
 	return
 }
@@ -166,16 +168,35 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
+func deployContent(ctx context.Context, destConfig *rest.Config, destClient client.Client,
 	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
 	instantiateTemplate := instantiateTemplate(referencedObject, logger)
-	referencedPolicies, err := collectContent(ctx, clusterSummary, mgtmResources, data, instantiateTemplate, logger)
+	referencedUnstructured, err := collectContent(ctx, clusterSummary, mgtmResources, data, instantiateTemplate, logger)
 	if err != nil {
 		return nil, err
 	}
+
+	ref := &corev1.ObjectReference{
+		Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
+		Namespace: referencedObject.GetNamespace(),
+		Name:      referencedObject.GetName(),
+	}
+
+	return deployUnstructured(ctx, destConfig, destClient, referencedUnstructured, ref,
+		configv1alpha1.FeatureResources, clusterSummary, logger)
+}
+
+// deployUnstructured deploys referencedUnstructured objects.
+// Returns an error if one occurred. Otherwise it returns a slice containing the name of
+// the policies deployed in the form of kind.group:namespace:name for namespaced policies
+// and kind.group::name for cluster wide policies.
+func deployUnstructured(ctx context.Context, destConfig *rest.Config, destClient client.Client,
+	referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
+) (reports []configv1alpha1.ResourceReport, err error) {
 
 	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
@@ -183,8 +204,8 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient 
 	}
 
 	reports = make([]configv1alpha1.ResourceReport, 0)
-	for i := range referencedPolicies {
-		policy := referencedPolicies[i]
+	for i := range referencedUnstructured {
+		policy := referencedUnstructured[i]
 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
@@ -196,9 +217,9 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient 
 			Group:     policy.GetObjectKind().GroupVersionKind().Group,
 			Version:   policy.GetObjectKind().GroupVersionKind().Version,
 			Owner: corev1.ObjectReference{
-				Namespace: referencedObject.GetNamespace(),
-				Name:      referencedObject.GetName(),
-				Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
+				Namespace: referencedObject.Namespace,
+				Name:      referencedObject.Name,
+				Kind:      referencedObject.Kind,
 			},
 		}
 
@@ -209,13 +230,14 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient 
 		}
 
 		// Get policy hash of referenced policy
-		addLabel(policy, deployer.ReferenceLabelKind, referencedObject.GetObjectKind().GroupVersionKind().Kind)
-		addLabel(policy, deployer.ReferenceLabelName, referencedObject.GetName())
-		addLabel(policy, deployer.ReferenceLabelNamespace, referencedObject.GetNamespace())
+		addLabel(policy, deployer.ReferenceKindLabel, referencedObject.GetObjectKind().GroupVersionKind().Kind)
+		addLabel(policy, deployer.ReferenceNameLabel, referencedObject.Name)
+		addLabel(policy, deployer.ReferenceNamespaceLabel, referencedObject.Namespace)
+		addLabel(policy, reasonLabel, string(featureID))
 		addAnnotation(policy, deployer.PolicyHash, policyHash)
 
 		// If policy is namespaced, create namespace if not already existing
-		err = createNamespace(ctx, remoteClient, clusterSummary, policy.GetNamespace())
+		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +245,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient 
 		// If policy already exists, just get current version and update it by overridding
 		// all metadata and spec.
 		// If policy does not exist already, create it
-		dr, err := utils.GetDynamicResourceInterface(remoteConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -231,7 +253,7 @@ func deployContent(ctx context.Context, remoteConfig *rest.Config, remoteClient 
 		var exist bool
 		var currentHash string
 		exist, currentHash, err = deployer.ValidateObjectForUpdate(ctx, dr, policy,
-			referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName())
+			referencedObject.Kind, referencedObject.Namespace, referencedObject.Name)
 		if err != nil {
 			var conflictErr *deployer.ConflictError
 			ok := errors.As(err, &conflictErr)
@@ -444,17 +466,8 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 
 // deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,
+	clusterSummary *configv1alpha1.ClusterSummary, objectsToDeployLocally, objectsToDeployRemotely []client.Object,
 	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
-
-	refs := featureHandler.getRefs(clusterSummary)
-
-	var objectsToDeployLocally []client.Object
-	var objectsToDeployRemotely []client.Object
-	objectsToDeployLocally, objectsToDeployRemotely, err = collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
-	if err != nil {
-		return nil, nil, err
-	}
 
 	remoteClient, err := client.New(remoteConfig, client.Options{})
 	if err != nil {
@@ -531,14 +544,8 @@ func deployObjects(ctx context.Context, destClient client.Client, destConfig *re
 }
 
 func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
+	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
 	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
-
-	// Do not use due to metav1.Selector limitation
-	// labelSelector := metav1.LabelSelector{MatchLabels: map[string]string{ClusterSummaryLabelName: clusterSummary.Name}}
-	// listOptions := metav1.ListOptions{
-	//	LabelSelector: labelSelector.String(),
-	// }
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
@@ -558,6 +565,14 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remo
 
 	d := dynamic.NewForConfigOrDie(remoteConfig)
 
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: map[string]string{reasonLabel: string(featureID)},
+	}
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	}
+
 	for i := range deployedGVKs {
 		mapping, err := mapper.RESTMapping(deployedGVKs[i].GroupKind(), deployedGVKs[i].Version)
 		if err != nil {
@@ -575,7 +590,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remo
 			Resource: mapping.Resource.Resource,
 		}
 
-		list, err := d.Resource(resourceId).List(ctx, metav1.ListOptions{})
+		list, err := d.Resource(resourceId).List(ctx, listOptions)
 		if err != nil {
 			return nil, err
 		}
@@ -585,7 +600,7 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remo
 			logger.V(logs.LogVerbose).Info("considering %s/%s", r.GetNamespace(), r.GetName())
 			// Verify if this policy was deployed because of a clustersummary (ReferenceLabelName
 			// is present as label in such a case).
-			if !hasLabel(&r, deployer.ReferenceLabelName, "") {
+			if !hasLabel(&r, deployer.ReferenceNameLabel, "") {
 				continue
 			}
 
@@ -633,11 +648,11 @@ func handleResourceDelete(ctx context.Context, remoteClient client.Client, polic
 	// If mode is set to LeavePolicies, leave policies in the workload cluster.
 	// Remove all labels added by Sveltos.
 	if isLeavePolicies(clusterSummary, logger) {
-		labels := policy.GetLabels()
-		delete(labels, deployer.ReferenceLabelKind)
-		delete(labels, deployer.ReferenceLabelName)
-		delete(labels, deployer.ReferenceLabelNamespace)
-		policy.SetLabels(labels)
+		l := policy.GetLabels()
+		delete(l, deployer.ReferenceKindLabel)
+		delete(l, deployer.ReferenceNameLabel)
+		delete(l, deployer.ReferenceNamespaceLabel)
+		policy.SetLabels(l)
 		return remoteClient.Update(ctx, policy)
 	}
 
@@ -834,4 +849,86 @@ func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInte
 		conflictReport.Message = message
 	}
 	return conflictReport
+}
+
+func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	featureID configv1alpha1.FeatureID, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
+	logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
+	reports := localResourceReports
+	reports = append(reports, remoteResourceReports...)
+
+	gvks := make([]schema.GroupVersionKind, 0)
+	gvkMap := make(map[schema.GroupVersionKind]bool)
+	for i := range reports {
+		gvk := schema.GroupVersionKind{
+			Group:   reports[i].Resource.Group,
+			Version: reports[i].Resource.Version,
+			Kind:    reports[i].Resource.Kind,
+		}
+		if _, ok := gvkMap[gvk]; !ok {
+			gvks = append(gvks, gvk)
+			gvkMap[gvk] = true
+		}
+	}
+
+	// update status with list of GroupVersionKinds deployed in a Managed and Management Cluster
+	setDeployedGroupVersionKind(clusterSummary, gvks, featureID)
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		return getManagementClusterClient().Status().Update(ctx, clusterSummary)
+	})
+	return err
+}
+
+// setDeployedGroupVersionKind sets the list of deployed GroupVersionKinds
+func setDeployedGroupVersionKind(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
+	featureID configv1alpha1.FeatureID) {
+
+	for i := range clusterSummary.Status.FeatureSummaries {
+		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
+			return
+		}
+	}
+
+	if clusterSummary.Status.FeatureSummaries == nil {
+		clusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
+	}
+
+	clusterSummary.Status.FeatureSummaries = append(
+		clusterSummary.Status.FeatureSummaries,
+		configv1alpha1.FeatureSummary{
+			FeatureID: featureID,
+		},
+	)
+
+	for i := range clusterSummary.Status.FeatureSummaries {
+		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
+			return
+		}
+	}
+}
+
+func setDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
+	tmp := make([]string, 0)
+
+	// Preserve the order
+	current := make(map[string]bool)
+	for _, k := range fs.DeployedGroupVersionKind {
+		current[k] = true
+		tmp = append(tmp, k)
+	}
+
+	for i := range gvks {
+		key := fmt.Sprintf("%s.%s.%s", gvks[i].Kind, gvks[i].Version, gvks[i].Group)
+		if _, ok := current[key]; !ok {
+			current[key] = true
+			tmp = append(tmp, key)
+		}
+	}
+
+	fs.DeployedGroupVersionKind = tmp
 }

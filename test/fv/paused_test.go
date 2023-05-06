@@ -46,7 +46,7 @@ var _ = Describe("Feature", Serial, func() {
 		namePrefix = "paused-"
 	)
 
-	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV"), func() {
+	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV", "EXTENDED"), func() {
 		Byf("Setting Cluster as paused")
 		setClusterPausedField(true)
 

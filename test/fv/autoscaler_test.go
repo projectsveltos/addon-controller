@@ -67,7 +67,7 @@ var _ = Describe("Feature", func() {
 		namePrefix = "autoscaler-"
 	)
 
-	It("Deploy resources in the management cluster and the managed cluster", Label("FV"), func() {
+	It("Deploy resources in the management cluster and the managed cluster", Label("FV", "EXTENDED"), func() {
 		Byf("Extend sveltos addon-manager permission in the management cluster")
 		clusterRole := &rbacv1.ClusterRole{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: "addon-manager-role-extra"}, clusterRole)).To(Succeed())

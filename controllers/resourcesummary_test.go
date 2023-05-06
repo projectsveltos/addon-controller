@@ -73,7 +73,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		}
 		clusterNamespace := randomString()
 		clusterSummaryName := randomString()
-		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil,
+		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
 			clusterNamespace, clusterSummaryName, klogr.New())).To(Succeed())
 
 		currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
@@ -115,7 +115,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployResourceSummaryInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, klogr.New())).To(Succeed())
+			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, nil, klogr.New())).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {

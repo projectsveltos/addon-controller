@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,6 +125,10 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
 		return nil, err
 	}
+	if err := sourcev1.AddToScheme(s); err != nil {
+		return nil, err
+	}
+
 	return s, nil
 }
 

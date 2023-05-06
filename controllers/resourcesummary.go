@@ -76,8 +76,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 
 func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1alpha1.ClusterType,
-	resources []libsveltosv1alpha1.Resource, helmResources []libsveltosv1alpha1.HelmResources,
-	logger logr.Logger) error {
+	resources []libsveltosv1alpha1.Resource, kustomizeResources []libsveltosv1alpha1.Resource,
+	helmResources []libsveltosv1alpha1.HelmResources, logger logr.Logger) error {
 
 	logger = logger.WithValues("clustersummary", applicant)
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
@@ -92,7 +92,8 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	}
 
 	// Deploy ResourceSummary instance
-	err = deployResourceSummaryInstance(ctx, remoteClient, resources, helmResources, clusterNamespace, applicant, logger)
+	err = deployResourceSummaryInstance(ctx, remoteClient, resources, kustomizeResources,
+		helmResources, clusterNamespace, applicant, logger)
 	if err != nil {
 		return err
 	}
@@ -224,8 +225,9 @@ func deployDriftDetectionManager(ctx context.Context, remoteRestConfig *rest.Con
 }
 
 func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,
-	resources []libsveltosv1alpha1.Resource, helmResources []libsveltosv1alpha1.HelmResources,
-	clusterNamespace, applicant string, logger logr.Logger) error {
+	resources []libsveltosv1alpha1.Resource, kustomizeResources []libsveltosv1alpha1.Resource,
+	helmResources []libsveltosv1alpha1.HelmResources, clusterNamespace, applicant string,
+	logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
 	currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
@@ -250,6 +252,9 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 			if resources != nil {
 				toDeployResourceSummary.Spec.Resources = resources
 			}
+			if kustomizeResources != nil {
+				toDeployResourceSummary.Spec.KustomizeResources = kustomizeResources
+			}
 			if helmResources != nil {
 				toDeployResourceSummary.Spec.ChartResources = helmResources
 			}
@@ -261,6 +266,9 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 
 	if resources != nil {
 		currentResourceSummary.Spec.Resources = resources
+	}
+	if kustomizeResources != nil {
+		currentResourceSummary.Spec.KustomizeResources = kustomizeResources
 	}
 	if helmResources != nil {
 		currentResourceSummary.Spec.ChartResources = helmResources

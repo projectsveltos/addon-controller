@@ -27,7 +27,7 @@ Here is an example of how to require that any CAPI Cluster with label *env: prod
 2. kubernetes resource(s) contained in the referenced Secret: *default/storage-class*
 3. kubernetes resource(s) contained in the referenced ConfigMap: *default/contour*.
 
-```
+```yaml
 apiVersion: config.projectsveltos.io/v1alpha1
 kind: ClusterProfile
 metadata:

@@ -80,6 +80,7 @@ var (
 
 	UndeployKustomizeRefs = undeployKustomizeRefs
 	KustomizationHash     = kustomizationHash
+	ExtractTarGz          = extractTarGz
 
 	HelmHash                                 = helmHash
 	ShouldInstall                            = shouldInstall

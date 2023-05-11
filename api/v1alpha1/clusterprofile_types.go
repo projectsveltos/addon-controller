@@ -149,8 +149,10 @@ type KustomizationRef struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Kind of the resource. Supported kinds are: flux GitRepository;OCIRepository;Bucket
-	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket
+	// Kind of the resource. Supported kinds are:
+	// - flux GitRepository;OCIRepository;Bucket
+	// - ConfigMap/Secret (which will be mounted as volume)
+	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
 	Kind string `json:"kind"`
 
 	// Path to the directory containing the kustomization.yaml file, or the

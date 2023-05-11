@@ -17,16 +17,23 @@ limitations under the License.
 package controllers
 
 import (
+	archivetar "archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/fluxcd/pkg/http/fetch"
 	"github.com/fluxcd/pkg/tar"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
+	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,6 +52,12 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
+)
+
+const (
+	permission0600 = 0600
+	permission0755 = 0755
+	maxSize        = int64(20 * 1024 * 1024)
 )
 
 func deployKustomizeRefs(ctx context.Context, c client.Client,
@@ -222,17 +235,46 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	h := sha256.New()
 	var config string
 
+	config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
+
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
-		source, err := getSource(ctx, c, kustomizationRef, clusterSummaryScope.ClusterSummary)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
-			return nil, err
+
+		if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+			namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace,
+				kustomizationRef.Namespace)
+			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
+				return nil, err
+			}
+			if configMap == nil {
+				continue
+			}
+			config += render.AsCode(configMap.BinaryData)
+		} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+			namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace,
+				kustomizationRef.Namespace)
+			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
+				return nil, err
+			}
+			if secret == nil {
+				continue
+			}
+			config += render.AsCode(secret.Data)
+		} else {
+			source, err := getSource(ctx, c, kustomizationRef, clusterSummaryScope.ClusterSummary)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
+				return nil, err
+			}
+			if source == nil {
+				continue
+			}
+			config += source.GetArtifact().Revision
 		}
-		if source == nil {
-			continue
-		}
-		config += source.GetArtifact().Revision
 	}
 
 	h.Write([]byte(config))
@@ -247,49 +289,20 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
 
-	source, err := getSource(ctx, c, kustomizationRef, clusterSummary)
+	var tmpDir string
+	tmpDir, err = prepareFileSystem(ctx, c, kustomizationRef, clusterSummary, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if source == nil {
+	if tmpDir == "" {
 		return nil, nil, nil
-	}
-
-	if source.GetArtifact() == nil {
-		msg := "Source is not ready, artifact not found"
-		logger.V(logs.LogInfo).Info(msg)
-		return nil, nil, err
-	}
-
-	// Update status with the reconciliation progress.
-	// revision := source.GetArtifact().Revision
-
-	// Create tmp dir.
-	tmpDir, err := os.MkdirTemp("", "kustomization-")
-	if err != nil {
-		err = fmt.Errorf("tmp dir error: %w", err)
-		return nil, nil, err
 	}
 
 	defer os.RemoveAll(tmpDir)
 
-	artifactFetcher := fetch.NewArchiveFetcher(
-		1,
-		tar.UnlimitedUntarSize,
-		tar.UnlimitedUntarSize,
-		os.Getenv("SOURCE_CONTROLLER_LOCALHOST"),
-	)
-
-	// Download artifact and extract files to the tmp dir.
-	err = artifactFetcher.Fetch(source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	// check build path exists
 	dirPath := filepath.Join(tmpDir, kustomizationRef.Path)
-
 	_, err = os.Stat(dirPath)
 	if err != nil {
 		err = fmt.Errorf("kustomization path not found: %w", err)
@@ -306,6 +319,126 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 	}
 
 	return deployKustomizeResources(ctx, c, remoteRestConfig, kustomizationRef, resMap, clusterSummary, logger)
+}
+
+func prepareFileSystem(ctx context.Context, c client.Client,
+	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (string, error) {
+
+	if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		return prepareFileSystemWithConfigMap(ctx, c, kustomizationRef, clusterSummary, logger)
+	} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
+	}
+
+	return prepareFileSystemWithFluxSource(ctx, c, kustomizationRef, clusterSummary, logger)
+}
+
+func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
+	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (string, error) {
+
+	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+	if err != nil {
+		return "", err
+	}
+
+	return prepareFileSystemWithData(configMap.BinaryData, kustomizationRef, logger)
+}
+
+func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
+	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (string, error) {
+
+	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+	if err != nil {
+		return "", err
+	}
+
+	return prepareFileSystemWithData(secret.Data, kustomizationRef, logger)
+}
+
+func prepareFileSystemWithData(binaryData map[string][]byte,
+	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (string, error) {
+
+	key := "kustomize.tar.gz"
+	binaryTarGz, ok := binaryData[key]
+	if !ok {
+		return "", fmt.Errorf("%s missing", key)
+	}
+
+	// Create tmp dir.
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s-%s",
+		kustomizationRef.Namespace, kustomizationRef.Name))
+	if err != nil {
+		err = fmt.Errorf("tmp dir error: %w", err)
+		return "", err
+	}
+
+	filePath := path.Join(tmpDir, key)
+
+	err = os.WriteFile(filePath, binaryTarGz, permission0600)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to write file %s: %v", filePath, err))
+		return "", err
+	}
+
+	err = extractTarGz(filePath, tmpDir)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to extract tar.gz: %v", err))
+		return "", err
+	}
+
+	logger.V(logs.LogDebug).Info("extracted .tar.gz")
+	return tmpDir, nil
+}
+
+func prepareFileSystemWithFluxSource(ctx context.Context, c client.Client,
+	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (string, error) {
+
+	source, err := getSource(ctx, c, kustomizationRef, clusterSummary)
+	if err != nil {
+		return "", err
+	}
+
+	if source == nil {
+		return "", fmt.Errorf("source %s %s/%s not found",
+			kustomizationRef.Kind, kustomizationRef.Namespace, kustomizationRef.Name)
+	}
+
+	if source.GetArtifact() == nil {
+		msg := "Source is not ready, artifact not found"
+		logger.V(logs.LogInfo).Info(msg)
+		return "", err
+	}
+
+	// Update status with the reconciliation progress.
+	// revision := source.GetArtifact().Revision
+
+	// Create tmp dir.
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s-%s", kustomizationRef.Namespace, kustomizationRef.Name))
+	if err != nil {
+		err = fmt.Errorf("tmp dir error: %w", err)
+		return "", err
+	}
+
+	artifactFetcher := fetch.NewArchiveFetcher(
+		1,
+		tar.UnlimitedUntarSize,
+		tar.UnlimitedUntarSize,
+		os.Getenv("SOURCE_CONTROLLER_LOCALHOST"),
+	)
+
+	// Download artifact and extract files to the tmp dir.
+	err = artifactFetcher.Fetch(source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)
+	if err != nil {
+		return "", err
+	}
+
+	return tmpDir, nil
 }
 
 func getKustomizedResources(deploymentType configv1alpha1.DeploymentType, resMap resmap.ResMap,
@@ -395,12 +528,9 @@ func getSource(ctx context.Context, c client.Client, kustomizationRef *configv1a
 	clusterSummary *configv1alpha1.ClusterSummary) (sourcev1.Source, error) {
 
 	var src sourcev1.Source
-	sourceNamespace := clusterSummary.GetNamespace()
-	if kustomizationRef.Namespace != "" {
-		sourceNamespace = kustomizationRef.Namespace
-	}
+	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
 	namespacedName := types.NamespacedName{
-		Namespace: sourceNamespace,
+		Namespace: namespace,
 		Name:      kustomizationRef.Name,
 	}
 
@@ -518,4 +648,57 @@ func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestCon
 	}
 
 	return localResourceReports, remoteResourceReports, err
+}
+
+func extractTarGz(src, dest string) error {
+	// Open the tarball for reading
+	tarball, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer tarball.Close()
+
+	// Create a gzip reader to decompress the tarball
+	gzipReader, err := gzip.NewReader(io.LimitReader(tarball, maxSize))
+	if err != nil {
+		return err
+	}
+	defer gzipReader.Close()
+
+	// Create a tar reader to read the uncompressed tarball
+	tarReader := archivetar.NewReader(gzipReader)
+
+	// Iterate over each file in the tarball and extract it to the destination
+	for {
+		header, err := tarReader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(dest, filepath.Clean(header.Name))
+		if !strings.HasPrefix(target, dest) {
+			return fmt.Errorf("tar archive entry %q is outside of destination directory", header.Name)
+		}
+
+		switch header.Typeflag {
+		case archivetar.TypeDir:
+			if err := os.MkdirAll(target, permission0755); err != nil {
+				return err
+			}
+		case archivetar.TypeReg:
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(file, io.LimitReader(tarReader, maxSize)); err != nil {
+				return err
+			}
+			file.Close()
+		}
+	}
+
+	return nil
 }

@@ -382,12 +382,15 @@ spec:
                       - Remote
                       type: string
                     kind:
-                      description: 'Kind of the resource. Supported kinds are: flux
-                        GitRepository;OCIRepository;Bucket'
+                      description: 'Kind of the resource. Supported kinds are: - flux
+                        GitRepository;OCIRepository;Bucket - ConfigMap/Secret (which
+                        will be mounted as volume)'
                       enum:
                       - GitRepository
                       - OCIRepository
                       - Bucket
+                      - ConfigMap
+                      - Secret
                       type: string
                     name:
                       description: Name of the rreferenced resource.
@@ -1093,11 +1096,14 @@ spec:
                           type: string
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
-                            flux GitRepository;OCIRepository;Bucket'
+                            - flux GitRepository;OCIRepository;Bucket - ConfigMap/Secret
+                            (which will be mounted as volume)'
                           enum:
                           - GitRepository
                           - OCIRepository
                           - Bucket
+                          - ConfigMap
+                          - Secret
                           type: string
                         name:
                           description: Name of the rreferenced resource.

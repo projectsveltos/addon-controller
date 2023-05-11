@@ -42,7 +42,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		kustomizeConfigMapName = "kustomize"
 	)
 
-	It("Deploy Kustomize resources", Label("FV"), func() {
+	It("Deploy Kustomize resources", Label("FV", "EXTENDED"), func() {
 		Byf("Verifying ConfigMap kustomize exists. It is created by Makefile")
 		kustomizeConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: defaultNamespace, Name: kustomizeConfigMapName},

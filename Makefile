@@ -199,6 +199,9 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
 
+	@echo "prepare configMap with kustomize files"
+	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz
+
 	@echo "sleep allowing control plane to be ready"
 	sleep 60
 
@@ -257,6 +260,11 @@ deploy-projectsveltos: $(KUSTOMIZE)
 
 	@echo "Waiting for projectsveltos addon-manager to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-manager -n projectsveltos --timeout=$(TIMEOUT)
+
+prepare-configmap-with-kustomize: $(KUBECTL)
+	mkdir tmp; cd tmp; git clone git@github.com:gianlucam76/kustomize.git; \
+	tar -czf ../test/kustomize.tar.gz -C kustomize/helloWorldWithOverlays .; \
+	cd ..; rm -rf tmp
 
 set-manifest-image:
 	$(info Updating kustomize image patch file for manager resource)

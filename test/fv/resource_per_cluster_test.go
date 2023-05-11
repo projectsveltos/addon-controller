@@ -196,5 +196,15 @@ var _ = Describe("Feature", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
+
+		By("Deleting Secret")
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentSecret)).To(Succeed())
+
+		By("Deleting ConfigMap")
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentConfigMap)).To(Succeed())
 	})
 })

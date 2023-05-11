@@ -22,13 +22,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 /*
@@ -36,12 +36,23 @@ import (
 * main branch of  ssh://git@github.com/gianlucam76/kustomize
 * This test is not run as part of CI.
  */
-var _ = Describe("Kustomize with GitRepository", func() {
+var _ = Describe("Kustomize with ConfigMap", func() {
 	const (
-		namePrefix = "kustomize-"
+		namePrefix             = "kustomize-cm-"
+		kustomizeConfigMapName = "kustomize"
 	)
 
-	It("Deploy Kustomize resources", Label("EXTENDED"), func() {
+	It("Deploy Kustomize resources", Label("FV"), func() {
+		Byf("Verifying ConfigMap kustomize exists. It is created by Makefile")
+		kustomizeConfigMap := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: defaultNamespace, Name: kustomizeConfigMapName},
+			kustomizeConfigMap)).To(Succeed())
+
+		Expect("Verifying ConfigMap kustomize contains kustomize.tar.gz")
+		Expect(kustomizeConfigMap.BinaryData).ToNot(BeNil())
+		_, ok := kustomizeConfigMap.BinaryData["kustomize.tar.gz"]
+		Expect(ok).To(BeTrue())
+
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -53,36 +64,19 @@ var _ = Describe("Kustomize with GitRepository", func() {
 
 		targetNamespace := randomString()
 
-		gitRepositoryNamespace := "flux-system"
-		gitRepositoryName := gitRepositoryNamespace
-
-		Byf("Update ClusterProfile %s to reference GitRepository flux-system/flux-system", clusterProfile.Name)
+		Byf("Update ClusterProfile %s to reference ConfigMap kustomize", clusterProfile.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.KustomizationRefs = []configv1alpha1.KustomizationRef{
 			{
-				Kind:            sourcev1.GitRepositoryKind,
-				Namespace:       gitRepositoryNamespace,
-				Name:            gitRepositoryName,
-				Path:            "./helloWorld",
+				Kind:            string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace:       defaultNamespace,
+				Name:            kustomizeConfigMapName, // this is created by Makefile and contains kustomize files
+				Path:            "./overlays/production/",
 				TargetNamespace: targetNamespace,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
-
-		Byf("Verifying GitRepository %s/%s exists", gitRepositoryNamespace, gitRepositoryName)
-		gitRepository := &sourcev1.GitRepository{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: gitRepositoryNamespace, Name: gitRepositoryName},
-			gitRepository)).To(Succeed())
-
-		Byf("Verifying GitRepository %s/%s artifact is set", gitRepositoryNamespace, gitRepositoryName)
-		Eventually(func() bool {
-			gitRepository := &sourcev1.GitRepository{}
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: gitRepositoryNamespace, Name: gitRepositoryName},
-				gitRepository)
-			return err == nil &&
-				gitRepository.Status.Artifact != nil
-		}, timeout, pollingInterval).Should(BeTrue())
 
 		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -95,7 +89,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -103,7 +97,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-deployment"}, currentDeployment)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -111,7 +105,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -120,15 +114,15 @@ var _ = Describe("Kustomize with GitRepository", func() {
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)).To(Succeed())
 
 		currentService := &corev1.Service{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)).To(Succeed())
 
 		currentDeployment := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "the-deployment"}, currentDeployment)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)).To(Succeed())
 
 		policies := []policy{
 			{kind: "Service", name: currentService.Name, namespace: targetNamespace, group: ""},
@@ -138,7 +132,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize, policies, nil)
 
-		Byf("Changing clusterprofile to not reference GitRepository anymore")
+		Byf("Changing clusterprofile to not reference ConfigMap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.KustomizationRefs = []configv1alpha1.KustomizationRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -149,7 +143,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -158,7 +152,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-deployment"}, currentDeployment)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -167,7 +161,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

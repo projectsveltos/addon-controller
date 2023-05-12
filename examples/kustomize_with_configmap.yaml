@@ -1,0 +1,34 @@
+# In this example a ConfigMap is used. ConfigMap contains a tar.gz of a directory
+# containing kustomize files
+# ├── ./overlays/
+# ├── ./base/
+# ├── ./base/deployment.yaml
+# ├── ./base/kustomization.yaml
+# ├── ./base/service.yaml
+# ├── ./base/configMap.yaml
+# ├── ./overlays/staging/
+# ├── ./overlays/production/
+# ├── ./overlays/production/deployment.yaml
+# ├── ./overlays/production/kustomization.yaml
+# ├── ./overlays/staging/kustomization.yaml
+# ├── ./overlays/staging/map.yaml
+#
+# git clone https://github.com/gianlucam76/kustomize
+# tar -czf kustomize.tar.gz -C kustomize/helloWorldWithOverlays .
+# kubectl create configmap kustomize1 --from-file=kustomize.tar.gz
+#
+# ClusterProfiles references this ConfigMap.
+
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: flux-system
+spec:
+  clusterSelector: env=fv
+  syncMode: Continuous
+  kustomizationRefs:
+  - namespace: default
+    name: kustomize 
+    kind: ConfigMap
+    path: ./overlays/production/
+    targetNamespace: eng

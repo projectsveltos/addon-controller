@@ -42,6 +42,12 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 		os.Exit(1)
 	}
 
+	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKustomize))
+	if err != nil {
+		setupLog.Error(err, "failed to register feature FeatureKustomize")
+		os.Exit(1)
+	}
+
 	creatFeatureHandlerMaps()
 }
 
@@ -53,6 +59,9 @@ func creatFeatureHandlerMaps() {
 
 	featuresHandlers[configv1alpha1.FeatureHelm] = feature{id: configv1alpha1.FeatureHelm, currentHash: helmHash,
 		deploy: deployHelmCharts, undeploy: undeployHelmCharts, getRefs: getHelmRefs}
+
+	featuresHandlers[configv1alpha1.FeatureKustomize] = feature{id: configv1alpha1.FeatureKustomize, currentHash: kustomizationHash,
+		deploy: deployKustomizeRefs, undeploy: undeployKustomizeRefs, getRefs: getKustomizationRefs}
 }
 
 func getHandlersForFeature(featureID configv1alpha1.FeatureID) feature {

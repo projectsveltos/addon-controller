@@ -34,7 +34,7 @@ var _ = Describe("Helm", func() {
 		namePrefix = "helm-"
 	)
 
-	It("Deploy and updates helm charts correctly", Label("FV"), func() {
+	It("Deploy and updates helm charts correctly", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous

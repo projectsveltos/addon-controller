@@ -161,6 +161,14 @@ rules:
   - patch
   - update
 - apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - gitrepositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:
   - kubeadmcontrolplanes

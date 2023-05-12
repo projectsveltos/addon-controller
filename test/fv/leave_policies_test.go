@@ -63,7 +63,7 @@ var _ = Describe("LeavePolicies", func() {
 		namePrefix = "leave-policies-"
 	)
 
-	It("Deploy resources referenced in ResourceRef. When Cluster stops matching, policies are left on Cluster.", Label("FV"), func() {
+	It("Deploy resources referenced in ResourceRef. When Cluster stops matching, policies are left on Cluster.", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s. StopMatchingBehavior set to LeavePolicies",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})

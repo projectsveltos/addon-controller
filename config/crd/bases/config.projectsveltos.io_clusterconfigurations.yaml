@@ -94,6 +94,7 @@ spec:
                             enum:
                             - Resources
                             - Helm
+                            - Kustomize
                             type: string
                           resources:
                             description: Resources is a list of resources deployed

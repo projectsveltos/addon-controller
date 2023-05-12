@@ -71,6 +71,21 @@ const (
 	SyncModeDryRun = SyncMode("DryRun")
 )
 
+// DeploymentType indicates whether resources need to be deployed
+// into the management cluster (local) or the managed cluster (remote)
+// +kubebuilder:validation:Enum:=Local;Remote
+type DeploymentType string
+
+const (
+	// DeploymentTypeLocal indicates resource deployment need to
+	// be in the management cluster
+	DeploymentTypeLocal = DeploymentType("Local")
+
+	// DeploymentTypeRemote indicates resource deployment need to
+	// be in the managed cluster
+	DeploymentTypeRemote = DeploymentType("Remote")
+)
+
 // HelmChartAction specifies action on an helm chart
 // +kubebuilder:validation:Enum:=Install;Uninstall
 type HelmChartAction string
@@ -124,6 +139,43 @@ type HelmChart struct {
 	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
 }
 
+type KustomizationRef struct {
+	// Namespace of the referenced resource.
+	// Namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	Namespace string `json:"namespace"`
+
+	// Name of the rreferenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the resource. Supported kinds are:
+	// - flux GitRepository;OCIRepository;Bucket
+	// - ConfigMap/Secret (which will be mounted as volume)
+	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
+	Kind string `json:"kind"`
+
+	// Path to the directory containing the kustomization.yaml file, or the
+	// set of plain YAMLs a kustomization.yaml should be generated for.
+	// Defaults to 'None', which translates to the root path of the SourceRef.
+	// +optional
+	Path string `json:"path,omitempty"`
+
+	// TargetNamespace sets or overrides the namespace in the
+	// kustomization.yaml file.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Optional
+	// +optional
+	TargetNamespace string `json:"targetNamespace,omitempty"`
+
+	// DeploymentType indicates whether resources need to be deployed
+	// into the management cluster (local) or the managed cluster (remote)
+	// +kubebuilder:default:=Remote
+	// +optional
+	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+}
+
 // StopMatchingBehavior indicates what will happen when Cluster stops matching
 // a ClusterProfile. By default, withdrawpolicies, deployed Helm charts and Kubernetes
 // resources will be removed from Cluster. LeavePolicy instead leaves Helm charts
@@ -145,21 +197,6 @@ type TemplateResourceRef struct {
 	// template
 	Identifier string `json:"identifier"`
 }
-
-// DeploymentType indicates whether resources need to be deployed
-// into the management cluster (local) or the managed cluster (remote)
-// +kubebuilder:validation:Enum:=Local;Remote
-type DeploymentType string
-
-const (
-	// DeploymentTypeLocal indicates resource deployment need to
-	// be in the management cluster
-	DeploymentTypeLocal = DeploymentType("Local")
-
-	// DeploymentTypeRemote indicates resource deployment need to
-	// be in the managed cluster
-	DeploymentTypeRemote = DeploymentType("Remote")
-)
 
 type PolicyRef struct {
 	// Namespace of the referenced resource.
@@ -229,6 +266,9 @@ type ClusterProfileSpec struct {
 
 	// Helm charts
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`
+
+	// Kustomization refs
+	KustomizationRefs []KustomizationRef `json:"kustomizationRefs,omitempty"`
 }
 
 // ClusterProfileStatus defines the observed state of ClusterProfile

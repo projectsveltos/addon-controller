@@ -35,7 +35,7 @@ var _ = Describe("Helm", Serial, func() {
 		kyvernoImageName = "kyverno"
 	)
 
-	It("React to configuration drift", Label("FV"), func() {
+	It("React to configuration drift", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection

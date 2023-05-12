@@ -1,0 +1,52 @@
+# In this example we use Flux to sync a git repository.
+# Git repoistory contains a kustomization.yaml file and some 
+# kubernetes resources YAML
+# ClusterProfile kustomizationRefs points to a Flux GitRepository CRD instance
+# so ClusterProfile is taking the content in that git repo, assume the directory
+# helloWorld/ is a kustomize directory. Then runs kustomize to get all resources
+# that needs to be deployed and creates those resources in any cluster matching the
+# selector env=fv in the namespace `eng`
+
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: flux-system
+spec:
+  clusterSelector: env=fv
+  syncMode: Continuous
+  kustomizationRefs:
+  - namespace: flux-system
+    name: flux-system
+    kind: GitRepository
+    path: ./helloWorld/
+    targetNamespace: eng
+
+
+#
+#apiVersion: source.toolkit.fluxcd.io/v1
+#kind: GitRepository
+#metadata:
+#  creationTimestamp: "2023-05-05T15:34:33Z"
+#  finalizers:
+#  - finalizers.fluxcd.io
+#  generation: 1
+#  name: flux-system
+#  namespace: flux-system
+#  resourceVersion: "10528"
+#  uid: 93fb8832-14ae-44a8-af17-6e4f4f10ad8a
+#spec:
+#  interval: 1m0s
+#  ref:
+#    branch: main
+#  secretRef:
+#    name: flux-system
+#  timeout: 60s
+#  url: ssh://git@github.com/gianlucam76/kustomize
+
+
+# Here is the content of the git repository
+#~github.com/gianlucam76/kustomize/helloWorld/
+#├── deployment.yaml
+#├── kustomization.yaml
+#└── service.yaml
+#└── configmap.yaml

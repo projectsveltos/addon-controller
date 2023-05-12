@@ -75,7 +75,7 @@ var _ = Describe("Feature", func() {
 
 	// In this test, tenant is given permission to create Deployment but not to create Secret.
 	// When a ClusterProfile is created by this tenant, deployment will fail because of missing permissions.
-	It("Tenant created ClusterProfile: Deploy resources in the management cluster fails", Label("FV"), func() {
+	It("Tenant created ClusterProfile: Deploy resources in the management cluster fails", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ServiceAccount representing tenant")
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{

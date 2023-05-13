@@ -296,9 +296,9 @@ var _ = Describe("HandlersUtils", func() {
 			var policyHash string
 			policyHash, err = controllers.ComputePolicyHash(policy)
 			Expect(err).To(BeNil())
-			controllers.AddLabel(policy, deployer.ReferenceLabelKind, secret.Kind)
-			controllers.AddLabel(policy, deployer.ReferenceLabelName, secret.Name)
-			controllers.AddLabel(policy, deployer.ReferenceLabelNamespace, secret.Namespace)
+			controllers.AddLabel(policy, deployer.ReferenceKindLabel, secret.Kind)
+			controllers.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
+			controllers.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
 			controllers.AddAnnotation(policy, deployer.PolicyHash, policyHash)
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
@@ -453,9 +453,10 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
-			deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-			deployer.ReferenceLabelName:      configMap.Name,
-			deployer.ReferenceLabelNamespace: configMap.Namespace,
+			deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			deployer.ReferenceNameLabel:      configMap.Name,
+			deployer.ReferenceNamespaceLabel: configMap.Namespace,
+			controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
 			{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfile.Name,
@@ -471,7 +472,7 @@ var _ = Describe("HandlersUtils", func() {
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
 		undeploy, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
-			currentClusterSummary, deployedGKVs, nil, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
 
@@ -519,9 +520,10 @@ var _ = Describe("HandlersUtils", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterRoleName1,
 				Labels: map[string]string{
-					deployer.ReferenceLabelKind:      configMap1.Kind,
-					deployer.ReferenceLabelNamespace: configMap1.Namespace,
-					deployer.ReferenceLabelName:      configMap1.Name,
+					deployer.ReferenceKindLabel:      configMap1.Kind,
+					deployer.ReferenceNamespaceLabel: configMap1.Namespace,
+					deployer.ReferenceNameLabel:      configMap1.Name,
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
 				},
 			},
 		}
@@ -532,9 +534,10 @@ var _ = Describe("HandlersUtils", func() {
 				Name:      clusterRoleName2,
 				Namespace: "default",
 				Labels: map[string]string{
-					deployer.ReferenceLabelKind:      configMap2.Kind,
-					deployer.ReferenceLabelNamespace: configMap2.Namespace,
-					deployer.ReferenceLabelName:      configMap2.Name,
+					deployer.ReferenceKindLabel:      configMap2.Kind,
+					deployer.ReferenceNamespaceLabel: configMap2.Namespace,
+					deployer.ReferenceNameLabel:      configMap2.Name,
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
 				},
 			},
 		}
@@ -586,7 +589,7 @@ var _ = Describe("HandlersUtils", func() {
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
 		_, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
-			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Consistently loop so testEnv Cache is synced
@@ -610,7 +613,7 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
 		_, err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
-			currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -660,9 +663,9 @@ var _ = Describe("HandlersUtils", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceLabelKind:      randomString(),
-					deployer.ReferenceLabelName:      randomString(),
-					deployer.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceKindLabel:      randomString(),
+					deployer.ReferenceNameLabel:      randomString(),
+					deployer.ReferenceNamespaceLabel: randomString(),
 					randomKey:                        randomValue,
 				},
 			},

@@ -54,7 +54,7 @@ var _ = Describe("SyncMode one time", func() {
 		namePrefix = "one-time-"
 	)
 
-	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once", Label("FV"), func() {
+	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once", Label("FV", "EXTENDED"), func() {
 		oneTimeNamespaceName := randomString()
 
 		configMapNs := randomString()

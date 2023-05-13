@@ -78,6 +78,10 @@ var (
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 
+	UndeployKustomizeRefs = undeployKustomizeRefs
+	KustomizationHash     = kustomizationHash
+	ExtractTarGz          = extractTarGz
+
 	HelmHash                                 = helmHash
 	ShouldInstall                            = shouldInstall
 	ShouldUninstall                          = shouldUninstall
@@ -118,4 +122,8 @@ var (
 
 var (
 	InitializeManager = initializeManager
+)
+
+const (
+	ReasonLabel = reasonLabel
 )

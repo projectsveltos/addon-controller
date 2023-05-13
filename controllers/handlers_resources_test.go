@@ -151,9 +151,10 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-					deployer.ReferenceLabelName:      randomString(),
-					deployer.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameLabel:      randomString(),
+					deployer.ReferenceNamespaceLabel: randomString(),
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
 				},
 			},
 		}
@@ -169,9 +170,10 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceLabelKind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-					deployer.ReferenceLabelName:      randomString(),
-					deployer.ReferenceLabelNamespace: randomString(),
+					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameLabel:      randomString(),
+					deployer.ReferenceNamespaceLabel: randomString(),
+					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
 				},
 			},
 		}
@@ -265,7 +267,7 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary,
+		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
 			localReports, remoteReports, klogr.New())).To(Succeed())
 
 		// wait for cache to sync

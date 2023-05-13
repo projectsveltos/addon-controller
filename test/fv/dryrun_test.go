@@ -74,7 +74,7 @@ var _ = Describe("DryRun", func() {
 		namePrefix = "dry-run-"
 	)
 
-	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts", Label("FV"), func() {
+	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts", Label("FV", "EXTENDED"), func() {
 		configMapNs := randomString()
 		Byf("Create configMap's namespace %s", configMapNs)
 		ns := &corev1.Namespace{

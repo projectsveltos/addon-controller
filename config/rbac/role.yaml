@@ -160,14 +160,6 @@ rules:
   - patch
   - update
 - apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - gitrepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:
   - kubeadmcontrolplanes
@@ -203,6 +195,54 @@ rules:
   - lib.projectsveltos.io
   resources:
   - sveltosclusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - buckets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - buckets/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - gitrepositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - gitrepositories/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - ocirepositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - source.toolkit.fluxcd.io
+  resources:
+  - ocirepositories/status
   verbs:
   - get
   - list

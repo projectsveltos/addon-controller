@@ -32,7 +32,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSources(
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	o client.Object,
 ) []reconcile.Request {
 

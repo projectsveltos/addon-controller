@@ -126,7 +126,12 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
 //+kubebuilder:rbac:groups="infrastructure.cluster.x-k8s.io",resources="*",verbs=get;watch;list
-//+kubebuilder:rbac:groups="config.projectsveltos.io",resources=gitrepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=gitrepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=gitrepositories/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=ocirepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=ocirepositories/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets/status,verbs=get;watch;list
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -366,7 +371,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	// need to be reconciled.
 
 	err := c.Watch(&source.Kind{Type: &sourcev1.GitRepository{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 	if err != nil {
@@ -374,7 +379,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	}
 
 	err = c.Watch(&source.Kind{Type: &sourcev1b2.OCIRepository{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 	if err != nil {
@@ -382,7 +387,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	}
 
 	return c.Watch(&source.Kind{Type: &sourcev1b2.Bucket{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 }

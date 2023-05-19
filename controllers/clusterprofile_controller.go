@@ -933,7 +933,6 @@ func (r *ClusterProfileReconciler) updateMaps(clusterProfileScope *scope.Cluster
 		r.getClusterMapForEntry(&clusterName).Erase(clusterProfileInfo)
 	}
 
-	// Update list of WorklaodRoles currently referenced by ClusterSummary
 	r.ClusterProfileMap[*clusterProfileInfo] = currentClusters
 	r.ClusterProfiles[*clusterProfileInfo] = clusterProfileScope.ClusterProfile.Spec.ClusterSelector
 }

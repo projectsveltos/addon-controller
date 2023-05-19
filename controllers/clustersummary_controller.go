@@ -662,7 +662,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 		)
 	}
 
-	// Update list of WorklaodRoles currently referenced by ClusterSummary
+	// Update list of resources currently referenced by ClusterSummary
 	r.ClusterSummaryMap[clusterSummaryName] = currentReferences
 	return nil
 }

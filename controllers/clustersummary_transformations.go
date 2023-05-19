@@ -53,21 +53,21 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	switch o.(type) {
 	case *sourcev1.GitRepository:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1.GroupVersion.String(),
 			Kind:       sourcev1.GitRepositoryKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *sourcev1b2.OCIRepository:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1b2.GroupVersion.String(),
 			Kind:       sourcev1b2.OCIRepositoryKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *sourcev1b2.Bucket:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1b2.GroupVersion.String(),
 			Kind:       sourcev1b2.BucketKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),

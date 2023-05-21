@@ -732,8 +732,17 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
 
+		var apiVersion string
+		switch clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind {
+		case sourcev1.GitRepositoryKind:
+			apiVersion = sourcev1.GroupVersion.String()
+		case sourcev1b2.OCIRepositoryKind:
+			apiVersion = sourcev1b2.GroupVersion.String()
+		case sourcev1b2.BucketKind:
+			apiVersion = sourcev1b2.GroupVersion.String()
+		}
 		currentReferences.Insert(&corev1.ObjectReference{
-			APIVersion: clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
+			APIVersion: apiVersion,
 			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
 			Namespace:  namespace,
 			Name:       referencedName,

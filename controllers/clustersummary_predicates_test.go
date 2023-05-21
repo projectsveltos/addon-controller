@@ -107,6 +107,46 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		result := configMapPredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
+
+	It("Update returns true when binaryData has changed", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+		configMap.BinaryData = map[string][]byte{randomString(): []byte(randomString())}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMap.Name,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns false when binaryData has not changed", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+		configMap.BinaryData = map[string][]byte{randomString(): []byte(randomString())}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   configMap.Name,
+				Labels: map[string]string{"env": "testing"},
+			},
+			BinaryData: configMap.BinaryData,
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
 })
 
 var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {

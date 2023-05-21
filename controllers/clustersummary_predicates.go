@@ -53,6 +53,13 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
+			if !reflect.DeepEqual(oldConfigMap.BinaryData, newConfigMap.BinaryData) {
+				log.V(logs.LogVerbose).Info(
+					"ConfigMap BinaryData changed. Will attempt to reconcile associated ClusterSummaries.",
+				)
+				return true
+			}
+
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
 				"ConfigMap did not match expected conditions.  Will not attempt to reconcile associated ClusterSummaries.")

@@ -273,7 +273,9 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			if source == nil {
 				continue
 			}
-			config += source.GetArtifact().Revision
+			if source.GetArtifact() != nil {
+				config += source.GetArtifact().Revision
+			}
 		}
 	}
 

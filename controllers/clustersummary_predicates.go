@@ -162,13 +162,13 @@ func FluxSourcePredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if hasArtifactChanged(e) {
-				log.V(logs.LogInfo).Info(
+				log.V(logs.LogVerbose).Info(
 					"Source artifact has changed.  Will attempt to reconcile associated ClusterProfiles.")
 				return true
 			}
 
 			// otherwise, return false
-			log.V(logs.LogInfo).Info(
+			log.V(logs.LogVerbose).Info(
 				"GitRepository did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
 			return false
 		},

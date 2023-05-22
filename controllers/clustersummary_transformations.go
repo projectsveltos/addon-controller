@@ -43,7 +43,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 		o.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to configMap/secret change")
+	logger.V(logs.LogDebug).Info("reacting to flux source change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()

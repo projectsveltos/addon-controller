@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"reflect"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -47,6 +49,13 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 			if !reflect.DeepEqual(oldConfigMap.Data, newConfigMap.Data) {
 				log.V(logs.LogVerbose).Info(
 					"ConfigMap Data changed. Will attempt to reconcile associated ClusterSummaries.",
+				)
+				return true
+			}
+
+			if !reflect.DeepEqual(oldConfigMap.BinaryData, newConfigMap.BinaryData) {
+				log.V(logs.LogVerbose).Info(
+					"ConfigMap BinaryData changed. Will attempt to reconcile associated ClusterSummaries.",
 				)
 				return true
 			}
@@ -140,3 +149,97 @@ var (
 		return false
 	}
 )
+
+// FluxSourcePredicates predicates for GitRepository/OCIRepository/Bucket.
+// ClusterProfileReconciler watches GitRepository/OCIRepository/Bucket events and
+// react to those by reconciling itself based on following predicates
+func FluxSourcePredicates(logger logr.Logger) predicate.Funcs {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			log := logger.WithValues("predicate", "updateEvent",
+				"namespace", e.ObjectNew.GetNamespace(),
+				"source", e.ObjectNew.GetName(),
+			)
+
+			if hasArtifactChanged(e) {
+				log.V(logs.LogVerbose).Info(
+					"Source artifact has changed.  Will attempt to reconcile associated ClusterProfiles.")
+				return true
+			}
+
+			// otherwise, return false
+			log.V(logs.LogVerbose).Info(
+				"GitRepository did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+			return false
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			log := logger.WithValues("predicate", "createEvent",
+				"namespace", e.Object.GetNamespace(),
+				"source", e.Object.GetName(),
+			)
+
+			log.V(logs.LogVerbose).Info(
+				"Source did match expected conditions.  Will attempt to reconcile associated ClusterProfiles.")
+			return true
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			log := logger.WithValues("predicate", "deleteEvent",
+				"namespace", e.Object.GetNamespace(),
+				"source", e.Object.GetName(),
+			)
+			log.V(logs.LogVerbose).Info(
+				"Source deleted.  Will attempt to reconcile associated ClusterProfiles.")
+			return true
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			log := logger.WithValues("predicate", "genericEvent",
+				"namespace", e.Object.GetNamespace(),
+				"source", e.Object.GetName(),
+			)
+			log.V(logs.LogVerbose).Info(
+				"Source did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+			return false
+		},
+	}
+}
+
+func hasArtifactChanged(e event.UpdateEvent) bool {
+	switch e.ObjectNew.GetObjectKind().GroupVersionKind().Kind {
+	case sourcev1.GitRepositoryKind:
+		newGitRepo := e.ObjectNew.(*sourcev1.GitRepository)
+		oldGitRepo := e.ObjectOld.(*sourcev1.GitRepository)
+		if oldGitRepo == nil ||
+			!isArtifactSame(oldGitRepo.Status.Artifact, newGitRepo.Status.Artifact) {
+
+			return true
+		}
+	case sourcev1b2.BucketKind:
+		newBucket := e.ObjectNew.(*sourcev1b2.Bucket)
+		oldBucket := e.ObjectOld.(*sourcev1b2.Bucket)
+		if oldBucket == nil ||
+			!isArtifactSame(oldBucket.Status.Artifact, newBucket.Status.Artifact) {
+
+			return true
+		}
+	case sourcev1b2.OCIRepositoryKind:
+		newOCIRepo := e.ObjectNew.(*sourcev1b2.OCIRepository)
+		oldOCIRepo := e.ObjectOld.(*sourcev1b2.OCIRepository)
+		if oldOCIRepo == nil ||
+			!isArtifactSame(oldOCIRepo.Status.Artifact, newOCIRepo.Status.Artifact) {
+
+			return true
+		}
+	}
+
+	return false
+}
+
+func isArtifactSame(oldArtifact, newArtifact *sourcev1.Artifact) bool {
+	if oldArtifact == nil && newArtifact != nil {
+		return false
+	}
+	if oldArtifact != nil && newArtifact == nil {
+		return false
+	}
+	return reflect.DeepEqual(oldArtifact, newArtifact)
+}

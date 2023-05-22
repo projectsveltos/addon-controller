@@ -32,7 +32,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSources(
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	o client.Object,
 ) []reconcile.Request {
 
@@ -43,7 +43,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSources(
 		o.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to configMap/secret change")
+	logger.V(logs.LogDebug).Info("reacting to flux source change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
@@ -53,21 +53,21 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSources(
 	switch o.(type) {
 	case *sourcev1.GitRepository:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1.GroupVersion.String(),
 			Kind:       sourcev1.GitRepositoryKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *sourcev1b2.OCIRepository:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1b2.GroupVersion.String(),
 			Kind:       sourcev1b2.OCIRepositoryKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *sourcev1b2.Bucket:
 		key = corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(),
+			APIVersion: sourcev1b2.GroupVersion.String(),
 			Kind:       sourcev1b2.BucketKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),

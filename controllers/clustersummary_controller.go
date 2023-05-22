@@ -126,7 +126,12 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
 //+kubebuilder:rbac:groups="infrastructure.cluster.x-k8s.io",resources="*",verbs=get;watch;list
-//+kubebuilder:rbac:groups="config.projectsveltos.io",resources=gitrepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=gitrepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=gitrepositories/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=ocirepositories,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=ocirepositories/status,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets,verbs=get;watch;list
+//+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets/status,verbs=get;watch;list
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -366,7 +371,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	// need to be reconciled.
 
 	err := c.Watch(&source.Kind{Type: &sourcev1.GitRepository{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 	if err != nil {
@@ -374,7 +379,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	}
 
 	err = c.Watch(&source.Kind{Type: &sourcev1b2.OCIRepository{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 	if err != nil {
@@ -382,7 +387,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	}
 
 	return c.Watch(&source.Kind{Type: &sourcev1b2.Bucket{}},
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSources),
+		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
 }
@@ -657,7 +662,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 		)
 	}
 
-	// Update list of WorklaodRoles currently referenced by ClusterSummary
+	// Update list of resources currently referenced by ClusterSummary
 	r.ClusterSummaryMap[clusterSummaryName] = currentReferences
 	return nil
 }
@@ -727,8 +732,17 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
 
+		var apiVersion string
+		switch clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind {
+		case sourcev1.GitRepositoryKind:
+			apiVersion = sourcev1.GroupVersion.String()
+		case sourcev1b2.OCIRepositoryKind:
+			apiVersion = sourcev1b2.GroupVersion.String()
+		case sourcev1b2.BucketKind:
+			apiVersion = sourcev1b2.GroupVersion.String()
+		}
 		currentReferences.Insert(&corev1.ObjectReference{
-			APIVersion: clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
+			APIVersion: apiVersion,
 			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
 			Namespace:  namespace,
 			Name:       referencedName,

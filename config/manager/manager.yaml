@@ -59,13 +59,6 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 500m
-            memory: 128Mi
         volumeMounts:
         - mountPath: /tmp
           name: tmp            

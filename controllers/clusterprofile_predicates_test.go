@@ -17,7 +17,6 @@ limitations under the License.
 package controllers_test
 
 import (
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -429,93 +428,6 @@ var _ = Describe("ClusterProfile Predicates: MachinePredicates", func() {
 		}
 
 		result := machinePredicate.Update(e)
-		Expect(result).To(BeFalse())
-	})
-})
-
-var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
-	var logger logr.Logger
-	var gitRepository *sourcev1.GitRepository
-
-	BeforeEach(func() {
-		logger = klogr.New()
-		gitRepository = &sourcev1.GitRepository{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      upstreamClusterNamePrefix + randomString(),
-				Namespace: "predicates" + randomString(),
-			},
-		}
-
-		Expect(addTypeInformationToObject(scheme, gitRepository)).To(Succeed())
-	})
-
-	It("Create reprocesses", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
-
-		e := event.CreateEvent{
-			Object: gitRepository,
-		}
-
-		result := sourcePredicate.Create(e)
-		Expect(result).To(BeTrue())
-	})
-	It("Delete does reprocess", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
-
-		e := event.DeleteEvent{
-			Object: gitRepository,
-		}
-
-		result := sourcePredicate.Delete(e)
-		Expect(result).To(BeTrue())
-	})
-	It("Update reprocesses when artifact has changed", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
-
-		gitRepository.Status.Artifact = &sourcev1.Artifact{
-			Revision: randomString(),
-		}
-
-		oldGitRepository := &sourcev1.GitRepository{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      gitRepository.Name,
-				Namespace: gitRepository.Namespace,
-			},
-		}
-
-		Expect(addTypeInformationToObject(scheme, oldGitRepository)).To(Succeed())
-
-		e := event.UpdateEvent{
-			ObjectNew: gitRepository,
-			ObjectOld: oldGitRepository,
-		}
-
-		result := sourcePredicate.Update(e)
-		Expect(result).To(BeTrue())
-	})
-	It("Update does not reprocess when artifact has not changed", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
-
-		gitRepository.Status.Artifact = &sourcev1.Artifact{
-			Revision: randomString(),
-		}
-
-		oldGitRepository := &sourcev1.GitRepository{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      gitRepository.Name,
-				Namespace: gitRepository.Namespace,
-			},
-		}
-		oldGitRepository.Status.Artifact = gitRepository.GetArtifact()
-
-		Expect(addTypeInformationToObject(scheme, oldGitRepository)).To(Succeed())
-
-		e := event.UpdateEvent{
-			ObjectNew: gitRepository,
-			ObjectOld: oldGitRepository,
-		}
-
-		result := sourcePredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
 })

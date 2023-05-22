@@ -730,6 +730,63 @@ subjects:
 		Expect(len(u)).To(Equal(1))
 		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
 	})
+
+	It("collectContent collect contents with no error even when there are section with multiple resources", func() {
+		content := `    apiVersion: v1
+    kind: Service
+    metadata:
+      name: sample-app
+      namespace: staging
+      labels:
+        environment: staging
+    spec:
+      selector:
+        app: sample-app
+      ports:
+      - protocol: TCP
+        port: 80
+        targetPort: 8080
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: sample-app
+      namespace: staging
+      labels:
+        environment: staging
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          environment: staging
+      template:
+        metadata:
+          labels:
+            environment: staging
+        spec:
+          containers:
+          - name: sample-app
+            image: nginx:latest
+            imagePullPolicy: IfNotPresent
+            ports:
+            - containerPort: 8080
+    ---
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: application-settings
+      namespace: staging
+    stringData:
+      app_mode: staging
+      certificates: /etc/ssl/staging
+      db_user: staging-user
+      db_password: staging-password
+`
+		data := map[string]string{"policy.yaml": content}
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(len(u)).To(Equal(3))
+	})
 })
 
 // validateResourceReports validates that number of resourceResources with certain actions

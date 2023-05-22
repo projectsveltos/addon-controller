@@ -155,11 +155,13 @@ func getClusterConfigurationName(clusterName string, clusterType libsveltosv1alp
 func getKeyFromObject(scheme *runtime.Scheme, obj client.Object) *corev1.ObjectReference {
 	addTypeInformationToObject(scheme, obj)
 
+	apiVersion, kind := obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+
 	return &corev1.ObjectReference{
 		Namespace:  obj.GetNamespace(),
 		Name:       obj.GetName(),
-		Kind:       obj.GetObjectKind().GroupVersionKind().Kind,
-		APIVersion: obj.GetObjectKind().GroupVersionKind().String(),
+		Kind:       kind,
+		APIVersion: apiVersion,
 	}
 }
 

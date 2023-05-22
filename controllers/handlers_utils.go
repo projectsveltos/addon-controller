@@ -316,7 +316,6 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 		elements := strings.Split(data[k], separator)
 		for i := range elements {
 			section := removeCommentsAndEmptyLines(elements[i])
-
 			if section == "" {
 				continue
 			}
@@ -332,19 +331,46 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				section = instance
 			}
 
-			policy, err := utils.GetUnstructured([]byte(section))
+			// Section can contain multiple resources separated by ---
+			policy, err := getUnstructured([]byte(section), logger)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
 				return nil, err
 			}
 
 			if policy == nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
-				return nil, fmt.Errorf("failed to get policy from Data %.100s", section)
+				continue
 			}
 
-			policies = append(policies, policy)
+			policies = append(policies, policy...)
 		}
+	}
+
+	return policies, nil
+}
+
+func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	policies := make([]*unstructured.Unstructured, 0)
+	elements := strings.Split(string(section), separator)
+
+	for i := range elements {
+		section := removeCommentsAndEmptyLines(elements[i])
+		if section == "" {
+			continue
+		}
+
+		policy, err := utils.GetUnstructured([]byte(section))
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+			return nil, err
+		}
+
+		if policy == nil {
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+			return nil, fmt.Errorf("failed to get policy from Data %.100s", section)
+		}
+
+		policies = append(policies, policy)
 	}
 
 	return policies, nil

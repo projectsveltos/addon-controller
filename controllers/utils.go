@@ -41,6 +41,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
+//+kubebuilder:rbac:groups=extension.projectsveltos.io,resources=yttsources,verbs=get;list;watch
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=debuggingconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;impersonate

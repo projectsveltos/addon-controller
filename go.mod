@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-manager
 
-go 1.19
+go 1.20
 
 require (
 	github.com/Masterminds/semver v1.5.0
@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.5
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.10.1
+	github.com/projectsveltos/libsveltos v0.10.2
 	github.com/prometheus/client_golang v1.14.0
 	github.com/spf13/pflag v1.0.5
 	golang.org/x/text v0.9.0

@@ -987,9 +987,7 @@ func (r *ClusterProfileReconciler) getMatchingClusters(ctx context.Context,
 		}
 	}
 
-	for i := range clusterProfileScope.ClusterProfile.Spec.ClusterRefs {
-		matchingCluster = append(matchingCluster, clusterProfileScope.ClusterProfile.Spec.ClusterRefs[i])
-	}
+	matchingCluster = append(matchingCluster, clusterProfileScope.ClusterProfile.Spec.ClusterRefs...)
 
 	return matchingCluster, nil
 }

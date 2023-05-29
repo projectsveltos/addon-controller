@@ -1570,6 +1570,14 @@ rules:
 - apiGroups:
   - extension.projectsveltos.io
   resources:
+  - jsonnetsources
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - extension.projectsveltos.io
+  resources:
   - yttsources
   verbs:
   - get

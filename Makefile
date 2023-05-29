@@ -79,6 +79,7 @@ CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
+GOLANGCI_LINT_VERSION := "v1.52.2"
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -89,8 +90,8 @@ $(ENVSUBST): $(TOOLS_DIR)/go.mod # Build envsubst from tools folder.
 $(KUSTOMIZE): $(TOOLS_DIR)/go.mod # Build kustomize from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(BIN_DIR)/kustomize sigs.k8s.io/kustomize/kustomize/v4
 
-$(GOLANGCI_LINT): $(TOOLS_DIR)/go.mod # Build golangci-lint from tools folder.
-	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst hack/tools/,,$@) github.com/golangci/golangci-lint/cmd/golangci-lint
+$(GOLANGCI_LINT): # Build golangci-lint from tools folder.
+	cd $(TOOLS_DIR); ./get-golangci-lint.sh $(GOLANGCI_LINT_VERSION)
 
 $(SETUP_ENVTEST): $(TOOLS_DIR)/go.mod # Build setup-envtest from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst hack/tools/,,$@) sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -113,7 +114,7 @@ $(KUBECTL):
 	chmod +x $@
 
 .PHONY: tools
-tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(GOLANGCI_LINT) $(SETUP_ENVTEST) $(GOIMPORTS) $(GINKGO) $(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
+tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(SETUP_ENVTEST) $(GOLANGCI_LINT) $(GOIMPORTS) $(GINKGO) $(CLUSTERCTL) $(KIND) $(KUBECTL) ## build all tools
 
 .PHONY: clean
 clean: ## Remove all built tools

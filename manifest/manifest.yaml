@@ -1823,7 +1823,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/addon-manager-amd64:dev
+        image: projectsveltos/addon-manager-amd64:v0.10.2
         livenessProbe:
           httpGet:
             path: /healthz

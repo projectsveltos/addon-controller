@@ -194,6 +194,22 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - addonconstraints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - addonconstraints/status
+  verbs:
+  - get
+  - list
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - debuggingconfigurations
   verbs:
   - get

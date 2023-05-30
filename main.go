@@ -46,15 +46,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/addon-manager/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+
+	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	"github.com/projectsveltos/addon-manager/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-manager/pkg/constraints"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -75,9 +78,10 @@ var (
 )
 
 const (
-	defaultReconcilers = 10
-	defaultWorkers     = 20
-	defaulReportMode   = int(controllers.CollectFromManagementCluster)
+	addonConstraintTimer = 5
+	defaultReconcilers   = 10
+	defaultWorkers       = 20
+	defaulReportMode     = int(controllers.CollectFromManagementCluster)
 )
 
 func main() {
@@ -113,26 +117,14 @@ func main() {
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
 
-	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
-	controllers.RegisterFeatures(d, setupLog)
-
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
 	logsettings.RegisterForLogSettings(ctx,
-		libsveltosv1alpha1.ComponentSveltosManager, ctrl.Log.WithName("log-setter"),
+		libsveltosv1alpha1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
 	var clusterProfileController controller.Controller
-	clusterProfileReconciler := &controllers.ClusterProfileReconciler{
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
-		Mux:                  sync.Mutex{},
-		ConcurrentReconciles: concurrentReconciles,
-	}
+	clusterProfileReconciler := getClusterProfileReconciler(mgr)
 	clusterProfileController, err = clusterProfileReconciler.SetupWithManager(mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
@@ -140,37 +132,24 @@ func main() {
 	}
 
 	var clusterSummaryController controller.Controller
-	clusterSummaryReconciler := &controllers.ClusterSummaryReconciler{
-		Config:               mgr.GetConfig(),
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		ReportMode:           reportMode,
-		Deployer:             d,
-		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
-		PolicyMux:            sync.Mutex{},
-		ConcurrentReconciles: concurrentReconciles,
-	}
+	clusterSummaryReconciler := getClusterSummaryReconciler(ctx, mgr)
 	clusterSummaryController, err = clusterSummaryReconciler.SetupWithManager(ctx, mgr)
 	if err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)
 		os.Exit(1)
 	}
+
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
 
 	setupIndexes(ctx, mgr)
 
-	go capiWatchers(ctx, mgr,
-		clusterProfileReconciler, clusterProfileController,
-		clusterSummaryReconciler, clusterSummaryController,
-		setupLog)
+	startWatchers(ctx, mgr, clusterProfileReconciler, clusterProfileController,
+		clusterSummaryReconciler, clusterSummaryController)
 
-	go fluxWatchers(ctx, mgr,
-		clusterSummaryReconciler, clusterSummaryController,
-		setupLog)
+	go constraints.InitializeManager(ctx, ctrl.Log.WithName("addon-constraints"),
+		mgr.GetConfig(), mgr.GetClient(), addonConstraintTimer)
 
 	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
 	if err := mgr.Start(ctx); err != nil {
@@ -341,5 +320,50 @@ func fluxWatchers(ctx context.Context, mgr ctrl.Manager,
 			}
 			return
 		}
+	}
+}
+
+func startWatchers(ctx context.Context, mgr manager.Manager,
+	clusterProfileReconciler *controllers.ClusterProfileReconciler, clusterProfileController controller.Controller,
+	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller) {
+
+	go capiWatchers(ctx, mgr,
+		clusterProfileReconciler, clusterProfileController,
+		clusterSummaryReconciler, clusterSummaryController,
+		setupLog)
+
+	go fluxWatchers(ctx, mgr,
+		clusterSummaryReconciler, clusterSummaryController,
+		setupLog)
+}
+
+func getClusterProfileReconciler(mgr manager.Manager) *controllers.ClusterProfileReconciler {
+	return &controllers.ClusterProfileReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Mux:                  sync.Mutex{},
+		ConcurrentReconciles: concurrentReconciles,
+	}
+}
+
+func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *controllers.ClusterSummaryReconciler {
+	d := deployer.GetClient(ctx, ctrl.Log.WithName("deployer"), mgr.GetClient(), workers)
+	controllers.RegisterFeatures(d, setupLog)
+
+	return &controllers.ClusterSummaryReconciler{
+		Config:               mgr.GetConfig(),
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ReportMode:           reportMode,
+		Deployer:             d,
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
+		PolicyMux:            sync.Mutex{},
+		ConcurrentReconciles: concurrentReconciles,
 	}
 }

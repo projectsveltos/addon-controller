@@ -246,5 +246,9 @@ var _ = Describe("Feature", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
+
+		currentNs := &corev1.Namespace{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 	})
 })

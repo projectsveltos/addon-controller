@@ -36,4 +36,3 @@ resources:
   kind: ClusterReport
   path: github.com/projectsveltos/addon-manager/api/v1alpha1
   version: v1alpha1
-version: "3"

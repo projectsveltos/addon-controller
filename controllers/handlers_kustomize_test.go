@@ -26,11 +26,11 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/gdexlab/go-render/render"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/gdexlab/go-render/render"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,6 +63,9 @@ var _ = Describe("KustomizeRefs", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
+				},
+				Annotations: map[string]string{
+					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
 				},
 			},
 		}

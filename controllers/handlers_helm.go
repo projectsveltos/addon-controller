@@ -307,7 +307,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
 	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
 	// only after helm release is successfully undeployed.
-	conflict, err := updateStatusForReferencedHelmReleases(ctx, c, clusterSummary)
+	conflict, err := updateStatusForeferencedHelmReleases(ctx, c, clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -653,7 +653,7 @@ func repoUpdate(settings *cli.EnvSettings, name, url string, logger logr.Logger)
 
 // installRelease installs helm release in the CAPI cluster.
 // No action in DryRun mode.
-func installRelease(clusterSummary *configv1alpha1.ClusterSummary,
+func installRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
 	settings *cli.EnvSettings, releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
 	values map[string]interface{}, logger logr.Logger) error {
 
@@ -730,6 +730,13 @@ func installRelease(clusterSummary *configv1alpha1.ClusterSummary,
 		}
 	}
 
+	err = validateInstallHelmResources(ctx, clusterSummary, installObject, chartRequested,
+		values, logger)
+	if err != nil {
+		return err
+	}
+
+	installObject.DryRun = false
 	_, err = installObject.Run(chartRequested, values)
 	if err != nil {
 		return err
@@ -770,7 +777,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 
 // upgradeRelease upgrades helm release in CAPI cluster.
 // No action in DryRun mode.
-func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings,
+func upgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings,
 	releaseName, releaseNamespace, chartName, chartVersion, kubeconfig string,
 	values map[string]interface{}, logger logr.Logger) error {
 
@@ -824,7 +831,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	hisClient.Max = 1
 	_, err = hisClient.Run(releaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = installRelease(clusterSummary, settings, releaseName, releaseNamespace, chartName, chartVersion,
+		err = installRelease(ctx, clusterSummary, settings, releaseName, releaseNamespace, chartName, chartVersion,
 			kubeconfig, values, logger)
 		if err != nil {
 			return err
@@ -834,7 +841,14 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 		return err
 	}
 
-	_, err = upgradeObject.Run(releaseName, chartRequested, nil)
+	err = validateUpgradeHelmResources(ctx, clusterSummary, upgradeObject, releaseName, chartRequested,
+		values, logger)
+	if err != nil {
+		return err
+	}
+
+	upgradeObject.DryRun = false
+	_, err = upgradeObject.Run(releaseName, chartRequested, values)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1017,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	err = installRelease(clusterSummary, settings, requestedChart.ReleaseName,
+	err = installRelease(ctx, clusterSummary, settings, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace, requestedChart.ChartName,
 		requestedChart.ChartVersion, kubeconfig,
 		values, logger)
@@ -1074,7 +1088,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	err = upgradeRelease(clusterSummary, settings, requestedChart.ReleaseName,
+	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace, requestedChart.ChartName,
 		requestedChart.ChartVersion, kubeconfig,
 		values, logger)
@@ -1144,7 +1158,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 	return reports, nil
 }
 
-// updateStatusForReferencedHelmReleases considers helm releases ClusterSummary currently
+// updateStatusForeferencedHelmReleases considers helm releases ClusterSummary currently
 // references. For each of those helm releases, adds an entry in ClusterSummary.Status reporting
 // whether such helm release is managed by this ClusterSummary or not.
 // This method also returns:
@@ -1152,7 +1166,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 // - whether there is at least one helm release ClusterSummary is referencing, but currently not
 // allowed to manage.
 // No action in DryRun mode.
-func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
+func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
 	// No-op in DryRun mode
@@ -1418,7 +1432,7 @@ func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client
 				ChartName:        currentChart.ChartName,
 				ReleaseName:      currentChart.ReleaseName,
 				ReleaseNamespace: currentChart.ReleaseNamespace,
-				Resources:        resources,
+				Resources:        unstructuredToSveltosResources(resources),
 			}
 
 			helmResources = append(helmResources, helmInfo)
@@ -1429,8 +1443,8 @@ func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client
 		clusterType, nil, nil, helmResources, logger)
 }
 
-func collectHelmContent(manifest string, logger logr.Logger) ([]libsveltosv1alpha1.Resource, error) {
-	resources := make([]libsveltosv1alpha1.Resource, 0)
+func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	resources := make([]*unstructured.Unstructured, 0)
 
 	elements := strings.Split(manifest, separator)
 	for i := range elements {
@@ -1444,16 +1458,97 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]libsveltosv1alph
 			return nil, err
 		}
 
+		resources = append(resources, policy)
+	}
+
+	return resources, nil
+}
+
+func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []libsveltosv1alpha1.Resource {
+	resources := make([]libsveltosv1alpha1.Resource, 0)
+
+	for i := range policies {
 		r := libsveltosv1alpha1.Resource{
-			Namespace: policy.GetNamespace(),
-			Name:      policy.GetName(),
-			Kind:      policy.GetKind(),
-			Group:     policy.GetObjectKind().GroupVersionKind().Group,
-			Version:   policy.GetObjectKind().GroupVersionKind().Version,
+			Namespace: policies[i].GetNamespace(),
+			Name:      policies[i].GetName(),
+			Kind:      policies[i].GetKind(),
+			Group:     policies[i].GetObjectKind().GroupVersionKind().Group,
+			Version:   policies[i].GetObjectKind().GroupVersionKind().Version,
 		}
 
 		resources = append(resources, r)
 	}
 
-	return resources, nil
+	return resources
+}
+
+func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	installObject *action.Install, chartRequested *chart.Chart, values map[string]interface{},
+	logger logr.Logger) error {
+
+	installObject.DryRun = true
+
+	resources, err := installObject.Run(chartRequested, values)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to run %v", err))
+		return err
+	}
+
+	var policies []*unstructured.Unstructured
+	policies, err = collectHelmContent(resources.Manifest, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect helm resources %v", err))
+		return err
+	}
+
+	var openAPIValidations map[string][]byte
+	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		&clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range policies {
+		err = runOpenAPIValidations(ctx, openAPIValidations, policies[i], logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	upgradeObject *action.Upgrade, releaseName string, chartRequested *chart.Chart,
+	values map[string]interface{}, logger logr.Logger) error {
+
+	upgradeObject.DryRun = true
+
+	resources, err := upgradeObject.Run(releaseName, chartRequested, values)
+	if err != nil {
+		return err
+	}
+
+	var policies []*unstructured.Unstructured
+	policies, err = collectHelmContent(resources.Manifest, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect helm resources %v", err))
+		return err
+	}
+
+	var openAPIValidations map[string][]byte
+	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		&clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	for i := range policies {
+		err = runOpenAPIValidations(ctx, openAPIValidations, policies[i], logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

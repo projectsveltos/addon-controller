@@ -113,6 +113,9 @@ var _ = Describe("HandlersUtils", func() {
 				Labels: map[string]string{
 					"dc": "eng",
 				},
+				Annotations: map[string]string{
+					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
+				},
 			},
 		}
 
@@ -279,7 +282,7 @@ var _ = Describe("HandlersUtils", func() {
 		// Because those services do not exist in the workload cluster yet, both will be reported
 		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
 		// created)
-		resourceReports, err := controllers.DeployContent(context.TODO(),
+		resourceReports, err := controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
 			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
@@ -307,7 +310,7 @@ var _ = Describe("HandlersUtils", func() {
 		// Because services are now existing in the workload cluster and match the content in
 		// the secret referenced by ClusterProfile, both obejcts will be reported as no action
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
-		resourceReports, err = controllers.DeployContent(context.TODO(),
+		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
 			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
@@ -338,7 +341,7 @@ var _ = Describe("HandlersUtils", func() {
 		// Because objects are now existing in the workload cluster but don't match the content
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
 		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
-		resourceReports, err = controllers.DeployContent(context.TODO(),
+		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
 			secret, map[string]string{"service": newContent}, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
@@ -348,8 +351,9 @@ var _ = Describe("HandlersUtils", func() {
 		// Pass a different secret to DeployContent, which means the services are contained in a different Secret
 		// and that is the one referenced by ClusterSummary. DeployContent will report conflicts in this case.
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
-		resourceReports, err = controllers.DeployContent(context.TODO(), testEnv.Config, testEnv.Client,
-			tmpSecret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
+		resourceReports, err = controllers.DeployContent(context.TODO(), false,
+			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
+			clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -388,8 +392,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), testEnv.Config, testEnv.Client,
-			secret, clusterSummary, nil, klogr.New())
+		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), false,
+			testEnv.Config, testEnv.Client, secret, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
@@ -406,8 +410,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), testEnv.Config, testEnv.Client,
-			configMap, clusterSummary, nil, klogr.New())
+		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
+			testEnv.Config, testEnv.Client, configMap, clusterSummary, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})

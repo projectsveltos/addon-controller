@@ -117,7 +117,8 @@ spec:
                       to.
                     type: string
                   helmCharts:
-                    description: Helm charts
+                    description: Helm charts is a list of helm charts that need to
+                      be deployed
                     items:
                       properties:
                         chartName:
@@ -173,7 +174,9 @@ spec:
                       type: object
                     type: array
                   kustomizationRefs:
-                    description: Kustomization refs
+                    description: Kustomization refs is a list of kustomization paths.
+                      Kustomization will be run on those paths and the outcome will
+                      be deployed.
                     items:
                       properties:
                         deploymentType:
@@ -187,8 +190,7 @@ spec:
                           type: string
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
-                            - flux GitRepository;OCIRepository;Bucket - ConfigMap/Secret
-                            (which will be mounted as volume)'
+                            - flux GitRepository;OCIRepository;Bucket - ConfigMap/Secret'
                           enum:
                           - GitRepository
                           - OCIRepository
@@ -197,7 +199,7 @@ spec:
                           - Secret
                           type: string
                         name:
-                          description: Name of the rreferenced resource.
+                          description: Name of the referenced resource.
                           minLength: 1
                           type: string
                         namespace:
@@ -246,7 +248,7 @@ spec:
                           - ConfigMap
                           type: string
                         name:
-                          description: Name of the rreferenced resource.
+                          description: Name of the referenced resource.
                           minLength: 1
                           type: string
                         namespace:

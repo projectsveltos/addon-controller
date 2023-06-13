@@ -1,0 +1,50 @@
+openapi: 3.0.0
+info:
+  title: Kubernetes Replica Validation
+  version: 1.0.0
+
+paths:
+  /apis/apps/v1/namespaces/{namespace}/deployments/{deployment}:
+    put:
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+            minimum: 1
+          description: The namespace of the resource
+        - in: path
+          name: deployment
+          required: true
+          schema:
+            type: string
+            minimum: 1
+          description: The name of the resource
+      summary: Create/Update a new deployment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Deployment'
+      responses:
+        '200':
+          description: OK
+
+components:
+  schemas:
+    Deployment:
+      type: object
+      properties:
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+        spec:
+          type: object
+          properties:
+            replicas:
+              type: integer
+              minimum: 3

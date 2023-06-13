@@ -145,13 +145,13 @@ type KustomizationRef struct {
 	// be implicit set to cluster's namespace.
 	Namespace string `json:"namespace"`
 
-	// Name of the rreferenced resource.
+	// Name of the referenced resource.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
 	// Kind of the resource. Supported kinds are:
 	// - flux GitRepository;OCIRepository;Bucket
-	// - ConfigMap/Secret (which will be mounted as volume)
+	// - ConfigMap/Secret
 	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
 	Kind string `json:"kind"`
 
@@ -204,7 +204,7 @@ type PolicyRef struct {
 	// be implicit set to cluster's namespace.
 	Namespace string `json:"namespace"`
 
-	// Name of the rreferenced resource.
+	// Name of the referenced resource.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -264,10 +264,11 @@ type ClusterProfileSpec struct {
 	// +optional
 	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
 
-	// Helm charts
+	// Helm charts is a list of helm charts that need to be deployed
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`
 
-	// Kustomization refs
+	// Kustomization refs is a list of kustomization paths. Kustomization will
+	// be run on those paths and the outcome will be deployed.
 	KustomizationRefs []KustomizationRef `json:"kustomizationRefs,omitempty"`
 }
 

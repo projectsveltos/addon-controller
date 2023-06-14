@@ -185,20 +185,18 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		Name:      referencedObject.GetName(),
 	}
 
-	err = validateUnstructred(ctx, deployingToMgmtCluster, destConfig, destClient, referencedUnstructured, ref,
-		configv1alpha1.FeatureResources, clusterSummary, logger)
+	err = validateUnstructred(ctx, deployingToMgmtCluster, referencedUnstructured, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, referencedUnstructured, ref,
+	return deployUnstructured(ctx, destConfig, destClient, referencedUnstructured, ref,
 		configv1alpha1.FeatureResources, clusterSummary, logger)
 }
 
-func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
-) error {
+func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool,
+	referencedUnstructured []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) error {
 
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
@@ -228,7 +226,7 @@ func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool, destC
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
+func deployUnstructured(ctx context.Context, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
 	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {

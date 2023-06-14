@@ -504,7 +504,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 
-	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
+	localReports, err = deployUnstructured(ctx, localConfig, c, objectsToDeployLocally,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
@@ -516,7 +516,12 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		return nil, nil, err
 	}
 
-	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
+	err = validateUnstructred(ctx, true, objectsToDeployRemotely, clusterSummary, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	remoteReports, err = deployUnstructured(ctx, remoteRestConfig, remoteClient, objectsToDeployRemotely,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))

@@ -63,7 +63,10 @@ func getOpenAPIValidations(clusterNamespace, clusterName string,
 func runOpenAPIValidations(ctx context.Context, specs map[string][]byte,
 	resource *unstructured.Unstructured, logger logr.Logger) error {
 
-	logger.V(logs.LogDebug).Info("openAPIValidations")
+	logger = logger.WithValues("resource", fmt.Sprintf("%s:%s/%s", resource.GroupVersionKind().Kind,
+		resource.GetNamespace(), resource.GetName()))
+
+	logger.V(logs.LogVerbose).Info("openAPIValidations")
 
 	for key := range specs {
 		if err := openAPIValidation(ctx, specs[key], resource, logger); err != nil {

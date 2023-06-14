@@ -185,8 +185,43 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		Name:      referencedObject.GetName(),
 	}
 
+	err = validateUnstructred(ctx, deployingToMgmtCluster, destConfig, destClient, referencedUnstructured, ref,
+		configv1alpha1.FeatureResources, clusterSummary, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, referencedUnstructured, ref,
 		configv1alpha1.FeatureResources, clusterSummary, logger)
+}
+
+func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
+	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
+) error {
+
+	for i := range referencedUnstructured {
+		policy := referencedUnstructured[i]
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("validating resource %s %s/%s",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+
+		// OpenAPI validations are enforced when posting to managed clusters
+		if !deployingToMgmtCluster {
+			var openAPIValidations map[string][]byte
+			openAPIValidations, err := getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				&clusterSummary.Spec.ClusterType, logger)
+			if err != nil {
+				return err
+			}
+			err = runOpenAPIValidations(ctx, openAPIValidations, policy, logger)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // deployUnstructured deploys referencedUnstructured objects.
@@ -211,20 +246,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 
 		resource, policyHash := getResource(policy, referencedObject, featureID, logger)
-
-		// OpenAPI validations are enforced when posting to managed clusters
-		if !deployingToMgmtCluster {
-			var openAPIValidations map[string][]byte
-			openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				&clusterSummary.Spec.ClusterType, logger)
-			if err != nil {
-				return nil, err
-			}
-			err = runOpenAPIValidations(ctx, openAPIValidations, policy, logger)
-			if err != nil {
-				return nil, err
-			}
-		}
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())

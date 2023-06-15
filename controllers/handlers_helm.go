@@ -51,9 +51,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"

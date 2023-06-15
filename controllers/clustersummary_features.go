@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 

@@ -28,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 

@@ -1,4 +1,4 @@
-module github.com/projectsveltos/addon-manager/hack/tools
+module github.com/projectsveltos/addon-controller/hack/tools
 
 go 1.20
 

@@ -38,9 +38,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )

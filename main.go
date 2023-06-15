@@ -54,10 +54,10 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/api/v1alpha1/index"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/pkg/constraints"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/constraints"
 	//+kubebuilder:scaffold:imports
 )
 

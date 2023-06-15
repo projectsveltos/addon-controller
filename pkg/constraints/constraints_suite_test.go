@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectsveltos/addon-manager/internal/test/helpers"
+	"github.com/projectsveltos/addon-controller/internal/test/helpers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/utils"

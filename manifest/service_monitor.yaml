@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    control-plane: addon-manager
+    control-plane: addon-controller
   name: fm-controller-manager-metrics-monitor
   namespace: projectsveltos
 spec:
@@ -15,5 +15,5 @@ spec:
       insecureSkipVerify: true
   selector:
     matchLabels:
-      control-plane: addon-manager
+      control-plane: addon-controller
 

@@ -29,8 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -125,5 +125,9 @@ var _ = Describe("Template", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
+
+		currentNs := &corev1.Namespace{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 	})
 })

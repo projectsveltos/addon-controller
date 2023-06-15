@@ -45,8 +45,8 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -512,6 +512,11 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	remoteClient, err := client.New(remoteRestConfig, client.Options{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = validateUnstructred(ctx, true, objectsToDeployRemotely, clusterSummary, logger)
 	if err != nil {
 		return nil, nil, err
 	}

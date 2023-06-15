@@ -185,7 +185,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	}
 	instantiatedValues := buffer.String()
 
-	logger.V(logs.LogVerbose).Info("Values %q", instantiatedValues)
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("Values %q", instantiatedValues))
 	return instantiatedValues, nil
 }
 

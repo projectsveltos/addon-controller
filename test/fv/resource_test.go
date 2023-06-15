@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -246,5 +246,9 @@ var _ = Describe("Feature", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
+
+		currentNs := &corev1.Namespace{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 	})
 })

@@ -30,7 +30,7 @@ import (
 	"k8s.io/klog/v2/klogr"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
-	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-controller/controllers"
 )
 
 var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {

@@ -43,7 +43,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -89,13 +89,13 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfConfigMap(ctx context.Context, destConfig *rest.Config, destClient client.Client,
-	configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
+func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
+	destClient client.Client, configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
 	reports, err =
-		deployContent(ctx, destConfig, destClient, configMap, configMap.Data, clusterSummary,
+		deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data, clusterSummary,
 			mgtmResources, logger)
 	return
 }
@@ -104,8 +104,8 @@ func deployContentOfConfigMap(ctx context.Context, destConfig *rest.Config, dest
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContentOfSecret(ctx context.Context, destConfig *rest.Config, destClient client.Client,
-	secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
+func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
+	destClient client.Client, secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
@@ -115,7 +115,7 @@ func deployContentOfSecret(ctx context.Context, destConfig *rest.Config, destCli
 	}
 
 	reports, err =
-		deployContent(ctx, destConfig, destClient, secret, data, clusterSummary,
+		deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data, clusterSummary,
 			mgtmResources, logger)
 	return
 }
@@ -168,7 +168,7 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployContent(ctx context.Context, destConfig *rest.Config, destClient client.Client,
+func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config, destClient client.Client,
 	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
@@ -185,16 +185,49 @@ func deployContent(ctx context.Context, destConfig *rest.Config, destClient clie
 		Name:      referencedObject.GetName(),
 	}
 
+	err = validateUnstructred(ctx, deployingToMgmtCluster, referencedUnstructured, clusterSummary, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	return deployUnstructured(ctx, destConfig, destClient, referencedUnstructured, ref,
 		configv1alpha1.FeatureResources, clusterSummary, logger)
+}
+
+func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool,
+	referencedUnstructured []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) error {
+
+	for i := range referencedUnstructured {
+		policy := referencedUnstructured[i]
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("validating resource %s %s/%s",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+
+		// OpenAPI validations are enforced when posting to managed clusters
+		if !deployingToMgmtCluster {
+			var openAPIValidations map[string][]byte
+			openAPIValidations, err := getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				&clusterSummary.Spec.ClusterType, logger)
+			if err != nil {
+				return err
+			}
+			err = runOpenAPIValidations(ctx, openAPIValidations, policy, logger)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployUnstructured(ctx context.Context, destConfig *rest.Config, destClient client.Client,
-	referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+func deployUnstructured(ctx context.Context, destConfig *rest.Config,
+	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
 	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
@@ -210,31 +243,7 @@ func deployUnstructured(ctx context.Context, destConfig *rest.Config, destClient
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 
-		resource := &configv1alpha1.Resource{
-			Name:      policy.GetName(),
-			Namespace: policy.GetNamespace(),
-			Kind:      policy.GetKind(),
-			Group:     policy.GetObjectKind().GroupVersionKind().Group,
-			Version:   policy.GetObjectKind().GroupVersionKind().Version,
-			Owner: corev1.ObjectReference{
-				Namespace: referencedObject.Namespace,
-				Name:      referencedObject.Name,
-				Kind:      referencedObject.Kind,
-			},
-		}
-
-		policyHash, err := computePolicyHash(policy)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to compute policy hash %v", err))
-			policyHash = ""
-		}
-
-		// Get policy hash of referenced policy
-		addLabel(policy, deployer.ReferenceKindLabel, referencedObject.GetObjectKind().GroupVersionKind().Kind)
-		addLabel(policy, deployer.ReferenceNameLabel, referencedObject.Name)
-		addLabel(policy, deployer.ReferenceNamespaceLabel, referencedObject.Namespace)
-		addLabel(policy, reasonLabel, string(featureID))
-		addAnnotation(policy, deployer.PolicyHash, policyHash)
+		resource, policyHash := getResource(policy, referencedObject, featureID, logger)
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())
@@ -289,6 +298,40 @@ func deployUnstructured(ctx context.Context, destConfig *rest.Config, destClient
 	}
 
 	return reports, nil
+}
+
+// getResource returns sveltos Resource and the resource hash hash
+func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+	featureID configv1alpha1.FeatureID, logger logr.Logger) (resource *configv1alpha1.Resource, policyHash string) {
+
+	resource = &configv1alpha1.Resource{
+		Name:      policy.GetName(),
+		Namespace: policy.GetNamespace(),
+		Kind:      policy.GetKind(),
+		Group:     policy.GetObjectKind().GroupVersionKind().Group,
+		Version:   policy.GetObjectKind().GroupVersionKind().Version,
+		Owner: corev1.ObjectReference{
+			Namespace: referencedObject.Namespace,
+			Name:      referencedObject.Name,
+			Kind:      referencedObject.Kind,
+		},
+	}
+
+	var err error
+	policyHash, err = computePolicyHash(policy)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to compute policy hash %v", err))
+		policyHash = ""
+	}
+
+	// Get policy hash of referenced policy
+	addLabel(policy, deployer.ReferenceKindLabel, referencedObject.GetObjectKind().GroupVersionKind().Kind)
+	addLabel(policy, deployer.ReferenceNameLabel, referencedObject.Name)
+	addLabel(policy, deployer.ReferenceNamespaceLabel, referencedObject.Namespace)
+	addLabel(policy, reasonLabel, string(featureID))
+	addAnnotation(policy, deployer.PolicyHash, policyHash)
+
+	return resource, policyHash
 }
 
 // removeCommentsAndEmptyLines removes any line containing just YAML comments
@@ -518,7 +561,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 			UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
 		}
 	}
-	tmpResourceReports, err = deployObjects(ctx, c, localConfig, objectsToDeployLocally, clusterSummary,
+	tmpResourceReports, err = deployObjects(ctx, true, c, localConfig, objectsToDeployLocally, clusterSummary,
 		mgtmResources, logger)
 	localReports = append(localReports, tmpResourceReports...)
 	if err != nil {
@@ -526,7 +569,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	}
 
 	// Deploy all resources that need to be deployed in the managed cluster
-	tmpResourceReports, err = deployObjects(ctx, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
+	tmpResourceReports, err = deployObjects(ctx, false, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
 		mgtmResources, logger)
 	remoteReports = append(remoteReports, tmpResourceReports...)
 	if err != nil {
@@ -537,7 +580,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 }
 
 // deployObjects deploys content of referencedObjects
-func deployObjects(ctx context.Context, destClient client.Client, destConfig *rest.Config,
+func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient client.Client, destConfig *rest.Config,
 	referencedObjects []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
@@ -549,14 +592,14 @@ func deployObjects(ctx context.Context, destClient client.Client, destConfig *re
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
-				deployContentOfConfigMap(ctx, destConfig, destClient, configMap,
+				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap,
 					clusterSummary, mgtmResources, l)
 		} else {
 			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
-				deployContentOfSecret(ctx, destConfig, destClient, secret,
+				deployContentOfSecret(ctx, deployingToMgmtCluster, destConfig, destClient, secret,
 					clusterSummary, mgtmResources, l)
 		}
 

@@ -37,10 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -63,6 +63,9 @@ var _ = Describe("ClustersummaryController", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
+				},
+				Annotations: map[string]string{
+					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
 				},
 			},
 		}

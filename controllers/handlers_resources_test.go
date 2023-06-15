@@ -36,9 +36,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
@@ -58,6 +58,9 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
+				},
+				Annotations: map[string]string{
+					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
 				},
 			},
 		}

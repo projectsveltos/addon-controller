@@ -87,7 +87,7 @@ var (
 	ShouldUninstall                          = shouldUninstall
 	ShouldUpgrade                            = shouldUpgrade
 	UpdateChartsInClusterConfiguration       = updateChartsInClusterConfiguration
-	UpdateStatusForReferencedHelmReleases    = updateStatusForReferencedHelmReleases
+	UpdateStatusForeferencedHelmReleases     = updateStatusForeferencedHelmReleases
 	UpdateStatusForNonReferencedHelmReleases = updateStatusForNonReferencedHelmReleases
 	CreateReportForUnmanagedHelmRelease      = createReportForUnmanagedHelmRelease
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
@@ -126,4 +126,8 @@ var (
 
 const (
 	ReasonLabel = reasonLabel
+)
+
+var (
+	RunOpenapiValidations = runOpenAPIValidations
 )

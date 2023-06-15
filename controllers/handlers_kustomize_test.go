@@ -26,11 +26,11 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/gdexlab/go-render/render"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/gdexlab/go-render/render"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -41,9 +41,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
@@ -63,6 +63,9 @@ var _ = Describe("KustomizeRefs", func() {
 				Namespace: namespace,
 				Labels: map[string]string{
 					"dc": "eng",
+				},
+				Annotations: map[string]string{
+					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
 				},
 			},
 		}

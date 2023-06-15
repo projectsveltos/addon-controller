@@ -190,12 +190,13 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 
 	@echo wait for capd-system pod
 	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
-
-	@echo "Create a workload cluster"
-	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
 
 	@echo "Start projectsveltos"
 	$(MAKE) deploy-projectsveltos
+
+	@echo "Create a workload cluster"
+	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
 
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
@@ -204,13 +205,13 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz
 
 	@echo "sleep allowing control plane to be ready"
-	sleep 60
+	sleep 100
 
 	@echo "get kubeconfig to access workload cluster"
 	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
 
 	@echo "install calico on workload cluster"
-	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.25.1/manifests/calico.yaml
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.0/manifests/calico.yaml
 
 	@echo wait for calico pod
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
@@ -250,6 +251,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_addonconstraints.yaml
 
 	# Install projectsveltos addon-manager components
 	@echo 'Install projectsveltos addon-manager components'
@@ -258,6 +260,9 @@ deploy-projectsveltos: $(KUSTOMIZE)
 
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
+
+	# Install addon-constraint-controller
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/addon-constraint-controller/$(TAG)/manifest/manifest.yaml
 
 	@echo "Waiting for projectsveltos addon-manager to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-manager -n projectsveltos --timeout=$(TIMEOUT)

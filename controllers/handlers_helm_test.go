@@ -34,10 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-manager/api/v1alpha1"
-	"github.com/projectsveltos/addon-manager/controllers"
-	"github.com/projectsveltos/addon-manager/controllers/chartmanager"
-	"github.com/projectsveltos/addon-manager/pkg/scope"
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 )
@@ -151,7 +151,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(controllers.ShouldUpgrade(currentRelease, requestChart, clusterSummary)).To(BeTrue())
 	})
 
-	It("UpdateStatusForReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
+	It("UpdateStatusForeferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
 		calicoChart := &configv1alpha1.HelmChart{
 			RepositoryURL:    "https://projectcalico.docs.tigera.io/charts",
 			RepositoryName:   "projectcalico",
@@ -190,7 +190,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
 
@@ -204,14 +204,14 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(calicoChart.ReleaseName))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(calicoChart.ReleaseNamespace))
 
-		// UpdateStatusForReferencedHelmReleases adds status for referenced releases and does not remove any
+		// UpdateStatusForeferencedHelmReleases adds status for referenced releases and does not remove any
 		// existing entry for non existing releases.
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].Status).To(Equal(kyvernoSummary.Status))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseName).To(Equal(kyvernoSummary.ReleaseName))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace).To(Equal(kyvernoSummary.ReleaseNamespace))
 	})
 
-	It("updateStatusForReferencedHelmReleases is no-op in DryRun mode", func() {
+	It("updateStatusForeferencedHelmReleases is no-op in DryRun mode", func() {
 		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
 			HelmCharts: []configv1alpha1.HelmChart{
 				{RepositoryURL: randomString(), RepositoryName: randomString(), ChartName: randomString(), ChartVersion: randomString(),
@@ -233,7 +233,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
 

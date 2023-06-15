@@ -17,7 +17,7 @@
 #
 # When asking Sveltos to deploy resources in the management cluster, remember
 # to add necessary RBACs.
-# kubectl edit clusterrole addon-manager-role-extra
+# kubectl edit clusterrole addon-controller-role-extra
 apiVersion: config.projectsveltos.io/v1alpha1
 kind: ClusterProfile
 metadata:

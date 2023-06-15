@@ -1,7 +1,7 @@
 domain: projectsveltos.io
 layout:
 - go.kubebuilder.io/v3
-projectName: addon-manager
+projectName: addon-controller
 repo: github.com/projectsveltos/addon-controller
 resources:
 - api:

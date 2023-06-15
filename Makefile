@@ -20,7 +20,7 @@ SHELL = /usr/bin/env bash -o pipefail
 
 # Define Docker related variables.
 REGISTRY ?= projectsveltos
-IMAGE_NAME ?= addon-manager
+IMAGE_NAME ?= addon-controller
 ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
@@ -126,7 +126,7 @@ clean: ## Remove all built tools
 
 .PHONY: manifests
 manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt generate ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
 
@@ -253,8 +253,8 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_addonconstraints.yaml
 
-	# Install projectsveltos addon-manager components
-	@echo 'Install projectsveltos addon-manager components'
+	# Install projectsveltos addon-controller components
+	@echo 'Install projectsveltos addon-controller components'
 	cd config/manager && ../../$(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
@@ -264,8 +264,8 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	# Install addon-constraint-controller
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/addon-constraint-controller/$(TAG)/manifest/manifest.yaml
 
-	@echo "Waiting for projectsveltos addon-manager to be available..."
-	$(KUBECTL) wait --for=condition=Available deployment/addon-manager -n projectsveltos --timeout=$(TIMEOUT)
+	@echo "Waiting for projectsveltos addon-controller to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 
 prepare-configmap-with-kustomize: $(KUBECTL)
 	mkdir tmp; cd tmp; git clone git@github.com:gianlucam76/kustomize.git; \

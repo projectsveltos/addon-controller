@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 
-	"github.com/projectsveltos/addon-manager/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/constraints"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -45,7 +45,9 @@ var _ = Describe("AddonConstraint watcher", func() {
 		Expect(testEnv.List(context.TODO(), addonConstraints)).To(Succeed())
 
 		for i := range addonConstraints.Items {
-			Expect(testEnv.Delete(context.TODO(), &addonConstraints.Items[i]))
+			if addonConstraints.Items[i].DeletionTimestamp.IsZero() {
+				Expect(testEnv.Delete(context.TODO(), &addonConstraints.Items[i]))
+			}
 		}
 
 		cancel()

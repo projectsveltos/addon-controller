@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2/klogr"
 
-	"github.com/projectsveltos/addon-manager/controllers"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosutils "github.com/projectsveltos/libsveltos/lib/utils"
 )
 

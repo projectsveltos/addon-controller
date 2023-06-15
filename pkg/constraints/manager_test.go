@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectsveltos/addon-manager/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/constraints"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 )
@@ -41,13 +41,13 @@ var _ = Describe("Constraints", func() {
 	})
 
 	AfterEach(func() {
-		addonConstrains := &libsveltosv1alpha1.AddonConstraintList{}
-		err := testEnv.Client.List(ctx, addonConstrains)
+		addonConstraints := &libsveltosv1alpha1.AddonConstraintList{}
+		err := testEnv.List(ctx, addonConstraints)
 		Expect(err).To(BeNil())
-		for i := range addonConstrains.Items {
-			if addonConstrains.Items[i].DeletionTimestamp.IsZero() {
-				err := testEnv.Client.Delete(context.TODO(), &addonConstrains.Items[i])
-				Expect(err).To(Succeed())
+		for i := range addonConstraints.Items {
+			ac := &addonConstraints.Items[i]
+			if ac.DeletionTimestamp.IsZero() {
+				Expect(testEnv.Delete(context.TODO(), ac)).To(Succeed())
 			}
 		}
 	})
@@ -153,7 +153,7 @@ var _ = Describe("Constraints", func() {
 		}
 
 		Expect(testEnv.Create(context.TODO(), addonConstraint2)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, addonConstraint1)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, addonConstraint2)).To(Succeed())
 
 		constraints.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
 		manager := constraints.GetManager()

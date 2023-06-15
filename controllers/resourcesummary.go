@@ -29,7 +29,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 
-	driftdetection "github.com/projectsveltos/addon-manager/pkg/drift-detection"
+	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"

@@ -6,10 +6,10 @@
 # in the management cluster, Sveltos needs "*" as verbs. Sveltos
 # create/patch/delete such resources, it needs to fetch (so get/list)
 # and react to changes (so watch).
-# ClusterRoleBinding tying this to addon-manager ServiceAccount
+# ClusterRoleBinding tying this to addon-controller ServiceAccount
 # is created by default when installing Sveltos.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: manager-role-extra
+  name: controller-role-extra

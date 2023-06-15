@@ -2,27 +2,27 @@ apiVersion: v1
 kind: Namespace
 metadata:
   labels:
-    control-plane: addon-manager
+    control-plane: addon-controller
   name: projectsveltos
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: manager
+  name: controller
   namespace: projectsveltos
   labels:
-    control-plane: addon-manager
+    control-plane: addon-controller
 spec:
   selector:
     matchLabels:
-      control-plane: addon-manager
+      control-plane: addon-controller
   replicas: 1
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: addon-manager
+        control-plane: addon-controller
     spec:
       securityContext:
         runAsNonRoot: true
@@ -41,7 +41,7 @@ spec:
         - --v=5
         image: controller:latest
         imagePullPolicy: Always
-        name: manager
+        name: controller
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -62,7 +62,7 @@ spec:
         volumeMounts:
         - mountPath: /tmp
           name: tmp            
-      serviceAccountName: manager
+      serviceAccountName: controller
       terminationGracePeriodSeconds: 10
       volumes:
       - emptyDir: {}

@@ -65,7 +65,7 @@ const (
 type ReportMode int
 
 const (
-	// Default mode. In this mode, addon-manager running
+	// Default mode. In this mode, addon-controller running
 	// in the management cluster periodically collects/processes
 	// ResourceSummaries from Sveltos/CAPI clusters
 	CollectFromManagementCluster ReportMode = iota

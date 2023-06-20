@@ -9,25 +9,24 @@ spec:
   - repositoryURL: https://kyverno.github.io/kyverno/
     repositoryName: kyverno
     chartName: kyverno/kyverno
-    chartVersion: v2.5.0
+    chartVersion: v3.0.1
     releaseName: kyverno-latest
     releaseNamespace: kyverno
-    values:
-      replicaCount: 3
-      podAnnotations:
-        annotation1: annotation-value-1
+    values: |
+      admissionController:
+        replicas: 3
     helmChartAction: Install
   - repositoryURL: https://helm.nginx.com/stable
     repositoryName: nginx-stable
     chartName: nginx-stable/nginx-ingress
-    chartVersion: 0.14.0
+    chartVersion: 0.17.1
     releaseName: nginx-latest
     releaseNamespace: nginx
     helmChartAction: Install
   - repositoryURL: https://charts.bitnami.com/bitnami
     repositoryName: bitnami
     chartName: bitnami/contour
-    chartVersion: 9.1.2
+    chartVersion: 12.1.0
     releaseName: contour
     releaseNamespace: projectcontour
     helmChartAction: Install

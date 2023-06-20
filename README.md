@@ -39,12 +39,13 @@ spec:
   - repositoryURL:    https://kyverno.github.io/kyverno/
     repositoryName:   kyverno
     chartName:        kyverno/kyverno
-    chartVersion:     v2.6.0
+    chartVersion:     v3.0.1
     releaseName:      kyverno-latest
     releaseNamespace: kyverno
     helmChartAction:  Install
     values: |
-      replicaCount: "{{ .Cluster.spec.topology.controlPlane.replicas }}"
+      admissionController:
+        replicas: 3
   policyRefs:
   - name: storage-class
     namespace: default

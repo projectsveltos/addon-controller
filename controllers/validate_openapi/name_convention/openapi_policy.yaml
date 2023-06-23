@@ -1,8 +1,8 @@
-# This openapi policy makes sure that each deployment has replicas >=3
+# This openapi policy makes sure that each deployment has a name starting with prod
 
 # To use this openapi policy:
-# 1. save it in a file "replica-convention.yaml" 
-# 2. create a ConfigMap containing it: kubectl create configmap depl-replica-convention --from-file=replica-convention.yaml
+# 1. save it in a file "name-convention.yaml" 
+# 2. create a ConfigMap containing it: kubectl create configmap depl-name-convention --from-file=name-convention.yaml
 # 3. create an AddonConstraint instance referencing it
 #apiVersion: lib.projectsveltos.io/v1alpha1
 #kind: AddonConstraint
@@ -12,13 +12,12 @@
 #  clusterSelector: env=production
 #  openAPIValidationRefs:
 #  - namespace: default
-#    name: depl-replica-convention
+#    name: depl-name-convention
 #    kind: ConfigMap
-
 
 openapi: 3.0.0
 info:
-  title: Kubernetes Replica Validation
+  title: Name Validation Policy
   version: 1.0.0
 
 paths:
@@ -38,8 +37,7 @@ paths:
           schema:
             type: string
             minimum: 1
-          description: The name of the resource
-      summary: Create/Update a new deployment
+          description: The name of the resource    
       requestBody:
         required: true
         content:
@@ -49,7 +47,6 @@ paths:
       responses:
         '200':
           description: OK
-
 components:
   schemas:
     Deployment:
@@ -60,9 +57,4 @@ components:
           properties:
             name:
               type: string
-        spec:
-          type: object
-          properties:
-            replicas:
-              type: integer
-              minimum: 3
+              pattern: '^prod.*'

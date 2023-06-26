@@ -125,15 +125,15 @@ var _ = Describe("OpenAPI validations", func() {
 		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
 		Byf("Create an AddConstraint")
-		addonConstraint := &libsveltosv1alpha1.AddonConstraint{
+		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.AddonConstraintSpec{
+			Spec: libsveltosv1alpha1.AddonComplianceSpec{
 				ClusterSelector: clusterProfile.Spec.ClusterSelector,
 			},
 		}
-		Expect(k8sClient.Create(context.TODO(), addonConstraint)).To(Succeed())
+		Expect(k8sClient.Create(context.TODO(), addonCompliance)).To(Succeed())
 
 		Byf("Create a configMap with openAPI policy")
 		preventPortPolicy := fmt.Sprintf(preventPortPolicyYAML, configMapNs)
@@ -143,34 +143,34 @@ var _ = Describe("OpenAPI validations", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
-		Byf("Update AddonConstraint %s to reference ConfigMap %s/%s", addonConstraint.Name, configMap.Namespace, configMap.Name)
-		currentAddonConstraint := &libsveltosv1alpha1.AddonConstraint{}
+		Byf("Update AddonCompliance %s to reference ConfigMap %s/%s", addonCompliance.Name, configMap.Namespace, configMap.Name)
+		currentAddonCompliance := &libsveltosv1alpha1.AddonCompliance{}
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			retryErr := k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonConstraint.Name}, currentAddonConstraint)
+			retryErr := k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonCompliance.Name}, currentAddonCompliance)
 			if retryErr != nil {
 				return retryErr
 			}
-			currentAddonConstraint.Spec.OpenAPIValidationRefs = []libsveltosv1alpha1.OpenAPIValidationRef{
+			currentAddonCompliance.Spec.OpenAPIValidationRefs = []libsveltosv1alpha1.OpenAPIValidationRef{
 				{
 					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 					Namespace: configMap.Namespace,
 					Name:      configMap.Name,
 				},
 			}
-			return k8sClient.Update(context.TODO(), currentAddonConstraint)
+			return k8sClient.Update(context.TODO(), currentAddonCompliance)
 		})
 		Expect(err).To(BeNil())
 
-		Byf("Verify addon-constraint-controller properly process AddonConstraint instance")
+		Byf("Verify addon-compliance-controller properly process AddonCompliance instance")
 		Eventually(func() bool {
-			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonConstraint.Name}, currentAddonConstraint)
+			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonCompliance.Name}, currentAddonCompliance)
 			if err != nil {
 				return false
 			}
 			// There is one matching cluster
 			// There is one openapi policy
-			return len(currentAddonConstraint.Status.MatchingClusterRefs) == 1 &&
-				len(currentAddonConstraint.Status.OpenapiValidations) == 1
+			return len(currentAddonCompliance.Status.MatchingClusterRefs) == 1 &&
+				len(currentAddonCompliance.Status.OpenapiValidations) == 1
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Create a configMap with a Service")
@@ -215,8 +215,8 @@ var _ = Describe("OpenAPI validations", func() {
 
 		deleteClusterProfile(clusterProfile)
 
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonConstraint.Name}, currentAddonConstraint)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentAddonConstraint)).To(Succeed())
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonCompliance.Name}, currentAddonCompliance)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentAddonCompliance)).To(Succeed())
 
 		currentNs := &corev1.Namespace{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())

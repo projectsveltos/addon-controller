@@ -1598,7 +1598,7 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
-  - addonconstraints
+  - addoncompliances
   verbs:
   - get
   - list
@@ -1606,7 +1606,7 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
-  - addonconstraints/status
+  - addoncompliances/status
   verbs:
   - get
   - list

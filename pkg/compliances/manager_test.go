@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package constraints_test
+package compliances_test
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/projectsveltos/addon-controller/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 )
@@ -37,22 +37,22 @@ import (
 var _ = Describe("Constraints", func() {
 
 	BeforeEach(func() {
-		constraints.Reset()
+		compliances.Reset()
 	})
 
 	AfterEach(func() {
-		addonConstraints := &libsveltosv1alpha1.AddonConstraintList{}
-		err := testEnv.List(ctx, addonConstraints)
+		addonCompliances := &libsveltosv1alpha1.AddonComplianceList{}
+		err := testEnv.List(ctx, addonCompliances)
 		Expect(err).To(BeNil())
-		for i := range addonConstraints.Items {
-			ac := &addonConstraints.Items[i]
+		for i := range addonCompliances.Items {
+			ac := &addonCompliances.Items[i]
 			if ac.DeletionTimestamp.IsZero() {
 				Expect(testEnv.Delete(context.TODO(), ac)).To(Succeed())
 			}
 		}
 	})
 
-	It("getOpenapiPolicies returns all openapi policies in an AddonConstraint", func() {
+	It("getOpenapiPolicies returns all openapi policies in an AddonCompliance", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
@@ -65,11 +65,11 @@ var _ = Describe("Constraints", func() {
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		}
-		addonConstraint := &libsveltosv1alpha1.AddonConstraint{
+		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Status: libsveltosv1alpha1.AddonConstraintStatus{
+			Status: libsveltosv1alpha1.AddonComplianceStatus{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					cluster1, cluster2,
 				},
@@ -81,11 +81,11 @@ var _ = Describe("Constraints", func() {
 			},
 		}
 
-		Expect(testEnv.Create(context.TODO(), addonConstraint)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, addonConstraint)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), addonCompliance)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance)).To(Succeed())
 
-		constraints.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
-		manager := constraints.GetManager()
+		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
+		manager := compliances.GetManager()
 
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
 		manager.MarkClusterReady(cluster1.Namespace, cluster1.Name, &clusterType)
@@ -95,12 +95,12 @@ var _ = Describe("Constraints", func() {
 		clusterTpe := clusterproxy.GetClusterType(&cluster1)
 		policies, err := manager.GetClusterOpenapiPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonConstraint.Status.OpenapiValidations)))
+		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
 
 		clusterTpe = clusterproxy.GetClusterType(&cluster2)
 		policies, err = manager.GetClusterOpenapiPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonConstraint.Status.OpenapiValidations)))
+		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
 
 		clusterTpe = clusterproxy.GetClusterType(&cluster3)
 		policies, err = manager.GetClusterOpenapiPolicies(cluster3.Namespace, cluster3.Name, &clusterTpe)
@@ -108,7 +108,7 @@ var _ = Describe("Constraints", func() {
 		Expect(len(policies)).To(Equal(0))
 	})
 
-	It("processAddConstraint returns current policy map considering all AddonConstraints", func() {
+	It("processAddConstraint returns current policy map considering all AddonCompliances", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
@@ -117,11 +117,11 @@ var _ = Describe("Constraints", func() {
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
 		}
-		addonConstraint1 := &libsveltosv1alpha1.AddonConstraint{
+		addonCompliance1 := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Status: libsveltosv1alpha1.AddonConstraintStatus{
+			Status: libsveltosv1alpha1.AddonComplianceStatus{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					cluster1, cluster2,
 				},
@@ -133,14 +133,14 @@ var _ = Describe("Constraints", func() {
 			},
 		}
 
-		Expect(testEnv.Create(context.TODO(), addonConstraint1)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, addonConstraint1)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), addonCompliance1)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance1)).To(Succeed())
 
-		addonConstraint2 := &libsveltosv1alpha1.AddonConstraint{
+		addonCompliance2 := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Status: libsveltosv1alpha1.AddonConstraintStatus{
+			Status: libsveltosv1alpha1.AddonComplianceStatus{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					cluster1,
 				},
@@ -152,27 +152,27 @@ var _ = Describe("Constraints", func() {
 			},
 		}
 
-		Expect(testEnv.Create(context.TODO(), addonConstraint2)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, addonConstraint2)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), addonCompliance2)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance2)).To(Succeed())
 
-		constraints.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
-		manager := constraints.GetManager()
+		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
+		manager := compliances.GetManager()
 
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
 		manager.MarkClusterReady(cluster1.Namespace, cluster1.Name, &clusterType)
 		manager.MarkClusterReady(cluster2.Namespace, cluster2.Name, &clusterType)
 
-		Expect(constraints.ReEvaluateAddonConstraints(manager, context.TODO())).To(Succeed())
+		Expect(compliances.ReEvaluateAddonCompliances(manager, context.TODO())).To(Succeed())
 
 		clusterTpe := clusterproxy.GetClusterType(&cluster1)
 		result, err := manager.GetClusterOpenapiPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonConstraint1.Status.OpenapiValidations) + len(addonConstraint2.Status.OpenapiValidations)))
+		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations) + len(addonCompliance2.Status.OpenapiValidations)))
 
 		clusterTpe = clusterproxy.GetClusterType(&cluster2)
 		result, err = manager.GetClusterOpenapiPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonConstraint1.Status.OpenapiValidations)))
+		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations)))
 	})
 
 	It("reEvaluateClusters finds all annotated clusters and update internal clusters map", func() {
@@ -218,16 +218,16 @@ var _ = Describe("Constraints", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		constraints.InitializeManagerWithSkip(context.TODO(), klogr.New(), nil, c, 10)
-		manager := constraints.GetManager()
-		constraints.ReEvaluateClusters(manager, context.TODO())
+		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), nil, c, 10)
+		manager := compliances.GetManager()
+		compliances.ReEvaluateClusters(manager, context.TODO())
 
 		clusterType := libsveltosv1alpha1.ClusterTypeCapi
-		Expect(constraints.CanAddonBeDeployed(manager, cluster1.Namespace, cluster1.Name, &clusterType)).To(BeTrue())
-		Expect(constraints.CanAddonBeDeployed(manager, cluster2.Namespace, cluster2.Name, &clusterType)).To(BeFalse())
+		Expect(compliances.CanAddonBeDeployed(manager, cluster1.Namespace, cluster1.Name, &clusterType)).To(BeTrue())
+		Expect(compliances.CanAddonBeDeployed(manager, cluster2.Namespace, cluster2.Name, &clusterType)).To(BeFalse())
 
 		clusterType = libsveltosv1alpha1.ClusterTypeSveltos
-		Expect(constraints.CanAddonBeDeployed(manager, sveltosCluster1.Namespace, sveltosCluster1.Name, &clusterType)).To(BeTrue())
-		Expect(constraints.CanAddonBeDeployed(manager, sveltosCluster2.Namespace, sveltosCluster2.Name, &clusterType)).To(BeFalse())
+		Expect(compliances.CanAddonBeDeployed(manager, sveltosCluster1.Namespace, sveltosCluster1.Name, &clusterType)).To(BeTrue())
+		Expect(compliances.CanAddonBeDeployed(manager, sveltosCluster2.Namespace, sveltosCluster2.Name, &clusterType)).To(BeFalse())
 	})
 })

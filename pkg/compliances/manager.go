@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package constraints
+package compliances
 
 import (
 	"context"
@@ -50,12 +50,12 @@ type manager struct {
 	// openAPIValidations contains all openapi validations for a given cluster
 	openAPIValidations map[string]map[string][]byte
 
-	// list of clusters ready to be programmed, i.e., addon constraints for each of
+	// list of clusters ready to be programmed, i.e., addon compliances for each of
 	// those clusters have been loaded
 	clusters map[string]bool
 
-	// interval is the interval at which constraints are re-evaluated assuming
-	// at least an AddonConstraint instance has changed since last evaluation
+	// interval is the interval at which compliances are re-evaluated assuming
+	// at least an AddonCompliance instance has changed since last evaluation
 	interval time.Duration
 }
 
@@ -77,7 +77,7 @@ func InitializeManager(ctx context.Context, l logr.Logger, config *rest.Config, 
 			managerInstance.openAPIValidations = make(map[string]map[string][]byte)
 			managerInstance.clusters = make(map[string]bool)
 
-			go watchAddonConstraint(ctx, managerInstance.config, managerInstance.log)
+			go watchAddonCompliance(ctx, managerInstance.config, managerInstance.log)
 
 			go managerInstance.evaluate(ctx)
 		}
@@ -93,14 +93,14 @@ func GetManager() *manager {
 	return nil
 }
 
-// IsReady returns true if manager is ready, i.e, all AddonConstraints have
+// IsReady returns true if manager is ready, i.e, all AddonCompliances have
 // been evaluated since pod started
 func (m *manager) IsReady() bool {
 	return m.ready.Load().(bool)
 }
 
 // GetClusterOpenapiPolicies returns current openAPI policies for a given cluster.
-// Returns an error if manager has not had a chance to evaluate addonConstraints yet
+// Returns an error if manager has not had a chance to evaluate addonCompliances yet
 func (m *manager) GetClusterOpenapiPolicies(clusterNamespace, clusterName string,
 	clusterType *libsveltosv1alpha1.ClusterType) (map[string][]byte, error) {
 
@@ -114,7 +114,7 @@ func (m *manager) GetClusterOpenapiPolicies(clusterNamespace, clusterName string
 	}
 
 	if !m.canAddonBeDeployed(clusterNamespace, clusterName, clusterType) {
-		errMsg := "not ready yet: constraints for this cluster not loaded yet. addons cannot be deployed yet"
+		errMsg := "not ready yet: compliances for this cluster not loaded yet. addons cannot be deployed yet"
 		logger.V(logs.LogInfo).Info(errMsg)
 		return nil, fmt.Errorf("%s", errMsg)
 	}
@@ -139,7 +139,7 @@ func (m *manager) setReEvaluate() {
 	m.reEvaluate.Store(true)
 }
 
-// evaluate gets all AddonConstraint instances and build openapi validations
+// evaluate gets all AddonCompliance instances and build openapi validations
 // per cluster
 func (m *manager) evaluate(ctx context.Context) {
 	for {
@@ -148,9 +148,9 @@ func (m *manager) evaluate(ctx context.Context) {
 			m.log.V(logs.LogDebug).Info("Context canceled. Exiting goroutine.")
 			return
 		default:
-			m.log.V(logs.LogDebug).Info("Evaluating AddonConstraint")
+			m.log.V(logs.LogDebug).Info("Evaluating AddonCompliance")
 
-			if err := m.reEvaluateAddonConstraints(ctx); err == nil {
+			if err := m.reEvaluateAddonCompliances(ctx); err == nil {
 				m.ready.Store(true)
 				m.reEvaluate.Store(false)
 			}
@@ -164,20 +164,20 @@ func (m *manager) evaluate(ctx context.Context) {
 	}
 }
 
-func (m *manager) reEvaluateAddonConstraints(ctx context.Context) error {
-	// Cluster: addonConstraint + key: openapi validation
+func (m *manager) reEvaluateAddonCompliances(ctx context.Context) error {
+	// Cluster: addonCompliance + key: openapi validation
 	currentMap := make(map[string]map[string][]byte)
 
-	addonConstrains := &libsveltosv1alpha1.AddonConstraintList{}
+	addonConstrains := &libsveltosv1alpha1.AddonComplianceList{}
 	err := m.Client.List(ctx, addonConstrains)
 	if err != nil {
-		m.log.V(logs.LogInfo).Info(fmt.Sprintf("failed to get addonConstraints: %v", err))
+		m.log.V(logs.LogInfo).Info(fmt.Sprintf("failed to get addonCompliances: %v", err))
 		return err
 	}
 
 	for i := range addonConstrains.Items {
 		if !addonConstrains.Items[i].DeletionTimestamp.IsZero() {
-			// Skip deleted addonConstraint instances
+			// Skip deleted addonCompliance instances
 			continue
 		}
 		m.processAddConstraint(currentMap, &addonConstrains.Items[i])
@@ -237,7 +237,7 @@ func (m *manager) updateCurrentSveltosClusters(ctx context.Context, currentClust
 	return currentClusterMap
 }
 
-// isClusterAnnotated returns true if cluster has "addon-constraints-ready"
+// isClusterAnnotated returns true if cluster has "addon-compliances-ready"
 // annotation.
 func (m *manager) isClusterAnnotated(cluster client.Object) bool {
 	annotations := cluster.GetAnnotations()
@@ -246,14 +246,14 @@ func (m *manager) isClusterAnnotated(cluster client.Object) bool {
 	}
 	// This annotation is added by addon-constraint controller.
 	// It indicates addon-constraint controller has loaded all
-	// AddonConstraint instances matching this cluster when cluster was
+	// AddonCompliance instances matching this cluster when cluster was
 	// first discovered
 	_, ok := annotations[libsveltosv1alpha1.GetClusterAnnotation()]
 	return ok
 }
 
 func (m *manager) processAddConstraint(currentMap map[string]map[string][]byte,
-	addonConstrain *libsveltosv1alpha1.AddonConstraint) {
+	addonConstrain *libsveltosv1alpha1.AddonCompliance) {
 
 	policies := m.getOpenapiPolicies(addonConstrain)
 
@@ -268,8 +268,8 @@ func (m *manager) processAddConstraint(currentMap map[string]map[string][]byte,
 	}
 }
 
-// getOpenapiPolicies returns all openAPI policies contained in the AddonConstraint
-func (m *manager) getOpenapiPolicies(addonConstrain *libsveltosv1alpha1.AddonConstraint) map[string][]byte {
+// getOpenapiPolicies returns all openAPI policies contained in the AddonCompliance
+func (m *manager) getOpenapiPolicies(addonConstrain *libsveltosv1alpha1.AddonCompliance) map[string][]byte {
 	policies := make(map[string][]byte)
 	for policyKey := range addonConstrain.Status.OpenapiValidations {
 		key := fmt.Sprintf("%s-%s", addonConstrain.Name, policyKey)

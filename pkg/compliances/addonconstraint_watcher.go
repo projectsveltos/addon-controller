@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package constraints
+package compliances
 
 import (
 	"context"
@@ -35,11 +35,11 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
-func watchAddonConstraint(ctx context.Context, config *rest.Config, logger logr.Logger) {
+func watchAddonCompliance(ctx context.Context, config *rest.Config, logger logr.Logger) {
 	gvk := schema.GroupVersionKind{
 		Group:   "lib.projectsveltos.io",
 		Version: "v1alpha1",
-		Kind:    "AddonConstraint",
+		Kind:    "AddonCompliance",
 	}
 
 	dcinformer, err := getDynamicInformer(&gvk, config)
@@ -93,19 +93,19 @@ func runInformer(stopCh <-chan struct{}, s cache.SharedIndexInformer, logger log
 	mgr := GetManager()
 	handlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			// if a new AddonConstraint is added, re-evaluate
+			// if a new AddonCompliance is added, re-evaluate
 			mgr.setReEvaluate()
 		},
 		DeleteFunc: func(obj interface{}) {
-			// if a new AddonConstraint is added, re-evaluate
+			// if a new AddonCompliance is added, re-evaluate
 			mgr.setReEvaluate()
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			newAddonConstraint := &libsveltosv1alpha1.AddonConstraint{}
+			newAddonCompliance := &libsveltosv1alpha1.AddonCompliance{}
 			err := runtime.DefaultUnstructuredConverter.
-				FromUnstructured(newObj.(*unstructured.Unstructured).UnstructuredContent(), newAddonConstraint)
+				FromUnstructured(newObj.(*unstructured.Unstructured).UnstructuredContent(), newAddonCompliance)
 			if err != nil {
-				logger.Error(err, "could not convert obj to AddonConstraint")
+				logger.Error(err, "could not convert obj to AddonCompliance")
 				return
 			}
 
@@ -114,18 +114,18 @@ func runInformer(stopCh <-chan struct{}, s cache.SharedIndexInformer, logger log
 				mgr.setReEvaluate()
 			}
 
-			oldAddonConstraint := &libsveltosv1alpha1.AddonConstraint{}
+			oldAddonCompliance := &libsveltosv1alpha1.AddonCompliance{}
 			err = runtime.DefaultUnstructuredConverter.
-				FromUnstructured(oldObj.(*unstructured.Unstructured).UnstructuredContent(), oldAddonConstraint)
+				FromUnstructured(oldObj.(*unstructured.Unstructured).UnstructuredContent(), oldAddonCompliance)
 			if err != nil {
-				logger.Error(err, "could not convert obj to AddonConstraint")
+				logger.Error(err, "could not convert obj to AddonCompliance")
 				return
 			}
 
-			if !reflect.DeepEqual(oldAddonConstraint.Status, newAddonConstraint.Status) {
+			if !reflect.DeepEqual(oldAddonCompliance.Status, newAddonCompliance.Status) {
 				// re-evaluate
 				mgr.setReEvaluate()
-			} else if !reflect.DeepEqual(oldAddonConstraint.Labels, newAddonConstraint.Labels) {
+			} else if !reflect.DeepEqual(oldAddonCompliance.Labels, newAddonCompliance.Labels) {
 				// re-evaluate
 				mgr.setReEvaluate()
 			}

@@ -35,7 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/projectsveltos/addon-controller/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -44,9 +44,9 @@ func getOpenAPIValidations(clusterNamespace, clusterName string,
 	clusterType *libsveltosv1alpha1.ClusterType, logger logr.Logger) (map[string][]byte, error) {
 
 	logger.V(logs.LogDebug).Info("collect all openapi validations")
-	manager := constraints.GetManager()
+	manager := compliances.GetManager()
 	if manager == nil {
-		const errMsg = "constraints manager is not ready"
+		const errMsg = "compliances manager is not ready"
 		logger.V(logs.LogInfo).Info(errMsg)
 		return nil, fmt.Errorf("%s", errMsg)
 	}

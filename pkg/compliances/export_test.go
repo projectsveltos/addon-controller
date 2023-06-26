@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package constraints
+package compliances
 
 import (
 	"context"
@@ -32,11 +32,11 @@ import (
 
 var (
 	GetOpenapiPolicies         = (*manager).getOpenapiPolicies
-	ReEvaluateAddonConstraints = (*manager).reEvaluateAddonConstraints
+	ReEvaluateAddonCompliances = (*manager).reEvaluateAddonCompliances
 	ReEvaluateClusters         = (*manager).reEvaluateClusters
 	CanAddonBeDeployed         = (*manager).canAddonBeDeployed
 
-	WatchAddonConstraint = watchAddonConstraint
+	WatchAddonCompliance = watchAddonCompliance
 )
 
 func InitializeManagerWithSkip(ctx context.Context, l logr.Logger, config *rest.Config, c client.Client,

@@ -401,7 +401,7 @@ func getUnstructured(section []byte) *unstructured.Unstructured {
 	return policy
 }
 
-var _ = Describe("AddonConstraint", func() {
+var _ = Describe("AddonCompliance", func() {
 
 	It("Verify all openapi policies", func() {
 		const openAPIDir = "./validate_openapi"

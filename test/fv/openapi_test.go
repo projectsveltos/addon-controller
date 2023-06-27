@@ -219,9 +219,6 @@ var _ = Describe("OpenAPI validations", func() {
 			currentAddonCompliance)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentAddonCompliance)).To(Succeed())
 
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonCompliance.Name}, currentAddonCompliance)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentAddonCompliance)).To(Succeed())
-
 		currentNs := &corev1.Namespace{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())

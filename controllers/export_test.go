@@ -130,4 +130,6 @@ const (
 
 var (
 	RunOpenapiValidations = runOpenAPIValidations
+	RunLuaValidations     = runLuaValidations
+	LuaValidation         = luaValidation
 )

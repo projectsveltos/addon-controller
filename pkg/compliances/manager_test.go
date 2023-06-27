@@ -52,7 +52,7 @@ var _ = Describe("Constraints", func() {
 		}
 	})
 
-	It("getOpenapiPolicies returns all openapi policies in an AddonCompliance", func() {
+	It("getOpenapiPolicies returns all openapi/lua policies in an AddonCompliance", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
@@ -78,6 +78,10 @@ var _ = Describe("Constraints", func() {
 					randomString(): []byte(randomString()),
 					randomString(): []byte(randomString()),
 				},
+				LuaValidations: map[string][]byte{
+					randomString(): []byte(randomString()),
+					randomString(): []byte(randomString()),
+				},
 			},
 		}
 
@@ -96,19 +100,28 @@ var _ = Describe("Constraints", func() {
 		policies, err := manager.GetClusterOpenapiPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
 		Expect(err).To(BeNil())
 		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
+		policies, err = manager.GetClusterLuaPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
+		Expect(err).To(BeNil())
+		Expect(len(policies)).To(Equal(len(addonCompliance.Status.LuaValidations)))
 
 		clusterTpe = clusterproxy.GetClusterType(&cluster2)
 		policies, err = manager.GetClusterOpenapiPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
 		Expect(err).To(BeNil())
 		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
+		policies, err = manager.GetClusterLuaPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
+		Expect(err).To(BeNil())
+		Expect(len(policies)).To(Equal(len(addonCompliance.Status.LuaValidations)))
 
 		clusterTpe = clusterproxy.GetClusterType(&cluster3)
 		policies, err = manager.GetClusterOpenapiPolicies(cluster3.Namespace, cluster3.Name, &clusterTpe)
 		Expect(err).To(BeNil())
 		Expect(len(policies)).To(Equal(0))
+		policies, err = manager.GetClusterLuaPolicies(cluster3.Namespace, cluster3.Name, &clusterTpe)
+		Expect(err).To(BeNil())
+		Expect(len(policies)).To(Equal(0))
 	})
 
-	It("processAddConstraint returns current policy map considering all AddonCompliances", func() {
+	It("processAddonCompliance returns current policy map considering all AddonCompliances", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace: randomString(), Name: randomString(),
 			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),

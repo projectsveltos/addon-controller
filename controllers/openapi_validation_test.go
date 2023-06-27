@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2/klogr"
 
@@ -401,7 +402,7 @@ func getUnstructured(section []byte) *unstructured.Unstructured {
 	return policy
 }
 
-var _ = Describe("AddonCompliance", func() {
+var _ = Describe("OpenAPI AddonCompliance", func() {
 
 	It("Verify all openapi policies", func() {
 		const openAPIDir = "./validate_openapi"
@@ -474,6 +475,22 @@ func verifyOpenAPIPolicy(dirName string) {
 		Expect(err).ToNot(BeNil())
 	}
 }
+
+var _ = Describe("Lua AddonCompliance", func() {
+
+	It("Verify all lua policies", func() {
+		const luaDir = "./validate_lua"
+
+		dirs, err := os.ReadDir(luaDir)
+		Expect(err).To(BeNil())
+
+		for i := range dirs {
+			if dirs[i].IsDir() {
+				verifyLuaPolicies(filepath.Join(luaDir, dirs[i].Name()))
+			}
+		}
+	})
+})
 
 func getResource(dirName, fileName string) *unstructured.Unstructured {
 	resourceFileName := filepath.Join(dirName, fileName)

@@ -34,78 +34,97 @@ import (
 )
 
 const (
-	myAppServiceYAML = `apiVersion: v1
-kind: Service
+	// to instantiate pass name, namespace and deployment name in this order
+	horizontalAutoscaler = `apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
 metadata:
-  name: my-service
+  name: %s
   namespace: %s
 spec:
-  selector:
-    app: my-app
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8080
-  type: ClusterIP`
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: %s
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80`
 
-	preventPortPolicyYAML = `openapi: 3.0.0
-info:
-  title: My API
-  version: 1.0.0
-paths:
-  /api/v1/namespaces/%s/services/{service}:
-    put:
-      parameters:
-        - name: service
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ServiceRequest"
-      responses:
-        '201':
-          description: Service created successfully
-        '400':
-          description: Invalid request
-      x-kubernetes-body-schema:
-        $ref: "#/components/schemas/ServiceRequest"
-components:
-  schemas:
-    ServiceRequest:
-      type: object
-      properties:
-        metadata:
-          type: object
-          properties:
-            name:
-              type: string
-        spec:
-          type: object
-          properties:
-            ports:
-              type: array
-              items:
-                $ref: "#/components/schemas/Port"
-    Port:
-      type: object
-      properties:
-        port:
-          type: integer
-          not:
-            enum: [80]
-          example: 8080`
+	// to instantiate pass name, namespace in this order
+	helloWorldDeployment = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: my-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: my-container
+        image: hello-world
+`
+
+	deploymentAndAutoscaler = `function evaluate()
+    local hs = {}
+    hs.valid = true
+    hs.message = ""
+
+    local deployments = {}
+    local autoscalers = {}
+
+    -- Separate deployments and services from the resources
+    for _, resource in ipairs(resources) do
+        local kind = resource.kind
+        if resource.metadata.namespace == "%s" then
+            if kind == "Deployment" then
+                table.insert(deployments, resource)
+            elseif kind == "HorizontalPodAutoscaler" then
+                table.insert(autoscalers, resource)
+            end
+        end
+    end
+
+    -- Check for each deployment if there is a matching HorizontalPodAutoscaler
+    for _, deployment in ipairs(deployments) do
+        local deploymentName = deployment.metadata.name
+        local matchingAutoscaler = false
+
+        for _, autoscaler in ipairs(autoscalers) do
+            if autoscaler.spec.scaleTargetRef.name == deployment.metadata.name then
+                matchingAutoscaler = true
+                break
+            end
+        end
+
+        if not matchingAutoscaler then
+            hs.valid = false
+            hs.message = "No matching autoscaler found for deployment: " .. deploymentName
+            break
+        end
+    end
+
+    return hs
+end`
 )
 
-var _ = Describe("OpenAPI validations", func() {
+var _ = Describe("LUA validations", func() {
 	const (
-		namePrefix = "openapi-"
+		namePrefix = "lua-"
 	)
 
-	It("Deploy and updates resources referenced in ResourceRefs correctly enforcing openapi validations", Label("FV", "EXTENDED"), func() {
+	var (
+		namespace string
+	)
+
+	It("Deploy and updates resources referenced in ResourceRefs correctly enforcing lua validations", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -115,16 +134,16 @@ var _ = Describe("OpenAPI validations", func() {
 
 		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		configMapNs := randomString()
-		Byf("Create configMap's namespace %s", configMapNs)
+		namespace = randomString()
+		Byf("Create namespace %s. All namespaced resources used in this test will be placed here.", namespace)
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
+				Name: namespace,
 			},
 		}
 		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
-		Byf("Create an AddonCompliance")
+		Byf("Create an AddonCompliance matching managed cluster")
 		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -135,9 +154,9 @@ var _ = Describe("OpenAPI validations", func() {
 		}
 		Expect(k8sClient.Create(context.TODO(), addonCompliance)).To(Succeed())
 
-		Byf("Create a configMap with openAPI policy")
-		preventPortPolicy := fmt.Sprintf(preventPortPolicyYAML, configMapNs)
-		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), preventPortPolicy)
+		Byf("Create a configMap with LUA policy")
+		configMap := createConfigMapWithPolicy(namespace, namePrefix+randomString(),
+			fmt.Sprintf(deploymentAndAutoscaler, namespace))
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -150,7 +169,7 @@ var _ = Describe("OpenAPI validations", func() {
 			if retryErr != nil {
 				return retryErr
 			}
-			currentAddonCompliance.Spec.OpenAPIValidationRefs = []libsveltosv1alpha1.OpenAPIValidationRef{
+			currentAddonCompliance.Spec.LuaValidationRefs = []libsveltosv1alpha1.LuaValidationRef{
 				{
 					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
 					Namespace: configMap.Namespace,
@@ -168,14 +187,15 @@ var _ = Describe("OpenAPI validations", func() {
 				return false
 			}
 			// There is one matching cluster
-			// There is one openapi policy
+			// There is one lua policy
 			return len(currentAddonCompliance.Status.MatchingClusterRefs) == 1 &&
-				len(currentAddonCompliance.Status.OpenapiValidations) == 1
+				len(currentAddonCompliance.Status.LuaValidations) == 1
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Byf("Create a configMap with a Service")
-		myAppService := fmt.Sprintf(myAppServiceYAML, configMapNs)
-		configMap = createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), myAppService)
+		deploymentName := randomString()
+		Byf("Create a new configMap with a Deployment")
+		myDeployment := fmt.Sprintf(helloWorldDeployment, deploymentName, namespace)
+		configMap = createConfigMapWithPolicy(namespace, namePrefix+randomString(), myDeployment)
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
@@ -192,6 +212,8 @@ var _ = Describe("OpenAPI validations", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
+		// We have a LUA compliance policy enforcing any deployment without an associated
+		// HorizontalPodAutoscaler should not be deployed
 		Byf("Verifying ClusterSummary reports an error")
 		Eventually(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
@@ -205,7 +227,35 @@ var _ = Describe("OpenAPI validations", func() {
 				fs := &currentClusterSummary.Status.FeatureSummaries[i]
 				if fs.FeatureID == configv1alpha1.FeatureResources {
 					if fs.FailureMessage != nil {
-						return strings.Contains(*fs.FailureMessage, "OpenAPI validation")
+						return strings.Contains(*fs.FailureMessage, "Lua validation")
+					}
+				}
+			}
+
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Update configMap to also contain an HorizontalPodAutoscaler")
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+		myAutoscaler := fmt.Sprintf(horizontalAutoscaler, randomString(), namespace, deploymentName)
+		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, myDeployment, myAutoscaler)
+		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
+
+		Byf("Verifying ClusterSummary reports no error as now we are trying to deploy a deployment with an associated autoscaler")
+		Eventually(func() bool {
+			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			for i := range currentClusterSummary.Status.FeatureSummaries {
+				fs := &currentClusterSummary.Status.FeatureSummaries[i]
+				if fs.FeatureID == configv1alpha1.FeatureResources {
+					if fs.Status == configv1alpha1.FeatureStatusProvisioned {
+						return true
 					}
 				}
 			}
@@ -219,11 +269,8 @@ var _ = Describe("OpenAPI validations", func() {
 			currentAddonCompliance)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentAddonCompliance)).To(Succeed())
 
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonCompliance.Name}, currentAddonCompliance)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentAddonCompliance)).To(Succeed())
-
 		currentNs := &corev1.Namespace{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNs}, currentNs)).To(Succeed())
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 	})
 })

@@ -325,7 +325,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
 	// need to be reconciled.
-	err = c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
 		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	)
@@ -335,7 +335,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}},
+	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
 		ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
 	)
@@ -345,7 +345,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// When Secret changes, according to SecretPredicates,
 	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(&source.Kind{Type: &corev1.Secret{}},
+	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
 		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
 	)
@@ -362,7 +362,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
 	// need to be reconciled.
-	return c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+	return c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
 		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	)
@@ -372,7 +372,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	// When a Flux source (GitRepository/OCIRepository/Bucket) changes, one or more ClusterSummaries
 	// need to be reconciled.
 
-	err := c.Watch(&source.Kind{Type: &sourcev1.GitRepository{}},
+	err := c.Watch(source.Kind(mgr.GetCache(), &sourcev1.GitRepository{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
@@ -380,7 +380,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 		return err
 	}
 
-	err = c.Watch(&source.Kind{Type: &sourcev1b2.OCIRepository{}},
+	err = c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.OCIRepository{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)
@@ -388,7 +388,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 		return err
 	}
 
-	return c.Watch(&source.Kind{Type: &sourcev1b2.Bucket{}},
+	return c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.Bucket{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
 		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
 	)

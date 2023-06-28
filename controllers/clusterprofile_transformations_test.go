@@ -79,7 +79,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -112,7 +112,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		reconciler.ClusterProfileMap[matchingInfo] = clusterSet2
 
 		By("Expect only matchingClusterProfile to be requeued")
-		requests := controllers.RequeueClusterProfileForCluster(reconciler, cluster)
+		requests := controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
 		expected := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
 		Expect(requests).To(ContainElement(expected))
 
@@ -128,7 +128,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		clusterProfileSet.Insert(&nonMatchingInfo)
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
 
-		requests = controllers.RequeueClusterProfileForCluster(reconciler, cluster)
+		requests = controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
 		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
 		Expect(requests).To(ContainElement(expected))
 		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: nonMatchingClusterProfile.Name}}
@@ -148,7 +148,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		reconciler.ClusterProfiles[matchingInfo] = matchingClusterProfile.Spec.ClusterSelector
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
 
-		requests = controllers.RequeueClusterProfileForCluster(reconciler, cluster)
+		requests = controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
 		Expect(requests).To(HaveLen(0))
 	})
 
@@ -209,7 +209,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		clusterProfileReconciler.ClusterProfiles[clusterProfileInfo] = clusterProfile.Spec.ClusterSelector
 
 		clusterProfileList := controllers.RequeueClusterProfileForMachine(clusterProfileReconciler,
-			cpMachine)
+			context.TODO(), cpMachine)
 		Expect(len(clusterProfileList)).To(Equal(1))
 	})
 })

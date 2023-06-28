@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +34,7 @@ import (
 )
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	logger := klogr.New().WithValues(
@@ -100,7 +101,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 }
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	logger := klogr.New().WithValues(
@@ -162,7 +163,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 // requeueClusterSummaryForCluster is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
 // for ClusterSummary to update when its own Sveltos/CAPI Cluster gets updated.
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	cluster := o

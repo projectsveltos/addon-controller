@@ -229,7 +229,7 @@ var _ = Describe("Constraints", func() {
 			sveltosCluster2,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), nil, c, 10)
 		manager := compliances.GetManager()

@@ -32,10 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
@@ -85,11 +85,12 @@ var _ = BeforeSuite(func() {
 
 	scheme = runtime.NewScheme()
 
+	ctrl.SetLogger(klog.Background())
+
 	Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
 	Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
 	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
 	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
-	Expect(gatewayapi.AddToScheme(scheme)).To(Succeed())
 	Expect(sourcev1.AddToScheme(scheme)).To(Succeed())
 
 	var err error

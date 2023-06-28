@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog/v2/klogr"
@@ -29,7 +31,7 @@ import (
 )
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	cluster := o
@@ -90,7 +92,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
-	o client.Object,
+	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	machine := o.(*clusterv1.Machine)

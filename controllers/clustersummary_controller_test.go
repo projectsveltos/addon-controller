@@ -106,7 +106,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
@@ -136,7 +136,7 @@ var _ = Describe("ClustersummaryController", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
@@ -160,7 +160,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
@@ -186,15 +186,17 @@ var _ = Describe("ClustersummaryController", func() {
 	It("updateChartMap updates chartMap always but in DryRun mode", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
-			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
-				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()},
+			{
+				RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
+			},
 		}
 
 		initObjects := []client.Object{
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
@@ -231,9 +233,11 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
-			configv1alpha1.HelmChart{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
-				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString()})
-		Expect(c.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+			configv1alpha1.HelmChart{
+				RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
+			})
+		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
@@ -259,7 +263,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
@@ -297,7 +301,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
@@ -339,7 +343,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
@@ -369,7 +373,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
@@ -415,7 +419,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 
@@ -471,7 +475,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
@@ -531,7 +535,7 @@ var _ = Describe("ClustersummaryController", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
@@ -590,7 +594,7 @@ var _ = Describe("ClustersummaryController", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
@@ -806,7 +810,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		By(fmt.Sprintf("Verifying that a change in ConfigMap %s/%s causes ClusterSummary %s reconciliation",
 			configMap.Namespace, configMap.Name, referencingClusterSummary.Name))
 		Eventually(func() bool {
-			clusterSummaryList := controllers.RequeueClusterSummaryForReference(clusterSummaryReconciler, configMap)
+			clusterSummaryList := controllers.RequeueClusterSummaryForReference(clusterSummaryReconciler,
+				context.TODO(), configMap)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{
 				Namespace: referencingClusterSummary.Namespace, Name: referencingClusterSummary.Name}}
 			for i := range clusterSummaryList {
@@ -857,7 +862,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler, cluster)
+		clusterSummaryList := controllers.RequeueClusterSummaryForCluster(clusterSummaryReconciler,
+			context.TODO(), cluster)
 		result := reconcile.Request{
 			NamespacedName: types.NamespacedName{
 				Namespace: referencingClusterSummary.Namespace,

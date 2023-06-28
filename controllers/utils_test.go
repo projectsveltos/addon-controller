@@ -33,7 +33,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	gatewayapi "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -119,9 +118,6 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := gatewayapi.AddToScheme(s); err != nil {
-		return nil, err
-	}
 	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
 		return nil, err
 	}
@@ -203,7 +199,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		owner, err := configv1alpha1.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
@@ -233,7 +229,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		owner, err := configv1alpha1.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
@@ -258,7 +254,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			clusterSummary0,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterProfile.Name, cluster.Namespace, cluster.Name,
 			libsveltosv1alpha1.ClusterTypeCapi)

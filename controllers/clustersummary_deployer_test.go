@@ -86,7 +86,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
@@ -108,7 +108,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
@@ -132,7 +132,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
@@ -157,7 +157,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
@@ -173,7 +173,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := getClusterSummaryReconciler(c, nil)
 
@@ -226,7 +226,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
@@ -391,7 +391,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
@@ -437,7 +437,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
@@ -473,7 +473,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
@@ -507,7 +507,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			cluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 

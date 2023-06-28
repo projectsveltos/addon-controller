@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -285,9 +286,20 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,
 	clusterNamespace, applicant string, logger logr.Logger) error {
 
+	resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
+	err := remoteClient.Get(ctx,
+		types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(logsettings.LogDebug).Info("resourceSummary CRD not present.")
+			return nil
+		}
+		return err
+	}
+
 	logger.V(logs.LogDebug).Info("unDeploy resourceSummary instance")
 	currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
-	err := remoteClient.Get(ctx,
+	err = remoteClient.Get(ctx,
 		types.NamespacedName{
 			Namespace: getResourceSummaryNamespace(),
 			Name:      getResourceSummaryName(clusterNamespace, applicant)},
@@ -297,6 +309,8 @@ func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Cl
 			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present.")
 			return nil
 		}
+
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get resourceSummary. Err %s", err.Error()))
 		return err
 	}
 

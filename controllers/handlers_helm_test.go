@@ -183,7 +183,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -231,7 +231,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
@@ -287,7 +287,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -334,7 +334,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterConfiguration,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
 			chartDeployed, klogr.New())).To(Succeed())
@@ -382,7 +382,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary,
 			helmChart, klogr.New())
@@ -430,7 +430,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterReport,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		releaseReports := []configv1alpha1.ReleaseReport{
 			{ReleaseName: helmChart.ReleaseName, ReleaseNamespace: helmChart.ReleaseNamespace, Action: string(configv1alpha1.HelmChartActionInstall)},
@@ -597,7 +597,7 @@ var _ = Describe("Hash methods", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,

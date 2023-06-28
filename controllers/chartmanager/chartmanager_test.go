@@ -84,8 +84,7 @@ var _ = Describe("Chart manager", func() {
 			clusterSummary,
 		}
 
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 	})
 
 	AfterEach(func() {
@@ -308,7 +307,7 @@ var _ = Describe("Chart manager", func() {
 				},
 			},
 		}
-		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(c.Update(context.TODO(), clusterSummary)).To(Succeed())
 
 		// Mark tmpClusterSummary as manager for other release
 		tmpClusterSummary := &configv1alpha1.ClusterSummary{

@@ -52,14 +52,14 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummaryNamePrefix + randomString(),
+				Name:      clusterSummaryNamePrefix + randomString(),
+				Namespace: randomString(),
 			},
 		}
 
 		scheme := setupScheme()
-		initObjects := []client.Object{clusterProfile, clusterSummary}
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
+		initObjects := []client.Object{clusterSummary, clusterProfile}
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 	})
 
 	It("Return nil,error if ClusterSummary is not specified", func() {
@@ -316,8 +316,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{
+				FeatureID: configv1alpha1.FeatureHelm,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+				Hash:      []byte(randomString()),
+			},
 		}
+
 		Expect(scope.Close(context.TODO())).To(Succeed())
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}

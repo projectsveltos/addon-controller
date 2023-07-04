@@ -17,6 +17,7 @@ limitations under the License.
 package controllers_test
 
 import (
+	"context"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -98,7 +99,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 			clusterSummary1,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
@@ -117,7 +118,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
 		reconciler.ReferenceMap[key] = &set
 
-		requests := controllers.RequeueClusterSummaryForReference(reconciler, configMap)
+		requests := controllers.RequeueClusterSummaryForReference(reconciler, context.TODO(), configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
@@ -125,7 +126,7 @@ var _ = Describe("ClustersummaryTransformations map functions", func() {
 			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
 		reconciler.ReferenceMap[key] = &set
 
-		requests = controllers.RequeueClusterSummaryForReference(reconciler, configMap)
+		requests = controllers.RequeueClusterSummaryForReference(reconciler, context.TODO(), configMap)
 		Expect(requests).To(HaveLen(2))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary0.Name}}))
 		Expect(requests).To(ContainElement(reconcile.Request{NamespacedName: types.NamespacedName{Name: clusterSummary1.Name}}))

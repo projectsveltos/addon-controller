@@ -3,9 +3,9 @@
 # To use this openapi policy:
 # 1. save it in a file "replica-convention.yaml" 
 # 2. create a ConfigMap containing it: kubectl create configmap depl-replica-convention --from-file=replica-convention.yaml
-# 3. create an AddonConstraint instance referencing it
+# 3. create an AddonCompliance instance referencing it
 #apiVersion: lib.projectsveltos.io/v1alpha1
-#kind: AddonConstraint
+#kind: AddonCompliance
 #metadata:
 # name: depl-name-convention
 #spec:

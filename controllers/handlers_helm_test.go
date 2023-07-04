@@ -183,7 +183,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -231,7 +231,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
@@ -256,7 +256,7 @@ var _ = Describe("HandlersHelm", func() {
 			RepositoryURL:    "https://charts.bitnami.com/bitnami",
 			RepositoryName:   "bitnami/contour",
 			ChartName:        "bitnami/contour",
-			ChartVersion:     "9.1.2",
+			ChartVersion:     "12.1.0",
 			ReleaseName:      "contour-latest",
 			ReleaseNamespace: "contour",
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -287,7 +287,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -313,7 +313,7 @@ var _ = Describe("HandlersHelm", func() {
 			{
 				RepoURL:      "https://charts.bitnami.com/bitnami",
 				ReleaseName:  "contour-latest",
-				ChartVersion: "9.1.2",
+				ChartVersion: "12.1.0",
 				Namespace:    "projectcontour",
 			},
 		}
@@ -334,7 +334,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterConfiguration,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
 			chartDeployed, klogr.New())).To(Succeed())
@@ -382,7 +382,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary,
 			helmChart, klogr.New())
@@ -430,7 +430,7 @@ var _ = Describe("HandlersHelm", func() {
 			clusterReport,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		releaseReports := []configv1alpha1.ReleaseReport{
 			{ReleaseName: helmChart.ReleaseName, ReleaseNamespace: helmChart.ReleaseNamespace, Action: string(configv1alpha1.HelmChartActionInstall)},
@@ -559,7 +559,7 @@ var _ = Describe("Hash methods", func() {
 			RepositoryURL:    "https://kyverno.github.io/kyverno/",
 			RepositoryName:   "kyverno",
 			ChartName:        "kyverno/kyverno",
-			ChartVersion:     "v2.5.0",
+			ChartVersion:     "v3.0.1",
 			ReleaseName:      "kyverno-latest",
 			ReleaseNamespace: "kyverno",
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -569,7 +569,7 @@ var _ = Describe("Hash methods", func() {
 			RepositoryURL:    "https://helm.nginx.com/stable/",
 			RepositoryName:   "nginx-stable",
 			ChartName:        "nginx-stable/nginx-ingress",
-			ChartVersion:     "0.14.0",
+			ChartVersion:     "0.17.1",
 			ReleaseName:      "nginx-latest",
 			ReleaseNamespace: "nginx",
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -597,7 +597,7 @@ var _ = Describe("Hash methods", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,

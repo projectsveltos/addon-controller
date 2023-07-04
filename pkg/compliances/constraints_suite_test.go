@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package constraints_test
+package compliances_test
 
 import (
 	"context"
@@ -62,7 +62,7 @@ const (
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "AddonConstraint Manager Suite")
+	RunSpecs(t, "AddonCompliance Manager Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -87,10 +87,10 @@ var _ = BeforeSuite(func() {
 		}
 	}()
 
-	addonConstraintCRD, err := utils.GetUnstructured(crd.GetAddonConstraintCRDYAML())
+	addonComplianceCRD, err := utils.GetUnstructured(crd.GetAddonComplianceCRDYAML())
 	Expect(err).To(BeNil())
-	Expect(testEnv.Create(ctx, addonConstraintCRD)).To(Succeed())
-	Expect(waitForObject(ctx, testEnv.Client, addonConstraintCRD)).To(Succeed())
+	Expect(testEnv.Create(ctx, addonComplianceCRD)).To(Succeed())
+	Expect(waitForObject(ctx, testEnv.Client, addonComplianceCRD)).To(Succeed())
 
 	dcCRD, err := utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	Expect(err).To(BeNil())
@@ -98,7 +98,7 @@ var _ = BeforeSuite(func() {
 	Expect(waitForObject(ctx, testEnv.Client, dcCRD)).To(Succeed())
 
 	// Wait for synchronization
-	// Sometimes we otherwise get "no matches for kind "AddonConstraint" in version "lib.projectsveltos.io/v1alpha1"
+	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {

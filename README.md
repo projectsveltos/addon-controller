@@ -8,7 +8,13 @@
 
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
 
-Please refere to sveltos [documentation](https://projectsveltos.github.io/sveltos/).
+# Useful links
+
+- Projectsveltos [documentation](https://projectsveltos.github.io/sveltos/)
+- [Quick Start](https://projectsveltos.github.io/sveltos/quick_start/)
+
+# What is the Projectsveltos?
+Projectsveltos is mainly a Kubernetes add-on controller that simplifies the deployment and management of add-ons in Kubernetes clusters. With Sveltos controller, you can easily automate the deployment process and ensure consistency across your cluster environment.
 
 ## Addon deployment: how it works
 
@@ -39,12 +45,13 @@ spec:
   - repositoryURL:    https://kyverno.github.io/kyverno/
     repositoryName:   kyverno
     chartName:        kyverno/kyverno
-    chartVersion:     v2.6.0
+    chartVersion:     v3.0.1
     releaseName:      kyverno-latest
     releaseNamespace: kyverno
     helmChartAction:  Install
     values: |
-      replicaCount: "{{ .Cluster.spec.topology.controlPlane.replicas }}"
+      admissionController:
+        replicas: 3
   policyRefs:
   - name: storage-class
     namespace: default

@@ -99,7 +99,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -145,7 +145,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -196,7 +196,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterConfiguration,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -242,45 +242,66 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			},
 		}
 
-		initObjects := []client.Object{
-			clusterProfile,
-			ns,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-
-		// Preprare clusterConfiguration with Status section. OwnerReference
 		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
 				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi),
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						Kind:       currentClusterProfile.Kind,
-						Name:       currentClusterProfile.Name,
-						APIVersion: currentClusterProfile.APIVersion,
-						UID:        currentClusterProfile.UID,
-					},
-					{ // Add a second fake Owner, so that when removing ClusterProfile as owner,
-						// ClusterConfiguration is not deleted
-						Kind:       currentClusterProfile.Kind,
-						Name:       randomString(),
-						APIVersion: currentClusterProfile.APIVersion,
-						UID:        types.UID(randomString()),
-					},
-				},
-			},
-			Status: configv1alpha1.ClusterConfigurationStatus{
-				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
-					{ClusterProfileName: clusterProfile.Name},
-				},
 			},
 		}
 
-		Expect(c.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+		initObjects := []client.Object{
+			clusterProfile,
+			ns,
+			clusterConfiguration,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
+		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
+			currentClusterConfiguration)).To(Succeed())
+
+		// Preprare clusterConfiguration with Status section. OwnerReference
+		clusterConfiguration.OwnerReferences = []metav1.OwnerReference{
+			{
+				Kind:       currentClusterProfile.Kind,
+				Name:       currentClusterProfile.Name,
+				APIVersion: currentClusterProfile.APIVersion,
+				UID:        currentClusterProfile.UID,
+			},
+			{ // Add a second fake Owner, so that when removing ClusterProfile as owner,
+				// ClusterConfiguration is not deleted
+				Kind:       currentClusterProfile.Kind,
+				Name:       randomString(),
+				APIVersion: currentClusterProfile.APIVersion,
+				UID:        types.UID(randomString()),
+			},
+		}
+
+		Expect(c.Update(context.TODO(), clusterConfiguration)).To(Succeed())
+
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
+			currentClusterConfiguration)).To(Succeed())
+
+		currentClusterConfiguration.Status =
+			configv1alpha1.ClusterConfigurationStatus{
+				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
+					{ClusterProfileName: clusterProfile.Name},
+				},
+			}
+
+		Expect(c.Status().Update(context.TODO(), currentClusterConfiguration)).To(Succeed())
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -292,9 +313,9 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			Mux:               sync.Mutex{},
 		}
 
-		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile, clusterConfiguration)).To(Succeed())
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile,
+			currentClusterConfiguration)).To(Succeed())
 
-		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{
 				Namespace: clusterConfiguration.Namespace,
@@ -305,7 +326,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
 
-		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile, clusterConfiguration)).To(Succeed())
+		Expect(controllers.CleanClusterConfiguration(reconciler, context.TODO(), currentClusterProfile,
+			currentClusterConfiguration)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
@@ -333,7 +355,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		addOwnerReference(ctx, c, clusterSummary, clusterProfile)
 
@@ -399,7 +421,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			nonMatchingCluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
@@ -494,7 +516,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
 			Client:         c,
@@ -564,7 +586,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
@@ -651,7 +673,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterSummary,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -686,7 +708,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			matchingCluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -742,7 +764,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			cpMachine,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -834,7 +856,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			cpMachine,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -881,7 +903,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			matchingCluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -932,7 +954,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			matchingCluster,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -986,7 +1008,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterReport2,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -1161,7 +1183,7 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			clusterProfileList := controllers.RequeueClusterProfileForCluster(clusterProfileReconciler,
-				cluster)
+				context.TODO(), cluster)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
 			for i := range clusterProfileList {
 				if clusterProfileList[i] == result {
@@ -1223,7 +1245,7 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			clusterProfileList := controllers.RequeueClusterProfileForMachine(clusterProfileReconciler,
-				cpMachine)
+				context.TODO(), cpMachine)
 			result := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
 			for i := range clusterProfileList {
 				if clusterProfileList[i] == result {

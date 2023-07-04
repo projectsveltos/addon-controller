@@ -277,7 +277,7 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controlle
 
 	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	err = c.Watch(&source.Kind{Type: &libsveltosv1alpha1.SveltosCluster{}},
+	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
 		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 	)
@@ -288,7 +288,7 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controlle
 func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
 	// When cluster-api cluster changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Cluster{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
 		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	); err != nil {
@@ -296,7 +296,7 @@ func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 	}
 	// When cluster-api machine changes, according to ClusterPredicates,
 	// one or more ClusterProfiles need to be reconciled.
-	if err := c.Watch(&source.Kind{Type: &clusterv1.Machine{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Machine{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
 		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
 	); err != nil {

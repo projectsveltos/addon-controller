@@ -30,13 +30,15 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
-	"github.com/projectsveltos/addon-controller/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -58,6 +60,8 @@ func TestControllers(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
+
+	ctrl.SetLogger(klog.Background())
 
 	ctx, cancel = context.WithCancel(context.TODO())
 
@@ -104,21 +108,21 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
 
-	var addonConstraintCRD *unstructured.Unstructured
-	addonConstraintCRD, err = utils.GetUnstructured(libsveltoscrd.GetAddonConstraintCRDYAML())
+	var addonComplianceCRD *unstructured.Unstructured
+	addonComplianceCRD, err = utils.GetUnstructured(libsveltoscrd.GetAddonComplianceCRDYAML())
 	Expect(err).To(BeNil())
-	Expect(testEnv.Create(context.TODO(), addonConstraintCRD)).To(Succeed())
-	Expect(waitForObject(context.TODO(), testEnv, addonConstraintCRD)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), addonComplianceCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, addonComplianceCRD)).To(Succeed())
 
 	// Wait for synchronization
-	// Sometimes we otherwise get "no matches for kind "AddonConstraint" in version "lib.projectsveltos.io/v1alpha1"
+	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)
 
 	controllers.InitializeManager(klogr.New(), testEnv.Config, testEnv.GetClient())
-	constraints.InitializeManager(ctx, klogr.New(), testEnv.Config, testEnv.Client, 1)
+	compliances.InitializeManager(ctx, klogr.New(), testEnv.Config, testEnv.Client, 1)
 
 	Eventually(func() bool {
-		manager := constraints.GetManager()
+		manager := compliances.GetManager()
 		return manager.IsReady()
 	}, timeout, pollingInterval).Should(BeTrue())
 

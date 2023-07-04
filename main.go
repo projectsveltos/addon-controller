@@ -57,7 +57,7 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/constraints"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -78,7 +78,7 @@ var (
 )
 
 const (
-	addonConstraintTimer = 5
+	addonComplianceTimer = 5
 	defaultReconcilers   = 10
 	defaultWorkers       = 20
 	defaulReportMode     = int(controllers.CollectFromManagementCluster)
@@ -148,8 +148,8 @@ func main() {
 	startWatchers(ctx, mgr, clusterProfileReconciler, clusterProfileController,
 		clusterSummaryReconciler, clusterSummaryController)
 
-	go constraints.InitializeManager(ctx, ctrl.Log.WithName("addon-constraints"),
-		mgr.GetConfig(), mgr.GetClient(), addonConstraintTimer)
+	go compliances.InitializeManager(ctx, ctrl.Log.WithName("addon-compliances"),
+		mgr.GetConfig(), mgr.GetClient(), addonComplianceTimer)
 
 	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
 	if err := mgr.Start(ctx); err != nil {

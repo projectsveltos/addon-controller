@@ -195,7 +195,7 @@ var _ = Describe("HandlersUtils", func() {
 	It("createNamespace creates namespace", func() {
 		initObjects := []client.Object{}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
@@ -206,7 +206,7 @@ var _ = Describe("HandlersUtils", func() {
 	It("createNamespace does not namespace in DryRun mode", func() {
 		initObjects := []client.Object{}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
@@ -225,7 +225,7 @@ var _ = Describe("HandlersUtils", func() {
 		}
 		initObjects := []client.Object{ns}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
@@ -678,7 +678,7 @@ var _ = Describe("HandlersUtils", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
 		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior = configv1alpha1.LeavePolicies
 		initObjects := []client.Object{depl, clusterSummary}
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},

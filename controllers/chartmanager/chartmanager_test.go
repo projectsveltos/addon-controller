@@ -61,7 +61,7 @@ var _ = Describe("Chart manager", func() {
 							RepositoryURL:    "https://kyverno.github.io/kyverno/",
 							RepositoryName:   "kyverno",
 							ChartName:        "kyverno/kyverno",
-							ChartVersion:     "v2.5.0",
+							ChartVersion:     "v3.0.1",
 							ReleaseName:      "kyverno-latest",
 							ReleaseNamespace: "kyverno",
 							HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -70,7 +70,7 @@ var _ = Describe("Chart manager", func() {
 							RepositoryURL:    "https://helm.nginx.com/stable/",
 							RepositoryName:   "nginx-stable",
 							ChartName:        "nginx-stable/nginx-ingress",
-							ChartVersion:     "0.14.0",
+							ChartVersion:     "0.17.1",
 							ReleaseName:      "nginx-latest",
 							ReleaseNamespace: "nginx",
 							HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -84,8 +84,7 @@ var _ = Describe("Chart manager", func() {
 			clusterSummary,
 		}
 
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
-
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 	})
 
 	AfterEach(func() {
@@ -308,7 +307,7 @@ var _ = Describe("Chart manager", func() {
 				},
 			},
 		}
-		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(c.Update(context.TODO(), clusterSummary)).To(Succeed())
 
 		// Mark tmpClusterSummary as manager for other release
 		tmpClusterSummary := &configv1alpha1.ClusterSummary{

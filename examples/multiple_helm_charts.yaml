@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://helm.nginx.com/stable/
     repositoryName:   nginx-stable
     chartName:        nginx-stable/nginx-ingress
-    chartVersion:     0.14.0
+    chartVersion:     0.17.1
     releaseName:      ngix-latest
     releaseNamespace: nginx
     helmChartAction:  Install
@@ -22,9 +22,10 @@ spec:
   - repositoryURL:    https://kyverno.github.io/kyverno/
     repositoryName:   kyverno
     chartName:        kyverno/kyverno
-    chartVersion:     v2.6.0
+    chartVersion:     v3.0.1
     releaseName:      kyverno-latest
     releaseNamespace: kyverno
     helmChartAction:  Install
     values: |
-      replicaCount: "{{ .Cluster.spec.topology.controlPlane.replicas }}"
+      admissionController:
+        replicas: 3"

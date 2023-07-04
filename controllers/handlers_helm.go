@@ -1501,18 +1501,16 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 		return err
 	}
 
-	var openAPIValidations map[string][]byte
-	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		&clusterSummary.Spec.ClusterType, logger)
+	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, clusterSummary, policies, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
 		return err
 	}
 
-	for i := range policies {
-		err = runOpenAPIValidations(ctx, openAPIValidations, policies[i], logger)
-		if err != nil {
-			return err
-		}
+	err = validateHelmResourcesAgainstLuaPolicies(ctx, clusterSummary, policies, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against lua policies %v", err))
+		return err
 	}
 
 	return nil
@@ -1536,18 +1534,59 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 		return err
 	}
 
-	var openAPIValidations map[string][]byte
-	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, clusterSummary, policies, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
+		return err
+	}
+
+	err = validateHelmResourcesAgainstLuaPolicies(ctx, clusterSummary, policies, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against lua policies %v", err))
+		return err
+	}
+
+	return nil
+}
+
+// validateHelmResourcesAgainstOpenAPIPolicies validates each individual resource against
+// all openAPI policies currently enforced for the managed cluster where resource need to be
+// applied
+func validateHelmResourcesAgainstOpenAPIPolicies(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	policies []*unstructured.Unstructured, logger logr.Logger) error {
+
+	openAPIPolicies, err := getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		&clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
 	for i := range policies {
-		err = runOpenAPIValidations(ctx, openAPIValidations, policies[i], logger)
+		err = runOpenAPIValidations(ctx, openAPIPolicies, policies[i], logger)
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// validateHelmResourcesAgainstLuaPolicies validates all resources against all lua policies currently
+// enforced for the managed cluster where resources need to be applied.
+// Lua policies can be written to validate single resources (each deployment replica must be at least 3)
+// or combined resources (each deployment must be exposed by a service).
+func validateHelmResourcesAgainstLuaPolicies(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	policies []*unstructured.Unstructured, logger logr.Logger) error {
+
+	luaPolicies, err := getLuaValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		&clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	err = runLuaValidations(ctx, luaPolicies, policies, logger)
+	if err != nil {
+		return err
 	}
 
 	return nil

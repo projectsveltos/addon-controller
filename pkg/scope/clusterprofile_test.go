@@ -48,7 +48,7 @@ var _ = Describe("ClusterProfileScope", func() {
 		}
 		scheme := setupScheme()
 		initObjects := []client.Object{clusterProfile}
-		c = fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 	})
 
 	It("Return nil,error if ClusterProfile is not specified", func() {

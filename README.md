@@ -8,7 +8,13 @@
 
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
 
-Please refere to sveltos [documentation](https://projectsveltos.github.io/sveltos/).
+# Useful links
+
+- Projectsveltos [documentation](https://projectsveltos.github.io/sveltos/)
+- [Quick Start](https://projectsveltos.github.io/sveltos/quick_start/)
+
+# What is the Projectsveltos?
+Projectsveltos is mainly a Kubernetes add-on controller that simplifies the deployment and management of add-ons in Kubernetes clusters. With Sveltos controller, you can easily automate the deployment process and ensure consistency across your cluster environment.
 
 ## Addon deployment: how it works
 

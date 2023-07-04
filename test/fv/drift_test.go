@@ -18,6 +18,8 @@ package fv_test
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -95,6 +98,20 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+
+		// Verify ResourceSummary is present
+		Eventually(func() bool {
+			currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
+			resiurceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "projectsveltos", Name: resiurceSummaryName},
+				currentResourceSummary)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Wait to make sure a watcher is started in the managed cluster
+		const sleepTime = 10
+		time.Sleep(sleepTime * time.Second)
 
 		// Change Kyverno image
 		depl := &appsv1.Deployment{}

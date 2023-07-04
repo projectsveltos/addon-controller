@@ -70,6 +70,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
+  creationTimestamp: null
   name: drift-detection-manager-role
 rules:
 - apiGroups:
@@ -259,7 +260,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: projectsveltos/drift-detection-manager-amd64:v0.12.0
+        image: projectsveltos/drift-detection-manager-amd64:main
         livenessProbe:
           httpGet:
             path: /healthz

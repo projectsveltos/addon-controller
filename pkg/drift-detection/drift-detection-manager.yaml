@@ -52,7 +52,6 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: drift-detection-manager-role
 rules:
 - apiGroups:

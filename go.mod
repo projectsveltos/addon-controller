@@ -8,7 +8,7 @@ require (
 	github.com/TwinProduction/go-color v1.0.0
 	github.com/fluxcd/pkg/http/fetch v0.5.2
 	github.com/fluxcd/pkg/tar v0.2.0
-	github.com/fluxcd/source-controller/api v1.0.0-rc.1
+	github.com/fluxcd/source-controller/api v1.0.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/getkin/kin-openapi v0.118.0
 	github.com/ghodss/yaml v1.0.0
@@ -17,7 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.12.1-0.20230704163255-7f5099a7ffd0
+	github.com/projectsveltos/libsveltos v0.13.1-0.20230710120721-2074a30e9c99
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.0
@@ -26,12 +26,12 @@ require (
 	helm.sh/helm/v3 v3.12.1
 	k8s.io/api v0.27.2
 	k8s.io/apiextensions-apiserver v0.27.2
-	k8s.io/apimachinery v0.27.2
+	k8s.io/apimachinery v0.27.3
 	k8s.io/client-go v0.27.2
 	k8s.io/component-base v0.27.2
 	k8s.io/klog/v2 v2.90.1
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106
-	sigs.k8s.io/cluster-api v1.5.0-beta.0
+	sigs.k8s.io/cluster-api v1.5.0-beta.1
 	sigs.k8s.io/controller-runtime v0.15.0
 	sigs.k8s.io/kustomize/api v0.13.2
 	sigs.k8s.io/kustomize/kyaml v0.14.1
@@ -72,7 +72,7 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.1.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.0.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-gorp/gorp/v3 v3.0.5 // indirect

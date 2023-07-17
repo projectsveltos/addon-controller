@@ -319,7 +319,7 @@ spec:
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
-  name: sveltos-management-workload
+  name: clusterapi-workload
   namespace: default
 spec:
   clusterNetwork:

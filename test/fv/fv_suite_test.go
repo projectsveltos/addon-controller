@@ -100,7 +100,7 @@ var _ = BeforeSuite(func() {
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
-			map[string]string{clusterv1.ClusterNameLabel: "sveltos-management-workload"},
+			map[string]string{clusterv1.ClusterNameLabel: "clusterapi-workload"},
 		),
 	}
 

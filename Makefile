@@ -172,7 +172,7 @@ endif
 
 KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
-WORKLOAD_CLUSTER_NAME ?= sveltos-management-workload
+WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 5
@@ -203,7 +203,7 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
 
 	@echo "wait for cluster to be provisioned"
-	$(KUBECTL) wait cluster sveltos-management-workload -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
 
 	@echo "prepare configMap with kustomize files"
 	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz

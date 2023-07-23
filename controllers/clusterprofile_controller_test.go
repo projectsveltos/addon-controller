@@ -737,17 +737,13 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries creates ClusterSummary for each matching CAPI Cluster", func() {
-		cpMachine := &clusterv1.Machine{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name,
-				Labels: map[string]string{
-					clusterv1.ClusterNameLabel:         matchingCluster.Name,
-					clusterv1.MachineControlPlaneLabel: "ok",
-				},
+		matchingCluster.Status.Conditions = []clusterv1.Condition{
+			{
+				Type:   clusterv1.ControlPlaneInitializedCondition,
+				Status: corev1.ConditionTrue,
 			},
 		}
-		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
+		nonMatchingCluster.Status.Conditions = matchingCluster.Status.Conditions
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
@@ -761,7 +757,6 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			clusterProfile,
 			nonMatchingCluster,
 			matchingCluster,
-			cpMachine,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
@@ -795,17 +790,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries updates existing ClusterSummary for each matching CAPI Cluster", func() {
-		cpMachine := &clusterv1.Machine{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: matchingCluster.Namespace,
-				Name:      matchingCluster.Name,
-				Labels: map[string]string{
-					clusterv1.ClusterNameLabel:         matchingCluster.Name,
-					clusterv1.MachineControlPlaneLabel: "ok",
-				},
+		matchingCluster.Status.Conditions = []clusterv1.Condition{
+			{
+				Type:   clusterv1.ControlPlaneInitializedCondition,
+				Status: corev1.ConditionTrue,
 			},
 		}
-		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
@@ -853,7 +843,6 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			nonMatchingCluster,
 			matchingCluster,
 			clusterSummary,
-			cpMachine,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()

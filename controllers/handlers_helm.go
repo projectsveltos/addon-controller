@@ -1448,13 +1448,14 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 
 	elements := strings.Split(manifest, separator)
 	for i := range elements {
-		if elements[i] == "" {
+		section := removeCommentsAndEmptyLines(elements[i])
+		if section == "" {
 			continue
 		}
 
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := utils.GetUnstructured([]byte(section))
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
 			return nil, err
 		}
 

@@ -110,7 +110,7 @@ var _ = Describe("Helm", Serial, func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		// Wait to make sure a watcher is started in the managed cluster
-		const sleepTime = 10
+		const sleepTime = 30
 		time.Sleep(sleepTime * time.Second)
 
 		// Change Kyverno image

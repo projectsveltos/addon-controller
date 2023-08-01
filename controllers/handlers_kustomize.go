@@ -103,6 +103,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	if err != nil {
 		return err
 	}
+	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+		remoteResources, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
 
 	// If we are here there are no conflicts (and error would have been returned by deployKustomizeRef)
 	remoteDeployed := make([]configv1alpha1.Resource, 0)
@@ -116,15 +122,9 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// Clean stale resources in the management cluster
-	_, err = cleanKustomizeResources(ctx, getManagementClusterConfig(), c, clusterSummary, localResourceReports, logger)
-	if err != nil {
-		return err
-	}
-
-	// Clean stale resources in the remote cluster
 	var undeployed []configv1alpha1.ResourceReport
-	undeployed, err = cleanKustomizeResources(ctx, remoteRestConfig, remoteClient, clusterSummary, remoteResourceReports, logger)
+	_, undeployed, err = cleanStaleKustomizeResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+		localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}
@@ -150,6 +150,26 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
 	return nil
+}
+
+func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
+	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
+	// Clean stale resources in the management cluster
+	localUndeployed, err = cleanKustomizeResources(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary, localResourceReports, logger)
+	if err != nil {
+		return
+	}
+
+	// Clean stale resources in the remote cluster
+	remoteUndeployed, err = cleanKustomizeResources(ctx, remoteRestConfig, remoteClient,
+		clusterSummary, remoteResourceReports, logger)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 func undeployKustomizeRefs(ctx context.Context, c client.Client,
@@ -203,6 +223,12 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}

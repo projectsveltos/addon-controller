@@ -133,3 +133,14 @@ var (
 	RunLuaValidations     = runLuaValidations
 	LuaValidation         = luaValidation
 )
+
+// reloader utils
+var (
+	WatchForRollingUpgrade                  = watchForRollingUpgrade
+	CreateReloaderInstance                  = createReloaderInstance
+	DeployReloaderInstance                  = deployReloaderInstance
+	RemoveReloaderInstance                  = removeReloaderInstance
+	UpdateReloaderWithDeployedResources     = updateReloaderWithDeployedResources
+	ConvertResourceReportsToObjectReference = convertResourceReportsToObjectReference
+	ConvertHelmResourcesToObjectReference   = convertHelmResourcesToObjectReference
+)

@@ -251,6 +251,15 @@ type ClusterProfileSpec struct {
 	// +optional
 	StopMatchingBehavior StopMatchingBehavior `json:"stopMatchingBehavior,omitempty"`
 
+	// Reloader indicates whether Deployment/StatefulSet/DaemonSet instances deployed
+	// by Sveltos and part of this ClusterProfile need to be restarted via rolling upgrade
+	// when a ConfigMap/Secret instance mounted as volume is modified.
+	// When set to true, when any mounted ConfigMap/Secret is modified, Sveltos automatically
+	// starts a rolling upgrade for Deployment/StatefulSet/DaemonSet instances mounting it.
+	// +kubebuilder:default:=false
+	// +optional
+	Reloader bool `json:"reloader,omitempty"`
+
 	// TemplateResourceRefs is a list of resource to collect from the management cluster.
 	// Those resources' values will be used to instantiate templates contained in referenced
 	// PolicyRefs and Helm charts

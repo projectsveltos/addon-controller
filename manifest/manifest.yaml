@@ -456,6 +456,16 @@ spec:
                   - namespace
                   type: object
                 type: array
+              reloader:
+                default: false
+                description: Reloader indicates whether Deployment/StatefulSet/DaemonSet
+                  instances deployed by Sveltos and part of this ClusterProfile need
+                  to be restarted via rolling upgrade when a ConfigMap/Secret instance
+                  mounted as volume is modified. When set to true, when any mounted
+                  ConfigMap/Secret is modified, Sveltos automatically starts a rolling
+                  upgrade for Deployment/StatefulSet/DaemonSet instances mounting
+                  it.
+                type: boolean
               stopMatchingBehavior:
                 default: WithdrawPolicies
                 description: StopMatchingBehavior indicates what behavior should be
@@ -1169,6 +1179,16 @@ spec:
                       - namespace
                       type: object
                     type: array
+                  reloader:
+                    default: false
+                    description: Reloader indicates whether Deployment/StatefulSet/DaemonSet
+                      instances deployed by Sveltos and part of this ClusterProfile
+                      need to be restarted via rolling upgrade when a ConfigMap/Secret
+                      instance mounted as volume is modified. When set to true, when
+                      any mounted ConfigMap/Secret is modified, Sveltos automatically
+                      starts a rolling upgrade for Deployment/StatefulSet/DaemonSet
+                      instances mounting it.
+                    type: boolean
                   stopMatchingBehavior:
                     default: WithdrawPolicies
                     description: StopMatchingBehavior indicates what behavior should
@@ -1843,7 +1863,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/addon-controller-amd64:main
+        image: projectsveltos/addon-controller-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

@@ -592,7 +592,11 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 	return local, remote, nil
 }
 
-// deployReferencedObjects deploys in a CAPI Cluster the policies contained in the Data section of each passed ConfigMap
+// deployReferencedObjects deploys in a managed Cluster the resources contained in each referenced ConfigMap
+// - objectsToDeployLocally is a list of ConfigMaps/Secrets whose content need to be deployed
+// in the management cluster
+// - objectsToDeployRemotely is a list of ConfigMaps/Secrets whose content need to be deployed
+// in the managed cluster
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
 	clusterSummary *configv1alpha1.ClusterSummary, objectsToDeployLocally, objectsToDeployRemotely []client.Object,
 	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
@@ -610,8 +614,8 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 
 	var tmpResourceReports []configv1alpha1.ResourceReport
 
-	// Assume that if objects are deployed in the management clusters, those are needed before any resource is deployed
-	// in the managed cluster. So try to deploy those first if any.
+	// Assume that if objects are deployed in the management clusters, those are needed before any
+	// resource is deployed in the managed cluster. So try to deploy those first if any.
 
 	localConfig := rest.CopyConfig(getManagementClusterConfig())
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)

@@ -99,8 +99,9 @@ func createReloaderInstance(ctx context.Context, remoteClient client.Client, clu
 	hash := h.Sum(nil)
 	reloader := &libsveltosv1alpha1.Reloader{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   fmt.Sprintf("%x", hash),
-			Labels: getReloaderLabels(clusterProfileName, feature),
+			Name:        fmt.Sprintf("%x", hash),
+			Labels:      getReloaderLabels(clusterProfileName, feature),
+			Annotations: getReloaderAnnotations(),
 		},
 		Spec: libsveltosv1alpha1.ReloaderSpec{
 			ReloaderInfo: reloaderInfo,
@@ -140,6 +141,13 @@ func getReloaderLabels(clusterProfileName string, feature configv1alpha1.Feature
 	return map[string]string{
 		"clusterprofile": clusterProfileName,
 		"feature":        string(feature),
+	}
+}
+
+// getReloaderAnnotations returns annotations a Reloader instance has in a managed cluster
+func getReloaderAnnotations() map[string]string {
+	return map[string]string{
+		libsveltosv1alpha1.DeployedBySveltosAnnotation: "ok",
 	}
 }
 

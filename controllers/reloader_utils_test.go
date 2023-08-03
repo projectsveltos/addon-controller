@@ -84,6 +84,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 		Expect(len(reloaders.Items[0].Labels)).ToNot(BeNil())
+		Expect(len(reloaders.Items[0].Annotations)).ToNot(BeNil())
 		Expect(reflect.DeepEqual(reloaders.Items[0].Spec.ReloaderInfo, reloaderInfo)).To(BeTrue())
 	})
 
@@ -105,6 +106,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 		Expect(len(reloaders.Items[0].Labels)).ToNot(BeNil())
+		Expect(len(reloaders.Items[0].Annotations)).ToNot(BeNil())
 
 		Expect(len(reloaders.Items[0].Spec.ReloaderInfo)).To(Equal(len(resources)))
 		for i := range resources {
@@ -130,6 +132,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 		Expect(len(reloaders.Items[0].Labels)).ToNot(BeNil())
+		Expect(len(reloaders.Items[0].Annotations)).ToNot(BeNil())
 
 		Expect(len(reloaders.Items[0].Spec.ReloaderInfo)).To(Equal(len(resources)))
 		for i := range resources {

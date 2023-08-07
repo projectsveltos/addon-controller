@@ -26,11 +26,14 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
@@ -69,6 +72,8 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 
 	ctx, cancel = context.WithCancel(context.TODO())
+
+	ctrl.SetLogger(klog.Background())
 
 	var err error
 	scheme = setupScheme()
@@ -117,6 +122,7 @@ func setupScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	Expect(libsveltosv1alpha1.AddToScheme(s)).To(Succeed())
 	Expect(clusterv1.AddToScheme(s)).To(Succeed())
+	Expect(apiextensionsv1.AddToScheme(s)).To(Succeed())
 	return s
 }
 

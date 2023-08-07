@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/projectsveltos/addon-controller/internal/test/helpers/external"
 	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -222,7 +223,10 @@ var _ = Describe("Constraints", func() {
 			},
 		}
 
+		clusterCRD := external.TestClusterCRD.DeepCopy()
+
 		initObjects := []client.Object{
+			clusterCRD,
 			cluster1,
 			cluster2,
 			sveltosCluster1,

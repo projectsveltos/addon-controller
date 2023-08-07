@@ -316,6 +316,10 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	h := sha256.New()
 	var config string
 
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		return h.Sum(nil), nil

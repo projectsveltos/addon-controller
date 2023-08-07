@@ -324,6 +324,10 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	h := sha256.New()
 	var config string
 
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]

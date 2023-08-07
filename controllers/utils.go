@@ -23,7 +23,6 @@ import (
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -183,94 +182,6 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 		obj.GetObjectKind().SetGroupVersionKind(gvk)
 		break
 	}
-}
-
-// getListOfCAPIClusters returns all CAPI Clusters where Classifier needs to be deployed.
-// Currently a Classifier instance needs to be deployed in every existing CAPI cluster.
-func getListOfCAPICluster(ctx context.Context, c client.Client, logger logr.Logger,
-) ([]corev1.ObjectReference, error) {
-
-	clusterList := &clusterv1.ClusterList{}
-	if err := c.List(ctx, clusterList); err != nil {
-		logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	clusters := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(c.Scheme(), cluster)
-
-		clusters = append(clusters, corev1.ObjectReference{
-			Namespace:  cluster.Namespace,
-			Name:       cluster.Name,
-			APIVersion: cluster.APIVersion,
-			Kind:       cluster.Kind,
-		})
-	}
-
-	return clusters, nil
-}
-
-// getListOfSveltosClusters returns all Sveltos Clusters where Classifier needs to be deployed.
-// Currently a Classifier instance needs to be deployed in every existing sveltosCluster.
-func getListOfSveltosCluster(ctx context.Context, c client.Client, logger logr.Logger,
-) ([]corev1.ObjectReference, error) {
-
-	clusterList := &libsveltosv1alpha1.SveltosClusterList{}
-	if err := c.List(ctx, clusterList); err != nil {
-		logger.Error(err, "failed to list all Cluster")
-		return nil, err
-	}
-
-	clusters := make([]corev1.ObjectReference, 0)
-
-	for i := range clusterList.Items {
-		cluster := &clusterList.Items[i]
-
-		if !cluster.DeletionTimestamp.IsZero() {
-			// Only existing cluster can match
-			continue
-		}
-
-		addTypeInformationToObject(c.Scheme(), cluster)
-
-		clusters = append(clusters, corev1.ObjectReference{
-			Namespace:  cluster.Namespace,
-			Name:       cluster.Name,
-			APIVersion: cluster.APIVersion,
-			Kind:       cluster.Kind,
-		})
-	}
-
-	return clusters, nil
-}
-
-// getListOfClusters returns all Sveltos/CAPI Clusters where Classifier needs to be deployed.
-// Currently a Classifier instance needs to be deployed in every existing clusters.
-func getListOfClusters(ctx context.Context, c client.Client, logger logr.Logger,
-) ([]corev1.ObjectReference, error) {
-
-	clusters, err := getListOfCAPICluster(ctx, c, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	var tmpClusters []corev1.ObjectReference
-	tmpClusters, err = getListOfSveltosCluster(ctx, c, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	clusters = append(clusters, tmpClusters...)
-	return clusters, nil
 }
 
 // collectMgmtResources collects clusterSummary.Spec.ClusterProfileSpec.MgmtClusterResources

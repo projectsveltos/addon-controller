@@ -40,6 +40,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/internal/test/helpers/external"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -93,7 +94,10 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 	})
 
 	It("getMatchingCluster considers both ClusterSelector and ClusterRefs", func() {
+		clusterCRD := external.TestClusterCRD.DeepCopy()
+
 		initObjects := []client.Object{
+			clusterCRD,
 			matchingCluster,
 			nonMatchingCluster,
 			clusterProfile,

@@ -261,6 +261,10 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	h := sha256.New()
 	var config string
 
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+
 	config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {

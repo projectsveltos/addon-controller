@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -295,7 +296,7 @@ var _ = Describe("Hash methods", func() {
 		})
 		Expect(err).To(BeNil())
 
-		var config string
+		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 		for i := 0; i < repoNum; i++ {
 			config += gitRepositories[i].Status.Artifact.Revision

@@ -129,13 +129,40 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
-		// Deploy resourceSummary
-		err = deployResourceSummaryWithHelmResources(ctx, c, clusterNamespace, clusterName,
-			clusterType, clusterSummary, kubeconfig, logger)
+	var helmResources []libsveltosv1alpha1.HelmResources
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection ||
+		clusterSummary.Spec.ClusterProfileSpec.Reloader {
+
+		helmResources, err = collectResourcesFromManagedHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return err
 		}
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy resourceSummary
+		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+			clusterType, nil, nil, helmResources, logger)
+		if err != nil {
+			return nil
+		}
+	}
+
+	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return err
+	}
+
+	// Update Reloader instance. If ClusterProfile Reloader knob is set to true, sveltos will
+	// start a rolling upgrade for all Deployment/StatefulSet/DaemonSet instances deployed by Sveltos
+	// in the managed cluster when a mounted ConfigMap/Secret is updated. In order to do so, sveltos-agent
+	// needs to be instructed which Deployment/StatefulSet/DaemonSet instances require this behavior.
+	// Update corresponding Reloader instance (instance will be deleted if Reloader is set to false)
+	resources := convertHelmResourcesToObjectReference(helmResources)
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureHelm,
+		resources, clusterSummary, logger)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -160,6 +187,8 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
 	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
 	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
+
+	logger.V(logs.LogDebug).Info("undeployHelmCharts")
 
 	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
@@ -194,6 +223,13 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	if err != nil {
 		return err
 	}
+
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+		nil, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
 	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
 		configv1alpha1.FeatureHelm, nil, []configv1alpha1.Chart{})
 	if err != nil {
@@ -279,6 +315,10 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 
 	h := sha256.New()
 	var config string
+
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
@@ -1393,13 +1433,16 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.C
 	return chartutil.ReadValues([]byte(instantiatedValues))
 }
 
-func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
-	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger) error {
+// collectResourcesFromManagedHelmCharts collects resources considering all
+// helm charts contained in a ClusterSummary that are currently managed by the
+// ClusterProfile instance
+func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger,
+) ([]libsveltosv1alpha1.HelmResources, error) {
 
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	helmResources := make([]libsveltosv1alpha1.HelmResources, 0)
@@ -1412,18 +1455,18 @@ func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client
 			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig, logger)
 
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			statusObject := action.NewStatus(actionConfig)
 			results, err := statusObject.Run(currentChart.ReleaseName)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			resources, err := collectHelmContent(results.Manifest, logger)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			l.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
@@ -1439,8 +1482,7 @@ func deployResourceSummaryWithHelmResources(ctx context.Context, c client.Client
 		}
 	}
 
-	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
-		clusterType, nil, nil, helmResources, logger)
+	return helmResources, nil
 }
 
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {

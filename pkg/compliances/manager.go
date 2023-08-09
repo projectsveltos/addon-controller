@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,8 +50,9 @@ type manager struct {
 	client.Client
 	config *rest.Config
 
-	reEvaluate atomic.Value
-	ready      atomic.Value
+	reEvaluate  atomic.Value
+	ready       atomic.Value
+	capiPresent bool
 
 	muMap *sync.RWMutex
 	// openAPIValidations contains all openapi validations for a given cluster
@@ -175,6 +179,14 @@ func (m *manager) setReEvaluate() {
 // per cluster
 func (m *manager) evaluate(ctx context.Context) {
 	for {
+		var err error
+		m.capiPresent, err = isCAPIInstalled(ctx, m.Client)
+		if err != nil {
+			// Sleep before next evaluation
+			time.Sleep(m.interval)
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			m.log.V(logs.LogDebug).Info("Context canceled. Exiting goroutine.")
@@ -239,6 +251,10 @@ func (m *manager) reEvaluateClusters(ctx context.Context) {
 }
 
 func (m *manager) updateCurrentClusters(ctx context.Context, currentClusterMap map[string]bool) map[string]bool {
+	if !m.capiPresent {
+		return currentClusterMap
+	}
+
 	clusters := &clusterv1.ClusterList{}
 	if err := m.Client.List(ctx, clusters); err != nil {
 		m.log.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
@@ -362,4 +378,19 @@ func (m *manager) getClusterKey(clusterNamespace, clusterName string,
 	clusterType *libsveltosv1alpha1.ClusterType) string {
 
 	return fmt.Sprintf("%s:%s/%s", string(*clusterType), clusterNamespace, clusterName)
+}
+
+// isCAPIInstalled returns true if CAPI is installed, false otherwise
+func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
+	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, clusterCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

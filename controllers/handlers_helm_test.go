@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -607,7 +608,8 @@ var _ = Describe("Hash methods", func() {
 		})
 		Expect(err).To(BeNil())
 
-		config := render.AsCode(kyvernoChart)
+		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+		config += render.AsCode(kyvernoChart)
 		config += render.AsCode(nginxChart)
 		h := sha256.New()
 		h.Write([]byte(config))

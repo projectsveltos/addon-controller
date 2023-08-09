@@ -88,6 +88,13 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureResources,
+		remoteResources, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
 	// If we are here there are no conflicts (and error would have been returned by deployPolicyRefs)
 	remoteDeployed := make([]configv1alpha1.Resource, 0)
 	for i := range remoteResourceReports {
@@ -100,15 +107,9 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// Clean stale resources in the management cluster
-	_, err = cleanPolicyRefResources(ctx, getManagementClusterConfig(), c, clusterSummary, localResourceReports, logger)
-	if err != nil {
-		return err
-	}
-
-	// Clean stale resources in the remote cluster
 	var undeployed []configv1alpha1.ResourceReport
-	undeployed, err = cleanPolicyRefResources(ctx, remoteRestConfig, remoteClient, clusterSummary, remoteResourceReports, logger)
+	_, undeployed, err = cleanStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+		localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}
@@ -134,6 +135,27 @@ func deployResources(ctx context.Context, c client.Client,
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
 	return nil
+}
+
+func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
+	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
+
+	// Clean stale resources in the management cluster
+	localUndeployed, err = cleanPolicyRefResources(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary, localResourceReports, logger)
+	if err != nil {
+		return
+	}
+
+	// Clean stale resources in the remote cluster
+	remoteUndeployed, err = cleanPolicyRefResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+		remoteResourceReports, logger)
+	if err != nil {
+		return
+	}
+
+	return
 }
 
 // handleDriftDetectionManagerDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
@@ -268,6 +290,12 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureResources,
+		nil, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
 	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
 		configv1alpha1.FeatureResources, []configv1alpha1.Resource{}, nil)
 	if err != nil {
@@ -295,6 +323,10 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 
 	h := sha256.New()
 	var config string
+
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
@@ -403,6 +435,8 @@ func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.C
 
 	var objectsToDeployLocally []client.Object
 	var objectsToDeployRemotely []client.Object
+	// collect all referenced ConfigMaps/Secrets whose content need to be deployed
+	// in the management cluster (local) or manaded cluster (remote)
 	objectsToDeployLocally, objectsToDeployRemotely, err =
 		collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
 	if err != nil {

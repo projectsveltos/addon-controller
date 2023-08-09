@@ -114,6 +114,12 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), addonComplianceCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, addonComplianceCRD)).To(Succeed())
 
+	var reloaderCRD *unstructured.Unstructured
+	reloaderCRD, err = utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), reloaderCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, reloaderCRD)).To(Succeed())
+
 	// Wait for synchronization
 	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)

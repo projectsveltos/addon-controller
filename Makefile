@@ -220,6 +220,9 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo wait for calico pod
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
 
+	@echo apply reloader CRD to managed cluster
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_reloaders.yaml
+
 .PHONY: delete-cluster
 delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 	$(KIND) delete cluster --name $(CONTROL_CLUSTER_NAME)

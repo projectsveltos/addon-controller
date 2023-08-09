@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -39,7 +40,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, lo
 
 	for {
 		logger.V(logs.LogDebug).Info("collecting ResourceSummaries")
-		clusterList, err := getListOfClusters(ctx, c, logger)
+		clusterList, err := clusterproxy.GetListOfClusters(ctx, c, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}
@@ -48,8 +49,10 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, lo
 			cluster := &clusterList[i]
 			err = collectResourceSummariesFromCluster(ctx, c, cluster, logger)
 			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
-					cluster.Namespace, cluster.Name, err))
+				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
+						cluster.Namespace, cluster.Name, err))
+				}
 			}
 		}
 

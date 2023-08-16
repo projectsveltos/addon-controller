@@ -453,7 +453,6 @@ spec:
                   required:
                   - kind
                   - name
-                  - namespace
                   type: object
                 type: array
               reloader:
@@ -1176,7 +1175,6 @@ spec:
                       required:
                       - kind
                       - name
-                      - namespace
                       type: object
                     type: array
                   reloader:
@@ -1863,7 +1861,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/addon-controller-amd64:main
+        image: projectsveltos/addon-controller-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

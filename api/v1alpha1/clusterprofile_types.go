@@ -202,7 +202,8 @@ type PolicyRef struct {
 	// Namespace of the referenced resource.
 	// Namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
-	Namespace string `json:"namespace"`
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
 	// +kubebuilder:validation:MinLength=1

@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= dev
 
 # Get cluster-api version and build ldflags
 clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
@@ -177,6 +177,27 @@ TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 5
 
+.PHONY: quickstart
+quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos
+	$(MAKE) create-control-cluster
+
+	@echo wait for capd-system pod
+	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
+
+	$(MAKE) create-workload-cluster
+
+	# this is needed fopr projectsveltos metrics
+	$(KUBECTL) apply -f test/quickstart/servicemonitor_crd.yaml
+
+	@echo "Start projectsveltos"
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/manifest.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/default-classifier.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/main/manifest/sveltosctl_manifest.yaml
+
+	@echo "Waiting for projectsveltos addon-controller to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
+
 .PHONY: test
 test: | check-manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
@@ -199,26 +220,10 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "Start projectsveltos"
 	$(MAKE) deploy-projectsveltos
 
-	@echo "Create a workload cluster"
-	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
-
-	@echo "wait for cluster to be provisioned"
-	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+	$(MAKE) create-workload-cluster
 
 	@echo "prepare configMap with kustomize files"
 	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz
-
-	@echo "sleep allowing control plane to be ready"
-	sleep 100
-
-	@echo "get kubeconfig to access workload cluster"
-	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
-
-	@echo "install calico on workload cluster"
-	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.0/manifests/calico.yaml
-
-	@echo wait for calico pod
-	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
 
 	@echo apply reloader CRD to managed cluster
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_reloaders.yaml
@@ -236,6 +241,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 #
 # add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
 # It requires control cluster to exist. So first "make create-control-cluster" then run this target.
+# Once generated, add label to cluster env: fv
 # Once generated, remove
 #      enforce: "{{ .podSecurityStandard.enforce }}"
 #      enforce-version: "latest"
@@ -249,6 +255,25 @@ create-control-cluster: $(KIND) $(CLUSTERCTL)
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
 	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --infrastructure docker
+
+create-workload-cluster: $(KIND) $(KUBECTL)
+	@echo "Create a workload cluster"
+	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
+
+	@echo "wait for cluster to be provisioned"
+	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+
+	@echo "sleep allowing control plane to be ready"
+	sleep 100
+
+	@echo "get kubeconfig to access workload cluster"
+	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
+
+	@echo "install calico on workload cluster"
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.0/manifests/calico.yaml
+
+	@echo wait for calico pod
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
 
 deploy-projectsveltos: $(KUSTOMIZE)
 	# Load projectsveltos image into cluster

@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= dev
+TAG ?= v0.15.1
 
 # Get cluster-api version and build ldflags
 clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
@@ -194,6 +194,8 @@ quickstart:  ## start kind cluster; install all cluster api components; create a
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/manifest.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/default-classifier.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/main/manifest/sveltosctl_manifest.yaml
+
+	sleep 5
 
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)

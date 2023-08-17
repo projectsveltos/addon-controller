@@ -37,43 +37,6 @@ spec:
   - definitions:
     - jsonPatches:
       - op: add
-        path: /spec/template/spec/kubeadmConfigSpec/initConfiguration/nodeRegistration/kubeletExtraArgs/cgroup-driver
-        value: cgroupfs
-      - op: add
-        path: /spec/template/spec/kubeadmConfigSpec/joinConfiguration/nodeRegistration/kubeletExtraArgs/cgroup-driver
-        value: cgroupfs
-      selector:
-        apiVersion: controlplane.cluster.x-k8s.io/v1beta1
-        kind: KubeadmControlPlaneTemplate
-        matchResources:
-          controlPlane: true
-    description: |
-      Sets the cgroupDriver to cgroupfs if a Kubernetes version < v1.24 is referenced.
-      This is required because kind and the node images do not support the default
-      systemd cgroupDriver for kubernetes < v1.24.
-    enabledIf: '{{ semverCompare "<= v1.23" .builtin.controlPlane.version }}'
-    name: cgroupDriver-controlPlane
-  - definitions:
-    - jsonPatches:
-      - op: add
-        path: /spec/template/spec/joinConfiguration/nodeRegistration/kubeletExtraArgs/cgroup-driver
-        value: cgroupfs
-      selector:
-        apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-        kind: KubeadmConfigTemplate
-        matchResources:
-          machineDeploymentClass:
-            names:
-            - default-worker
-    description: |
-      Sets the cgroupDriver to cgroupfs if a Kubernetes version < v1.24 is referenced.
-      This is required because kind and the node images do not support the default
-      systemd cgroupDriver for kubernetes < v1.24.
-    enabledIf: '{{ semverCompare "<= v1.23" .builtin.machineDeployment.version }}'
-    name: cgroupDriver-machineDeployment
-  - definitions:
-    - jsonPatches:
-      - op: add
         path: /spec/template/spec/kubeadmConfigSpec/clusterConfiguration/etcd
         valueFrom:
           template: |
@@ -268,15 +231,9 @@ spec:
             extraArgs:
               enable-hostpath-provisioner: "true"
         initConfiguration:
-          nodeRegistration:
-            criSocket: unix:///var/run/containerd/containerd.sock
-            kubeletExtraArgs:
-              eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          nodeRegistration: {}
         joinConfiguration:
-          nodeRegistration:
-            criSocket: unix:///var/run/containerd/containerd.sock
-            kubeletExtraArgs:
-              eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+          nodeRegistration: {}
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: DockerMachineTemplate
@@ -311,16 +268,15 @@ spec:
   template:
     spec:
       joinConfiguration:
-        nodeRegistration:
-          criSocket: unix:///var/run/containerd/containerd.sock
-          kubeletExtraArgs:
-            eviction-hard: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
+        nodeRegistration: {}
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: Cluster
 metadata:
   name: clusterapi-workload
   namespace: default
+  labels:
+    env: fv
 spec:
   clusterNetwork:
     pods:
@@ -348,7 +304,7 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.26.0
+    version: v1.27.0
     workers:
       machineDeployments:
       - class: default-worker

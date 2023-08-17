@@ -1861,7 +1861,7 @@ spec:
         - --v=5
         command:
         - /manager
-        image: projectsveltos/addon-controller-amd64:v0.15.1
+        image: projectsveltos/addon-controller-amd64:main
         livenessProbe:
           httpGet:
             path: /healthz

@@ -422,6 +422,8 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				continue
 			}
 
+			section = elements[i]
+
 			if instantiateTemplate {
 				instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -460,6 +462,8 @@ func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstru
 		if section == "" {
 			continue
 		}
+
+		section = elements[i]
 
 		policy, err := utils.GetUnstructured([]byte(section))
 		if err != nil {

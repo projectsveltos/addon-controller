@@ -259,7 +259,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: projectsveltos/drift-detection-manager-amd64:main
+        image: projectsveltos/drift-detection-manager-amd64:v0.15.2
         livenessProbe:
           httpGet:
             path: /healthz

@@ -764,6 +764,10 @@ func installRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 				if err != nil {
 					return err
 				}
+				// Reload the chart with the updated Chart.lock file.
+				if chartRequested, err = loader.Load(cp); err != nil {
+					return fmt.Errorf("%w: failed reloading chart after repo update", err)
+				}
 			} else {
 				return nil
 			}
@@ -1495,9 +1499,9 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 			continue
 		}
 
-		policy, err := utils.GetUnstructured([]byte(section))
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 			return nil, err
 		}
 
@@ -1529,6 +1533,21 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 	installObject *action.Install, chartRequested *chart.Chart, values map[string]interface{},
 	logger logr.Logger) error {
 
+	// If an Helm chart contains CRDs and also install instances of this CRD, dryRun mode won't work
+	// as CRDs are not really installed by DryRun mode and fetching resources will fail.
+	// "This chart or one of its subcharts contains CRDs. Rendering may fail or contain inaccuracies."
+	// This limitation (do not have any validation if installing such an Helm chart) is listed in the
+	// documentation.
+	// Workaround here is to skip running Run for Helm in DryRun mode if there are no validation.
+	openAPIValidations, luaValidations, err := getComplianceValidations(clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	if len(openAPIValidations) == 0 && len(luaValidations) == 0 {
+		return nil
+	}
+
 	installObject.DryRun = true
 
 	resources, err := installObject.Run(chartRequested, values)
@@ -1544,13 +1563,13 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 		return err
 	}
 
-	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, clusterSummary, policies, logger)
+	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, policies, openAPIValidations, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
 		return err
 	}
 
-	err = validateHelmResourcesAgainstLuaPolicies(ctx, clusterSummary, policies, logger)
+	err = validateHelmResourcesAgainstLuaPolicies(ctx, policies, luaValidations, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against lua policies %v", err))
 		return err
@@ -1562,6 +1581,21 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
 	upgradeObject *action.Upgrade, releaseName string, chartRequested *chart.Chart,
 	values map[string]interface{}, logger logr.Logger) error {
+
+	// If an Helm chart contains CRDs and also install instances of this CRD, dryRun mode won't work
+	// as CRDs are not really installed by DryRun mode and fetching resources will fail.
+	// "This chart or one of its subcharts contains CRDs. Rendering may fail or contain inaccuracies."
+	// This limitation (do not have any validation if installing such an Helm chart) is listed in the
+	// documentation.
+	// Workaround here is to skip running Run for Helm in DryRun mode if there are no validation.
+	openAPIValidations, luaValidations, err := getComplianceValidations(clusterSummary, logger)
+	if err != nil {
+		return err
+	}
+
+	if len(openAPIValidations) == 0 && len(luaValidations) == 0 {
+		return nil
+	}
 
 	upgradeObject.DryRun = true
 
@@ -1577,13 +1611,13 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 		return err
 	}
 
-	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, clusterSummary, policies, logger)
+	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, policies, openAPIValidations, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
 		return err
 	}
 
-	err = validateHelmResourcesAgainstLuaPolicies(ctx, clusterSummary, policies, logger)
+	err = validateHelmResourcesAgainstLuaPolicies(ctx, policies, luaValidations, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against lua policies %v", err))
 		return err
@@ -1595,17 +1629,11 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 // validateHelmResourcesAgainstOpenAPIPolicies validates each individual resource against
 // all openAPI policies currently enforced for the managed cluster where resource need to be
 // applied
-func validateHelmResourcesAgainstOpenAPIPolicies(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	policies []*unstructured.Unstructured, logger logr.Logger) error {
-
-	openAPIPolicies, err := getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		&clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
+func validateHelmResourcesAgainstOpenAPIPolicies(ctx context.Context, policies []*unstructured.Unstructured,
+	openAPIPolicies map[string][]byte, logger logr.Logger) error {
 
 	for i := range policies {
-		err = runOpenAPIValidations(ctx, openAPIPolicies, policies[i], logger)
+		err := runOpenAPIValidations(ctx, openAPIPolicies, policies[i], logger)
 		if err != nil {
 			return err
 		}
@@ -1614,20 +1642,33 @@ func validateHelmResourcesAgainstOpenAPIPolicies(ctx context.Context, clusterSum
 	return nil
 }
 
+// getComplianceValidations returns OpenAPI and Lua compliance policies for cluster
+func getComplianceValidations(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
+) (openAPIValidations, luaValidations map[string][]byte, err error) {
+
+	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, &clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return
+	}
+
+	luaValidations, err = getLuaValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		&clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 // validateHelmResourcesAgainstLuaPolicies validates all resources against all lua policies currently
 // enforced for the managed cluster where resources need to be applied.
 // Lua policies can be written to validate single resources (each deployment replica must be at least 3)
 // or combined resources (each deployment must be exposed by a service).
-func validateHelmResourcesAgainstLuaPolicies(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	policies []*unstructured.Unstructured, logger logr.Logger) error {
+func validateHelmResourcesAgainstLuaPolicies(ctx context.Context, policies []*unstructured.Unstructured,
+	luaPolicies map[string][]byte, logger logr.Logger) error {
 
-	luaPolicies, err := getLuaValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		&clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	err = runLuaValidations(ctx, luaPolicies, policies, logger)
+	err := runLuaValidations(ctx, luaPolicies, policies, logger)
 	if err != nil {
 		return err
 	}

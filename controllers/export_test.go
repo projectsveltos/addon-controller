@@ -144,3 +144,7 @@ var (
 	ConvertResourceReportsToObjectReference = convertResourceReportsToObjectReference
 	ConvertHelmResourcesToObjectReference   = convertHelmResourcesToObjectReference
 )
+
+var (
+	GetMgmtResourceName = getMgmtResourceName
+)

@@ -147,6 +147,27 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		result := configMapPredicate.Update(e)
 		Expect(result).To(BeFalse())
 	})
+
+	It("Update returns true when annotations changed", func() {
+		configMapPredicate := controllers.ConfigMapPredicates(logger)
+		configMap.Annotations = map[string]string{
+			"projectsveltos.io/template": "true",
+		}
+
+		oldConfigMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMap.Name,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: configMap,
+			ObjectOld: oldConfigMap,
+		}
+
+		result := configMapPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
 })
 
 var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
@@ -221,6 +242,27 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 
 		result := secretPredicate.Update(e)
 		Expect(result).To(BeFalse())
+	})
+
+	It("Update returns true when annotations changed", func() {
+		secretPredicate := controllers.SecretPredicates(logger)
+		secret.Annotations = map[string]string{
+			"projectsveltos.io/template": "true",
+		}
+
+		oldSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: secret.Name,
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: secret,
+			ObjectOld: oldSecret,
+		}
+
+		result := secretPredicate.Update(e)
+		Expect(result).To(BeTrue())
 	})
 })
 

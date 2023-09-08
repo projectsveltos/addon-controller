@@ -6,7 +6,7 @@ on:
     - 'main'
     - 'dev'
   pull_request:
-    types: [opened, edited, reopened]
+    types: [opened, edited, synchronize, reopened]
 
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19
+        go-version: 1.20.0
     - name: Build
       run: make build
     - name: FMT
@@ -41,7 +41,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19
+        go-version: 1.20.0
     - name: ut
       run: make test
       env:

@@ -53,6 +53,13 @@ func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
+			if !reflect.DeepEqual(oldConfigMap.Annotations, newConfigMap.Annotations) {
+				log.V(logs.LogVerbose).Info(
+					"ConfigMap Annotation changed. Will attempt to reconcile associated ClusterSummaries.",
+				)
+				return true
+			}
+
 			if !reflect.DeepEqual(oldConfigMap.BinaryData, newConfigMap.BinaryData) {
 				log.V(logs.LogVerbose).Info(
 					"ConfigMap BinaryData changed. Will attempt to reconcile associated ClusterSummaries.",
@@ -96,6 +103,13 @@ func SecretPredicates(logger logr.Logger) predicate.Funcs {
 			if !reflect.DeepEqual(oldSecret.Data, newSecret.Data) {
 				log.V(logs.LogVerbose).Info(
 					"Secret Data changed. Will attempt to reconcile associated ClusterSummaries.",
+				)
+				return true
+			}
+
+			if !reflect.DeepEqual(oldSecret.Annotations, newSecret.Annotations) {
+				log.V(logs.LogVerbose).Info(
+					"Secret Annotation changed. Will attempt to reconcile associated ClusterSummaries.",
 				)
 				return true
 			}

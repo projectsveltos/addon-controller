@@ -262,6 +262,30 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
 	})
+
+	It("getMgmtResourceName returns the correct name", func() {
+		ref := &configv1alpha1.TemplateResourceRef{
+			Resource: corev1.ObjectReference{
+				Name: "{{ .ClusterNamespace }}-{{ .ClusterName }}",
+			},
+			Identifier: randomString(),
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "cs" + randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+			},
+		}
+
+		value, err := controllers.GetMgmtResourceName(clusterSummary, ref)
+		Expect(err).To(BeNil())
+		Expect(value).To(Equal(cluster.Namespace + "-" + cluster.Name))
+	})
 })
 
 func getClusterRef(cluster client.Object) *corev1.ObjectReference {

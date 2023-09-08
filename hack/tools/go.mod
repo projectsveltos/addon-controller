@@ -7,8 +7,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	golang.org/x/oauth2 v0.10.0
 	k8s.io/client-go v0.27.2
-	sigs.k8s.io/cluster-api v1.5.0
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230808055612-5bf44d2ffd62
+	sigs.k8s.io/cluster-api v1.5.1
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230831162448-4332e3a54f00
 	sigs.k8s.io/controller-tools v0.12.0
 	sigs.k8s.io/kind v0.20.0
 )
@@ -32,7 +32,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/coredns/caddy v1.1.0 // indirect
-	github.com/coredns/corefile-migration v1.0.20 // indirect
+	github.com/coredns/corefile-migration v1.0.21 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/daviddengcn/go-colortext v1.0.0 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
@@ -124,7 +124,7 @@ require (
 	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/mod v0.10.0 // indirect
-	golang.org/x/net v0.12.0 // indirect
+	golang.org/x/net v0.13.0 // indirect
 	golang.org/x/sys v0.10.0 // indirect
 	golang.org/x/term v0.10.0 // indirect
 	golang.org/x/text v0.11.0 // indirect
@@ -152,7 +152,7 @@ require (
 	k8s.io/kubectl v0.27.2 // indirect
 	k8s.io/metrics v0.27.2 // indirect
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
-	sigs.k8s.io/controller-runtime v0.15.0 // indirect
+	sigs.k8s.io/controller-runtime v0.15.1 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.13.2 // indirect
 	sigs.k8s.io/kustomize/kustomize/v5 v5.0.1 // indirect

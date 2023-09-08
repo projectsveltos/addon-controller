@@ -92,6 +92,15 @@ where GitRepository synced with Flux contains following resources:
 
 Refer to [examples](./examples/) for more complex examples.
 
+## Give projectsveltos a try
+
+If you want to try projectsveltos with a test cluster:
+
+1. git clone https://github.com/projectsveltos/addon-controller
+2. make quickstart
+
+will create a management cluster using Kind, deploy clusterAPI and projectsveltos, create a workload cluster powered by clusterAPI.
+
 ## Sveltos in action
 
 ![Sveltos in action](doc/SveltosOverview.gif)

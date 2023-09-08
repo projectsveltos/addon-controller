@@ -17,12 +17,16 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -197,7 +201,7 @@ func collectMgmtResources(ctx context.Context, clusterSummary *configv1alpha1.Cl
 
 	result := make(map[string]*unstructured.Unstructured)
 	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
-		ref := clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
+		ref := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
 		// If namespace is not defined, default to cluster namespace
 		namespace := ref.Resource.Namespace
 		if namespace == "" {
@@ -208,8 +212,13 @@ func collectMgmtResources(ctx context.Context, clusterSummary *configv1alpha1.Cl
 			return nil, err
 		}
 
+		instantiatedName, err := getMgmtResourceName(clusterSummary, ref)
+		if err != nil {
+			return nil, err
+		}
+
 		var u *unstructured.Unstructured
-		u, err = dr.Get(ctx, ref.Resource.Name, metav1.GetOptions{})
+		u, err = dr.Get(ctx, instantiatedName, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
@@ -221,4 +230,28 @@ func collectMgmtResources(ctx context.Context, clusterSummary *configv1alpha1.Cl
 	}
 
 	return result, nil
+}
+
+// Resources referenced in the management cluster can have their name expressed in function
+// of cluster information (clusterNamespace, clusterName, clusterType)
+func getMgmtResourceName(clusterSummary *configv1alpha1.ClusterSummary,
+	ref *configv1alpha1.TemplateResourceRef) (string, error) {
+
+	// Accept name that are templates
+	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		string(clusterSummary.Spec.ClusterType))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(ref.Resource.Name)
+	if err != nil {
+		return "", err
+	}
+
+	var buffer bytes.Buffer
+
+	if err := tmpl.Execute(&buffer,
+		struct{ ClusterNamespace, ClusterName string }{
+			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
+		return "", errors.Wrapf(err, "error executing template")
+	}
+	return buffer.String(), nil
 }

@@ -19,8 +19,6 @@ package driftdetection
 var driftDetectionYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
-  labels:
-    control-plane: drift-detection-manager
   name: projectsveltos
 ---
 apiVersion: v1
@@ -259,7 +257,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: projectsveltos/drift-detection-manager-amd64:main
+        image: projectsveltos/drift-detection-manager-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

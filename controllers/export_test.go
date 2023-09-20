@@ -44,6 +44,7 @@ var (
 	UpdateChartMap       = (*ClusterSummaryReconciler).updateChartMap
 	ShouldRedeploy       = (*ClusterSummaryReconciler).shouldRedeploy
 	CanRemoveFinalizer   = (*ClusterSummaryReconciler).canRemoveFinalizer
+	ReconcileDelete      = (*ClusterSummaryReconciler).reconcileDelete
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference

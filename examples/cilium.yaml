@@ -1,0 +1,28 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: deploy-cilium-v1-26
+spec:
+  clusterSelector: env=fv
+  helmCharts:
+  - chartName: cilium/cilium
+    chartVersion: 1.12.12
+    helmChartAction: Install
+    releaseName: cilium
+    releaseNamespace: kube-system
+    repositoryName: cilium
+    repositoryURL: https://helm.cilium.io/
+    values: |
+      k8sServiceHost: "{{ .Cluster.spec.controlPlaneEndpoint.host }}"
+      k8sServicePort: "{{ .Cluster.spec.controlPlaneEndpoint.port }}"
+      hubble:
+        enabled: false
+      nodePort:
+        enabled: true
+      kubeProxyReplacement: strict
+      operator:
+        replicas: 1
+        updateStrategy:
+          rollingUpdate:
+            maxSurge: 0
+            maxUnavailable: 1

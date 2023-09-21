@@ -30,7 +30,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -63,7 +62,7 @@ var _ = Describe("Template", func() {
 		Byf("Add configMap containing a template policy. Policy has annotation to indicate it is a template")
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), templatePolicy)
 		configMap.Annotations = map[string]string{
-			controllers.PolicyTemplate: "ok",
+			libsveltosv1alpha1.PolicyTemplateAnnotation: "ok",
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 

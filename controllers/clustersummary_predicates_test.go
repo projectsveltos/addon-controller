@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/projectsveltos/addon-controller/controllers"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
@@ -151,7 +152,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 	It("Update returns true when annotations changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
 		configMap.Annotations = map[string]string{
-			"projectsveltos.io/template": "true",
+			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
 		}
 
 		oldConfigMap := &corev1.ConfigMap{
@@ -247,7 +248,7 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 	It("Update returns true when annotations changed", func() {
 		secretPredicate := controllers.SecretPredicates(logger)
 		secret.Annotations = map[string]string{
-			"projectsveltos.io/template": "true",
+			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
 		}
 
 		oldSecret := &corev1.Secret{

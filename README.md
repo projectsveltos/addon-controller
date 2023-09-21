@@ -14,7 +14,7 @@
 - [Quick Start](https://projectsveltos.github.io/sveltos/quick_start/)
 
 # What is the Projectsveltos?
-Projectsveltos is mainly a Kubernetes add-on controller that simplifies the deployment and management of add-ons in Kubernetes clusters. With Sveltos controller, you can easily automate the deployment process and ensure consistency across your cluster environment.
+Projectsveltos is mainly a Kubernetes add-on controller that simplifies the deployment and management of add-ons in Kubernetes clusters. With Sveltos controller, you can easily automate the deployment process and ensure consistency across your cluster environment. Sveltos can deploy raw Kubernetes YAMLs, Helm charts, or Kustomize or any combination of those.
 
 ## Addon deployment: how it works
 

@@ -134,7 +134,7 @@ func deployResources(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
-	return nil
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureResources, logger)
 }
 
 func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,

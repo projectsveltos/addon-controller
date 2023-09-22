@@ -165,7 +165,12 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	return nil
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureHelm, logger)
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,

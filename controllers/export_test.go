@@ -17,16 +17,20 @@ limitations under the License.
 package controllers
 
 var (
-	UpdateClusterSummaries       = (*ClusterProfileReconciler).updateClusterSummaries
-	CreateClusterSummary         = (*ClusterProfileReconciler).createClusterSummary
-	UpdateClusterSummary         = (*ClusterProfileReconciler).updateClusterSummary
-	DeleteClusterSummary         = (*ClusterProfileReconciler).deleteClusterSummary
-	UpdateClusterConfiguration   = (*ClusterProfileReconciler).updateClusterConfiguration
-	CleanClusterConfiguration    = (*ClusterProfileReconciler).cleanClusterConfiguration
-	CleanClusterReports          = (*ClusterProfileReconciler).cleanClusterReports
-	UpdateClusterReports         = (*ClusterProfileReconciler).updateClusterReports
-	UpdateClusterSummarySyncMode = (*ClusterProfileReconciler).updateClusterSummarySyncMode
-	GetMatchingClusters          = (*ClusterProfileReconciler).getMatchingClusters
+	UpdateClusterSummaries           = (*ClusterProfileReconciler).updateClusterSummaries
+	CreateClusterSummary             = (*ClusterProfileReconciler).createClusterSummary
+	UpdateClusterSummary             = (*ClusterProfileReconciler).updateClusterSummary
+	DeleteClusterSummary             = (*ClusterProfileReconciler).deleteClusterSummary
+	UpdateClusterConfiguration       = (*ClusterProfileReconciler).updateClusterConfiguration
+	CleanClusterConfiguration        = (*ClusterProfileReconciler).cleanClusterConfiguration
+	CleanClusterReports              = (*ClusterProfileReconciler).cleanClusterReports
+	UpdateClusterReports             = (*ClusterProfileReconciler).updateClusterReports
+	UpdateClusterSummarySyncMode     = (*ClusterProfileReconciler).updateClusterSummarySyncMode
+	GetMatchingClusters              = (*ClusterProfileReconciler).getMatchingClusters
+	GetMaxUpdate                     = (*ClusterProfileReconciler).getMaxUpdate
+	ReviseUpdatedAndUpdatingClusters = (*ClusterProfileReconciler).reviseUpdatedAndUpdatingClusters
+	IsCluterSummaryProvisioned       = (*ClusterProfileReconciler).isCluterSummaryProvisioned
+	GetUpdatedAndUpdatingClusters    = (*ClusterProfileReconciler).getUpdatedAndUpdatingClusters
 
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
 	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
@@ -133,6 +137,9 @@ var (
 	RunOpenapiValidations = runOpenAPIValidations
 	RunLuaValidations     = runLuaValidations
 	LuaValidation         = luaValidation
+
+	IsHealthy      = isHealthy
+	FetchResources = fetchResources
 )
 
 // reloader utils

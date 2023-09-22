@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
@@ -49,6 +50,46 @@ type DryRunReconciliationError struct{}
 
 func (m *DryRunReconciliationError) Error() string {
 	return "mode is DryRun. Nothing is reconciled"
+}
+
+type ValidateHealth struct {
+	// Name is the name of this check
+	Name string `json:"name"`
+
+	// FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+	// This field indicates when to run this check.
+	// For instance:
+	// - if set to Helm this check will be run after all helm
+	// charts specified in the ClusterProfile are deployed.
+	// - if set to Resources this check will be run after the content
+	// of all the ConfigMaps/Secrets referenced by ClusterProfile in the
+	// PolicyRef sections is deployed
+	FeatureID FeatureID `json:"featureID"`
+
+	// Group of the resource to fetch in the managed Cluster.
+	Group string `json:"group"`
+
+	// Version of the resource to fetch in the managed Cluster.
+	Version string `json:"version"`
+
+	// Kind of the resource to fetch in the managed Cluster.
+	// +kubebuilder:validation:MinLength=1
+	Kind string `json:"kind"`
+
+	// LabelFilters allows to filter resources based on current labels.
+	// +optional
+	LabelFilters []libsveltosv1alpha1.LabelFilter `json:"labelFilters,omitempty"`
+
+	// Namespace of the resource to fetch in the managed Cluster.
+	// Empty for resources scoped at cluster level.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Script is a text containing a lua script.
+	// Must return struct with field "health"
+	// representing whether object is a match (true or false)
+	// +optional
+	Script string `json:"script,omitempty"`
 }
 
 // SyncMode specifies how features are synced in a workload cluster.
@@ -244,6 +285,17 @@ type ClusterProfileSpec struct {
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
+	// The maximum number of clusters that can be updated concurrently.
+	// Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
+	// Defaults to 100%.
+	// Example: when this is set to 30%, when list of add-ons/applications in ClusterProfile
+	// changes, only 30% of matching clusters will be updated in parallel. Only when updates
+	// in those cluster succeed, other matching clusters are updated.
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +optional
+	MaxUpdate *intstr.IntOrString `json:"maxUpdate,omitempty"`
+
 	// StopMatchingBehavior indicates what behavior should be when a Cluster stop matching
 	// the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
 	// be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
@@ -280,13 +332,39 @@ type ClusterProfileSpec struct {
 	// Kustomization refs is a list of kustomization paths. Kustomization will
 	// be run on those paths and the outcome will be deployed.
 	KustomizationRefs []KustomizationRef `json:"kustomizationRefs,omitempty"`
+
+	// ValidateHealths is a slice of Lua functions to run against
+	// the managed cluster to validate the state of those add-ons/applications
+	// is healthy
+	ValidateHealths []ValidateHealth `json:"validateHealths,omitempty"`
+}
+
+type Clusters struct {
+	// Hash represents of a unique value for ClusterProfile Spec at
+	// a fixed point in time
+	// +optional
+	Hash []byte `json:"hash,omitempty"`
+
+	// Clusters reference all the clusters currently matching
+	// ClusterProfile ClusterSelector and already updated/being updated
+	// to ClusterProfile Spec
+	Clusters []corev1.ObjectReference `json:"clusters,omitempty"`
 }
 
 // ClusterProfileStatus defines the observed state of ClusterProfile
 type ClusterProfileStatus struct {
-	// MatchingClusterRefs reference all the cluster-api Cluster currently matching
+	// MatchingClusterRefs reference all the clusters currently matching
 	// ClusterProfile ClusterSelector
 	MatchingClusterRefs []corev1.ObjectReference `json:"matchingClusters,omitempty"`
+
+	// UpdatingClusters reference all the cluster currently matching
+	// ClusterProfile ClusterSelector and being updated
+	UpdatingClusters Clusters `json:"updatingClusters,omitempty"`
+
+	// UpdatedClusters contains information all the cluster currently matching
+	// ClusterProfile ClusterSelector and already updated to latest ClusterProfile
+	// Spec
+	UpdatedClusters Clusters `json:"updatedClusters,omitempty"`
 }
 
 //+kubebuilder:object:root=true

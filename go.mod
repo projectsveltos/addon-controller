@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/TwinProduction/go-color v1.0.0
+	github.com/dariubs/percent v1.0.0
 	github.com/fluxcd/pkg/http/fetch v0.5.2
 	github.com/fluxcd/pkg/tar v0.2.0
 	github.com/fluxcd/source-controller/api v1.0.0

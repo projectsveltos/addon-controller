@@ -32,6 +32,20 @@ import (
 var _ = Describe("Helm", func() {
 	const (
 		namePrefix = "helm-"
+
+		luaEvaluateDeploymentHealth = `function evaluate()
+	hs = {}
+	hs.healthy = false
+	hs.message = "available replicas not matching requested replicas"
+	if obj.status ~= nil then
+		if obj.status.availableReplicas ~= nil then
+			if obj.status.availableReplicas == obj.spec.replicas then
+				hs.healthy = true
+			end
+		end
+	end
+	return hs
+	end`
 	)
 
 	It("Deploy and updates helm charts correctly", Label("FV", "EXTENDED"), func() {
@@ -67,6 +81,28 @@ var _ = Describe("Helm", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
+
+		currentClusterProfile.Spec.ValidateHealths = []configv1alpha1.ValidateHealth{
+			{
+				Name:      "kyverno-deployment-health",
+				FeatureID: configv1alpha1.FeatureHelm,
+				Namespace: "kyverno",
+				Group:     "apps",
+				Version:   "v1",
+				Kind:      "Deployment",
+				Script:    luaEvaluateDeploymentHealth,
+			},
+			{
+				Name:      "nginx-deployment-health",
+				FeatureID: configv1alpha1.FeatureHelm,
+				Namespace: "nginx",
+				Group:     "apps",
+				Version:   "v1",
+				Kind:      "Deployment",
+				Script:    luaEvaluateDeploymentHealth,
+			},
+		}
+
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

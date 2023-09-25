@@ -209,6 +209,18 @@ spec:
                   - namespace
                   type: object
                 type: array
+              maxUpdate:
+                anyOf:
+                - type: integer
+                - type: string
+                description: 'The maximum number of clusters that can be updated concurrently.
+                  Value can be an absolute number (ex: 5) or a percentage of desired
+                  pods (ex: 10%). Defaults to 100%. Example: when this is set to 30%,
+                  when list of add-ons/applications in ClusterProfile changes, only
+                  30% of matching clusters will be updated in parallel. Only when
+                  updates in those cluster succeed, other matching clusters are updated.'
+                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                x-kubernetes-int-or-string: true
               policyRefs:
                 description: PolicyRefs references all the ConfigMaps/Secrets containing
                   kubernetes resources that need to be deployed in the matching CAPI
@@ -338,13 +350,86 @@ spec:
                   - resource
                   type: object
                 type: array
+              validateHealths:
+                description: ValidateHealths is a slice of Lua functions to run against
+                  the managed cluster to validate the state of those add-ons/applications
+                  is healthy
+                items:
+                  properties:
+                    featureID:
+                      description: 'FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                        This field indicates when to run this check. For instance:
+                        - if set to Helm this check will be run after all helm charts
+                        specified in the ClusterProfile are deployed. - if set to
+                        Resources this check will be run after the content of all
+                        the ConfigMaps/Secrets referenced by ClusterProfile in the
+                        PolicyRef sections is deployed'
+                      enum:
+                      - Resources
+                      - Helm
+                      - Kustomize
+                      type: string
+                    group:
+                      description: Group of the resource to fetch in the managed Cluster.
+                      type: string
+                    kind:
+                      description: Kind of the resource to fetch in the managed Cluster.
+                      minLength: 1
+                      type: string
+                    labelFilters:
+                      description: LabelFilters allows to filter resources based on
+                        current labels.
+                      items:
+                        properties:
+                          key:
+                            description: Key is the label key
+                            type: string
+                          operation:
+                            description: Operation is the comparison operation
+                            enum:
+                            - Equal
+                            - Different
+                            type: string
+                          value:
+                            description: Value is the label value
+                            type: string
+                        required:
+                        - key
+                        - operation
+                        - value
+                        type: object
+                      type: array
+                    name:
+                      description: Name is the name of this check
+                      type: string
+                    namespace:
+                      description: Namespace of the resource to fetch in the managed
+                        Cluster. Empty for resources scoped at cluster level.
+                      type: string
+                    script:
+                      description: Script is a text containing a lua script. Must
+                        return struct with field "health" representing whether object
+                        is a match (true or false)
+                      type: string
+                    version:
+                      description: Version of the resource to fetch in the managed
+                        Cluster.
+                      type: string
+                  required:
+                  - featureID
+                  - group
+                  - kind
+                  - name
+                  - version
+                  type: object
+                type: array
             type: object
           status:
             description: ClusterProfileStatus defines the observed state of ClusterProfile
             properties:
               matchingClusters:
-                description: MatchingClusterRefs reference all the cluster-api Cluster
-                  currently matching ClusterProfile ClusterSelector
+                description: MatchingClusterRefs reference all the clusters currently
+                  matching ClusterProfile ClusterSelector
                 items:
                   description: "ObjectReference contains enough information to let
                     you inspect or modify the referred object. --- New uses of this
@@ -407,6 +492,163 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
+              updatedClusters:
+                description: UpdatedClusters contains information all the cluster
+                  currently matching ClusterProfile ClusterSelector and already updated
+                  to latest ClusterProfile Spec
+                properties:
+                  clusters:
+                    description: Clusters reference all the clusters currently matching
+                      ClusterProfile ClusterSelector and already updated/being updated
+                      to ClusterProfile Spec
+                    items:
+                      description: "ObjectReference contains enough information to
+                        let you inspect or modify the referred object. --- New uses
+                        of this type are discouraged because of difficulty describing
+                        its usage when embedded in APIs. 1. Ignored fields.  It includes
+                        many fields which are not generally honored.  For instance,
+                        ResourceVersion and FieldPath are both very rarely valid in
+                        actual usage. 2. Invalid usage help.  It is impossible to
+                        add specific help for individual usage.  In most embedded
+                        usages, there are particular restrictions like, \"must refer
+                        only to types A and B\" or \"UID not honored\" or \"name must
+                        be restricted\". Those cannot be well described when embedded.
+                        3. Inconsistent validation.  Because the usages are different,
+                        the validation rules are different by usage, which makes it
+                        hard for users to predict what will happen. 4. The fields
+                        are both imprecise and overly precise.  Kind is not a precise
+                        mapping to a URL. This can produce ambiguity during interpretation
+                        and require a REST mapping.  In most cases, the dependency
+                        is on the group,resource tuple and the version of the actual
+                        struct is irrelevant. 5. We cannot easily change it.  Because
+                        this type is embedded in many locations, updates to this type
+                        will affect numerous schemas.  Don't make new APIs embed an
+                        underspecified API type they do not control. \n Instead of
+                        using this type, create a locally provided and used type that
+                        is well-focused on your reference. For example, ServiceReferences
+                        for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                        ."
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: 'If referring to a piece of an object instead
+                            of an entire object, this string should contain a valid
+                            JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container
+                            within a pod, this would take on a value like: "spec.containers{name}"
+                            (where "name" refers to the name of the container that
+                            triggered the event) or if no container name is specified
+                            "spec.containers[2]" (container with index 2 in this pod).
+                            This syntax is chosen only to have some well-defined way
+                            of referencing a part of an object. TODO: this design
+                            is not final and this field is subject to change in the
+                            future.'
+                          type: string
+                        kind:
+                          description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                          type: string
+                        namespace:
+                          description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                          type: string
+                        resourceVersion:
+                          description: 'Specific resourceVersion to which this reference
+                            is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                          type: string
+                        uid:
+                          description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  hash:
+                    description: Hash represents of a unique value for ClusterProfile
+                      Spec at a fixed point in time
+                    format: byte
+                    type: string
+                type: object
+              updatingClusters:
+                description: UpdatingClusters reference all the cluster currently
+                  matching ClusterProfile ClusterSelector and being updated
+                properties:
+                  clusters:
+                    description: Clusters reference all the clusters currently matching
+                      ClusterProfile ClusterSelector and already updated/being updated
+                      to ClusterProfile Spec
+                    items:
+                      description: "ObjectReference contains enough information to
+                        let you inspect or modify the referred object. --- New uses
+                        of this type are discouraged because of difficulty describing
+                        its usage when embedded in APIs. 1. Ignored fields.  It includes
+                        many fields which are not generally honored.  For instance,
+                        ResourceVersion and FieldPath are both very rarely valid in
+                        actual usage. 2. Invalid usage help.  It is impossible to
+                        add specific help for individual usage.  In most embedded
+                        usages, there are particular restrictions like, \"must refer
+                        only to types A and B\" or \"UID not honored\" or \"name must
+                        be restricted\". Those cannot be well described when embedded.
+                        3. Inconsistent validation.  Because the usages are different,
+                        the validation rules are different by usage, which makes it
+                        hard for users to predict what will happen. 4. The fields
+                        are both imprecise and overly precise.  Kind is not a precise
+                        mapping to a URL. This can produce ambiguity during interpretation
+                        and require a REST mapping.  In most cases, the dependency
+                        is on the group,resource tuple and the version of the actual
+                        struct is irrelevant. 5. We cannot easily change it.  Because
+                        this type is embedded in many locations, updates to this type
+                        will affect numerous schemas.  Don't make new APIs embed an
+                        underspecified API type they do not control. \n Instead of
+                        using this type, create a locally provided and used type that
+                        is well-focused on your reference. For example, ServiceReferences
+                        for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                        ."
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: 'If referring to a piece of an object instead
+                            of an entire object, this string should contain a valid
+                            JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container
+                            within a pod, this would take on a value like: "spec.containers{name}"
+                            (where "name" refers to the name of the container that
+                            triggered the event) or if no container name is specified
+                            "spec.containers[2]" (container with index 2 in this pod).
+                            This syntax is chosen only to have some well-defined way
+                            of referencing a part of an object. TODO: this design
+                            is not final and this field is subject to change in the
+                            future.'
+                          type: string
+                        kind:
+                          description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                          type: string
+                        namespace:
+                          description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                          type: string
+                        resourceVersion:
+                          description: 'Specific resourceVersion to which this reference
+                            is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                          type: string
+                        uid:
+                          description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  hash:
+                    description: Hash represents of a unique value for ClusterProfile
+                      Spec at a fixed point in time
+                    format: byte
+                    type: string
+                type: object
             type: object
         type: object
     served: true

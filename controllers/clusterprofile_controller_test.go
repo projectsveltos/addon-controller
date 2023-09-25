@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -1086,6 +1088,278 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			}
 			return currentClusterSummary.Spec.ClusterProfileSpec.SyncMode == clusterProfile.Spec.SyncMode
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("getMaxUpdate returns max value of clusters that can be updated (fixed)", func() {
+		const maxUpdate = int32(10)
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: maxUpdate}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.GetMaxUpdate(reconciler, clusterProfileScope)).To(Equal(maxUpdate))
+	})
+
+	It("getMaxUpdate returns max value of clusters that can be updated (percentage)", func() {
+		const maxUpdate = 50
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.String, StrVal: fmt.Sprintf("%d%%", maxUpdate)}
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.GetMaxUpdate(reconciler, clusterProfileScope)).To(Equal(int32(2)))
+	})
+
+	It("reviseUpdatedAndUpdatingClusters removes non matching clusters from ClusterProfile Updated/Updating Clusters",
+		func() {
+			cluster1 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
+			cluster2 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
+			clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+				{
+					Namespace: cluster1.Namespace, Name: cluster1.Name,
+					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				},
+				{
+					Namespace: cluster2.Namespace, Name: cluster2.Name,
+					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				},
+				{
+					Namespace: randomString(), Name: randomString(),
+					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				},
+			}
+			clusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{
+				Hash: []byte(randomString()),
+				Clusters: []corev1.ObjectReference{
+					{
+						Namespace: cluster1.Namespace, Name: cluster1.Name,
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+					{
+						Namespace: randomString(), Name: randomString(),
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+				},
+			}
+			clusterProfile.Status.UpdatingClusters = configv1alpha1.Clusters{
+				Hash: []byte(randomString()),
+				Clusters: []corev1.ObjectReference{
+					{
+						Namespace: cluster2.Namespace, Name: cluster2.Name,
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+					{
+						Namespace: randomString(), Name: randomString(),
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+				},
+			}
+
+			c := fake.NewClientBuilder().WithScheme(scheme).Build()
+			reconciler := getClusterProfileReconciler(c)
+
+			clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+				Client:         c,
+				Logger:         logger,
+				ClusterProfile: clusterProfile,
+				ControllerName: "clusterprofile",
+			})
+			Expect(err).To(BeNil())
+			controllers.ReviseUpdatedAndUpdatingClusters(reconciler, clusterProfileScope)
+
+			Expect(len(clusterProfile.Status.UpdatedClusters.Clusters)).To(Equal(1))
+			Expect(clusterProfile.Status.UpdatedClusters.Clusters).To(ContainElement(corev1.ObjectReference{
+				Namespace: cluster1.Namespace, Name: cluster1.Name,
+				Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			}))
+
+			Expect(len(clusterProfile.Status.UpdatingClusters.Clusters)).To(Equal(1))
+			Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(ContainElement(corev1.ObjectReference{
+				Namespace: cluster2.Namespace, Name: cluster2.Name,
+				Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			}))
+		})
+
+	It("isClusterProvisioned returns true when all Features are marked Provisioned", func() {
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   clusterProfileNamePrefix + randomString(),
+				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+			},
+			Status: configv1alpha1.ClusterSummaryStatus{
+				FeatureSummaries: []configv1alpha1.FeatureSummary{
+					{
+						FeatureID: configv1alpha1.FeatureHelm,
+						Status:    configv1alpha1.FeatureStatusProvisioned,
+					},
+					{
+						FeatureID: configv1alpha1.FeatureResources,
+						Status:    configv1alpha1.FeatureStatusProvisioning,
+					},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		// Not all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(reconciler, clusterSummary)).To(BeFalse())
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureHelm,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		// all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(reconciler, clusterSummary)).To(BeTrue())
+	})
+
+	It("getUpdatedAndUpdatingClusters returns list of clusters already updated and being updated", func() {
+		cluster1 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
+		cluster2 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
+
+		clusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{
+			Hash: []byte(randomString()),
+			Clusters: []corev1.ObjectReference{
+				{
+					Namespace: cluster1.Namespace, Name: cluster1.Name,
+					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				},
+			},
+		}
+		clusterProfile.Status.UpdatingClusters = configv1alpha1.Clusters{
+			Hash: []byte(randomString()),
+			Clusters: []corev1.ObjectReference{
+				{
+					Namespace: cluster2.Namespace, Name: cluster2.Name,
+					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		// Not all Features are marked as provisioned
+		updated, updating := controllers.GetUpdatedAndUpdatingClusters(reconciler, clusterProfileScope)
+		Expect(updated.Len()).To(Equal(1))
+		Expect(updated.Has(&clusterProfile.Status.UpdatedClusters.Clusters[0])).To(BeTrue())
+
+		Expect(updating.Len()).To(Equal(1))
+		Expect(updating.Has(&clusterProfile.Status.UpdatingClusters.Clusters[0])).To(BeTrue())
+	})
+
+	It("updateClusterSummaries respects MaxUpdate field", func() {
+		cluster1 := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       libsveltosv1alpha1.SveltosClusterKind,
+			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+		}
+		sveltosCluster1 := libsveltosv1alpha1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster1.Namespace,
+				Name:      cluster1.Name,
+			},
+			Status: libsveltosv1alpha1.SveltosClusterStatus{
+				Ready: true,
+			},
+		}
+
+		cluster2 := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       libsveltosv1alpha1.SveltosClusterKind,
+			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+		}
+		sveltosCluster2 := libsveltosv1alpha1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster2.Namespace,
+				Name:      cluster2.Name,
+			},
+			Status: libsveltosv1alpha1.SveltosClusterStatus{
+				Ready: true,
+			},
+		}
+
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			cluster1, cluster2,
+		}
+
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: 1}
+
+		initObjects := []client.Object{
+			clusterProfile,
+			&sveltosCluster1,
+			&sveltosCluster2,
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		// Reports an error that not all clusters are being updated due to MaxUpdate policy
+		Expect(controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterProfileScope)).ToNot(BeNil())
+
+		// Since MaxUpdate is set to 1 expect only one clusterSummary is created
+		clusterSummaries := &configv1alpha1.ClusterSummaryList{}
+		Expect(c.List(context.TODO(), clusterSummaries)).To(Succeed())
+		Expect(len(clusterSummaries.Items)).To(Equal(1))
+
+		// Reset MaxUpdate to 2
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: 2}
+		Expect(c.Update(context.TODO(), clusterProfile)).To(Succeed())
+
+		Expect(controllers.UpdateClusterSummaries(reconciler, context.TODO(), clusterProfileScope)).To(BeNil())
+
+		// Since MaxUpdate is set to 2 expect two clusterSummaries are created
+		Expect(c.List(context.TODO(), clusterSummaries)).To(Succeed())
+		Expect(len(clusterSummaries.Items)).To(Equal(2))
 	})
 })
 

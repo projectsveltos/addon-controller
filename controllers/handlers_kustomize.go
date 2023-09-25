@@ -149,7 +149,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
-	return nil
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureKustomize, logger)
 }
 
 func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,

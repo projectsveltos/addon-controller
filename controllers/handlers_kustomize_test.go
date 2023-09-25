@@ -296,7 +296,8 @@ var _ = Describe("Hash methods", func() {
 		})
 		Expect(err).To(BeNil())
 
-		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 		for i := 0; i < repoNum; i++ {
 			config += gitRepositories[i].Status.Artifact.Revision

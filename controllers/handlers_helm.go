@@ -321,6 +321,10 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	h := sha256.New()
 	var config string
 
+	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
+	// or viceversa) reconcile.
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)

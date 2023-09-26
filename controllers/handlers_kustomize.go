@@ -313,6 +313,13 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		}
 	}
 
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureKustomize {
+			config += render.AsCode(h)
+		}
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

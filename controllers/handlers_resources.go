@@ -362,6 +362,13 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		}
 	}
 
+	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureResources {
+			config += render.AsCode(h)
+		}
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

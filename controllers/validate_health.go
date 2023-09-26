@@ -73,7 +73,7 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 		return err
 	}
 
-	if list == nil {
+	if list == nil || len(list.Items) == 0 {
 		return fmt.Errorf("did not fetch any resource")
 	}
 

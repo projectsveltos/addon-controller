@@ -96,7 +96,7 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Define it as template as content of autoscalerServiceAccount and autoscalerSecret is a template
 		currentConfigMap.Annotations = map[string]string{
-			"projectsveltos.io/template": "true",
+			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
@@ -108,7 +108,7 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Defined it as template as content of autoscalerInfo is a template
 		currentConfigMap.Annotations = map[string]string{
-			"projectsveltos.io/template": "true",
+			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 

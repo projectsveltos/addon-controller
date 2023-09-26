@@ -134,7 +134,7 @@ func deployResources(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
-	return nil
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureResources, logger)
 }
 
 func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
@@ -324,6 +324,10 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	h := sha256.New()
 	var config string
 
+	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
+	// or viceversa) reconcile.
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
@@ -355,6 +359,13 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 			logger.Error(err, fmt.Sprintf("failed to get %s %s/%s",
 				reference.Kind, reference.Namespace, reference.Name))
 			return nil, err
+		}
+	}
+
+	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureResources {
+			config += render.AsCode(h)
 		}
 	}
 

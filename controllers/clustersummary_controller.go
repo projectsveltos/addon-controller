@@ -209,37 +209,44 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
-
-	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
+	// If Sveltos/CAPI Cluster is not found, there is nothing to clean up.
+	isPresent, err := r.isClusterPresent(ctx, clusterSummaryScope)
 	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if paused {
-		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
-		return reconcile.Result{}, nil
-	}
-
-	err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
+	if isPresent {
+		// Cleanup
+		paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if paused {
+			logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+			return reconcile.Result{}, nil
+		}
 
-	err = r.undeploy(ctx, clusterSummaryScope, logger)
-	if err != nil {
-		// In DryRun mode it is expected to always get an error back
-		if !clusterSummaryScope.IsDryRunSync() {
-			logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+
+		err = r.undeploy(ctx, clusterSummaryScope, logger)
+		if err != nil {
+			// In DryRun mode it is expected to always get an error back
+			if !clusterSummaryScope.IsDryRunSync() {
+				logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			}
+		}
+
+		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
+			logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 
-	if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
-		logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-	}
-
-	// Cluster is deleted so remove the finalizer.
+	// Cluster is not present anymore or cleanup succeeded
 	logger.V(logs.LogInfo).Info("Removing finalizer")
 	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
 		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
@@ -481,7 +488,6 @@ func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, cluster
 	cs := clusterSummaryScope.ClusterSummary
 
 	_, err = clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
-
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
@@ -491,15 +497,8 @@ func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, cluster
 	return true, err
 }
 
-func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	// If Sveltos/CAPI Cluster is not found, there is nothing to clean up.
-	isPresent, err := r.isClusterPresent(ctx, clusterSummaryScope)
-	if err != nil {
-		return err
-	}
-	if !isPresent {
-		return nil
-	}
+func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
 
 	resourceErr := r.undeployResources(ctx, clusterSummaryScope, logger)
 

@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	luaFileName = "lua_policy.yaml"
+	luaFileName = "lua_policy.lua"
 )
 
 const (

@@ -152,7 +152,7 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 func instantiateTemplate(referencedObject client.Object, logger logr.Logger) bool {
 	annotations := referencedObject.GetAnnotations()
 	if annotations != nil {
-		if _, ok := annotations[PolicyTemplate]; ok {
+		if _, ok := annotations[libsveltosv1alpha1.PolicyTemplateAnnotation]; ok {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("referencedObject %s %s/%s is a template",
 				referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName()))
 			return true

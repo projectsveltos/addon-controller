@@ -165,7 +165,12 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	return nil
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureHelm, logger)
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
@@ -316,6 +321,10 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	h := sha256.New()
 	var config string
 
+	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
+	// or viceversa) reconcile.
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
@@ -328,6 +337,13 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
 		config += render.AsCode(*currentChart)
+	}
+
+	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureHelm {
+			config += render.AsCode(h)
+		}
 	}
 
 	h.Write([]byte(config))

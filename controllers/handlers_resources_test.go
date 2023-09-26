@@ -363,7 +363,8 @@ var _ = Describe("Hash methods", func() {
 		})
 		Expect(err).To(BeNil())
 
-		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 		config += render.AsCode(configMap1.Data)
 		config += render.AsCode(configMap2.Data)
 		h := sha256.New()

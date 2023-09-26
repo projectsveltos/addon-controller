@@ -661,6 +661,43 @@ var _ = Describe("ClustersummaryController", func() {
 		items := set.Items()
 		Expect(items[0].Namespace).To(Equal(clusterSummary.Namespace))
 	})
+
+	It("reconcileDelete successfully returns when cluster is not found", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
+		}
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		}
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
+		}
+
+		// No cluster.
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		var result reconcile.Result
+		result, err = controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(result.Requeue).To(BeFalse())
+	})
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {

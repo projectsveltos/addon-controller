@@ -18,10 +18,15 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"math"
 	"reflect"
+	"strings"
 	"sync"
 
+	"github.com/dariubs/percent"
+	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
@@ -241,7 +247,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	// For each matching Sveltos/CAPI Cluster, create/update corresponding ClusterSummary
 	if err := r.updateClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummaries")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	// For Sveltos/CAPI Cluster not matching ClusterProfile, deletes corresponding ClusterSummary
@@ -419,19 +425,257 @@ func (r *ClusterProfileReconciler) cleanClusterReports(ctx context.Context,
 	return nil
 }
 
+// getClusterProfileSpecHash returns hash of current clusterProfile Spec
+func (r *ClusterProfileReconciler) getClusterProfileSpecHash(clusterProfileScope *scope.ClusterProfileScope) []byte {
+	h := sha256.New()
+	var config string
+
+	config += render.AsCode(clusterProfileScope.ClusterProfile.Spec)
+
+	h.Write([]byte(config))
+	return h.Sum(nil)
+}
+
+// reviseUpdatedAndUpdatingClusters updates ClusterProfile Status UpdatedClusters and UpdatingClusters fields
+// by removing clusters non matching ClusterProfile anymore.
+// - UpdatedClusters represents list of matching clusters already updated since last ClusterProfile change
+// - UpdatingClusters represents list of matching clusters being updated since last ClusterProfile change
+func (r *ClusterProfileReconciler) reviseUpdatedAndUpdatingClusters(clusterProfileScope *scope.ClusterProfileScope) {
+	matchingCluster := libsveltosset.Set{}
+	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
+		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
+		matchingCluster.Insert(&cluster)
+	}
+
+	updatedClusters := &libsveltosset.Set{}
+	currentUpdatedClusters := make([]corev1.ObjectReference, 0)
+	for i := range clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters {
+		cluster := &clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters[i]
+		if matchingCluster.Has(cluster) {
+			currentUpdatedClusters = append(currentUpdatedClusters, *cluster)
+			updatedClusters.Insert(cluster)
+		}
+	}
+
+	clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters = currentUpdatedClusters
+
+	updatingClusters := &libsveltosset.Set{}
+	currentUpdatingClusters := make([]corev1.ObjectReference, 0)
+	for i := range clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters {
+		cluster := &clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters[i]
+		if matchingCluster.Has(cluster) {
+			currentUpdatingClusters = append(currentUpdatingClusters, *cluster)
+			updatingClusters.Insert(cluster)
+		}
+	}
+
+	clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters = currentUpdatingClusters
+}
+
+// isCluterSummaryProvisioned returns true if ClusterSummary is currently fully deployed.
+func (r *ClusterProfileReconciler) isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary,
+) bool {
+
+	hasHelmCharts := false
+	hasRawYAMLs := false
+	hasKustomize := false
+
+	if clusterSumary.Spec.ClusterProfileSpec.HelmCharts != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
+
+		hasHelmCharts = true
+	}
+
+	if clusterSumary.Spec.ClusterProfileSpec.PolicyRefs != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
+
+		hasRawYAMLs = true
+	}
+
+	if clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
+
+		hasKustomize = true
+	}
+
+	deployedHelmCharts := false
+	deployedRawYAMLs := false
+	deployedKustomize := false
+
+	for i := range clusterSumary.Status.FeatureSummaries {
+		fs := &clusterSumary.Status.FeatureSummaries[i]
+		if fs.Status != configv1alpha1.FeatureStatusProvisioned {
+			return false
+		}
+		switch fs.FeatureID {
+		case configv1alpha1.FeatureHelm:
+			deployedHelmCharts = true
+		case configv1alpha1.FeatureResources:
+			deployedRawYAMLs = true
+		case configv1alpha1.FeatureKustomize:
+			deployedKustomize = true
+		}
+	}
+
+	if hasHelmCharts {
+		if !deployedHelmCharts {
+			return false
+		}
+	}
+
+	if hasRawYAMLs {
+		if !deployedRawYAMLs {
+			return false
+		}
+	}
+
+	if hasKustomize {
+		if !deployedKustomize {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (r *ClusterProfileReconciler) getMaxUpdate(clusterProfileScope *scope.ClusterProfileScope) int32 {
+	if clusterProfileScope.ClusterProfile.Spec.MaxUpdate == nil {
+		return int32(0)
+	}
+
+	// Check the Type field to determine if it is an int or a string.
+	switch clusterProfileScope.ClusterProfile.Spec.MaxUpdate.Type {
+	case intstr.Int:
+		return clusterProfileScope.ClusterProfile.Spec.MaxUpdate.IntVal
+	case intstr.String:
+		maxUpdateString := clusterProfileScope.ClusterProfile.Spec.MaxUpdate.StrVal
+		maxUpdateString = strings.ReplaceAll(maxUpdateString, "%s", "")
+		var maxUpdateInt int
+		if _, err := fmt.Sscanf(maxUpdateString, "%d", &maxUpdateInt); err != nil {
+			// There is a validation on format accepted so this should never happen
+			clusterProfileScope.Logger.V(logs.LogInfo).Info(fmt.Sprintf("incorrect MaxUpdate %s: %v",
+				clusterProfileScope.ClusterProfile.Spec.MaxUpdate.StrVal, err))
+			return int32(0)
+		}
+		return int32(math.Ceil(percent.Percent(
+			maxUpdateInt,
+			len(clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs),
+		)))
+	}
+
+	return int32(0)
+}
+
+func (r *ClusterProfileReconciler) getUpdatedAndUpdatingClusters(clusterProfileScope *scope.ClusterProfileScope,
+) (updatedClusters, updatingClusters *libsveltosset.Set) {
+
+	updatedClusters = &libsveltosset.Set{}
+	for i := range clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters {
+		cluster := &clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters[i]
+		updatedClusters.Insert(cluster)
+	}
+
+	updatingClusters = &libsveltosset.Set{}
+	for i := range clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters {
+		cluster := &clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters[i]
+		updatingClusters.Insert(cluster)
+	}
+
+	return
+}
+
+// reviseUpdatingClusterList walks over list of clusters in updating state.
+// If all features are marked as provisioned, cluster is moved to updated list.
+// Otherwise it is left in the updating list.
+func (r *ClusterProfileReconciler) reviseUpdatingClusterList(ctx context.Context,
+	clusterProfileScope *scope.ClusterProfileScope, currentHash []byte) error {
+
+	if !reflect.DeepEqual(clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Hash, currentHash) {
+		// Since ClusterProfile Spec hash has changed, even if ClusterSummary are in
+		// Provisioned state those cannot be moved to UpdatedClusters. Due to ClusterProfile Spec change
+		// new updates are needed
+		return nil
+	}
+
+	// Walk UpdatingClusters:
+	// - if hash is same and cluster is provisioned, moved to UpdatedClusters. Remove from UpdatingClusters
+	// - if hash is different, update ClusterSummary and leave it in UpdatingClusters
+	updatingClusters := []corev1.ObjectReference{}
+	for i := range clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters {
+		cluster := &clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters[i]
+		clusterType := clusterproxy.GetClusterType(cluster)
+		clusterSumary, err := getClusterSummary(ctx, r.Client, clusterProfileScope.ClusterProfile.Name,
+			cluster.Namespace, cluster.Name, clusterType)
+		if err != nil {
+			return err
+		}
+		if r.isCluterSummaryProvisioned(clusterSumary) {
+			clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters =
+				append(clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Clusters, *cluster)
+		} else {
+			updatingClusters = append(updatingClusters, *cluster)
+		}
+	}
+	clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters = updatingClusters
+
+	return nil
+}
+
 // updateClusterSummaries for each Sveltos/CAPI Cluster currently matching ClusterProfile:
 // - creates corresponding ClusterSummary if one does not exist already
 // - updates (eventually) corresponding ClusterSummary if one already exists
-func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, clusterProfileScope *scope.ClusterProfileScope) error {
+// Return an error if due to MaxUpdate not all ClusterSummaries are synced
+func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context,
+	clusterProfileScope *scope.ClusterProfileScope) error {
+
+	currentHash := r.getClusterProfileSpecHash(clusterProfileScope)
+
+	// Remove Status.UpdatedClusters if hash is different
+	if !reflect.DeepEqual(clusterProfileScope.ClusterProfile.Status.UpdatedClusters.Hash, currentHash) {
+		clusterProfileScope.ClusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{
+			Hash:     currentHash,
+			Clusters: []corev1.ObjectReference{},
+		}
+	}
+
+	// Remove clusters non matching anynmore from UpdatedClusters and UpdatingClusters
+	r.reviseUpdatedAndUpdatingClusters(clusterProfileScope)
+
+	if err := r.reviseUpdatingClusterList(ctx, clusterProfileScope, currentHash); err != nil {
+		return err
+	}
+
+	updatedClusters, updatingClusters := r.getUpdatedAndUpdatingClusters(clusterProfileScope)
+
+	maxUpdate := r.getMaxUpdate(clusterProfileScope)
+
+	skippedUpdate := false
+	// Consider matchingCluster number and MaxUpdate, walk remaining matching clusters.  If more clusters can be
+	// updated, update ClusterSummary and add it to UpdatingClusters
 	for i := range clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs {
 		cluster := clusterProfileScope.ClusterProfile.Status.MatchingClusterRefs[i]
+
+		logger := clusterProfileScope.Logger
+		logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
+
 		ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, &cluster, clusterProfileScope.Logger)
 		if err != nil {
 			return err
 		}
 		if !ready {
-			clusterProfileScope.Logger.V(logs.LogDebug).Info(fmt.Sprintf("Cluster %s/%s is not ready yet",
-				cluster.Namespace, cluster.Name))
+			logger.V(logs.LogDebug).Info("Cluster is not ready yet")
+			continue
+		}
+
+		if updatedClusters.Has(&cluster) {
+			logger.V(logs.LogDebug).Info("Cluster is already updated")
+			continue
+		}
+
+		// if maxUpdate is set no more than maxUpdate clusters can be updated in parallel by ClusterProfile
+		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && int32(updatingClusters.Len()) >= maxUpdate {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("Already %d being updating", updatingClusters.Len()))
+			skippedUpdate = true
 			continue
 		}
 
@@ -461,7 +705,25 @@ func (r *ClusterProfileReconciler) updateClusterSummaries(ctx context.Context, c
 				return err
 			}
 		}
+
+		if !updatingClusters.Has(&cluster) {
+			updatingClusters.Insert(&cluster)
+			clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters =
+				append(clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters,
+					cluster)
+		}
+
+		clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Hash = currentHash
 	}
+
+	if skippedUpdate {
+		return fmt.Errorf("Not all clusters updated yet. %d still being updated",
+			len(clusterProfileScope.ClusterProfile.Status.UpdatingClusters.Clusters))
+	}
+
+	// If all ClusterSummaries have been updated, reset Updated and Updating
+	clusterProfileScope.ClusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{}
+	clusterProfileScope.ClusterProfile.Status.UpdatingClusters = configv1alpha1.Clusters{}
 
 	return nil
 }

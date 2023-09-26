@@ -6,6 +6,7 @@ require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/sprig v2.22.0+incompatible
 	github.com/TwinProduction/go-color v1.0.0
+	github.com/dariubs/percent v1.0.0
 	github.com/fluxcd/pkg/http/fetch v0.5.2
 	github.com/fluxcd/pkg/tar v0.2.0
 	github.com/fluxcd/source-controller/api v1.0.0
@@ -17,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/onsi/gomega v1.27.8
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.16.1-0.20230918112609-93a8300779a8
+	github.com/projectsveltos/libsveltos v0.17.1-0.20230926100809-8226974e7fde
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.0

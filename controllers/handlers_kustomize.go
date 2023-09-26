@@ -149,7 +149,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
-	return nil
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureKustomize, logger)
 }
 
 func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
@@ -261,6 +261,10 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	h := sha256.New()
 	var config string
 
+	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
+	// or viceversa) reconcile.
+	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
+
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
@@ -306,6 +310,13 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			if source.GetArtifact() != nil {
 				config += source.GetArtifact().Revision
 			}
+		}
+	}
+
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureKustomize {
+			config += render.AsCode(h)
 		}
 	}
 

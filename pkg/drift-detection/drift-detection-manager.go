@@ -19,8 +19,6 @@ package driftdetection
 var driftDetectionYAML = []byte(`apiVersion: v1
 kind: Namespace
 metadata:
-  labels:
-    control-plane: drift-detection-manager
   name: projectsveltos
 ---
 apiVersion: v1

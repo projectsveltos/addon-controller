@@ -405,7 +405,7 @@ func getUnstructured(section []byte) *unstructured.Unstructured {
 var _ = Describe("OpenAPI AddonCompliance", func() {
 
 	It("Verify all openapi policies", func() {
-		const openAPIDir = "./validate_openapi"
+		const openAPIDir = "./compliance_policies/openapi_policies"
 
 		dirs, err := os.ReadDir(openAPIDir)
 		Expect(err).To(BeNil())
@@ -479,7 +479,7 @@ func verifyOpenAPIPolicy(dirName string) {
 var _ = Describe("Lua AddonCompliance", func() {
 
 	It("Verify all lua policies", func() {
-		const luaDir = "./validate_lua"
+		const luaDir = "./compliance_policies/lua_policies"
 
 		dirs, err := os.ReadDir(luaDir)
 		Expect(err).To(BeNil())

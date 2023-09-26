@@ -48,16 +48,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
-	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	//+kubebuilder:scaffold:imports
 )
 

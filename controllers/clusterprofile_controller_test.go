@@ -1132,6 +1132,28 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(controllers.GetMaxUpdate(reconciler, clusterProfileScope)).To(Equal(int32(2)))
 	})
 
+	It("getMaxUpdate returns max value of clusters that can be updated (percentage)", func() {
+		const maxUpdate = 30
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.String, StrVal: fmt.Sprintf("%d%%", maxUpdate)}
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		reconciler := getClusterProfileReconciler(c)
+
+		clusterProfileScope, err := scope.NewClusterProfileScope(scope.ClusterProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterProfile: clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.GetMaxUpdate(reconciler, clusterProfileScope)).To(Equal(int32(1)))
+	})
+
 	It("reviseUpdatedAndUpdatingClusters removes non matching clusters from ClusterProfile Updated/Updating Clusters",
 		func() {
 			cluster1 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
@@ -1210,6 +1232,25 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						{
+							RepositoryURL:    randomString(),
+							RepositoryName:   randomString(),
+							ChartName:        randomString(),
+							ChartVersion:     randomString(),
+							ReleaseName:      randomString(),
+							ReleaseNamespace: randomString(),
+						},
+					},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: randomString(),
+							Name:      randomString(),
+							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+						},
+					},
+				},
 			},
 			Status: configv1alpha1.ClusterSummaryStatus{
 				FeatureSummaries: []configv1alpha1.FeatureSummary{

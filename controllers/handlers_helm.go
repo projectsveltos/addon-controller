@@ -339,6 +339,13 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += render.AsCode(*currentChart)
 	}
 
+	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureHelm {
+			config += render.AsCode(h)
+		}
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

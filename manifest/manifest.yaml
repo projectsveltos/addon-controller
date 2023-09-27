@@ -423,10 +423,11 @@ spec:
                 - type: string
                 description: 'The maximum number of clusters that can be updated concurrently.
                   Value can be an absolute number (ex: 5) or a percentage of desired
-                  pods (ex: 10%). Defaults to 100%. Example: when this is set to 30%,
-                  when list of add-ons/applications in ClusterProfile changes, only
-                  30% of matching clusters will be updated in parallel. Only when
-                  updates in those cluster succeed, other matching clusters are updated.'
+                  cluster (ex: 10%). Defaults to 100%. Example: when this is set to
+                  30%, when list of add-ons/applications in ClusterProfile changes,
+                  only 30% of matching clusters will be updated in parallel. Only
+                  when updates in those cluster succeed, other matching clusters are
+                  updated.'
                 pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
               policyRefs:
@@ -1387,8 +1388,8 @@ spec:
                     - type: string
                     description: 'The maximum number of clusters that can be updated
                       concurrently. Value can be an absolute number (ex: 5) or a percentage
-                      of desired pods (ex: 10%). Defaults to 100%. Example: when this
-                      is set to 30%, when list of add-ons/applications in ClusterProfile
+                      of desired cluster (ex: 10%). Defaults to 100%. Example: when
+                      this is set to 30%, when list of add-ons/applications in ClusterProfile
                       changes, only 30% of matching clusters will be updated in parallel.
                       Only when updates in those cluster succeed, other matching clusters
                       are updated.'

@@ -25,9 +25,6 @@ import (
 	"syscall"
 	"time"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-
 	_ "embed"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -72,6 +69,7 @@ var (
 	probeAddr            string
 	workers              int
 	concurrentReconciles int
+	agentInMgmtCluster   bool
 	reportMode           controllers.ReportMode
 	tmpReportMode        int
 )
@@ -161,7 +159,12 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&tmpReportMode,
 		"report-mode",
 		defaulReportMode,
-		"Indicates how ClassifierReport needs to be collected")
+		"Indicates how ReportSummaries need to be collected")
+
+	fs.BoolVar(&agentInMgmtCluster,
+		"agent-in-mgmt-cluster",
+		false,
+		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
 	fs.StringVar(&metricsAddr,
 		"metrics-bind-address",
@@ -358,6 +361,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ReportMode:           reportMode,
+		AgentInMgmtCluster:   agentInMgmtCluster,
 		Deployer:             d,
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),

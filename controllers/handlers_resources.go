@@ -57,7 +57,7 @@ func deployResources(ctx context.Context, c client.Client,
 		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	err = handleDriftDetectionManagerDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-		clusterType, logger)
+		clusterType, startDriftDetectionInMgmtCluster(o), logger)
 	if err != nil {
 		return err
 	}
@@ -161,12 +161,13 @@ func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, rem
 // handleDriftDetectionManagerDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
 // drift-detection-manager in the managed clyuster
 func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) error {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, startInMgmtCluster bool,
+	logger logr.Logger) error {
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err := deployDriftDetectionManagerInCluster(ctx, getManagementClusterClient(), clusterNamespace,
-			clusterName, clusterSummary.Name, clusterType, logger)
+			clusterName, clusterSummary.Name, clusterType, startInMgmtCluster, logger)
 		if err != nil {
 			return err
 		}

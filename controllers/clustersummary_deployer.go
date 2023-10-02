@@ -35,6 +35,23 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+const (
+	driftDetectionInMgtmCluster = "driftDetectionInMgtmCluster"
+)
+
+func startDriftDetectionInMgmtCluster(o deployer.Options) bool {
+	if o.HandlerOptions == nil {
+		return false
+	}
+
+	runInMgtmCluster := false
+	if _, ok := o.HandlerOptions[driftDetectionInMgtmCluster]; ok {
+		runInMgtmCluster = true
+	}
+
+	return runInMgtmCluster
+}
+
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
@@ -119,10 +136,15 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
+	options := deployer.Options{HandlerOptions: map[string]string{}}
+	if r.AgentInMgmtCluster {
+		options.HandlerOptions[driftDetectionInMgtmCluster] = "management"
+	}
+
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, false,
-		genericDeploy, programDuration, deployer.Options{}); err != nil {
+		genericDeploy, programDuration, options); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}

@@ -90,4 +90,7 @@ func generate(filename, outputFilename, manifest string) {
 func main() {
 	driftDetectionManagerFile := "../../pkg/drift-detection/drift-detection-manager.yaml"
 	generate(driftDetectionManagerFile, "drift-detection-manager", "driftDetection")
+
+	driftDetectionManagerInMgmtClusterFile := "../../pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml"
+	generate(driftDetectionManagerInMgmtClusterFile, "drift-detection-manager-in-mgmt-cluster", "driftDetectionInMgmtCluster")
 }

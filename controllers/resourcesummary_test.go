@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/klogr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -124,6 +126,59 @@ var _ = Describe("ResourceSummary Deployer", func() {
 				types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
+
+	It("deploy/remove DriftDetectionManager resources to/from management cluster", func() {
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+
+		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
+			clusterNamespace, clusterName, "", clusterType, klogr.New())).To(Succeed())
+
+		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
+
+		listOptions := []client.ListOption{
+			client.InNamespace(controllers.GetDriftDetectionNamespaceInMgmtCluster()),
+		}
+		Eventually(func() bool {
+			deployments := &appsv1.DeploymentList{}
+			err := testEnv.List(context.TODO(), deployments, listOptions...)
+			if err != nil {
+				return false
+			}
+
+			if len(deployments.Items) == 0 {
+				return false
+			}
+
+			for i := range deployments.Items {
+				d := &deployments.Items[i]
+				if verifyLabels(d.Labels, expectedLabels) {
+					return true
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.RemoveDriftDetectionManagerFromManagementCluster(context.TODO(), clusterNamespace, clusterName,
+			clusterType, klogr.New())).To(Succeed())
+
+		// Verify resources are gone
+		Eventually(func() bool {
+			deployments := &appsv1.DeploymentList{}
+			err := testEnv.List(context.TODO(), deployments, listOptions...)
+			if err != nil {
+				return false
+			}
+			for i := range deployments.Items {
+				d := &deployments.Items[i]
+				if verifyLabels(d.Labels, expectedLabels) {
+					return false
+				}
+			}
+			return true
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
 })
 
 func prepareCluster() *clusterv1.Cluster {
@@ -187,4 +242,24 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 	return cluster
+}
+
+// verifyLabels verifies that all labels in expectedLabels are also present
+// in currentLabels with same value
+func verifyLabels(currentLabels, expectedLabels map[string]string) bool {
+	if currentLabels == nil {
+		return false
+	}
+
+	for k := range expectedLabels {
+		v, ok := currentLabels[k]
+		if !ok {
+			return false
+		}
+		if v != expectedLabels[k] {
+			return false
+		}
+	}
+
+	return true
 }

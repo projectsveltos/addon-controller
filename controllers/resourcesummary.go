@@ -19,12 +19,13 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -234,12 +235,11 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
 		clusterName, mode, clusterType)
 
-	c := getManagementClusterClient()
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
-	labels := getDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
+	lbls := getDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
 
-	name, create, err := getDriftDetectionManagerDeploymentName(ctx, c, labels)
+	name, create, err := getDriftDetectionManagerDeploymentName(ctx, restConfig, lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get name for drift-detection-manager deployment: %v", err))
@@ -248,14 +248,14 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 
 	if create {
 		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "$NAME", name)
-		return deployDriftDetectionManagerResources(ctx, restConfig, driftDetectionManagerYAML, labels, logger)
+		return deployDriftDetectionManagerResources(ctx, restConfig, driftDetectionManagerYAML, lbls, logger)
 	}
 
 	return nil
 }
 
 func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.Config,
-	driftDetectionManagerYAML string, labels map[string]string, logger logr.Logger) error {
+	driftDetectionManagerYAML string, lbls map[string]string, logger logr.Logger) error {
 
 	const separator = "---"
 	elements := strings.Split(driftDetectionManagerYAML, separator)
@@ -266,14 +266,14 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 			return err
 		}
 
-		if labels != nil {
+		if lbls != nil {
 			// Add extra labels
 			currentLabels := policy.GetLabels()
 			if currentLabels == nil {
 				currentLabels = make(map[string]string)
 			}
-			for k := range labels {
-				currentLabels[k] = labels[k]
+			for k := range lbls {
+				currentLabels[k] = lbls[k]
 			}
 			policy.SetLabels(currentLabels)
 		}
@@ -408,18 +408,28 @@ func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Cl
 
 // getDriftDetectionManagerDeploymentName returns the name for a given drift-detection-manager deployment
 // started in the management cluster for a given cluster.
-func getDriftDetectionManagerDeploymentName(ctx context.Context, c client.Client, labels map[string]string,
+func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *rest.Config, lbls map[string]string,
 ) (name string, create bool, err error) {
 
-	listOptions := []client.ListOption{
-		client.MatchingLabels(labels),
-		client.InNamespace(getDriftDetectionNamespaceInMgmtCluster()),
+	labelSelector := metav1.LabelSelector{
+		MatchLabels: lbls,
 	}
 
-	deployments := &appsv1.DeploymentList{}
-	err = c.List(ctx, deployments, listOptions...)
+	// Create a new ListOptions object.
+	listOptions := metav1.ListOptions{
+		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
+	}
+
+	// Create a new ClientSet using the RESTConfig.
+	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return
+		return "", false, err
+	}
+
+	// using client and a List would require permission at cluster level. So using clientset instead
+	deployments, err := clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster()).List(ctx, listOptions)
+	if err != nil {
+		return "", false, err
 	}
 
 	objects := make([]client.Object, len(deployments.Items))
@@ -457,11 +467,11 @@ func getDriftDetectionManagerLabels(clusterNamespace, clusterName string,
 
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
-	labels := make(map[string]string)
-	labels["cluster-namespace"] = clusterNamespace
-	labels["cluster-name"] = clusterName
-	labels["cluster-type"] = strings.ToLower(string(clusterType))
-	return labels
+	lbls := make(map[string]string)
+	lbls["cluster-namespace"] = clusterNamespace
+	lbls["cluster-name"] = clusterName
+	lbls["cluster-type"] = strings.ToLower(string(clusterType))
+	return lbls
 }
 
 // removeDriftDetectionManagerFromManagementCluster removes the drift-detection-manager resources
@@ -477,9 +487,8 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 
 	// Addon-controller deploys drift-detection-manager resources for each cluster matching at least
 	// one ClusterProfile with SyncMode set to ContinuousWithDriftDetection.
-	c := getManagementClusterClient()
-	labels := getDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
-	name, _, err := getDriftDetectionManagerDeploymentName(ctx, c, labels)
+	lbls := getDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
+	name, _, err := getDriftDetectionManagerDeploymentName(ctx, getManagementClusterConfig(), lbls)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get name for drift-detection-manager deployment: %v", err))

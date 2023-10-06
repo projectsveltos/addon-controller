@@ -214,6 +214,7 @@ func deployDriftDetectionManager(ctx context.Context, remoteRestConfig *rest.Con
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) error {
 
+	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in managed cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerYAML())
 
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
@@ -230,6 +231,7 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) error {
 
+	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in management cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerInMgmtClusterYAML())
 
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
@@ -471,6 +473,7 @@ func getDriftDetectionManagerLabels(clusterNamespace, clusterName string,
 	lbls["cluster-namespace"] = clusterNamespace
 	lbls["cluster-name"] = clusterName
 	lbls["cluster-type"] = strings.ToLower(string(clusterType))
+	lbls["feature"] = "drift-detection"
 	return lbls
 }
 

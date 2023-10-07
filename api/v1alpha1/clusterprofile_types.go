@@ -286,7 +286,7 @@ type ClusterProfileSpec struct {
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
 	// The maximum number of clusters that can be updated concurrently.
-	// Value can be an absolute number (ex: 5) or a percentage of desired pods (ex: 10%).
+	// Value can be an absolute number (ex: 5) or a percentage of desired cluster (ex: 10%).
 	// Defaults to 100%.
 	// Example: when this is set to 30%, when list of add-ons/applications in ClusterProfile
 	// changes, only 30% of matching clusters will be updated in parallel. Only when updates

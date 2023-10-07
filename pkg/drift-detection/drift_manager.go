@@ -18,6 +18,14 @@ package driftdetection
 
 //go:generate go run ../../generator.go
 
+// Get the YAML to deploy drift-detection-manager in the
+// managed cluster
 func GetDriftDetectionManagerYAML() []byte {
 	return driftDetectionYAML
+}
+
+// Get the YAML to deploy drift-detection-manager in the
+// management cluster
+func GetDriftDetectionManagerInMgmtClusterYAML() []byte {
+	return driftDetectionInMgmtClusterYAML
 }

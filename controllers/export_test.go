@@ -111,11 +111,15 @@ var (
 )
 
 var (
-	DeployDebuggingConfigurationCRD = deployDebuggingConfigurationCRD
-	DeployResourceSummaryCRD        = deployResourceSummaryCRD
-	DeployResourceSummaryInCluster  = deployResourceSummaryInCluster
-	DeployResourceSummaryInstance   = deployResourceSummaryInstance
-	UpdateDeployedGroupVersionKind  = updateDeployedGroupVersionKind
+	DeployDebuggingConfigurationCRD                  = deployDebuggingConfigurationCRD
+	DeployResourceSummaryCRD                         = deployResourceSummaryCRD
+	DeployResourceSummaryInCluster                   = deployResourceSummaryInCluster
+	DeployResourceSummaryInstance                    = deployResourceSummaryInstance
+	UpdateDeployedGroupVersionKind                   = updateDeployedGroupVersionKind
+	DeployDriftDetectionManagerInManagementCluster   = deployDriftDetectionManagerInManagementCluster
+	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels
+	RemoveDriftDetectionManagerFromManagementCluster = removeDriftDetectionManagerFromManagementCluster
+	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
 
 	GetResourceSummaryNamespace = getResourceSummaryNamespace
 	GetResourceSummaryName      = getResourceSummaryName

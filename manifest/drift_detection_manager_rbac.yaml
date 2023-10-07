@@ -1,0 +1,37 @@
+# When addon-controller is configured to deploy drift-detection-manager
+# in the management cluster, addon-controller will create a Service and
+# a Deployment per cluster matching at least one ClusterProfile in 
+# ContinuousWithDriftDetection mode.
+# Those extra permissions are needed.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: addon-controller-role-dtm-in-mgmt-cluster
+  namespace: projectsveltos
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - "*"
+- apiGroups:
+  - "apps"
+  resources:
+  - deployments
+  verbs:
+  - "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: addon-controller-rolebinging-dtm-in-mgmt-cluster
+  namespace: projectsveltos
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: addon-controller-role-dtm-in-mgmt-cluster
+subjects:
+- kind: ServiceAccount
+  name: addon-controller
+  namespace: projectsveltos

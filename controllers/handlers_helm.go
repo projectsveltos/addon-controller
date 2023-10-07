@@ -97,10 +97,11 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
+	startInMgmtCluster := startDriftDetectionInMgmtCluster(o)
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
-			clusterType, logger)
+			clusterType, startInMgmtCluster, logger)
 		if err != nil {
 			return err
 		}
@@ -144,7 +145,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
 			clusterType, nil, nil, helmResources, logger)
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 

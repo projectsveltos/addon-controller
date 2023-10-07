@@ -319,6 +319,7 @@ set-manifest-pull-policy:
 drift-detection-manager:
 	@echo "Downloading drift detection manager yaml"
 	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
 	cd pkg/drift-detection; go generate
 
 .PHONY: build

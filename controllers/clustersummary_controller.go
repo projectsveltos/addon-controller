@@ -81,6 +81,7 @@ type ClusterSummaryReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ReportMode           ReportMode
+	AgentInMgmtCluster   bool // if true, indicates drift-detection-manager needs to be started in the management cluster
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
@@ -210,7 +211,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
 	// If Sveltos/CAPI Cluster is not found, there is nothing to clean up.
-	isPresent, err := r.isClusterPresent(ctx, clusterSummaryScope)
+	isPresent, isDeleted, err := r.isClusterPresent(ctx, clusterSummaryScope)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
@@ -242,6 +243,18 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
 			logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+	}
+
+	// If cluster is not present anymore or is it marked for deletion
+	if !isPresent || isDeleted {
+		logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
+		cs := clusterSummaryScope.ClusterSummary
+		if err := removeDriftDetectionManagerFromManagementCluster(ctx,
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger); err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to remove drift-detection-manager resources from management cluster: %v", err))
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
@@ -483,18 +496,20 @@ func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummar
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
-func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) (bool, error) {
-	var err error
+func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope) (present, deleted bool, err error) {
+
 	cs := clusterSummaryScope.ClusterSummary
 
-	_, err = clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	var cluster client.Object
+	cluster, err = clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, nil
+			return false, false, nil
 		}
 	}
 
-	return true, err
+	return true, !cluster.GetDeletionTimestamp().IsZero(), err
 }
 
 func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,

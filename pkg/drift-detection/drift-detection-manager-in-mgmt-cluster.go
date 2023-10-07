@@ -16,125 +16,12 @@ limitations under the License.
 */
 package driftdetection
 
-var driftDetectionYAML = []byte(`apiVersion: v1
-kind: Namespace
-metadata:
-  name: projectsveltos
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: drift-detection-manager
-  namespace: projectsveltos
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: drift-detection-manager-role
-rules:
-- apiGroups:
-  - '*'
-  resources:
-  - '*'
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - debuggingconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - resourcesummaries
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - resourcesummaries/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - resourcesummaries/status
-  verbs:
-  - get
-  - patch
-  - update
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: drift-detection-metrics-reader
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: drift-detection-proxy-role
-rules:
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: drift-detection-manager-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: drift-detection-manager-role
-subjects:
-- kind: ServiceAccount
-  name: drift-detection-manager
-  namespace: projectsveltos
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: drift-detection-proxy-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: drift-detection-proxy-role
-subjects:
-- kind: ServiceAccount
-  name: drift-detection-manager
-  namespace: projectsveltos
----
-apiVersion: v1
+var driftDetectionInMgmtClusterYAML = []byte(`apiVersion: v1
 kind: Service
 metadata:
   labels:
-    control-plane: drift-detection-manager
-  name: drift-detection-manager-metrics-service
+    control-plane: $NAME
+  name: $NAME-metrics-service
   namespace: projectsveltos
 spec:
   ports:
@@ -143,26 +30,26 @@ spec:
     protocol: TCP
     targetPort: https
   selector:
-    control-plane: drift-detection-manager
+    control-plane: $NAME
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: drift-detection-manager
-  name: drift-detection-manager
+    control-plane: $NAME
+  name: $NAME
   namespace: projectsveltos
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: drift-detection-manager
+      control-plane: $NAME
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
       labels:
-        control-plane: drift-detection-manager
+        control-plane: $NAME
     spec:
       containers:
       - args:
@@ -172,7 +59,7 @@ spec:
         - --cluster-namespace=
         - --cluster-name=
         - --cluster-type=
-        - --current-cluster=managed-cluster
+        - --current-cluster=management-cluster
         - --run-mode=do-not-send-updates
         command:
         - /manager

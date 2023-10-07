@@ -57,11 +57,6 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-//go:generate bash hack/get_version.sh
-//go:embed version.txt
-//nolint:grouper // run generate embed
-var version string
-
 var (
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
@@ -148,7 +143,7 @@ func main() {
 	go compliances.InitializeManager(ctx, ctrl.Log.WithName("addon-compliances"),
 		mgr.GetConfig(), mgr.GetClient(), addonComplianceTimer)
 
-	setupLog.Info(fmt.Sprintf("starting manager (version %s)", version))
+	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

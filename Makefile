@@ -124,7 +124,6 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(SETUP_ENVTEST) $(GOLANGCI_LI
 clean: ## Remove all built tools
 	rm -rf $(TOOLS_BIN_DIR)/*
 	rm -rf $(GENERATED_FILES)
-	rm -rf version.txt
 
 ##@ Development
 

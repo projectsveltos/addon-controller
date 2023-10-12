@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v0.18.0
+TAG ?= v0.18.1
 
 # Get cluster-api version and build ldflags
 clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
@@ -124,7 +124,6 @@ tools: $(CONTROLLER_GEN) $(ENVSUBST) $(KUSTOMIZE) $(SETUP_ENVTEST) $(GOLANGCI_LI
 clean: ## Remove all built tools
 	rm -rf $(TOOLS_BIN_DIR)/*
 	rm -rf $(GENERATED_FILES)
-	rm -rf version.txt
 
 ##@ Development
 

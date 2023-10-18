@@ -1,0 +1,15 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile 
+metadata: 
+  name: kubevela-core
+spec:
+  clusterSelector: env=production
+  syncMode: Continuous
+  helmCharts:
+  - repositoryURL: https://kubevela.github.io/charts
+    repositoryName: kubevela
+    chartName: kubevela/vela-core
+    chartVersion: 1.9.6
+    releaseName: kubevela-core-latest
+    releaseNamespace: vela-system
+    helmChartAction: Install

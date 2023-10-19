@@ -14,7 +14,7 @@
 - [Quick Start](https://projectsveltos.github.io/sveltos/quick_start/)
 
 # What is the Projectsveltos?
-Projectsveltos is mainly a Kubernetes add-on controller that simplifies the deployment and management of add-ons in Kubernetes clusters. With Sveltos controller, you can easily automate the deployment process and ensure consistency across your cluster environment. Sveltos can deploy raw Kubernetes YAMLs, Helm charts, or Kustomize or any combination of those.
+Sveltos is a Kubernetes add-on controller that simplifies the deployment and management of add-ons and applications across multiple clusters. It runs in the management cluster and can programmatically deploy and manage add-ons and applications on any cluster in the fleet, including the management cluster itself. Sveltos supports a variety of add-on formats, including Helm charts, raw YAML, Kustomize, Carvel ytt, and Jsonnet.
 
 ## Addon deployment: how it works
 
@@ -62,6 +62,8 @@ spec:
 ```
 
 As soon as a cluster is a match for above ClusterProfile instance, all referenced features are automatically deployed in such cluster.
+
+![Kubernetes add-on deployment](https://github.com/projectsveltos/sveltos/blob/main/docs/assets/addons_deployment.gif)
 
 Here is an example using Kustomize:
 

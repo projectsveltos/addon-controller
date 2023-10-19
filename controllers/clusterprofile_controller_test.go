@@ -385,11 +385,12 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		// Since ClusterSummary won't be removed, ClusterProfile's finalizer will not be
 		// removed.
 
-		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
+		result, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterProfileName,
 		})
 		// Because there was one ClusterSummary and reconciliation deleted it and returned an error
-		Expect(err).To(HaveOccurred())
+		Expect(err).To(BeNil())
+		Expect(result.Requeue).To(BeTrue())
 
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)

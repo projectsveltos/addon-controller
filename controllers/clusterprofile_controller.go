@@ -159,17 +159,16 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Handle deleted clusterProfile
 	if !clusterProfile.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, clusterProfileScope)
+		return r.reconcileDelete(ctx, clusterProfileScope), nil
 	}
 
 	// Handle non-deleted clusterProfile
-	return r.reconcileNormal(ctx, clusterProfileScope)
+	return r.reconcileNormal(ctx, clusterProfileScope), nil
 }
 
 func (r *ClusterProfileReconciler) reconcileDelete(
 	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-) (reconcile.Result, error) {
+	clusterProfileScope *scope.ClusterProfileScope) reconcile.Result {
 
 	logger := clusterProfileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile delete")
@@ -178,27 +177,27 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 
 	if err := r.cleanClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
 	if !r.allClusterSummariesGone(ctx, clusterProfileScope) {
 		logger.V(logs.LogInfo).Info("Not all cluster summaries are gone")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
 	if err := r.cleanClusterConfigurations(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
 	if err := r.cleanClusterReports(ctx, clusterProfileScope.ClusterProfile); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterReports")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
 	if !r.canRemoveFinalizer(ctx, clusterProfileScope) {
 		logger.V(logs.LogInfo).Info("Cannot remove finalizer yet")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
 	if controllerutil.ContainsFinalizer(clusterProfileScope.ClusterProfile, configv1alpha1.ClusterProfileFinalizer) {
@@ -208,26 +207,25 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 	r.cleanMaps(clusterProfileScope)
 
 	logger.V(logs.LogInfo).Info("Reconcile delete success")
-	return reconcile.Result{}, nil
+	return reconcile.Result{}
 }
 
 func (r *ClusterProfileReconciler) reconcileNormal(
 	ctx context.Context,
-	clusterProfileScope *scope.ClusterProfileScope,
-) (reconcile.Result, error) {
+	clusterProfileScope *scope.ClusterProfileScope) reconcile.Result {
 
 	logger := clusterProfileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile")
 
 	if !controllerutil.ContainsFinalizer(clusterProfileScope.ClusterProfile, configv1alpha1.ClusterProfileFinalizer) {
 		if err := r.addFinalizer(ctx, clusterProfileScope); err != nil {
-			return reconcile.Result{}, err
+			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}
 	}
 
 	matchingCluster, err := r.getMatchingClusters(ctx, clusterProfileScope, logger)
 	if err != nil {
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
 	clusterProfileScope.SetMatchingClusterRefs(matchingCluster)
@@ -237,33 +235,33 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	// For each matching Sveltos/CAPI Cluster, create/update corresponding ClusterConfiguration
 	if err := r.updateClusterConfigurations(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterConfigurations")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 	// For each matching Sveltos/CAPI Cluster, create or delete corresponding ClusterReport if needed
 	if err := r.updateClusterReports(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterReports")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 	// For each matching Sveltos/CAPI Cluster, create/update corresponding ClusterSummary
 	if err := r.updateClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummaries")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
 	// For Sveltos/CAPI Cluster not matching ClusterProfile, deletes corresponding ClusterSummary
 	if err := r.cleanClusterSummaries(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 	// For Sveltos/CAPI Cluster not matching ClusterProfile, removes ClusterProfile as OwnerReference
 	// from corresponding ClusterConfiguration
 	if err := r.cleanClusterConfigurations(ctx, clusterProfileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
-		return reconcile.Result{}, err
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
 	logger.V(logs.LogInfo).Info("Reconcile success")
-	return reconcile.Result{}, nil
+	return reconcile.Result{}
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -60,6 +60,7 @@ type ClusterProfileReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
+
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
 	// key: Sveltos/CAPI Cluster; value: set of all ClusterProfiles matching the Cluster
@@ -913,7 +914,6 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 					UID:        clusterProfileScope.ClusterProfile.UID,
 				},
 			},
-			// Copy annotation. Paused annotation might be set on ClusterProfile.
 			Annotations: clusterProfileScope.ClusterProfile.Annotations,
 		},
 		Spec: configv1alpha1.ClusterSummarySpec{
@@ -926,6 +926,8 @@ func (r *ClusterProfileReconciler) createClusterSummary(ctx context.Context, clu
 	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	clusterSummary.Labels = clusterProfileScope.ClusterProfile.Labels
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
+	// Copy annotation. Paused annotation might be set on ClusterProfile.
+	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 
 	return r.Create(ctx, clusterSummary)
 }
@@ -955,6 +957,8 @@ func (r *ClusterProfileReconciler) updateClusterSummary(ctx context.Context, clu
 	clusterSummary.Spec.ClusterProfileSpec = clusterProfileScope.ClusterProfile.Spec
 	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	r.addClusterSummaryLabels(clusterSummary, clusterProfileScope, cluster)
+	// Copy annotation. Paused annotation might be set on ClusterProfile.
+	clusterSummary.Annotations = clusterProfileScope.ClusterProfile.Annotations
 
 	return r.Update(ctx, clusterSummary)
 }

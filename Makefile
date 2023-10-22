@@ -174,7 +174,7 @@ CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
-NUM_NODES ?= 5
+NUM_NODES ?= 7
 
 .PHONY: quickstart
 quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos
@@ -211,7 +211,7 @@ fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: fv-sharding
-fv-sharding: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) patch cluster  clusterapi-workload  -n default --type json -p '[{ "op": "add", "path": "/metadata/annotations/sharding.projectsveltos.io~1key", "value": "shard1" }]'
 	$(KUBECTL) apply -f test/addon-controller-shard.yaml
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all

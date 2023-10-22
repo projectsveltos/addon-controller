@@ -60,8 +60,8 @@ import (
 var (
 	setupLog             = ctrl.Log.WithName("setup")
 	metricsAddr          string
-	enableLeaderElection bool
 	probeAddr            string
+	shardKey             string
 	workers              int
 	concurrentReconciles int
 	agentInMgmtCluster   bool
@@ -98,8 +98,6 @@ func main() {
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "86dad58d.projectsveltos.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -116,11 +114,17 @@ func main() {
 		ctrl.GetConfigOrDie())
 
 	var clusterProfileController controller.Controller
-	clusterProfileReconciler := getClusterProfileReconciler(mgr)
-	clusterProfileController, err = clusterProfileReconciler.SetupWithManager(mgr)
-	if err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
-		os.Exit(1)
+	var clusterProfileReconciler *controllers.ClusterProfileReconciler
+	if shardKey == "" {
+		// Only if shardKey is not set, start ClusterProfile reconcilers.
+		// When shardKey is set, only ClusterSummary reconciler will be started and only
+		// cluster matching the shardkey will be managed
+		clusterProfileReconciler = getClusterProfileReconciler(mgr)
+		clusterProfileController, err = clusterProfileReconciler.SetupWithManager(mgr)
+		if err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
+			os.Exit(1)
+		}
 	}
 
 	var clusterSummaryController controller.Controller
@@ -171,9 +175,10 @@ func initFlags(fs *pflag.FlagSet) {
 		":8081",
 		"The address the probe endpoint binds to.")
 
-	fs.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+	fs.StringVar(&shardKey,
+		"shard-key",
+		"",
+		"If set, only clusters will annotation matching this shard key will be reconciled by this deployment")
 
 	fs.IntVar(
 		&workers,
@@ -276,9 +281,11 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), capiCRDHandler, setupLog)
 			} else {
 				setupLog.V(logsettings.LogInfo).Info("CAPI present.")
-				err = clusterProfileReconciler.WatchForCAPI(mgr, clusterProfileController)
-				if err != nil {
-					continue
+				if clusterProfileReconciler != nil {
+					err = clusterProfileReconciler.WatchForCAPI(mgr, clusterProfileController)
+					if err != nil {
+						continue
+					}
 				}
 				err = clusterSummaryReconciler.WatchForCAPI(mgr, clusterSummaryController)
 				if err != nil {
@@ -355,6 +362,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		Config:               mgr.GetConfig(),
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
+		ShardKey:             shardKey,
 		ReportMode:           reportMode,
 		AgentInMgmtCluster:   agentInMgmtCluster,
 		Deployer:             d,

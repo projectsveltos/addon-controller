@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -119,6 +120,14 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), reloaderCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, reloaderCRD)).To(Succeed())
+
+	projectsveltosNs := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "projectsveltos",
+		},
+	}
+	Expect(testEnv.Client.Create(context.TODO(), projectsveltosNs)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, projectsveltosNs)).To(Succeed())
 
 	// Wait for synchronization
 	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"

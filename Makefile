@@ -207,7 +207,13 @@ test: | check-manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
 kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv
 
 .PHONY: fv
-fv: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: fv-sharding
+fv-sharding: $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	$(KUBECTL) patch cluster  clusterapi-workload  -n default --type json -p '[{ "op": "add", "path": "/metadata/annotations/sharding.projectsveltos.io~1key", "value": "shard1" }]'
+	$(KUBECTL) apply -f test/addon-controller-shard.yaml
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: create-cluster

@@ -52,9 +52,18 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
+			// a label change migth change which clusters match which clusterprofile
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
 					"Cluster labels changed. Will attempt to reconcile associated ClusterProfiles.",
+				)
+				return true
+			}
+
+			// if sharding is used, cluster sharding annotation must be copied over ClusterSummary
+			if !reflect.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
+				log.V(logs.LogVerbose).Info(
+					"Cluster annotations changed. Will attempt to reconcile associated ClusterProfiles.",
 				)
 				return true
 			}
@@ -133,9 +142,18 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
+			// a label change migth change which clusters match which clusterprofile
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
 					"Cluster labels changed. Will attempt to reconcile associated ClusterProfiles.",
+				)
+				return true
+			}
+
+			// if sharding is used, cluster sharding annotation must be copied over ClusterSummary
+			if !reflect.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
+				log.V(logs.LogVerbose).Info(
+					"Cluster annotations changed. Will attempt to reconcile associated ClusterProfiles.",
 				)
 				return true
 			}

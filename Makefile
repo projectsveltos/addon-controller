@@ -27,16 +27,6 @@ K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-rele
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= main
 
-# Get cluster-api version and build ldflags
-clusterapi := $(shell go list -m sigs.k8s.io/cluster-api)
-clusterapi_version := $(lastword  ., ,$(clusterapi))
-clusterapi_version_tuple := $(subst ., ,$(clusterapi_version:v%=%))
-clusterapi_major := $(word 1,$(clusterapi_version_tuple))
-clusterapi_minor := $(word 2,$(clusterapi_version_tuple))
-clusterapi_patch := $(word 3,$(clusterapi_version_tuple))
-CLUSTERAPI_LDFLAGS := "-X 'sigs.k8s.io/cluster-api/version.gitMajor=$(clusterapi_major)' -X 'sigs.k8s.io/cluster-api/version.gitMinor=$(clusterapi_minor)' -X 'sigs.k8s.io/cluster-api/version.gitVersion=$(clusterapi_version)'"
-
-
 .PHONY: all
 all: build
 
@@ -80,6 +70,7 @@ KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 GOLANGCI_LINT_VERSION := "v1.52.2"
+CLUSTERCTL_VERSION := "v1.5.2"
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -103,8 +94,8 @@ $(KIND): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/kind
 
 $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
-	cd $(TOOLS_DIR); $(GOBUILD) -trimpath  -ldflags $(CLUSTERAPI_LDFLAGS) -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/cluster-api/cmd/clusterctl
-	mkdir -p $(HOME)/.cluster-api # create cluster api init directory, if not present	
+	curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CLUSTERCTL_VERSION)/clusterctl-$(OS)-$(ARCH) -o $@
+	chmod +x $@
 
 $(KUBECTL):
 	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
@@ -174,7 +165,7 @@ CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TIMEOUT ?= 10m
 KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
-NUM_NODES ?= 7
+NUM_NODES ?= 6
 
 .PHONY: quickstart
 quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos

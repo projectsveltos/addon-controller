@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/TwinProduction/go-color"
+	"github.com/TwiN/go-color"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
 	"k8s.io/apimachinery/pkg/runtime"

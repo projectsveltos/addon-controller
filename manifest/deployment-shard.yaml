@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     control-plane: addon-controller
-  name: addon-controller-shard1
+  name: addon-controller-{{.SHARD}}
   namespace: projectsveltos
 spec:
   replicas: 1
@@ -22,8 +22,8 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --report-mode=0
+        - --shard-key={{.SHARD}}
         - --v=5
-        - --shard-key=shard1
         command:
         - /manager
         image: projectsveltos/addon-controller-amd64:dev

@@ -26,7 +26,7 @@ spec:
         - --shard-key=shard1
         command:
         - /manager
-        image: projectsveltos/addon-controller-amd64:main
+        image: projectsveltos/addon-controller-amd64:dev
         livenessProbe:
           httpGet:
             path: /healthz

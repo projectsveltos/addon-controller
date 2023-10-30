@@ -35,12 +35,12 @@ import (
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
-func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, logger logr.Logger) {
+func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey string, logger logr.Logger) {
 	const interval = 10 * time.Second
 
 	for {
 		logger.V(logs.LogDebug).Info("collecting ResourceSummaries")
-		clusterList, err := clusterproxy.GetListOfClusters(ctx, c, logger)
+		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, shardkey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}

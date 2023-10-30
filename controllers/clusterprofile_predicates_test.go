@@ -28,6 +28,7 @@ import (
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/sharding"
 )
 
 var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
@@ -113,6 +114,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 			},
 		}
 		oldCluster.Spec.Paused = false
+		oldCluster.Annotations = cluster.Annotations
 
 		e := event.UpdateEvent{
 			ObjectNew: cluster,
@@ -146,6 +148,27 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 		clusterPredicate := controllers.SveltosClusterPredicates(logger)
 
 		cluster.Labels = map[string]string{"department": "eng"}
+
+		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+				Labels:    map[string]string{},
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: cluster,
+			ObjectOld: oldCluster,
+		}
+
+		result := clusterPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+	It("Update reprocesses when sveltos Cluster annotation change", func() {
+		clusterPredicate := controllers.SveltosClusterPredicates(logger)
+
+		cluster.Annotations = map[string]string{sharding.ShardAnnotation: "shard1"}
 
 		oldCluster := &libsveltosv1alpha1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -272,6 +295,7 @@ var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 			},
 		}
 		oldCluster.Spec.Paused = false
+		oldCluster.Annotations = cluster.Annotations
 
 		e := event.UpdateEvent{
 			ObjectNew: cluster,
@@ -305,6 +329,27 @@ var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 		clusterPredicate := controllers.ClusterPredicates(logger)
 
 		cluster.Labels = map[string]string{"department": "eng"}
+
+		oldCluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      cluster.Name,
+				Namespace: cluster.Namespace,
+				Labels:    map[string]string{},
+			},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: cluster,
+			ObjectOld: oldCluster,
+		}
+
+		result := clusterPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+	It("Update reprocesses when v1Cluster annotation change", func() {
+		clusterPredicate := controllers.ClusterPredicates(logger)
+
+		cluster.Labels = map[string]string{sharding.ShardAnnotation: "shard-production"}
 
 		oldCluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{

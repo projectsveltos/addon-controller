@@ -26,10 +26,11 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 // Multiple ClusterProfiles can:
-// - match same CAPI Clusters
+// - match same clusters
 // - reference same set of Helm Chart(s)/Version(s)
 // Above is a misconfiguration/conflict that needs to be detected.
 // Only one ClusterSummary (there is one ClusterSummary for each pair ClusterProfile/CAPI Cluster) can manage an helm
@@ -62,6 +63,9 @@ type instance struct {
 	// - without asking for helm chart to be released, the Helm chart is removed from the ClusterProfileSpec;
 	// - helm chart needs to be withdrawn if no other ClusterSummary is trying to manage it.
 	perClusterChartMap map[string]map[string][]string
+
+	// list of tracked clusters
+	clusters *libsveltosset.Set
 }
 
 type HelmReleaseInfo struct {
@@ -88,6 +92,7 @@ func GetChartManagerInstance(ctx context.Context, c client.Client) (*instance, e
 				perClusterChartMap: make(map[string]map[string][]string),
 				chartMux:           sync.Mutex{},
 			}
+			managerInstance.clusters = &libsveltosset.Set{}
 			if err := managerInstance.rebuildRegistrations(ctx, c); err != nil {
 				managerInstance = nil
 				return nil, err

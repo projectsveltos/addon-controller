@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"syscall"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -50,16 +51,17 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	"github.com/projectsveltos/libsveltos/lib/sharding"
 )
 
 const (
 	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has
 	// children during deletion.
-	deleteRequeueAfter = 20 * time.Second
+	deleteRequeueAfter = 10 * time.Second
 
 	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
 	// to ready after or workload features (for instance ingress or reporter) have failed
-	normalRequeueAfter = 20 * time.Second
+	normalRequeueAfter = 10 * time.Second
 )
 
 type ReportMode int
@@ -81,7 +83,8 @@ type ClusterSummaryReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ReportMode           ReportMode
-	AgentInMgmtCluster   bool // if true, indicates drift-detection-manager needs to be started in the management cluster
+	AgentInMgmtCluster   bool   // if true, indicates drift-detection-manager needs to be started in the management cluster
+	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
@@ -184,6 +187,23 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			"unable to create clusterprofile scope for %s",
 			req.NamespacedName,
 		)
+	}
+
+	var isMatch bool
+	isMatch, err = r.isClusterAShardMatch(ctx, clusterSummary, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	} else if !isMatch {
+		// This addon-controller pod is not a shard match, yet we need to refresh internal state by:
+		// - removing any helm chart registration made by this ClusterSummary
+		// - update internal maps. This is needed cause when cluster changes, shard annotation changes,
+		// this addon-controller might become the new shard match and so it must reconcile this ClusterSummary instance
+		return reconcile.Result{}, r.refreshInternalState(ctx, clusterSummaryScope, logger)
+	}
+
+	err = r.updateClusterShardPair(ctx, clusterSummary, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
@@ -371,7 +391,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	)
 
 	if r.ReportMode == CollectFromManagementCluster {
-		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), mgr.GetLogger())
+		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, mgr.GetLogger())
 	}
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
@@ -880,4 +900,88 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 		}
 	}
 	return err
+}
+
+func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+
+	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1alpha1.ComponentAddonManager,
+		string(configv1alpha1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType); err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to check/update cluster:shard pair %v", err))
+		return err
+	} else if hasShardChanged {
+		// internal in-memory state must be rebuilt. Restart pod
+		logger.V(logs.LogInfo).Info("restarting pod to rebuild internal state")
+		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
+			panic("kill -TERM failed")
+		}
+	}
+
+	return nil
+}
+
+// isClusterAShardMatch checks if cluster is matching this addon-controller deployment shard.
+func (r *ClusterSummaryReconciler) isClusterAShardMatch(ctx context.Context,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (bool, error) {
+
+	cluster, err := clusterproxy.GetCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		// If Cluster does not exist anymore, make it match any shard
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to get cluster: %v", err))
+		return false, err
+	}
+
+	if !sharding.IsShardAMatch(r.ShardKey, cluster) {
+		logger.V(logs.LogDebug).Info("not a shard match")
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// refreshInternalState updates internal maps in this addon-controller pod:
+// - remove any chart subscription handled by the clusterSummary
+// - update cluster to clusterSummary maps. This is needed cause if cluster shard changes,
+// we want this clusterSummary to be reconciled)
+func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+
+	if err := r.deleteChartMap(ctx, clusterSummaryScope, logger); err != nil {
+		return err
+	}
+
+	clusterInfo := &corev1.ObjectReference{
+		Namespace: clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace,
+		Name:      clusterSummaryScope.ClusterSummary.Spec.ClusterName,
+	}
+
+	switch clusterSummaryScope.ClusterSummary.Spec.ClusterType {
+	case libsveltosv1alpha1.ClusterTypeSveltos:
+		clusterInfo.Kind = string(libsveltosv1alpha1.ClusterTypeSveltos)
+		clusterInfo.APIVersion = libsveltosv1alpha1.GroupVersion.String()
+	case libsveltosv1alpha1.ClusterTypeCapi:
+		clusterInfo.Kind = "Cluster"
+		clusterInfo.APIVersion = clusterv1.GroupVersion.String()
+	}
+
+	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
+		Kind: configv1alpha1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
+		Name: clusterSummaryScope.Name()}
+
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	// Even if this addon-controller is not a shard match now, we need to keep internal map
+	// updated. If cluster sharding annotation, all addon-controllers (including this one)
+	// needs to be requeued. For instance, this specific addon-controller might become the new
+	// shard match and it has to take it over.
+	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
+
+	return nil
 }

@@ -49,7 +49,8 @@ var _ = Describe("Chart manager", func() {
 
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name:      randomString(),
+				Namespace: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: randomString(),
@@ -307,12 +308,13 @@ var _ = Describe("Chart manager", func() {
 				},
 			},
 		}
-		Expect(c.Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
 		// Mark tmpClusterSummary as manager for other release
 		tmpClusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummary.Name + randomString(),
+				Name:      clusterSummary.Name + randomString(),
+				Namespace: randomString(),
 			},
 			Spec: clusterSummary.Spec,
 			Status: configv1alpha1.ClusterSummaryStatus{
@@ -331,6 +333,7 @@ var _ = Describe("Chart manager", func() {
 			},
 		}
 		Expect(c.Create(context.TODO(), tmpClusterSummary)).To(Succeed())
+
 		defer removeSubscriptions(c, tmpClusterSummary)
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)

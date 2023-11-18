@@ -67,7 +67,8 @@ var _ = Describe("SyncMode one time", func() {
 		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
 		Byf("Create a configMap with a Namespace")
-		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(oneTimeNamespace, oneTimeNamespaceName))
+		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
+			fmt.Sprintf(oneTimeNamespace, oneTimeNamespaceName))
 
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
@@ -149,7 +150,10 @@ var _ = Describe("SyncMode one time", func() {
 		Eventually(func() bool {
 			currentNamespace := &corev1.Namespace{}
 			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
-			return apierrors.IsNotFound(err)
+			if err != nil {
+				return apierrors.IsNotFound(err)
+			}
+			return !currentNamespace.DeletionTimestamp.IsZero()
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })

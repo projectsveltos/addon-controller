@@ -156,14 +156,14 @@ func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Co
 	clusterSummary *configv1alpha1.ClusterSummary, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
 	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
 	// Clean stale resources in the management cluster
-	localUndeployed, err = cleanKustomizeResources(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	localUndeployed, err = cleanKustomizeResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary, localResourceReports, logger)
 	if err != nil {
 		return
 	}
 
 	// Clean stale resources in the remote cluster
-	remoteUndeployed, err = cleanKustomizeResources(ctx, remoteRestConfig, remoteClient,
+	remoteUndeployed, err = cleanKustomizeResources(ctx, false, remoteRestConfig, remoteClient,
 		clusterSummary, remoteResourceReports, logger)
 	if err != nil {
 		return
@@ -195,7 +195,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	var resourceReports []configv1alpha1.ResourceReport
 
 	// Undeploy from management cluster
-	_, err = undeployStaleResources(ctx, getManagementClusterConfig(), c, configv1alpha1.FeatureKustomize,
+	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureKustomize,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
@@ -215,7 +215,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	// Undeploy from managed cluster
-	resourceReports, err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, configv1alpha1.FeatureKustomize,
+	resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient, configv1alpha1.FeatureKustomize,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
@@ -545,7 +545,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 
-	localReports, err = deployUnstructured(ctx, localConfig, c, objectsToDeployLocally,
+	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
@@ -562,7 +562,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		return nil, nil, err
 	}
 
-	remoteReports, err = deployUnstructured(ctx, remoteRestConfig, remoteClient, objectsToDeployRemotely,
+	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))
@@ -620,18 +620,18 @@ func getSource(ctx context.Context, c client.Client, kustomizationRef *configv1a
 	return src, nil
 }
 
-func cleanKustomizeResources(ctx context.Context, destRestConfig *rest.Config, destClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, resourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
+func cleanKustomizeResources(ctx context.Context, isMgmtCluster bool, destRestConfig *rest.Config,
+	destClient client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	resourceReports []configv1alpha1.ResourceReport, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
 
 	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
 	for i := range resourceReports {
 		key := getPolicyInfo(&resourceReports[i].Resource)
 		currentPolicies[key] = resourceReports[i].Resource
 	}
-	undeployed, err := undeployStaleResources(ctx, destRestConfig, destClient, configv1alpha1.FeatureKustomize,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize),
-		currentPolicies, logger)
+	undeployed, err := undeployStaleResources(ctx, isMgmtCluster, destRestConfig, destClient,
+		configv1alpha1.FeatureKustomize, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize), currentPolicies, logger)
 	if err != nil {
 		return nil, err
 	}

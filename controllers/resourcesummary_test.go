@@ -86,11 +86,11 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			},
 			currentResourceSummary)).To(Succeed())
 		Expect(currentResourceSummary.Labels).ToNot(BeNil())
-		v, ok := currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryLabelName]
+		v, ok := currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNameLabel]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterSummaryName))
 
-		v, ok = currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryLabelNamespace]
+		v, ok = currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterNamespace))
 

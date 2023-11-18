@@ -142,14 +142,14 @@ func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, rem
 	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
 
 	// Clean stale resources in the management cluster
-	localUndeployed, err = cleanPolicyRefResources(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	localUndeployed, err = cleanPolicyRefResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary, localResourceReports, logger)
 	if err != nil {
 		return
 	}
 
 	// Clean stale resources in the remote cluster
-	remoteUndeployed, err = cleanPolicyRefResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
+	remoteUndeployed, err = cleanPolicyRefResources(ctx, false, remoteRestConfig, remoteClient, clusterSummary,
 		remoteResourceReports, logger)
 	if err != nil {
 		return
@@ -217,16 +217,18 @@ func handleWatchers(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	return nil
 }
 
-func cleanPolicyRefResources(ctx context.Context, destRestConfig *rest.Config, destClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, resourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
+func cleanPolicyRefResources(ctx context.Context, isMgmtCluster bool, destRestConfig *rest.Config,
+	destClient client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	resourceReports []configv1alpha1.ResourceReport, logger logr.Logger,
+) ([]configv1alpha1.ResourceReport, error) {
 
 	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
 	for i := range resourceReports {
 		key := getPolicyInfo(&resourceReports[i].Resource)
 		currentPolicies[key] = resourceReports[i].Resource
 	}
-	undeployed, err := undeployStaleResources(ctx, destRestConfig, destClient, configv1alpha1.FeatureResources,
+
+	undeployed, err := undeployStaleResources(ctx, isMgmtCluster, destRestConfig, destClient, configv1alpha1.FeatureResources,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		currentPolicies, logger)
 	if err != nil {
@@ -271,7 +273,7 @@ func undeployResources(ctx context.Context, c client.Client,
 	var resourceReports []configv1alpha1.ResourceReport
 
 	// Undeploy from management cluster
-	_, err = undeployStaleResources(ctx, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
+	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
@@ -279,8 +281,9 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	// Undeploy from managed cluster
-	resourceReports, err = undeployStaleResources(ctx, remoteRestConfig, remoteClient, configv1alpha1.FeatureResources,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+	resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient,
+		configv1alpha1.FeatureResources, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
 		map[string]configv1alpha1.Resource{}, logger)
 	if err != nil {
 		return err
@@ -368,6 +371,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		if h.FeatureID == configv1alpha1.FeatureResources {
 			config += render.AsCode(h)
 		}
+	}
+
+	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
+		tr := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
+		config += render.AsCode(tr)
 	}
 
 	h.Write([]byte(config))

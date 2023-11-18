@@ -52,9 +52,16 @@ import (
 )
 
 const (
-	separator   = "---\n"
-	reasonLabel = "projectsveltos.io/reason"
+	separator                = "---\n"
+	reasonLabel              = "projectsveltos.io/reason"
+	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
 )
+
+func getClusterSummaryAnnotationValue(clusterSummary *configv1alpha1.ClusterSummary) string {
+	prefix := getPrefix(clusterSummary.Spec.ClusterType)
+	return fmt.Sprintf("%s-%s-%s", prefix, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName)
+}
 
 // createNamespace creates a namespace if it does not exist already
 // No action in DryRun mode.
@@ -190,7 +197,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		return nil, err
 	}
 
-	return deployUnstructured(ctx, destConfig, destClient, resources, ref,
+	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
 		configv1alpha1.FeatureResources, clusterSummary, logger)
 }
 
@@ -285,7 +292,7 @@ func validateUnstructredAgainstLuaPolicies(ctx context.Context, deployingToMgmtC
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
-func deployUnstructured(ctx context.Context, destConfig *rest.Config,
+func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
 	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
@@ -299,8 +306,8 @@ func deployUnstructured(ctx context.Context, destConfig *rest.Config,
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
 
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s",
-			policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
 		resource, policyHash := getResource(policy, referencedObject, featureID, logger)
 
@@ -335,6 +342,16 @@ func deployUnstructured(ctx context.Context, destConfig *rest.Config,
 		}
 
 		deployer.AddOwnerReference(policy, clusterProfile)
+
+		if deployingToMgmtCluster {
+			// When deploying resources in the management cluster, just setting ClusterProfile as OwnerReference is
+			// not enough. We also need to track which ClusterSummary is creating the resource. Otherwise while
+			// trying to clean stale resources those objects will be incorrectly removed.
+			// An extra annotation is added here to indicate the clustersummary, so the managed cluster, this
+			// resource was created for
+			value := getClusterSummaryAnnotationValue(clusterSummary)
+			addAnnotation(policy, clusterSummaryAnnotation, value)
+		}
 
 		err = updateResource(ctx, dr, clusterSummary, policy, logger)
 		if err != nil {
@@ -679,8 +696,9 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 	return reports, nil
 }
 
-func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remoteClient client.Client,
-	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
+func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
+	remoteConfig *rest.Config, remoteClient client.Client, featureID configv1alpha1.FeatureID,
+	clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
 	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
@@ -733,49 +751,79 @@ func undeployStaleResources(ctx context.Context, remoteConfig *rest.Config, remo
 
 		for j := range list.Items {
 			r := list.Items[j]
-			logger.V(logs.LogVerbose).Info("considering %s/%s", r.GetNamespace(), r.GetName())
-			// Verify if this policy was deployed because of a clustersummary (ReferenceLabelName
-			// is present as label in such a case).
-			if !hasLabel(&r, deployer.ReferenceNameLabel, "") {
-				continue
+			rr, err := undeployStaleResource(ctx, isMgmtCluster, remoteClient, clusterProfile, clusterSummary,
+				r, currentPolicies, logger)
+			if err != nil {
+				return nil, err
 			}
 
-			// If in DryRun do not withdrawn any policy.
-			// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
-			// policy would be withdrawn
-			if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-				if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, clusterProfile) &&
-					!isLeavePolicies(clusterSummary, logger) {
-
-					undeployed = append(undeployed, configv1alpha1.ResourceReport{
-						Resource: configv1alpha1.Resource{
-							Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
-							Group: r.GroupVersionKind().Group, Version: r.GroupVersionKind().Version,
-						},
-						Action: string(configv1alpha1.DeleteResourceAction),
-					})
-				}
-			} else {
-				logger.V(logs.LogVerbose).Info("remove owner reference %s/%s", r.GetNamespace(), r.GetName())
-
-				deployer.RemoveOwnerReference(&r, clusterProfile)
-
-				if len(r.GetOwnerReferences()) != 0 {
-					// Other ClusterSummary are still deploying this very same policy
-					continue
-				}
-
-				if canDelete(&r, currentPolicies) {
-					err = handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
-					if err != nil {
-						return nil, err
-					}
-				}
+			if rr != nil {
+				undeployed = append(undeployed, *rr)
 			}
 		}
 	}
 
 	return undeployed, nil
+}
+
+func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient client.Client,
+	clusterProfile *configv1alpha1.ClusterProfile, clusterSummary *configv1alpha1.ClusterSummary, r unstructured.Unstructured,
+	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) (*configv1alpha1.ResourceReport, error) {
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("considering %s/%s", r.GetNamespace(), r.GetName()))
+	// Verify if this policy was deployed because of a projectsveltos (ReferenceLabelName
+	// is present as label in such a case).
+	if !hasLabel(&r, deployer.ReferenceNameLabel, "") {
+		return nil, nil
+	}
+
+	if isMgmtCluster {
+		// When deploying resources in the management cluster, just setting ClusterProfile as OwnerReference is
+		// not enough. We also need to track which ClusterSummary is creating the resource. Otherwise while
+		// trying to clean stale resources those objects will be incorrectly removed.
+		// An extra annotation is added to indicate the clustersummary, so the managed cluster, this
+		// resource was created for. Check if annotation is present.
+		value := getClusterSummaryAnnotationValue(clusterSummary)
+		if !hasAnnotation(&r, clusterSummaryAnnotation, value) {
+			return nil, nil
+		}
+	}
+
+	var resourceReport *configv1alpha1.ResourceReport = nil
+	// If in DryRun do not withdrawn any policy.
+	// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
+	// policy would be withdrawn
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, clusterProfile) &&
+			!isLeavePolicies(clusterSummary, logger) {
+
+			resourceReport = &configv1alpha1.ResourceReport{
+				Resource: configv1alpha1.Resource{
+					Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
+					Group: r.GroupVersionKind().Group, Version: r.GroupVersionKind().Version,
+				},
+				Action: string(configv1alpha1.DeleteResourceAction),
+			}
+		}
+	} else {
+		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
+
+		deployer.RemoveOwnerReference(&r, clusterProfile)
+
+		if len(r.GetOwnerReferences()) != 0 {
+			// Other ClusterSummary are still deploying this very same policy
+			return nil, nil
+		}
+
+		if canDelete(&r, currentPolicies) {
+			err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return resourceReport, nil
 }
 
 func handleResourceDelete(ctx context.Context, remoteClient client.Client, policy client.Object,
@@ -792,8 +840,8 @@ func handleResourceDelete(ctx context.Context, remoteClient client.Client, polic
 		return remoteClient.Update(ctx, policy)
 	}
 
-	logger.V(logs.LogDebug).Info("removing resource %s %s/%s",
-		policy.GetObjectKind().GroupVersionKind().Kind, policy.GetNamespace(), policy.GetName())
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("removing resource %s %s/%s",
+		policy.GetObjectKind().GroupVersionKind().Kind, policy.GetNamespace(), policy.GetName()))
 	return remoteClient.Delete(ctx, policy)
 }
 
@@ -837,6 +885,24 @@ func hasLabel(u *unstructured.Unstructured, key, value string) bool {
 	}
 
 	v, ok := lbls[key]
+
+	if value == "" {
+		return ok
+	}
+
+	return v == value
+}
+
+// hasAnnotation search if key is one of the annotation.
+// If value is empty, returns true if key is present.
+// If value is not empty, returns true if key is present and value is a match.
+func hasAnnotation(u *unstructured.Unstructured, key, value string) bool {
+	annotations := u.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	v, ok := annotations[key]
 
 	if value == "" {
 		return ok

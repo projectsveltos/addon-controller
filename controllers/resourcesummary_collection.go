@@ -124,14 +124,14 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 	}
 
 	// Get ClusterSummary
-	clusterSummaryName, ok := rs.Labels[libsveltosv1alpha1.ClusterSummaryLabelName]
+	clusterSummaryName, ok := rs.Labels[libsveltosv1alpha1.ClusterSummaryNameLabel]
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummary name label not set. Cannot process it")
 		return nil
 	}
 
 	var clusterSummaryNamespace string
-	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1alpha1.ClusterSummaryLabelNamespace]
+	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel]
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummaryspace name label not set. Cannot process it")
 		return nil

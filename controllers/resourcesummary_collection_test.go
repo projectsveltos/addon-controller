@@ -91,8 +91,8 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		resourceSummary := getResourceSummary(nil, nil)
 		resourceSummary.Labels = map[string]string{
-			libsveltosv1alpha1.ClusterSummaryLabelName:      clusterSummary.Name,
-			libsveltosv1alpha1.ClusterSummaryLabelNamespace: clusterSummary.Namespace,
+			libsveltosv1alpha1.ClusterSummaryNameLabel:      clusterSummary.Name,
+			libsveltosv1alpha1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
 		}
 		Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())

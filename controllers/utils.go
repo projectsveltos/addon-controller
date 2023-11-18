@@ -77,15 +77,24 @@ func InitScheme() (*runtime.Scheme, error) {
 	return s, nil
 }
 
+func getPrefix(clusterType libsveltosv1alpha1.ClusterType) string {
+	prefix := "capi"
+	if clusterType == libsveltosv1alpha1.ClusterTypeSveltos {
+		prefix = "sveltos"
+	}
+	return prefix
+}
+
 // GetClusterSummaryName returns the ClusterSummary name given a ClusterProfile name and
 // CAPI cluster Namespace/Name.
 // This method does not guarantee that name is not already in use. Caller of this method needs
 // to handle that scenario
 func GetClusterSummaryName(clusterProfileName, clusterName string, isSveltosCluster bool) string {
-	prefix := "capi"
+	clusterType := libsveltosv1alpha1.ClusterTypeCapi
 	if isSveltosCluster {
-		prefix = "sveltos"
+		clusterType = libsveltosv1alpha1.ClusterTypeSveltos
 	}
+	prefix := getPrefix(clusterType)
 	return fmt.Sprintf("%s-%s-%s", clusterProfileName, prefix, clusterName)
 }
 

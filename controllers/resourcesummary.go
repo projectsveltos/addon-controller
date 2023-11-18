@@ -333,8 +333,8 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 					Name:      getResourceSummaryName(clusterNamespace, applicant),
 					Namespace: getResourceSummaryNamespace(),
 					Labels: map[string]string{
-						libsveltosv1alpha1.ClusterSummaryLabelName:      applicant,
-						libsveltosv1alpha1.ClusterSummaryLabelNamespace: clusterNamespace,
+						libsveltosv1alpha1.ClusterSummaryNameLabel:      applicant,
+						libsveltosv1alpha1.ClusterSummaryNamespaceLabel: clusterNamespace,
 					},
 				},
 			}
@@ -365,8 +365,8 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 	if currentResourceSummary.Labels == nil {
 		currentResourceSummary.Labels = map[string]string{}
 	}
-	currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryLabelName] = applicant
-	currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryLabelNamespace] = clusterNamespace
+	currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNameLabel] = applicant
+	currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel] = clusterNamespace
 
 	logger.V(logsettings.LogDebug).Info("resourceSummary instance already present. updating it.")
 	return remoteClient.Update(ctx, currentResourceSummary)

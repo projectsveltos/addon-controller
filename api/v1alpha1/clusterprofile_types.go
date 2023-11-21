@@ -321,6 +321,12 @@ type ClusterProfileSpec struct {
 	// +optional
 	TemplateResourceRefs []TemplateResourceRef `json:"templateResourceRefs,omitempty"`
 
+	// DependsOn specifies a list of other ClusterProfiles that this instance depends on.
+	// In any managed cluster that matches this ClusterProfile, the add-ons and applications
+	// defined in this instance will not be deployed until all add-ons and applications in the
+	// ClusterProfiles listed as dependencies are deployed.
+	DependsOn []string `json:"dependsOn,omitempty"`
+
 	// PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
 	// that need to be deployed in the matching CAPI clusters.
 	// +optional

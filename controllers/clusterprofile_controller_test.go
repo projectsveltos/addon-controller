@@ -1225,68 +1225,6 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 			}))
 		})
 
-	It("isClusterProvisioned returns true when all Features are marked Provisioned", func() {
-		clusterSummary := &configv1alpha1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   clusterProfileNamePrefix + randomString(),
-				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
-			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
-					HelmCharts: []configv1alpha1.HelmChart{
-						{
-							RepositoryURL:    randomString(),
-							RepositoryName:   randomString(),
-							ChartName:        randomString(),
-							ChartVersion:     randomString(),
-							ReleaseName:      randomString(),
-							ReleaseNamespace: randomString(),
-						},
-					},
-					PolicyRefs: []configv1alpha1.PolicyRef{
-						{
-							Namespace: randomString(),
-							Name:      randomString(),
-							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-						},
-					},
-				},
-			},
-			Status: configv1alpha1.ClusterSummaryStatus{
-				FeatureSummaries: []configv1alpha1.FeatureSummary{
-					{
-						FeatureID: configv1alpha1.FeatureHelm,
-						Status:    configv1alpha1.FeatureStatusProvisioned,
-					},
-					{
-						FeatureID: configv1alpha1.FeatureResources,
-						Status:    configv1alpha1.FeatureStatusProvisioning,
-					},
-				},
-			},
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).Build()
-		reconciler := getClusterProfileReconciler(c)
-
-		// Not all Features are marked as provisioned
-		Expect(controllers.IsCluterSummaryProvisioned(reconciler, clusterSummary)).To(BeFalse())
-
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{
-				FeatureID: configv1alpha1.FeatureHelm,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
-			},
-			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
-			},
-		}
-		// all Features are marked as provisioned
-		Expect(controllers.IsCluterSummaryProvisioned(reconciler, clusterSummary)).To(BeTrue())
-	})
-
 	It("getUpdatedAndUpdatingClusters returns list of clusters already updated and being updated", func() {
 		cluster1 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
 		cluster2 := types.NamespacedName{Namespace: randomString(), Name: randomString()}

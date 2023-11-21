@@ -333,6 +333,15 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{}, nil
 	}
 
+	allDeployed, msg, err := r.areDependenciesDeployed(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+	clusterSummaryScope.SetDependenciesMessage(&msg)
+	if !allDeployed {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
 	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
@@ -477,7 +486,7 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs == nil {
 		logger.V(logs.LogDebug).Info("no policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureKustomize) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
@@ -491,7 +500,7 @@ func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clus
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs == nil {
 		logger.V(logs.LogDebug).Info("no policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureResources) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
@@ -505,7 +514,7 @@ func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterS
 func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		logger.V(logs.LogDebug).Info("no helm configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope, configv1alpha1.FeatureHelm) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("no helm status. Do not reconcile this")
 			return nil
 		}
@@ -731,14 +740,14 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureResources) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope, configv1alpha1.FeatureHelm) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Helm Charts not deployed yet. Reconciliation is needed.")
 			return true
 		}
@@ -984,4 +993,38 @@ func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
 	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
 
 	return nil
+}
+
+// areDependenciesDeployed checks dependencies. All must be provisioned for this ClusterSummary to proceed further
+// reconciling add-ons and applications
+func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) (allDeployed bool, dependencyMessage string, err error) {
+
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn {
+		clusterProfileName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn[i]
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Considering ClusterProfile %s", clusterProfileName))
+		var cs *configv1alpha1.ClusterSummary
+		cs, err = getClusterSummary(ctx, r.Client, clusterProfileName, clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterName, clusterSummaryScope.ClusterSummary.Spec.ClusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterSummary for ClusterProfile %s not found", clusterProfileName))
+				return false, fmt.Sprintf("ClusterProfile %s is not deployed on this cluster", clusterProfileName), nil
+			}
+
+			return false, "", err
+		}
+
+		if !isCluterSummaryProvisioned(cs) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterProfile %s is not fully deployed yet", clusterProfileName))
+			return false, fmt.Sprintf("ClusterProfile %s is not fully deployed yet", clusterProfileName), nil
+		}
+	}
+
+	dependencyMessage = "All dependencies deployed"
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn == nil {
+		dependencyMessage = "no dependencies"
+	}
+
+	return true, dependencyMessage, nil
 }

@@ -286,6 +286,90 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(err).To(BeNil())
 		Expect(value).To(Equal(cluster.Namespace + "-" + cluster.Name))
 	})
+
+	It("isClusterProvisioned returns true when all Features are marked Provisioned", func() {
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   clusterProfileNamePrefix + randomString(),
+				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						{
+							RepositoryURL:    randomString(),
+							RepositoryName:   randomString(),
+							ChartName:        randomString(),
+							ChartVersion:     randomString(),
+							ReleaseName:      randomString(),
+							ReleaseNamespace: randomString(),
+						},
+					},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: randomString(),
+							Name:      randomString(),
+							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+						},
+					},
+					KustomizationRefs: []configv1alpha1.KustomizationRef{
+						{
+							Namespace: randomString(),
+							Name:      randomString(),
+							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+						},
+					},
+				},
+			},
+		}
+
+		// Not all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureHelm,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusProvisioning,
+			},
+		}
+		// Not all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureHelm,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		// Not all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureHelm,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1alpha1.FeatureKustomize,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		// all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeTrue())
+	})
 })
 
 func getClusterRef(cluster client.Object) *corev1.ObjectReference {

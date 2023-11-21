@@ -92,7 +92,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources)).To(BeFalse())
+		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureResources)).To(BeFalse())
 	})
 
 	It("isFeatureDeployed returns true when feature is deployed", func() {
@@ -114,7 +114,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope, configv1alpha1.FeatureHelm)).To(BeTrue())
+		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm)).To(BeTrue())
 	})
 
 	It("getHash returns nil when hash is not stored", func() {

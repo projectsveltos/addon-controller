@@ -199,7 +199,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		return fmt.Errorf("deploying %s still in progress. Wait before cleanup", string(f.id))
 	}
 
-	if r.isFeatureRemoved(clusterSummaryScope, f.id) {
+	if r.isFeatureRemoved(clusterSummaryScope.ClusterSummary, f.id) {
 		logger.V(logs.LogDebug).Info("feature is removed")
 		// feature is removed. Nothing to do.
 		return nil
@@ -281,10 +281,8 @@ func genericUndeploy(ctx context.Context, c client.Client,
 
 // isFeatureStatusPresent returns true if feature status is set.
 // That means feature was deployed/being deployed
-func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummaryScope *scope.ClusterSummaryScope,
+func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
-
-	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
 		fs := clusterSummary.Status.FeatureSummaries[i]
@@ -297,10 +295,8 @@ func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummaryScope *s
 
 // isFeatureDeployed returns true if feature is marked as deployed (present in FeatureSummaries and status
 // is set to Provisioned).
-func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummaryScope *scope.ClusterSummaryScope,
+func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
-
-	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
 		fs := clusterSummary.Status.FeatureSummaries[i]
@@ -315,10 +311,8 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummaryScope *scope.
 
 // isFeatureRemoved returns true if feature is marked as removed (present in FeatureSummaries and status
 // is set to Removed).
-func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummaryScope *scope.ClusterSummaryScope,
+func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
-
-	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	for i := range clusterSummary.Status.FeatureSummaries {
 		fs := clusterSummary.Status.FeatureSummaries[i]
@@ -407,7 +401,7 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.Clu
 		return true
 	}
 
-	deployed := r.isFeatureDeployed(clusterSummaryScope, f.id)
+	deployed := r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, f.id)
 	if deployed && isConfigSame {
 		// feature is deployed and nothing has changed. Nothing to do.
 		logger.V(logs.LogDebug).Info("feature is deployed and hash has not changed")

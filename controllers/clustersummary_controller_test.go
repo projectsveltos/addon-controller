@@ -698,6 +698,141 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 		Expect(result.Requeue).To(BeFalse())
 	})
+
+	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {
+		clusterProfileAName := randomString()
+		clusterSummaryAName := controllers.GetClusterSummaryName(clusterProfileAName, clusterName, false)
+		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileAName, clusterSummaryAName))
+		clusterSummaryA := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummaryAName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					controllers.ClusterProfileLabelName: clusterProfileAName,
+					configv1alpha1.ClusterNameLabel:     clusterName,
+					configv1alpha1.ClusterTypeLabel:     string(libsveltosv1alpha1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						{
+							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+							ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
+						},
+					},
+				},
+			},
+		}
+
+		clusterProfileBName := randomString()
+		clusterSummaryBName := controllers.GetClusterSummaryName(clusterProfileBName, clusterName, false)
+		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileBName, clusterSummaryBName))
+		clusterSummaryB := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummaryBName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					controllers.ClusterProfileLabelName: clusterProfileBName,
+					configv1alpha1.ClusterNameLabel:     clusterName,
+					configv1alpha1.ClusterTypeLabel:     string(libsveltosv1alpha1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						{
+							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+							ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
+						},
+					},
+					PolicyRefs: []configv1alpha1.PolicyRef{
+						{
+							Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						},
+					},
+				},
+			},
+		}
+
+		By(fmt.Sprintf("setting %s and %s as dependencies", clusterProfileAName, clusterProfileBName))
+		// Set dependencyA and dependencyB as dependendecies for clustersummary
+		clusterSummary.Spec.ClusterProfileSpec.DependsOn = []string{clusterProfileAName, clusterProfileBName}
+
+		initObjects := []client.Object{
+			clusterSummaryA,
+			clusterSummaryB,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          deployer,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         klogr.New(),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		// because dependencies are not provisioned
+		deployed, _, err := controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(deployed).To(BeFalse())
+
+		// Mark first deopendency as provisioned
+		clusterSummaryA.Status = configv1alpha1.ClusterSummaryStatus{
+			FeatureSummaries: []configv1alpha1.FeatureSummary{
+				{
+					FeatureID: configv1alpha1.FeatureHelm,
+					Status:    configv1alpha1.FeatureStatusProvisioned,
+				},
+			},
+		}
+
+		Expect(c.Status().Update(context.TODO(), clusterSummaryA)).To(Succeed())
+
+		// because dependencies are not all provisioned
+		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(deployed).To(BeFalse())
+
+		// Mark first deopendency as provisioned
+		clusterSummaryB.Status = configv1alpha1.ClusterSummaryStatus{
+			FeatureSummaries: []configv1alpha1.FeatureSummary{
+				{
+					FeatureID: configv1alpha1.FeatureHelm,
+					Status:    configv1alpha1.FeatureStatusProvisioned,
+				},
+				{
+					FeatureID: configv1alpha1.FeatureResources,
+					Status:    configv1alpha1.FeatureStatusProvisioned,
+				},
+			},
+		}
+
+		Expect(c.Status().Update(context.TODO(), clusterSummaryB)).To(Succeed())
+		// because dependencies are  all provisioned
+		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		Expect(err).To(BeNil())
+		Expect(deployed).To(BeTrue())
+	})
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {

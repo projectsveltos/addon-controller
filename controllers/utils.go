@@ -264,3 +264,67 @@ func getMgmtResourceName(clusterSummary *configv1alpha1.ClusterSummary,
 	}
 	return buffer.String(), nil
 }
+
+// isCluterSummaryProvisioned returns true if ClusterSummary is currently fully deployed.
+func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bool {
+	hasHelmCharts := false
+	hasRawYAMLs := false
+	hasKustomize := false
+
+	if clusterSumary.Spec.ClusterProfileSpec.HelmCharts != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
+
+		hasHelmCharts = true
+	}
+
+	if clusterSumary.Spec.ClusterProfileSpec.PolicyRefs != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
+
+		hasRawYAMLs = true
+	}
+
+	if clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs != nil &&
+		len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
+
+		hasKustomize = true
+	}
+
+	deployedHelmCharts := false
+	deployedRawYAMLs := false
+	deployedKustomize := false
+
+	for i := range clusterSumary.Status.FeatureSummaries {
+		fs := &clusterSumary.Status.FeatureSummaries[i]
+		if fs.Status != configv1alpha1.FeatureStatusProvisioned {
+			return false
+		}
+		switch fs.FeatureID {
+		case configv1alpha1.FeatureHelm:
+			deployedHelmCharts = true
+		case configv1alpha1.FeatureResources:
+			deployedRawYAMLs = true
+		case configv1alpha1.FeatureKustomize:
+			deployedKustomize = true
+		}
+	}
+
+	if hasHelmCharts {
+		if !deployedHelmCharts {
+			return false
+		}
+	}
+
+	if hasRawYAMLs {
+		if !deployedRawYAMLs {
+			return false
+		}
+	}
+
+	if hasKustomize {
+		if !deployedKustomize {
+			return false
+		}
+	}
+
+	return true
+}

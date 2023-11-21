@@ -116,6 +116,15 @@ spec:
                     description: ClusterSelector identifies clusters to associate
                       to.
                     type: string
+                  dependsOn:
+                    description: DependsOn specifies a list of other ClusterProfiles
+                      that this instance depends on. In any managed cluster that matches
+                      this ClusterProfile, the add-ons and applications defined in
+                      this instance will not be deployed until all add-ons and applications
+                      in the ClusterProfiles listed as dependencies are deployed.
+                    items:
+                      type: string
+                    type: array
                   helmCharts:
                     description: Helm charts is a list of helm charts that need to
                       be deployed
@@ -456,6 +465,10 @@ spec:
           status:
             description: ClusterSummaryStatus defines the observed state of ClusterSummary
             properties:
+              dependencies:
+                description: Dependencies is a summary reporting the status of the
+                  dependencies for the associated ClusterProfile
+                type: string
               featureSummaries:
                 description: FeatureSummaries reports the status of each workload
                   cluster feature directly managed by ClusterProfile.

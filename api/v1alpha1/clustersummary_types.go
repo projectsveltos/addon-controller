@@ -162,6 +162,10 @@ type ClusterSummarySpec struct {
 
 // ClusterSummaryStatus defines the observed state of ClusterSummary
 type ClusterSummaryStatus struct {
+	// Dependencies is a summary reporting the status of the dependencies
+	// for the associated ClusterProfile
+	Dependencies *string `json:"dependencies,omitempty"`
+
 	// FeatureSummaries reports the status of each workload cluster feature
 	// directly managed by ClusterProfile.
 	// +listType=atomic

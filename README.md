@@ -11,7 +11,7 @@
 # Useful links
 
 - Projectsveltos [documentation](https://projectsveltos.github.io/sveltos/)
-- [Quick Start](https://projectsveltos.github.io/sveltos/quick_start/)
+- [Quick Start](https://projectsveltos.github.io/sveltos/install/quick_start/)
 
 # What is the Projectsveltos?
 Sveltos is a Kubernetes add-on controller that simplifies the deployment and management of add-ons and applications across multiple clusters. It runs in the management cluster and can programmatically deploy and manage add-ons and applications on any cluster in the fleet, including the management cluster itself. Sveltos supports a variety of add-on formats, including Helm charts, raw YAML, Kustomize, Carvel ytt, and Jsonnet.

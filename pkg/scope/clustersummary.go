@@ -124,6 +124,11 @@ func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1alpha1.FeatureI
 	)
 }
 
+// SetDependenciesMessage sets the dependencies status.
+func (s *ClusterSummaryScope) SetDependenciesMessage(message *string) {
+	s.ClusterSummary.Status.Dependencies = message
+}
+
 // SetFailureMessage sets the infrastructure status failure message.
 func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1alpha1.FeatureID, failureMessage *string) {
 	for i := range s.ClusterSummary.Status.FeatureSummaries {

@@ -446,4 +446,25 @@ var _ = Describe("ClusterSummaryScope", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 		Expect(scope.IsDryRunSync()).To(BeFalse())
 	})
+
+	It("SetDependenciesMessage update status regarding dependencies", func() {
+		params := scope.ClusterSummaryScopeParams{
+			Client:         c,
+			ClusterProfile: clusterProfile,
+			ClusterSummary: clusterSummary,
+			Logger:         klogr.New(),
+		}
+
+		scope, err := scope.NewClusterSummaryScope(params)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(scope).ToNot(BeNil())
+
+		msg := randomString()
+		scope.SetDependenciesMessage(&msg)
+		Expect(clusterSummary.Status.Dependencies).ToNot(BeNil())
+		Expect(*clusterSummary.Status.Dependencies).To(Equal(msg))
+
+		scope.SetDependenciesMessage(nil)
+		Expect(clusterSummary.Status.Dependencies).To(BeNil())
+	})
 })

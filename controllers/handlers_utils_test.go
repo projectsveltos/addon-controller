@@ -475,7 +475,7 @@ var _ = Describe("HandlersUtils", func() {
 		// Because ClusterSummary is not referencing any ConfigMap/Resource and because test created a ClusterRole
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
-		undeploy, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
+		undeploy, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
 			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, nil, klogr.New())
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
@@ -592,7 +592,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(deployedGKVs).ToNot(BeEmpty())
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
-		_, err := controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
+		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
 			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 
@@ -616,7 +616,7 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource1))
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
-		_, err = controllers.UndeployStaleResources(context.TODO(), testEnv.Config, testEnv.Client,
+		_, err = controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
 			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
 		Expect(err).To(BeNil())
 

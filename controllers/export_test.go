@@ -29,7 +29,6 @@ var (
 	GetMatchingClusters              = (*ClusterProfileReconciler).getMatchingClusters
 	GetMaxUpdate                     = (*ClusterProfileReconciler).getMaxUpdate
 	ReviseUpdatedAndUpdatingClusters = (*ClusterProfileReconciler).reviseUpdatedAndUpdatingClusters
-	IsCluterSummaryProvisioned       = (*ClusterProfileReconciler).isCluterSummaryProvisioned
 	GetUpdatedAndUpdatingClusters    = (*ClusterProfileReconciler).getUpdatedAndUpdatingClusters
 
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
@@ -37,18 +36,19 @@ var (
 )
 
 var (
-	IsFeatureDeployed    = (*ClusterSummaryReconciler).isFeatureDeployed
-	GetHash              = (*ClusterSummaryReconciler).getHash
-	UpdateFeatureStatus  = (*ClusterSummaryReconciler).updateFeatureStatus
-	DeployFeature        = (*ClusterSummaryReconciler).deployFeature
-	UndeployFeature      = (*ClusterSummaryReconciler).undeployFeature
-	GetCurrentReferences = (*ClusterSummaryReconciler).getCurrentReferences
-	IsPaused             = (*ClusterSummaryReconciler).isPaused
-	ShouldReconcile      = (*ClusterSummaryReconciler).shouldReconcile
-	UpdateChartMap       = (*ClusterSummaryReconciler).updateChartMap
-	ShouldRedeploy       = (*ClusterSummaryReconciler).shouldRedeploy
-	CanRemoveFinalizer   = (*ClusterSummaryReconciler).canRemoveFinalizer
-	ReconcileDelete      = (*ClusterSummaryReconciler).reconcileDelete
+	IsFeatureDeployed       = (*ClusterSummaryReconciler).isFeatureDeployed
+	GetHash                 = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus     = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature           = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature         = (*ClusterSummaryReconciler).undeployFeature
+	GetCurrentReferences    = (*ClusterSummaryReconciler).getCurrentReferences
+	IsPaused                = (*ClusterSummaryReconciler).isPaused
+	ShouldReconcile         = (*ClusterSummaryReconciler).shouldReconcile
+	UpdateChartMap          = (*ClusterSummaryReconciler).updateChartMap
+	ShouldRedeploy          = (*ClusterSummaryReconciler).shouldRedeploy
+	CanRemoveFinalizer      = (*ClusterSummaryReconciler).canRemoveFinalizer
+	ReconcileDelete         = (*ClusterSummaryReconciler).reconcileDelete
+	AreDependenciesDeployed = (*ClusterSummaryReconciler).areDependenciesDeployed
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
@@ -99,6 +99,8 @@ var (
 	HandleCharts                             = handleCharts
 
 	InstantiateTemplateValues = instantiateTemplateValues
+
+	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
 )
 
 type (

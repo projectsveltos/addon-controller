@@ -70,7 +70,7 @@ KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 GOLANGCI_LINT_VERSION := "v1.52.2"
-CLUSTERCTL_VERSION := "v1.5.3"
+CLUSTERCTL_VERSION := "v1.6.0-rc.1"
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -172,10 +172,6 @@ NUM_NODES ?= 6
 quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos
 	$(MAKE) create-control-cluster
 
-	@echo wait for capd-system pod
-	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
-	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
-
 	$(MAKE) create-workload-cluster
 
 	# this is needed fopr projectsveltos metrics
@@ -213,10 +209,6 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 .PHONY: create-cluster
 create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
 	$(MAKE) create-control-cluster
-
-	@echo wait for capd-system pod
-	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
-	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
 
 	@echo "Start projectsveltos"
 	$(MAKE) deploy-projectsveltos
@@ -256,6 +248,10 @@ create-control-cluster: $(KIND) $(CLUSTERCTL)
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
 	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --infrastructure docker
+
+	@echo wait for capd-system pod
+	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
 
 create-workload-cluster: $(KIND) $(KUBECTL)
 	@echo "Create a workload cluster"

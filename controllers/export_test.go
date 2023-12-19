@@ -140,9 +140,8 @@ const (
 )
 
 var (
-	RunOpenapiValidations = runOpenAPIValidations
-	RunLuaValidations     = runLuaValidations
-	LuaValidation         = luaValidation
+	RunLuaValidations = runLuaValidations
+	LuaValidation     = luaValidation
 
 	IsHealthy      = isHealthy
 	FetchResources = fetchResources

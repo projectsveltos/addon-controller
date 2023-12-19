@@ -29,7 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -164,7 +164,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -180,7 +180,8 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("updateChartMap updates chartMap always but in DryRun mode", func() {
@@ -200,7 +201,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -216,7 +217,8 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.UpdateChartMap(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(Succeed())
+		Expect(controllers.UpdateChartMap(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 		Expect(err).To(BeNil())
@@ -267,7 +269,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -283,7 +285,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
@@ -305,7 +307,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -321,7 +323,8 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("shouldReconcile returns false when mode is OneTime and policies and helm charts are deployed", func() {
@@ -347,7 +350,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -363,7 +366,8 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 	})
 
 	It("Adds finalizer", func() {
@@ -375,7 +379,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
@@ -421,7 +425,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
@@ -435,7 +439,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -444,7 +448,8 @@ var _ = Describe("ClustersummaryController", func() {
 		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
 		// In SyncMode DryRun even if config is same (input for ShouldRedeploy) result is redeploy
-		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeTrue())
+		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      clusterSummary.Name,
@@ -460,7 +465,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope.ClusterSummary = currentClusterSummary
 		// In SyncMode != DryRun and if config is same (input for ShouldRedeploy) result is do not redeploy
-		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true, klogr.New())).To(BeFalse())
+		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 	})
 
 	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {
@@ -477,7 +483,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
@@ -490,14 +496,15 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
 		// ClusterSummary not marked for deletion. So cannot remove finalizer
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 
 		// Mark ClusterSummary for deletion
 		now := metav1.NewTime(time.Now())
@@ -505,7 +512,8 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryScope.ClusterSummary = clusterSummary
 
 		// ClusterProfile is not marked for deletion. So cannot remove finalizer
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 
 		// Mark ClusterProfile for deletion
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -515,7 +523,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope.ClusterProfile = currentClusterProfile
 
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("canRemoveFinalizer in not DryRun returns true when ClusterSummary is deleted and features removed", func() {
@@ -537,7 +546,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(),
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
@@ -550,13 +560,14 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 
 		// Mark ClusterSummary for deletion
 		now := metav1.NewTime(time.Now())
@@ -565,7 +576,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope.ClusterSummary = clusterSummary
 
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 
 		// Mark all features as removed
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -575,7 +587,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope.ClusterSummary = clusterSummary
 
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("canRemoveFinalizer returns true when Cluster is gone", func() {
@@ -596,7 +609,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
@@ -609,14 +622,15 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
 		// Since ClusterSummary is not yet marked for deletion, finalizer cannot be removed
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeFalse())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeFalse())
 
 		// Mark ClusterSummary for deletion
 		now := metav1.NewTime(time.Now())
@@ -624,7 +638,8 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryScope.ClusterSummary = clusterSummary
 
 		// Because CAPI cluster does not exist and ClusterSummary is marked for deletion, finalizer can be removed
-		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope, klogr.New())).To(BeTrue())
+		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
@@ -639,7 +654,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, klogr.New(), clusterProfile, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
 		Expect(set.Len()).To(Equal(1))
@@ -654,7 +670,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		clusterSummaryScope := getClusterSummaryScope(c, klogr.New(), clusterProfile, clusterSummary)
+		clusterSummaryScope := getClusterSummaryScope(c,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
 		Expect(set.Len()).To(Equal(1))
@@ -682,19 +699,20 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
 		var result reconcile.Result
-		result, err = controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		result, err = controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(result.Requeue).To(BeFalse())
 	})
@@ -772,7 +790,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		deployer := fakedeployer.GetClient(context.TODO(), klogr.New(), c)
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
 			Client:            c,
 			Scheme:            scheme,
@@ -785,14 +803,15 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
 		// because dependencies are not provisioned
-		deployed, _, err := controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		deployed, _, err := controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeFalse())
 
@@ -809,7 +828,8 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(c.Status().Update(context.TODO(), clusterSummaryA)).To(Succeed())
 
 		// because dependencies are not all provisioned
-		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeFalse())
 
@@ -829,7 +849,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		Expect(c.Status().Update(context.TODO(), clusterSummaryB)).To(Succeed())
 		// because dependencies are  all provisioned
-		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope, klogr.New())
+		deployed, _, err = controllers.AreDependenciesDeployed(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeTrue())
 	})
@@ -967,7 +988,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Namespace: referencingClusterSummary.Namespace,
 		}
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
 		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
@@ -1025,7 +1046,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			Namespace: referencingClusterSummary.Namespace,
 		}
 
-		dep := fakedeployer.GetClient(context.TODO(), klogr.New(), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
 		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 

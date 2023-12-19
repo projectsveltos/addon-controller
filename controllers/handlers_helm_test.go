@@ -31,7 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -338,7 +338,7 @@ var _ = Describe("HandlersHelm", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
-			chartDeployed, klogr.New())).To(Succeed())
+			chartDeployed, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
@@ -386,7 +386,7 @@ var _ = Describe("HandlersHelm", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary,
-			helmChart, klogr.New())
+			helmChart, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(report).ToNot(BeNil())
 		Expect(report.Action).To(Equal(string(configv1alpha1.InstallHelmAction)))
@@ -504,13 +504,14 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
 
-		kubeconfig, err := clusterproxy.CreateKubeconfig(klogr.New(), testEnv.Kubeconfig)
+		kubeconfig, err := clusterproxy.CreateKubeconfig(textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Kubeconfig)
 		Expect(err).To(BeNil())
 
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
-		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig, klogr.New())
+		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1alpha1.DryRunReconciliationError
@@ -602,7 +603,7 @@ var _ = Describe("Hash methods", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -616,7 +617,8 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope, klogr.New())
+		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})

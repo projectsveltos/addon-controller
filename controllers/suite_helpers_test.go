@@ -317,7 +317,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	Eventually(func() bool {
 		manager := compliances.GetManager()
 		clusterType := libsveltosv1alpha1.ClusterTypeCapi
-		_, err := manager.GetClusterOpenapiPolicies(cluster.Namespace, cluster.Name, &clusterType)
+		_, err := manager.GetClusterLuaPolicies(cluster.Namespace, cluster.Name, &clusterType)
 		return err == nil
 	}, timeout, pollingInterval).Should(BeTrue())
 }

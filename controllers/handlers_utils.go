@@ -205,53 +205,11 @@ func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool,
 	resources []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) error {
 
-	err := validateUnstructredAgainstOpenAPIPolicies(ctx, deployingToMgmtCluster, resources,
-		clusterSummary, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Info("resources are not compliant with OpenAPI policies")
-		return err
-	}
-
-	err = validateUnstructredAgainstLuaPolicies(ctx, deployingToMgmtCluster, resources,
+	err := validateUnstructredAgainstLuaPolicies(ctx, deployingToMgmtCluster, resources,
 		clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info("resources are not compliant with LUA policies")
 		return err
-	}
-
-	return nil
-}
-
-// validateUnstructredAgainstOpenAPIPolicies validates each individual resource against
-// all openAPI policies currently enforced for the managed cluster where resource need to be
-// applied
-func validateUnstructredAgainstOpenAPIPolicies(ctx context.Context, deployingToMgmtCluster bool,
-	resources []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) error {
-
-	// OpenAPI validations are only enforced when posting to managed clusters
-	if deployingToMgmtCluster {
-		return nil
-	}
-
-	var openAPIPolicies map[string][]byte
-	openAPIPolicies, err := getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		&clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	// Validate each single resource against openAPI compliance policies
-	for i := range resources {
-		policy := resources[i]
-
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("validating resource %s %s/%s against %d opneAPI policies",
-			policy.GetKind(), policy.GetNamespace(), policy.GetName(), len(openAPIPolicies)))
-
-		err = runOpenAPIValidations(ctx, openAPIPolicies, policy, logger)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -265,7 +223,7 @@ func validateUnstructredAgainstLuaPolicies(ctx context.Context, deployingToMgmtC
 	referencedUnstructured []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
 	logger logr.Logger) error {
 
-	// OpenAPI validations are only enforced when posting to managed clusters
+	// validations are only enforced when posting to managed clusters
 	if deployingToMgmtCluster {
 		return nil
 	}

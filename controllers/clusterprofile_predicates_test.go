@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
@@ -36,7 +36,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 	var cluster *libsveltosv1alpha1.SveltosCluster
 
 	BeforeEach(func() {
-		logger = klogr.New()
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		cluster = &libsveltosv1alpha1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -217,7 +217,7 @@ var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 	var cluster *clusterv1.Cluster
 
 	BeforeEach(func() {
-		logger = klogr.New()
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -374,7 +374,7 @@ var _ = Describe("ClusterProfile Predicates: MachinePredicates", func() {
 	var machine *clusterv1.Machine
 
 	BeforeEach(func() {
-		logger = klogr.New()
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		machine = &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamMachineNamePrefix + randomString(),

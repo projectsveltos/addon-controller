@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -123,7 +123,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		// - reset ClusterSummary.Status.FeatureSummaries hash for helm (indicating new reconciliation is needed)
 		// - reset ResourceSummary.Status
 		Expect(controllers.CollectResourceSummariesFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
-			klogr.New())).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {

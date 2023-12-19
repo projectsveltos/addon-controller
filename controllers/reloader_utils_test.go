@@ -27,7 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -100,7 +100,7 @@ var _ = Describe("Reloader utils", func() {
 		clusterProfileName := randomString()
 		feature := configv1alpha1.FeatureHelm
 		Expect(controllers.DeployReloaderInstance(context.TODO(), c,
-			clusterProfileName, feature, resources, klogr.New())).To(Succeed())
+			clusterProfileName, feature, resources, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		reloaders := &libsveltosv1alpha1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
@@ -127,7 +127,7 @@ var _ = Describe("Reloader utils", func() {
 
 		// Reloader Spec.ReloaderInfo is updated now
 		Expect(controllers.DeployReloaderInstance(context.TODO(), c,
-			clusterProfileName, feature, resources, klogr.New())).To(Succeed())
+			clusterProfileName, feature, resources, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
@@ -149,7 +149,7 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		Expect(controllers.RemoveReloaderInstance(context.TODO(), c, randomString(),
-			configv1alpha1.FeatureKustomize, klogr.New())).To(BeNil())
+			configv1alpha1.FeatureKustomize, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeNil())
 	})
 
 	It("removeReloaderInstance removes Reloader instance", func() {
@@ -165,7 +165,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(len(reloaders.Items)).To(Equal(1))
 
 		Expect(controllers.RemoveReloaderInstance(context.TODO(), c, clusterProfileName,
-			feature, klogr.New())).To(BeNil())
+			feature, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeNil())
 
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(0))
@@ -213,7 +213,7 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1alpha1.FeatureResources, resources, clusterSummary, klogr.New())).To(Succeed())
+			configv1alpha1.FeatureResources, resources, clusterSummary, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		reloaders := &libsveltosv1alpha1.ReloaderList{}
 
@@ -237,7 +237,7 @@ var _ = Describe("Reloader utils", func() {
 		clusterSummary.Spec.ClusterProfileSpec.Reloader = false
 
 		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1alpha1.FeatureResources, nil, clusterSummary, klogr.New())).To(Succeed())
+			configv1alpha1.FeatureResources, nil, clusterSummary, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
 
 		Eventually(func() bool {
 			err := testEnv.Client.List(context.TODO(), reloaders)

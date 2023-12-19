@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -133,8 +133,8 @@ var _ = BeforeSuite(func() {
 	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)
 
-	controllers.InitializeManager(klogr.New(), testEnv.Config, testEnv.GetClient())
-	compliances.InitializeManager(ctx, klogr.New(), testEnv.Config, testEnv.Client, 1)
+	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.GetClient())
+	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.Client, 1)
 
 	Eventually(func() bool {
 		manager := compliances.GetManager()

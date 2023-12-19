@@ -32,7 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,7 +63,7 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 	BeforeEach(func() {
 		namespace = "reconcile" + randomString()
 
-		logger = klogr.New()
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 		matchingCluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -126,7 +126,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		// Only clusterSelector is, so only matchingCluster is a match
-		matching, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope, klogr.New())
+		matching, err := controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(1))
 
@@ -141,7 +142,8 @@ var _ = Describe("ClusterProfile: Reconciler", func() {
 
 		// Both clusterSelector (matchingCluster is a match) and ClusterRefs (nonMatchingCluster is referenced) are set
 		// So two clusters are now matching
-		matching, err = controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope, klogr.New())
+		matching, err = controllers.GetMatchingClusters(reconciler, context.TODO(), clusterProfileScope,
+			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(2))
 	})

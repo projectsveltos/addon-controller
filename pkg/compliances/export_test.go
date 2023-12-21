@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	GetOpenapiPolicies         = (*manager).getOpenapiPolicies
 	ReEvaluateAddonCompliances = (*manager).reEvaluateAddonCompliances
 	ReEvaluateClusters         = (*manager).reEvaluateClusters
 	CanAddonBeDeployed         = (*manager).canAddonBeDeployed

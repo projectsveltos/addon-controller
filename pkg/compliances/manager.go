@@ -293,17 +293,6 @@ func (m *manager) processAddonComplianceLuaPolicies(currentLuaMap map[string]map
 	}
 }
 
-// getOpenapiPolicies returns all openAPI policies contained in the AddonCompliance
-func (m *manager) getOpenapiPolicies(addonConstrain *libsveltosv1alpha1.AddonCompliance) map[string][]byte {
-	policies := make(map[string][]byte)
-	for policyKey := range addonConstrain.Status.OpenapiValidations {
-		key := fmt.Sprintf("%s-%s", addonConstrain.Name, policyKey)
-		policies[key] = addonConstrain.Status.OpenapiValidations[policyKey]
-	}
-
-	return policies
-}
-
 // getLuaPolicies returns all lua policies contained in the AddonCompliance
 func (m *manager) getLuaPolicies(addonConstrain *libsveltosv1alpha1.AddonCompliance) map[string][]byte {
 	policies := make(map[string][]byte)

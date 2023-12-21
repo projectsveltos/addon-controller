@@ -109,15 +109,10 @@ var _ = Describe("Constraints", func() {
 
 		Expect(compliances.ReEvaluateAddonCompliances(manager, context.TODO())).To(Succeed())
 
-		clusterTpe := clusterproxy.GetClusterType(&cluster1)
-		result, err := manager.GetClusterLuaPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
+		clusterTpe := clusterproxy.GetClusterType(&cluster2)
+		result, err := manager.GetClusterLuaPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations) + len(addonCompliance2.Status.OpenapiValidations)))
-
-		clusterTpe = clusterproxy.GetClusterType(&cluster2)
-		result, err = manager.GetClusterLuaPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations)))
+		Expect(len(result)).To(Equal(len(addonCompliance1.Status.LuaValidations)))
 	})
 
 	It("reEvaluateClusters finds all annotated clusters and update internal clusters map", func() {

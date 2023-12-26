@@ -28,6 +28,10 @@ const (
 	// ClusterProfileLabelName is added to all ClusterSummary instances created
 	// by a ClusterProfile instance
 	ClusterProfileLabelName = "projectsveltos.io/cluster-profile-name"
+
+	// ProfileLabelName is added to all ClusterSummary instances created
+	// by a Profile instance
+	ProfileLabelName = "projectsveltos.io/profile-name"
 )
 
 // addLabel adds label to an object

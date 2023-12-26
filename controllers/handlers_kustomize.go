@@ -99,12 +99,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return gvkErr
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
 		remoteResources, clusterSummary, logger)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	// TODO: track resource deployed in the management cluster
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, featureHandler.id, remoteDeployed, nil)
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef, featureHandler.id, remoteDeployed, nil)
 	if err != nil {
 		return err
 	}
@@ -222,18 +222,18 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
 		configv1alpha1.FeatureKustomize, []configv1alpha1.Resource{}, nil)
 	if err != nil {
 		return err

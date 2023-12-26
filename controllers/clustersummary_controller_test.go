@@ -74,12 +74,13 @@ var _ = Describe("ClustersummaryController", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -162,7 +163,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -199,7 +200,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -267,7 +268,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -305,7 +306,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -348,7 +349,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -437,7 +438,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -494,7 +495,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -521,7 +522,7 @@ var _ = Describe("ClustersummaryController", func() {
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		Expect(c.Delete(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummaryScope.ClusterProfile = currentClusterProfile
+		clusterSummaryScope.Profile = currentClusterProfile
 
 		Expect(controllers.CanRemoveFinalizer(reconciler, context.TODO(), clusterSummaryScope,
 			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeTrue())
@@ -558,7 +559,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -620,7 +621,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -702,7 +703,7 @@ var _ = Describe("ClustersummaryController", func() {
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -719,7 +720,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {
 		clusterProfileAName := randomString()
-		clusterSummaryAName := controllers.GetClusterSummaryName(clusterProfileAName, clusterName, false)
+		clusterSummaryAName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfileAName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileAName, clusterSummaryAName))
 		clusterSummaryA := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -735,7 +737,7 @@ var _ = Describe("ClustersummaryController", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
 							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
@@ -747,7 +749,8 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		clusterProfileBName := randomString()
-		clusterSummaryBName := controllers.GetClusterSummaryName(clusterProfileBName, clusterName, false)
+		clusterSummaryBName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfileBName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileBName, clusterSummaryBName))
 		clusterSummaryB := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -763,7 +766,7 @@ var _ = Describe("ClustersummaryController", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
 							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
@@ -786,9 +789,13 @@ var _ = Describe("ClustersummaryController", func() {
 		initObjects := []client.Object{
 			clusterSummaryA,
 			clusterSummaryB,
+			clusterSummary,
+			clusterProfile,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		addOwnerReference(context.TODO(), c, clusterSummary, clusterProfile)
 
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
@@ -801,7 +808,7 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 			ClusterSummary: clusterSummary,
@@ -900,7 +907,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
@@ -922,7 +929,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,

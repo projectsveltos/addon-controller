@@ -94,11 +94,11 @@ type Feature struct {
 	Charts []Chart `json:"charts,omitempty"`
 }
 
-// ClusterProfileResource keeps info on all of the resources deployed in this Cluster
-// due to a given ClusterProfile
-type ClusterProfileResource struct {
-	// ClusterProfileName is the name of the ClusterProfile matching the Cluster.
-	ClusterProfileName string `json:"clusterProfileName"`
+// ProfileResource keeps info on all of the resources deployed in this Cluster
+// due to a given ClusterProfile/Profile
+type ProfileResource struct {
+	// ProfileName is the name of the ClusterProfile/Profile matching the Cluster.
+	ProfileName string `json:"profileName"`
 
 	// Features contains the list of policies deployed in the Cluster because
 	// of a given feature
@@ -111,7 +111,12 @@ type ClusterConfigurationStatus struct {
 	// ClusterProfileResources is the list of resources currently deployed in a Cluster due
 	// to ClusterProfiles
 	// +optional
-	ClusterProfileResources []ClusterProfileResource `json:"clusterProfileResources,omitempty"`
+	ClusterProfileResources []ProfileResource `json:"clusterProfileResources,omitempty"`
+
+	// ProfileResources is the list of resources currently deployed in a Cluster due
+	// to Profiles
+	// +optional
+	ProfileResources []ProfileResource `json:"profileResources,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -141,13 +146,23 @@ func init() {
 
 // GetClusterConfigurationSectionIndex returns Status.ClusterProfileResources index for given ClusterProfile.
 // If not found, returns an error
-func GetClusterConfigurationSectionIndex(clusterConfiguration *ClusterConfiguration, clusterProfileName string) (int, error) {
-	for i := range clusterConfiguration.Status.ClusterProfileResources {
-		if clusterConfiguration.Status.ClusterProfileResources[i].ClusterProfileName == clusterProfileName {
-			return i, nil
+func GetClusterConfigurationSectionIndex(clusterConfiguration *ClusterConfiguration,
+	profileKind, profileName string) (int, error) {
+
+	if profileKind == ClusterProfileKind {
+		for i := range clusterConfiguration.Status.ClusterProfileResources {
+			if clusterConfiguration.Status.ClusterProfileResources[i].ProfileName == profileName {
+				return i, nil
+			}
+		}
+	} else {
+		for i := range clusterConfiguration.Status.ProfileResources {
+			if clusterConfiguration.Status.ProfileResources[i].ProfileName == profileName {
+				return i, nil
+			}
 		}
 	}
 
-	return -1, fmt.Errorf("section for ClusterProfile %s not present in clusterConfiguration %s/%s",
-		clusterProfileName, clusterConfiguration.Namespace, clusterConfiguration.Name)
+	return -1, fmt.Errorf("section for %s/%s not present in clusterConfiguration %s/%s",
+		profileKind, profileName, clusterConfiguration.Namespace, clusterConfiguration.Name)
 }

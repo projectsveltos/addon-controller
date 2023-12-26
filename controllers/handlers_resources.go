@@ -83,13 +83,13 @@ func deployResources(ctx context.Context, c client.Client,
 		return gvkErr
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
 	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureResources,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureResources,
 		remoteResources, clusterSummary, logger)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func deployResources(ctx context.Context, c client.Client,
 	}
 
 	// TODO: track resource deployed in the management cluster
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, featureHandler.id, remoteDeployed, nil)
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef, featureHandler.id, remoteDeployed, nil)
 	if err != nil {
 		return err
 	}
@@ -289,18 +289,18 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureResources,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureResources,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
 		configv1alpha1.FeatureResources, []configv1alpha1.Resource{}, nil)
 	if err != nil {
 		return err
@@ -397,12 +397,12 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return nil
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+	clusterReportName := getClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {

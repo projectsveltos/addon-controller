@@ -41,6 +41,7 @@ import (
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
 	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -133,8 +134,10 @@ var _ = BeforeSuite(func() {
 	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)
 
-	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.GetClient())
-	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.Client, 1)
+	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		testEnv.Config, testEnv.GetClient())
+	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		testEnv.Config, testEnv.Client, 1)
 
 	Eventually(func() bool {
 		manager := compliances.GetManager()
@@ -144,6 +147,11 @@ var _ = BeforeSuite(func() {
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)
 	}
+
+	// Do this read so library is initialized with CAPI present
+	_, err = clusterproxy.GetListOfClusters(context.TODO(), testEnv.Client, "",
+		textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+	Expect(err).To(BeNil())
 })
 
 var _ = AfterSuite(func() {
@@ -174,5 +182,17 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 		ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
 		Mux:               sync.Mutex{},
+	}
+}
+
+func getProfileReconciler(c client.Client) *controllers.ProfileReconciler {
+	return &controllers.ProfileReconciler{
+		Client:        c,
+		Scheme:        scheme,
+		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+		Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+		Mux:           sync.Mutex{},
 	}
 }

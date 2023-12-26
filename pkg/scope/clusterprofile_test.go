@@ -34,10 +34,12 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
-const clusterProfileNamePrefix = "scope-"
+const clusterProfileNamePrefix = "scope-cp-"
+const profileNamePrefix = "scope-p-"
 
-var _ = Describe("ClusterProfileScope", func() {
+var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	var clusterProfile *configv1alpha1.ClusterProfile
+	var profile *configv1alpha1.Profile
 	var c client.Client
 
 	BeforeEach(func() {
@@ -46,142 +48,192 @@ var _ = Describe("ClusterProfileScope", func() {
 				Name: clusterProfileNamePrefix + randomString(),
 			},
 		}
+		profile = &configv1alpha1.Profile{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      profileNamePrefix + randomString(),
+				Namespace: randomString(),
+			},
+		}
 		scheme := setupScheme()
-		initObjects := []client.Object{clusterProfile}
-		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		addTypeInformationToObject(scheme, clusterProfile)
+		addTypeInformationToObject(scheme, profile)
+		initObjects := []client.Object{clusterProfile, profile}
+		c = fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 	})
 
-	It("Return nil,error if ClusterProfile is not specified", func() {
-		params := scope.ClusterProfileScopeParams{
+	It("Return nil,error if Profile/ClusterProfile is not specified", func() {
+		cpParams := scope.ProfileScopeParams{
 			Client: c,
 			Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
-		scope, err := scope.NewClusterProfileScope(params)
+		cpScope, err := scope.NewProfileScope(cpParams)
 		Expect(err).To(HaveOccurred())
-		Expect(scope).To(BeNil())
+		Expect(cpScope).To(BeNil())
 	})
 
 	It("Return nil,error if client is not specified", func() {
-		params := scope.ClusterProfileScopeParams{
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		cpParams := scope.ProfileScopeParams{
+			Profile: clusterProfile,
+			Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
 		}
 
-		scope, err := scope.NewClusterProfileScope(params)
+		cpScope, err := scope.NewProfileScope(cpParams)
 		Expect(err).To(HaveOccurred())
-		Expect(scope).To(BeNil())
+		Expect(cpScope).To(BeNil())
+	})
+
+	It("Return nil,error if any resource but Profile/ClusterProfile is passed", func() {
+		cpParams := scope.ProfileScopeParams{
+			Client:  c,
+			Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Profile: &corev1.Node{},
+		}
+
+		cpScope, err := scope.NewProfileScope(cpParams)
+		Expect(err).To(HaveOccurred())
+		Expect(cpScope).To(BeNil())
 	})
 
 	It("IsContinuousSync returns false when SyncMode is OneTime", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsContinuousSync()).To(BeFalse())
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.IsContinuousSync()).To(BeFalse())
 	})
 
 	It("IsContinuousSync returns true when SyncMode is Continuous", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsContinuousSync()).To(BeTrue())
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.IsContinuousSync()).To(BeTrue())
 	})
 
 	It("IsContinuousSync returns true when SyncMode is ContinuousWithDriftDetection", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
+
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsContinuousSync()).To(BeTrue())
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.IsContinuousSync()).To(BeTrue())
 	})
 
 	It("Name returns ClusterProfile Name", func() {
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.Name()).To(Equal(objects[i].GetName()))
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.Name()).To(Equal(clusterProfile.Name))
 	})
 
 	It("GetSelector returns ClusterProfile ClusterSelector", func() {
 		clusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector("zone=east")
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		profile.Spec.ClusterSelector = clusterProfile.Spec.ClusterSelector
+
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.GetSelector()).To(Equal(string(clusterProfile.Spec.ClusterSelector)))
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.GetSelector()).To(Equal(string(clusterProfile.Spec.ClusterSelector)))
 	})
 
 	It("SetMatchingClusters sets ClusterProfile.Status.MatchingCluster", func() {
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
-		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
 		matchingClusters := []corev1.ObjectReference{
 			{
 				Namespace: "t-" + randomString(),
 				Name:      "c-" + randomString(),
 			},
 		}
-		scope.SetMatchingClusterRefs(matchingClusters)
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			scope.SetMatchingClusterRefs(matchingClusters)
+		}
 		Expect(reflect.DeepEqual(clusterProfile.Status.MatchingClusterRefs, matchingClusters)).To(BeTrue())
+		Expect(reflect.DeepEqual(profile.Status.MatchingClusterRefs, matchingClusters)).To(BeTrue())
 	})
 
 	It("Close updates ClusterProfile", func() {
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			objects[i].SetLabels(map[string]string{"clusters": "hr"})
+			Expect(scope.Close(context.TODO())).To(Succeed())
 		}
-
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		clusterProfile.Labels = map[string]string{"clusters": "hr"}
-		Expect(scope.Close(context.TODO())).To(Succeed())
-
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		Expect(currentClusterProfile.Labels).ToNot(BeNil())
@@ -189,68 +241,126 @@ var _ = Describe("ClusterProfileScope", func() {
 		v, ok := currentClusterProfile.Labels["clusters"]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal("hr"))
+
+		currentProfile := &configv1alpha1.Profile{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Name: profile.Name, Namespace: profile.Namespace}, currentProfile)).To(Succeed())
+		Expect(currentProfile.Labels).ToNot(BeNil())
+		Expect(len(currentProfile.Labels)).To(Equal(1))
+		v, ok = currentProfile.Labels["clusters"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal("hr"))
 	})
 
 	It("IsContinuousSync returns true when mode is Continuous", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
 
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsContinuousSync()).To(BeTrue())
 		}
 
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.IsContinuousSync()).To(BeTrue())
-
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		Expect(scope.IsContinuousSync()).To(BeFalse())
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		Expect(scope.IsContinuousSync()).To(BeFalse())
+		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		objects = []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsContinuousSync()).To(BeFalse())
+		}
 	})
 
 	It("IsOneTimeSync returns true when mode is OneTime", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
 
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsOneTimeSync()).To(BeFalse())
 		}
 
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
+		objects = []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
 
-		Expect(scope.IsOneTimeSync()).To(BeTrue())
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		Expect(scope.IsOneTimeSync()).To(BeFalse())
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(scope.IsOneTimeSync()).To(BeFalse())
+			Expect(scope.IsOneTimeSync()).To(BeTrue())
+		}
 	})
 
 	It("IsDryRunSync returns true when mode is DryRun", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
 
-		params := scope.ClusterProfileScopeParams{
-			Client:         c,
-			ClusterProfile: clusterProfile,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		objects := []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsDryRunSync()).To(BeTrue())
 		}
 
-		scope, err := scope.NewClusterProfileScope(params)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(scope).ToNot(BeNil())
-
-		Expect(scope.IsDryRunSync()).To(BeTrue())
-
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		Expect(scope.IsDryRunSync()).To(BeFalse())
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		Expect(scope.IsDryRunSync()).To(BeFalse())
+		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+
+		objects = []client.Object{clusterProfile, profile}
+		for i := range objects {
+			params := scope.ProfileScopeParams{
+				Client:  c,
+				Profile: objects[i],
+				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			}
+
+			scope, err := scope.NewProfileScope(params)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(scope).ToNot(BeNil())
+
+			Expect(scope.IsDryRunSync()).To(BeFalse())
+			Expect(scope.IsDryRunSync()).To(BeFalse())
+		}
 	})
 })

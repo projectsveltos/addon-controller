@@ -45,13 +45,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
 		clusterName = randomString()
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, clusterName, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -566,10 +567,10 @@ func getClusterSummaryScope(c client.Client, logger logr.Logger,
 	clusterProfile *configv1alpha1.ClusterProfile, clusterSummary *configv1alpha1.ClusterSummary,
 ) *scope.ClusterSummaryScope {
 
-	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+	clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 		Client:         c,
 		Logger:         logger,
-		ClusterProfile: clusterProfile,
+		Profile:        clusterProfile,
 		ClusterSummary: clusterSummary,
 		ControllerName: "clustersummary",
 	})

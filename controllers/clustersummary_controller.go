@@ -69,7 +69,7 @@ type ReportMode int
 const (
 	// Default mode. In this mode, addon-controller running
 	// in the management cluster periodically collects/processes
-	// ResourceSummaries from Sveltos/CAPI clusters
+	// ResourceSummaries from Sveltos/CAPI Clusters
 	CollectFromManagementCluster ReportMode = iota
 
 	// In this mode, drift detection manager sends ResourceSummaries
@@ -91,11 +91,11 @@ type ClusterSummaryReconciler struct {
 	ReferenceMap         map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
 	ClusterSummaryMap    map[types.NamespacedName]*libsveltosset.Set   // key: ClusterSummary namespace/name; value: set of referenced resources
 
-	// key: Sveltos/CAPI Cluster; value: set of all ClusterSummaries for that Cluster
+	// key: Sveltos/Cluster; value: set of all ClusterSummaries for that Cluster
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
 
 	// Reason for the two maps:
-	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a Sveltos/CAPI Cluster.
+	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a Sveltos/Cluster.
 	// When a ConfigMap/Secret changes, all the ClusterSummaries referencing it need to be reconciled.
 	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps/Secrets. When a ConfigMap/Secret spec changes,
 	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
@@ -157,8 +157,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	// Fetch the ClusterProfile.
-	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, r.Client, clusterSummary)
+	// Fetch the (Cluster)Profile.
+	profile, err := configv1alpha1.GetProfileOwner(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
 		return reconcile.Result{}, errors.Wrapf(
@@ -167,18 +167,18 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			req.NamespacedName,
 		)
 	}
-	if clusterProfile == nil {
-		logger.Error(err, "Failed to get owner clusterProfile")
-		return reconcile.Result{}, fmt.Errorf("failed to get owner clusterProfile for %s",
+	if profile == nil {
+		logger.Error(err, "Failed to get owner (Cluster)Profile")
+		return reconcile.Result{}, fmt.Errorf("failed to get owner (Cluster)Profile for %s",
 			req.NamespacedName)
 	}
 
-	clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+	clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 		Client:         r.Client,
 		Logger:         logger,
 		ClusterSummary: clusterSummary,
-		ClusterProfile: clusterProfile,
-		ControllerName: "clusterprofile",
+		Profile:        profile,
+		ControllerName: "clustersummary",
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create clusterProfileScope")
@@ -230,7 +230,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
-	// If Sveltos/CAPI Cluster is not found, there is nothing to clean up.
+	// If Sveltos/Cluster is not found, there is nothing to clean up.
 	isPresent, isDeleted, err := r.isClusterPresent(ctx, clusterSummaryScope)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
@@ -605,7 +605,7 @@ func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSu
 	chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
 
 	// Registration for helm chart not referenced anymore, are cleaned only after such helm
-	// chart are removed from Sveltos/CAPI Cluster. That is done as part of deployHelmCharts and
+	// chart are removed from Sveltos/Cluster. That is done as part of deployHelmCharts and
 	// undeployHelmCharts (RemoveStaleRegistrations).
 	// That is because we need to make sure managed helm charts are successfully uninstalled
 	// before any registration with chartManager is cleared.
@@ -805,7 +805,7 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectR
 	return s
 }
 
-// isPaused returns true if Sveltos/CAPI Cluster is paused or ClusterSummary has paused annotation.
+// isPaused returns true if Sveltos/Cluster is paused or ClusterSummary has paused annotation.
 func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
 
@@ -855,18 +855,18 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
 		// ClusterProfile is moved away from DryRun mode.
-		clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		profile, err := configv1alpha1.GetProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile %v", err))
 			return false
 		}
 
-		if clusterProfile == nil {
+		if profile == nil {
 			logger.V(logs.LogInfo).Info("failed to get ClusterProfile")
 			return false
 		}
 
-		if !clusterProfile.DeletionTimestamp.IsZero() {
+		if !profile.GetDeletionTimestamp().IsZero() {
 			return true
 		}
 		logger.V(logs.LogInfo).Info("ClusterProfile not marked for deletion")
@@ -1000,24 +1000,37 @@ func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
 func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) (allDeployed bool, dependencyMessage string, err error) {
 
+	profileReference, err := configv1alpha1.GetProfileOwnerReference(clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get profile owner: %v", err))
+		return false, "", fmt.Errorf("failed to get profile owner: %w", err)
+	}
+
+	if profileReference == nil {
+		return false, "", fmt.Errorf("profile owner not found: %w", err)
+	}
+
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn {
-		clusterProfileName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn[i]
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("Considering ClusterProfile %s", clusterProfileName))
+		profileName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn[i]
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Considering %s %s", profileReference.Kind, profileName))
 		var cs *configv1alpha1.ClusterSummary
-		cs, err = getClusterSummary(ctx, r.Client, clusterProfileName, clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace,
-			clusterSummaryScope.ClusterSummary.Spec.ClusterName, clusterSummaryScope.ClusterSummary.Spec.ClusterType)
+		cs, err = getClusterSummary(ctx, r.Client, profileReference.Kind, profileName,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace, clusterSummaryScope.ClusterSummary.Spec.ClusterName,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterType)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterSummary for ClusterProfile %s not found", clusterProfileName))
-				return false, fmt.Sprintf("ClusterProfile %s is not deployed on this cluster", clusterProfileName), nil
+				msg := fmt.Sprintf("ClusterSummary for %s %s not found", profileReference.Kind, profileName)
+				logger.V(logs.LogInfo).Info(msg)
+				return false, msg, nil
 			}
 
 			return false, "", err
 		}
 
 		if !isCluterSummaryProvisioned(cs) {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterProfile %s is not fully deployed yet", clusterProfileName))
-			return false, fmt.Sprintf("ClusterProfile %s is not fully deployed yet", clusterProfileName), nil
+			msg := fmt.Sprintf("%s %s is not fully deployed yet", profileReference.Kind, profileName)
+			logger.V(logs.LogInfo).Info(msg)
+			return false, msg, nil
 		}
 	}
 

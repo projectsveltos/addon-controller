@@ -206,7 +206,7 @@ var _ = Describe("Reloader utils", func() {
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					Reloader: true,
 				},
 			},

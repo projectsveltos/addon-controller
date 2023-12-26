@@ -85,29 +85,37 @@ func getPrefix(clusterType libsveltosv1alpha1.ClusterType) string {
 	return prefix
 }
 
-// GetClusterSummaryName returns the ClusterSummary name given a ClusterProfile name and
-// CAPI cluster Namespace/Name.
-// This method does not guarantee that name is not already in use. Caller of this method needs
-// to handle that scenario
-func GetClusterSummaryName(clusterProfileName, clusterName string, isSveltosCluster bool) string {
+// GetClusterSummaryName returns the ClusterSummary name given a ClusterProfile/Profile kind/name and
+// cluster type/Name.
+func GetClusterSummaryName(profileKind, profileName, clusterName string, isSveltosCluster bool) string {
 	clusterType := libsveltosv1alpha1.ClusterTypeCapi
 	if isSveltosCluster {
 		clusterType = libsveltosv1alpha1.ClusterTypeSveltos
 	}
 	prefix := getPrefix(clusterType)
-	return fmt.Sprintf("%s-%s-%s", clusterProfileName, prefix, clusterName)
+	if profileKind == configv1alpha1.ClusterProfileKind {
+		// For backward compatibility (code before addition of Profiles) do not change this
+		return fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
+	}
+
+	return fmt.Sprintf("p--%s-%s-%s", profileName, prefix, clusterName)
 }
 
-// getClusterSummary returns the ClusterSummary instance created by a specific ClusterProfile for a specific
-// CAPI Cluster
+// getClusterSummary returns the ClusterSummary instance created by a specific
+// ClusterProfile/Profile for a specific Cluster
 func getClusterSummary(ctx context.Context, c client.Client,
-	clusterProfileName, clusterNamespace, clusterName string,
+	profileKind, profileName string, clusterNamespace, clusterName string,
 	clusterType libsveltosv1alpha1.ClusterType) (*configv1alpha1.ClusterSummary, error) {
+
+	profileLabel := ClusterProfileLabelName
+	if profileKind == configv1alpha1.ProfileKind {
+		profileLabel = ProfileLabelName
+	}
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
-			ClusterProfileLabelName:         clusterProfileName,
+			profileLabel:                    profileName,
 			configv1alpha1.ClusterNameLabel: clusterName,
 			configv1alpha1.ClusterTypeLabel: string(clusterType),
 		},
@@ -124,8 +132,8 @@ func getClusterSummary(ctx context.Context, c client.Client,
 	}
 
 	if len(clusterSummaryList.Items) != 1 {
-		return nil, fmt.Errorf("more than one clustersummary found for cluster %s/%s created by %s",
-			clusterNamespace, clusterName, clusterProfileName)
+		return nil, fmt.Errorf("more than one clustersummary found for cluster %s/%s created by %s %s",
+			clusterNamespace, clusterName, profileKind, profileName)
 	}
 
 	return &clusterSummaryList.Items[0], nil
@@ -155,9 +163,13 @@ func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
 }
 
-func getClusterReportName(clusterProfileName, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+func getClusterReportName(profileKind, profileName, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
 	// TODO: shorten this value
-	return clusterProfileName + "--" + strings.ToLower(string(clusterType)) + "--" + clusterName
+	prefix := "" // For backward compatibility (before addition of Profile) leave this empty for ClusterProfiles
+	if profileKind == configv1alpha1.ProfileKind {
+		prefix = "p--"
+	}
+	return prefix + profileName + "--" + strings.ToLower(string(clusterType)) + "--" + clusterName
 }
 
 func getClusterConfigurationName(clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {

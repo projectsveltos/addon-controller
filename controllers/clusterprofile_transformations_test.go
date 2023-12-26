@@ -59,7 +59,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
+			Spec: configv1alpha1.Spec{
 				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
 			},
 		}
@@ -68,7 +68,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
+			Spec: configv1alpha1.Spec{
 				ClusterSelector: libsveltosv1alpha1.Selector("env=qa"),
 			},
 		}
@@ -178,7 +178,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
+			Spec: configv1alpha1.Spec{
 				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
 			},
 		}

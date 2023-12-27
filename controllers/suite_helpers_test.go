@@ -300,10 +300,10 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 		if err != nil {
 			return err
 		}
-		currentClusterConfiguration.Status.ClusterProfileResources = []configv1alpha1.ProfileResource{
+		currentClusterConfiguration.Status.ClusterProfileResources = []configv1alpha1.ClusterProfileResource{
 			{
-				ProfileName: clusterProfile.Name,
-				Features:    make([]configv1alpha1.Feature, 0),
+				ClusterProfileName: clusterProfile.Name,
+				Features:           make([]configv1alpha1.Feature, 0),
 			},
 		}
 		return testEnv.Status().Update(ctx, currentClusterConfiguration)

@@ -93,8 +93,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: minio, ChartVersion: "12.6.4", Namespace: minio},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

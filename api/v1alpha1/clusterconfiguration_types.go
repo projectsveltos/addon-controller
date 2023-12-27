@@ -95,10 +95,22 @@ type Feature struct {
 }
 
 // ProfileResource keeps info on all of the resources deployed in this Cluster
-// due to a given ClusterProfile/Profile
+// due to a given Profile
 type ProfileResource struct {
-	// ProfileName is the name of the ClusterProfile/Profile matching the Cluster.
+	// ProfileName is the name of the Profile matching the Cluster.
 	ProfileName string `json:"profileName"`
+
+	// Features contains the list of policies deployed in the Cluster because
+	// of a given feature
+	// +optional
+	Features []Feature `json:"Features,omitempty"`
+}
+
+// ClusterProfileResource keeps info on all of the resources deployed in this Cluster
+// due to a given ClusterProfile
+type ClusterProfileResource struct {
+	// ProfileName is the name of the ClusterProfile matching the Cluster.
+	ClusterProfileName string `json:"clusterProfileName"`
 
 	// Features contains the list of policies deployed in the Cluster because
 	// of a given feature
@@ -111,7 +123,7 @@ type ClusterConfigurationStatus struct {
 	// ClusterProfileResources is the list of resources currently deployed in a Cluster due
 	// to ClusterProfiles
 	// +optional
-	ClusterProfileResources []ProfileResource `json:"clusterProfileResources,omitempty"`
+	ClusterProfileResources []ClusterProfileResource `json:"clusterProfileResources,omitempty"`
 
 	// ProfileResources is the list of resources currently deployed in a Cluster due
 	// to Profiles
@@ -151,7 +163,7 @@ func GetClusterConfigurationSectionIndex(clusterConfiguration *ClusterConfigurat
 
 	if profileKind == ClusterProfileKind {
 		for i := range clusterConfiguration.Status.ClusterProfileResources {
-			if clusterConfiguration.Status.ClusterProfileResources[i].ProfileName == profileName {
+			if clusterConfiguration.Status.ClusterProfileResources[i].ClusterProfileName == profileName {
 				return i, nil
 			}
 		}

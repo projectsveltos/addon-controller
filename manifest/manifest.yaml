@@ -44,8 +44,8 @@ spec:
                 description: ClusterProfileResources is the list of resources currently
                   deployed in a Cluster due to ClusterProfiles
                 items:
-                  description: ProfileResource keeps info on all of the resources
-                    deployed in this Cluster due to a given ClusterProfile/Profile
+                  description: ClusterProfileResource keeps info on all of the resources
+                    deployed in this Cluster due to a given ClusterProfile
                   properties:
                     Features:
                       description: Features contains the list of policies deployed
@@ -192,12 +192,12 @@ spec:
                         - featureID
                         type: object
                       type: array
-                    profileName:
-                      description: ProfileName is the name of the ClusterProfile/Profile
-                        matching the Cluster.
+                    clusterProfileName:
+                      description: ProfileName is the name of the ClusterProfile matching
+                        the Cluster.
                       type: string
                   required:
-                  - profileName
+                  - clusterProfileName
                   type: object
                 type: array
               profileResources:
@@ -205,7 +205,7 @@ spec:
                   in a Cluster due to Profiles
                 items:
                   description: ProfileResource keeps info on all of the resources
-                    deployed in this Cluster due to a given ClusterProfile/Profile
+                    deployed in this Cluster due to a given Profile
                   properties:
                     Features:
                       description: Features contains the list of policies deployed
@@ -353,8 +353,8 @@ spec:
                         type: object
                       type: array
                     profileName:
-                      description: ProfileName is the name of the ClusterProfile/Profile
-                        matching the Cluster.
+                      description: ProfileName is the name of the Profile matching
+                        the Cluster.
                       type: string
                   required:
                   - profileName

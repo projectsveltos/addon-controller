@@ -427,7 +427,7 @@ type policy struct {
 	group     string
 }
 
-func verifyClusterConfiguration(clusterProfileName, clusterNamespace, clusterName string,
+func verifyClusterConfiguration(profileKind, profileName, clusterNamespace, clusterName string,
 	featureID configv1alpha1.FeatureID, expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) {
 
 	Byf("Verifying ClusterConfiguration %s/%s", clusterNamespace, clusterName)
@@ -441,11 +441,19 @@ func verifyClusterConfiguration(clusterProfileName, clusterNamespace, clusterNam
 		if err != nil {
 			return false
 		}
-		if currentClusterConfiguration.Status.ClusterProfileResources == nil {
-			return false
+		if profileKind == configv1alpha1.ClusterProfileKind {
+			if currentClusterConfiguration.Status.ClusterProfileResources == nil {
+				return false
+			}
+			return verifyClusterConfigurationEntryForClusterProfile(currentClusterConfiguration, profileName,
+				featureID, expectedPolicies, expectedCharts)
+		} else {
+			if currentClusterConfiguration.Status.ProfileResources == nil {
+				return false
+			}
+			return verifyClusterConfigurationEntryForProfile(currentClusterConfiguration, profileName,
+				featureID, expectedPolicies, expectedCharts)
 		}
-		return verifyClusterConfigurationEntryForClusterProfile(currentClusterConfiguration, clusterProfileName,
-			featureID, expectedPolicies, expectedCharts)
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -454,9 +462,23 @@ func verifyClusterConfigurationEntryForClusterProfile(clusterConfiguration *conf
 	expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) bool {
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
-		if clusterConfiguration.Status.ClusterProfileResources[i].ProfileName == clusterProfileName {
-			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterProfileResources[i].Features, featureID,
-				expectedPolicies, expectedCharts)
+		if clusterConfiguration.Status.ClusterProfileResources[i].ClusterProfileName == clusterProfileName {
+			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ClusterProfileResources[i].Features,
+				featureID, expectedPolicies, expectedCharts)
+		}
+	}
+
+	return false
+}
+
+func verifyClusterConfigurationEntryForProfile(clusterConfiguration *configv1alpha1.ClusterConfiguration,
+	profileName string, featureID configv1alpha1.FeatureID,
+	expectedPolicies []policy, expectedCharts []configv1alpha1.Chart) bool {
+
+	for i := range clusterConfiguration.Status.ProfileResources {
+		if clusterConfiguration.Status.ProfileResources[i].ProfileName == profileName {
+			return verifyClusterConfigurationPolicies(clusterConfiguration.Status.ProfileResources[i].Features,
+				featureID, expectedPolicies, expectedCharts)
 		}
 	}
 

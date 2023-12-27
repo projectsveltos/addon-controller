@@ -138,8 +138,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.17.1", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for kyverno")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -191,8 +192,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.17.1", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile to not require nginx anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -232,8 +234,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.0", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 

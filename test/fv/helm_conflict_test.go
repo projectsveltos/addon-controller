@@ -84,8 +84,9 @@ var _ = Describe("Helm with conflicts", func() {
 		charts := []configv1alpha1.Chart{
 			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		By("Creating a second ClusterProfile which conflicts with first ClusterProfile")
 		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -115,8 +116,9 @@ var _ = Describe("Helm with conflicts", func() {
 		charts = []configv1alpha1.Chart{
 			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
-		verifyClusterConfiguration(clusterProfile2.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile2.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
 		deleteClusterProfile(clusterProfile2)

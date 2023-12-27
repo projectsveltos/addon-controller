@@ -97,7 +97,7 @@ var _ = Describe("Profile", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentProfile)).To(Succeed())
 
-		verifyClusterSummary(controllers.ProfileLabelName,
+		clusterSummary := verifyClusterSummary(controllers.ProfileLabelName,
 			currentProfile.Name, &currentProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -114,6 +114,13 @@ var _ = Describe("Profile", func() {
 				currentJob)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		policies := []policy{
+			{kind: "Job", name: jobName, namespace: ns, group: "batch"},
+		}
+		verifyClusterConfiguration(configv1alpha1.ProfileKind, profile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		deleteProfile(profile)
 

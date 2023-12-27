@@ -325,9 +325,9 @@ var _ = Describe("HandlersHelm", func() {
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
-				ClusterProfileResources: []configv1alpha1.ProfileResource{
+				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
 					{
-						ProfileName: clusterProfile.Name},
+						ClusterProfileName: clusterProfile.Name},
 				},
 			},
 		}
@@ -351,7 +351,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
-		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].ProfileName).To(
+		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].ClusterProfileName).To(
 			Equal(clusterProfile.Name))
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources[0].Features)).To(Equal(1))

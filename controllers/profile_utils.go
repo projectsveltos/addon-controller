@@ -111,28 +111,30 @@ func updateClusterConfigurationProfileResources(ctx context.Context, c client.Cl
 			return err
 		}
 
-		var profileResources []configv1alpha1.ProfileResource
 		if profileKind == configv1alpha1.ClusterProfileKind {
-			profileResources = currentClusterConfiguration.Status.ClusterProfileResources
-		} else {
-			profileResources = currentClusterConfiguration.Status.ProfileResources
-		}
-
-		for i := range profileResources {
-			if profileResources[i].ProfileName == profile.GetName() {
-				return nil
+			for i := range currentClusterConfiguration.Status.ClusterProfileResources {
+				cpr := &currentClusterConfiguration.Status.ClusterProfileResources[i]
+				if cpr.ClusterProfileName == profile.GetName() {
+					return nil
+				}
 			}
-		}
-
-		profileResources =
-			append(profileResources, configv1alpha1.ProfileResource{
-				ProfileName: profile.GetName(),
-			})
-
-		if profileKind == configv1alpha1.ClusterProfileKind {
-			currentClusterConfiguration.Status.ClusterProfileResources = profileResources
+			currentClusterConfiguration.Status.ClusterProfileResources = append(
+				currentClusterConfiguration.Status.ClusterProfileResources,
+				configv1alpha1.ClusterProfileResource{
+					ClusterProfileName: profile.GetName(),
+				})
 		} else {
-			currentClusterConfiguration.Status.ProfileResources = profileResources
+			for i := range currentClusterConfiguration.Status.ProfileResources {
+				cpr := &currentClusterConfiguration.Status.ProfileResources[i]
+				if cpr.ProfileName == profile.GetName() {
+					return nil
+				}
+			}
+			currentClusterConfiguration.Status.ProfileResources = append(
+				currentClusterConfiguration.Status.ProfileResources,
+				configv1alpha1.ProfileResource{
+					ProfileName: profile.GetName(),
+				})
 		}
 
 		return c.Status().Update(ctx, currentClusterConfiguration)
@@ -341,38 +343,66 @@ func cleanClusterConfigurationProfileResources(ctx context.Context, c client.Cli
 			return err
 		}
 
-		toBeUpdated := false
 		profileKind := profile.GetObjectKind().GroupVersionKind().Kind
-		var profileResources []configv1alpha1.ProfileResource
 		if profileKind == configv1alpha1.ClusterProfileKind {
-			profileResources = currentClusterConfiguration.Status.ClusterProfileResources
+			return cleanClusterProfileResources(ctx, c, profile, currentClusterConfiguration)
 		} else {
-			profileResources = currentClusterConfiguration.Status.ProfileResources
+			return cleanProfileResources(ctx, c, profile, currentClusterConfiguration)
 		}
-
-		for i := range profileResources {
-			if profileResources[i].ProfileName != profile.GetName() {
-				continue
-			}
-			// Order is not important. So move the element at index i with last one in order to avoid moving all elements.
-			length := len(profileResources)
-			profileResources[i] = profileResources[length-1]
-			profileResources = profileResources[:length-1]
-			toBeUpdated = true
-			break
-		}
-
-		if profileKind == configv1alpha1.ClusterProfileKind {
-			currentClusterConfiguration.Status.ClusterProfileResources = profileResources
-		} else {
-			currentClusterConfiguration.Status.ProfileResources = profileResources
-		}
-		if toBeUpdated {
-			return c.Status().Update(ctx, currentClusterConfiguration)
-		}
-		return nil
 	})
 	return err
+}
+
+func cleanClusterProfileResources(ctx context.Context, c client.Client, profile client.Object,
+	currentClusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	toBeUpdated := false
+
+	for i := range currentClusterConfiguration.Status.ClusterProfileResources {
+		cpr := &currentClusterConfiguration.Status.ClusterProfileResources[i]
+		if cpr.ClusterProfileName != profile.GetName() {
+			continue
+		}
+		// Order is not important. So move the element at index i with last one in order to avoid moving all elements.
+		length := len(currentClusterConfiguration.Status.ClusterProfileResources)
+		currentClusterConfiguration.Status.ClusterProfileResources[i] =
+			currentClusterConfiguration.Status.ClusterProfileResources[length-1]
+		currentClusterConfiguration.Status.ClusterProfileResources =
+			currentClusterConfiguration.Status.ClusterProfileResources[:length-1]
+		toBeUpdated = true
+		break
+	}
+
+	if toBeUpdated {
+		return c.Status().Update(ctx, currentClusterConfiguration)
+	}
+	return nil
+}
+
+func cleanProfileResources(ctx context.Context, c client.Client, profile client.Object,
+	currentClusterConfiguration *configv1alpha1.ClusterConfiguration) error {
+
+	toBeUpdated := false
+
+	for i := range currentClusterConfiguration.Status.ProfileResources {
+		cpr := &currentClusterConfiguration.Status.ProfileResources[i]
+		if cpr.ProfileName != profile.GetName() {
+			continue
+		}
+		// Order is not important. So move the element at index i with last one in order to avoid moving all elements.
+		length := len(currentClusterConfiguration.Status.ProfileResources)
+		currentClusterConfiguration.Status.ProfileResources[i] =
+			currentClusterConfiguration.Status.ProfileResources[length-1]
+		currentClusterConfiguration.Status.ProfileResources =
+			currentClusterConfiguration.Status.ProfileResources[:length-1]
+		toBeUpdated = true
+		break
+	}
+
+	if toBeUpdated {
+		return c.Status().Update(ctx, currentClusterConfiguration)
+	}
+	return nil
 }
 
 // ClusterSummary

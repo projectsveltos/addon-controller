@@ -130,8 +130,9 @@ var _ = Describe("LeavePolicies", func() {
 		policies := []policy{
 			{kind: "Deployment", name: deploymentName, namespace: deploymentNamespace, group: "apps"},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

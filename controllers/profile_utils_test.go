@@ -243,9 +243,9 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		currentClusterConfiguration.Status =
 			configv1alpha1.ClusterConfigurationStatus{
-				ClusterProfileResources: []configv1alpha1.ProfileResource{
+				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
 					{
-						ProfileName: clusterProfile.Name,
+						ClusterProfileName: clusterProfile.Name,
 					},
 				},
 			}

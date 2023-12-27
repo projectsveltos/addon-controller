@@ -102,8 +102,9 @@ var _ = Describe("Helm", Serial, func() {
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.1", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		// Verify ResourceSummary is present
 		Eventually(func() bool {

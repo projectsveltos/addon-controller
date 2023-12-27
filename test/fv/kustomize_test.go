@@ -140,8 +140,9 @@ var _ = Describe("Kustomize with GitRepository", func() {
 			{kind: "ConfigMap", name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
 			{kind: "Deployment", name: currentDeployment.Name, namespace: targetNamespace, group: "apps"},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize,
+			policies, nil)
 
 		Byf("Changing clusterprofile to not reference GitRepository anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

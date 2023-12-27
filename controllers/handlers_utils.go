@@ -921,44 +921,88 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 			return err
 		}
 
-		isPresent := false
-
-		var profileResources *configv1alpha1.ProfileResource
 		if profileOwnerRef.Kind == configv1alpha1.ClusterProfileKind {
-			profileResources = &clusterConfiguration.Status.ClusterProfileResources[index]
+			return updateClusterProfileResources(ctx, c, profileOwnerRef, clusterConfiguration,
+				index, featureID, policyDeployed, chartDeployed)
 		} else {
-			profileResources = &clusterConfiguration.Status.ProfileResources[index]
+			return updateProfileResources(ctx, c, profileOwnerRef, clusterConfiguration,
+				index, featureID, policyDeployed, chartDeployed)
 		}
-
-		for i := range profileResources.Features {
-			if profileResources.Features[i].FeatureID == featureID {
-				if policyDeployed != nil {
-					profileResources.Features[i].Resources = policyDeployed
-				}
-				if chartDeployed != nil {
-					profileResources.Features[i].Charts = chartDeployed
-				}
-				isPresent = true
-				break
-			}
-		}
-
-		if !isPresent {
-			if profileResources.Features == nil {
-				profileResources.Features = make([]configv1alpha1.Feature, 0)
-			}
-			profileResources.Features = append(
-				profileResources.Features,
-				configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
-			)
-		}
-
-		clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *profileOwnerRef)
-
-		return c.Status().Update(ctx, clusterConfiguration)
 	})
 
 	return err
+}
+
+func updateClusterProfileResources(ctx context.Context, c client.Client, profileOwnerRef *metav1.OwnerReference,
+	clusterConfiguration *configv1alpha1.ClusterConfiguration, index int,
+	featureID configv1alpha1.FeatureID, policyDeployed []configv1alpha1.Resource,
+	chartDeployed []configv1alpha1.Chart) error {
+
+	isPresent := false
+
+	profileResources := &clusterConfiguration.Status.ClusterProfileResources[index]
+	for i := range profileResources.Features {
+		if profileResources.Features[i].FeatureID == featureID {
+			if policyDeployed != nil {
+				profileResources.Features[i].Resources = policyDeployed
+			}
+			if chartDeployed != nil {
+				profileResources.Features[i].Charts = chartDeployed
+			}
+			isPresent = true
+			break
+		}
+	}
+
+	if !isPresent {
+		if profileResources.Features == nil {
+			profileResources.Features = make([]configv1alpha1.Feature, 0)
+		}
+		profileResources.Features = append(
+			profileResources.Features,
+			configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
+		)
+	}
+
+	clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *profileOwnerRef)
+
+	return c.Status().Update(ctx, clusterConfiguration)
+}
+
+func updateProfileResources(ctx context.Context, c client.Client, profileOwnerRef *metav1.OwnerReference,
+	clusterConfiguration *configv1alpha1.ClusterConfiguration, index int,
+	featureID configv1alpha1.FeatureID, policyDeployed []configv1alpha1.Resource,
+	chartDeployed []configv1alpha1.Chart) error {
+
+	isPresent := false
+
+	profileResources := &clusterConfiguration.Status.ProfileResources[index]
+	for i := range profileResources.Features {
+		if profileResources.Features[i].FeatureID == featureID {
+			if policyDeployed != nil {
+				profileResources.Features[i].Resources = policyDeployed
+			}
+			if chartDeployed != nil {
+				profileResources.Features[i].Charts = chartDeployed
+			}
+			isPresent = true
+			break
+		}
+	}
+
+	if !isPresent {
+		if profileResources.Features == nil {
+			profileResources.Features = make([]configv1alpha1.Feature, 0)
+		}
+		profileResources.Features = append(
+			profileResources.Features,
+			configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
+		)
+	}
+
+	clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *profileOwnerRef)
+
+	return c.Status().Update(ctx, clusterConfiguration)
 }
 
 // computePolicyHash compute policy hash.

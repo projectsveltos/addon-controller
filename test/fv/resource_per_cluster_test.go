@@ -115,8 +115,9 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: updateClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		By("Updating ConfigMap to reference new ClusterRole")
 		Expect(k8sClient.Get(context.TODO(),
@@ -143,8 +144,9 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		By("Updating Secret to reference new Pod")
 		newPodName := "prod" + randomString()
@@ -173,8 +175,9 @@ var _ = Describe("Feature", func() {
 			{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: newPodName, namespace: defaultNamespace, group: ""},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		Byf("Changing clusterprofile to not reference configmap/secret anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

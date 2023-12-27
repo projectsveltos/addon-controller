@@ -108,8 +108,9 @@ var _ = Describe("SyncMode one time", func() {
 		policies := []policy{
 			{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+			policies, nil)
 
 		By("Updating content of policy in ConfigMap")
 		currentConfigMap := &corev1.ConfigMap{}

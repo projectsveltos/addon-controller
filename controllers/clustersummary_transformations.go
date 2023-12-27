@@ -161,7 +161,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 }
 
 // requeueClusterSummaryForCluster is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
-// for ClusterSummary to update when its own Sveltos/CAPI Cluster gets updated.
+// for ClusterSummary to update when its own Sveltos/Cluster gets updated.
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {

@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-23. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,92 +28,151 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
 
-// ClusterProfileScopeParams defines the input parameters used to create a new ClusterProfile Scope.
-type ClusterProfileScopeParams struct {
+// ProfileScopeParams defines the input parameters used to create a new Profile Scope.
+type ProfileScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
-	ClusterProfile *configv1alpha1.ClusterProfile
+	Profile        client.Object
 	ControllerName string
 }
 
-// NewClusterProfileScope creates a new ClusterProfile Scope from the supplied parameters.
+// NewProfileScope creates a new Profile Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
-func NewClusterProfileScope(params ClusterProfileScopeParams) (*ClusterProfileScope, error) {
+func NewProfileScope(params ProfileScopeParams) (*ProfileScope, error) {
 	if params.Client == nil {
-		return nil, errors.New("client is required when creating a ClusterProfileScope")
+		return nil, errors.New("client is required when creating a ProfileScope")
 	}
-	if params.ClusterProfile == nil {
-		return nil, errors.New("failed to generate new scope from nil ClusterProfile")
+	if params.Profile == nil {
+		return nil, errors.New("failed to generate new scope from nil Profile")
 	}
 
-	helper, err := patch.NewHelper(params.ClusterProfile, params.Client)
+	helper, err := patch.NewHelper(params.Profile, params.Client)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
-	return &ClusterProfileScope{
+
+	if params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1alpha1.ClusterProfileKind &&
+		params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1alpha1.ProfileKind {
+
+		return nil, errors.Wrap(err, "only ClusterProfile or Profile can be used")
+	}
+
+	return &ProfileScope{
 		Logger:         params.Logger,
 		client:         params.Client,
-		ClusterProfile: params.ClusterProfile,
+		Profile:        params.Profile,
 		patchHelper:    helper,
 		controllerName: params.ControllerName,
 	}, nil
 }
 
-// ClusterProfileScope defines the basic context for an actuator to operate upon.
-type ClusterProfileScope struct {
+// ProfileScope defines the basic context for an actuator to operate upon.
+type ProfileScope struct {
 	logr.Logger
 	client         client.Client
 	patchHelper    *patch.Helper
-	ClusterProfile *configv1alpha1.ClusterProfile
+	Profile        client.Object
 	controllerName string
 }
 
 // PatchObject persists the feature configuration and status.
-func (s *ClusterProfileScope) PatchObject(ctx context.Context) error {
+func (s *ProfileScope) PatchObject(ctx context.Context) error {
 	return s.patchHelper.Patch(
 		ctx,
-		s.ClusterProfile,
+		s.Profile,
 	)
 }
 
-// Close closes the current scope persisting the clusterprofile configuration and status.
-func (s *ClusterProfileScope) Close(ctx context.Context) error {
+// Close closes the current scope persisting the Profile configuration and status.
+func (s *ProfileScope) Close(ctx context.Context) error {
 	return s.PatchObject(ctx)
 }
 
-// Name returns the ClusterProfile name.
-func (s *ClusterProfileScope) Name() string {
-	return s.ClusterProfile.Name
+// Name returns the Profile name.
+func (s *ProfileScope) Name() string {
+	return s.Profile.GetName()
 }
 
 // ControllerName returns the name of the controller that
-// created the ClusterProfileScope.
-func (s *ClusterProfileScope) ControllerName() string {
+// created the ProfileScope.
+func (s *ProfileScope) ControllerName() string {
 	return s.controllerName
 }
 
 // GetSelector returns the ClusterSelector
-func (s *ClusterProfileScope) GetSelector() string {
-	return string(s.ClusterProfile.Spec.ClusterSelector)
+func (s *ProfileScope) GetSelector() string {
+	spec := s.GetSpec()
+	return string(spec.ClusterSelector)
 }
 
 // SetMatchingClusterRefs sets the feature status.
-func (s *ClusterProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
-	s.ClusterProfile.Status.MatchingClusterRefs = matchingClusters
+func (s *ProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
+	status := s.GetStatus()
+	status.MatchingClusterRefs = matchingClusters
 }
 
-// IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
-func (s *ClusterProfileScope) IsContinuousSync() bool {
-	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuous ||
-		s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
+// IsContinuousSync returns true if Profile is set to keep updating workload cluster
+func (s *ProfileScope) IsContinuousSync() bool {
+	spec := s.GetSpec()
+	return spec.SyncMode == configv1alpha1.SyncModeContinuous ||
+		spec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
 }
 
-// IsOneTimeSync returns true if ClusterProfile sync mod is set to one time
-func (s *ClusterProfileScope) IsOneTimeSync() bool {
-	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeOneTime
+// IsOneTimeSync returns true if Profile sync mod is set to one time
+func (s *ProfileScope) IsOneTimeSync() bool {
+	spec := s.GetSpec()
+	return spec.SyncMode == configv1alpha1.SyncModeOneTime
 }
 
-// IsDryRunSync returns true if ClusterProfile sync mod is set to dryRun
-func (s *ClusterProfileScope) IsDryRunSync() bool {
-	return s.ClusterProfile.Spec.SyncMode == configv1alpha1.SyncModeDryRun
+// IsDryRunSync returns true if Profile sync mod is set to dryRun
+func (s *ProfileScope) IsDryRunSync() bool {
+	spec := s.GetSpec()
+	return spec.SyncMode == configv1alpha1.SyncModeDryRun
+}
+
+func (s *ProfileScope) GetSpec() *configv1alpha1.Spec {
+	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
+	case configv1alpha1.ClusterProfileKind:
+		clusterProfile := s.Profile.(*configv1alpha1.ClusterProfile)
+		return &clusterProfile.Spec
+	case configv1alpha1.ProfileKind:
+		profile := s.Profile.(*configv1alpha1.Profile)
+		return &profile.Spec
+	}
+
+	// This will never happen as there is a validation creating scope
+	return nil
+}
+
+func (s *ProfileScope) GetStatus() *configv1alpha1.Status {
+	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
+	case configv1alpha1.ClusterProfileKind:
+		clusterProfile := s.Profile.(*configv1alpha1.ClusterProfile)
+		return &clusterProfile.Status
+	case configv1alpha1.ProfileKind:
+		profile := s.Profile.(*configv1alpha1.Profile)
+		return &profile.Status
+	}
+
+	// This will never happen as there is a validation creating scope
+	return nil
+}
+
+func (s *ProfileScope) GetClusterProfile() *configv1alpha1.ClusterProfile {
+	return s.Profile.(*configv1alpha1.ClusterProfile)
+}
+
+func (s *ProfileScope) GetProfile() *configv1alpha1.Profile {
+	return s.Profile.(*configv1alpha1.Profile)
+}
+
+func (s *ProfileScope) GetKind() string {
+	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
+	case configv1alpha1.ClusterProfileKind:
+		return configv1alpha1.ClusterProfileKind
+	case configv1alpha1.ProfileKind:
+		return configv1alpha1.ProfileKind
+	}
+
+	return ""
 }

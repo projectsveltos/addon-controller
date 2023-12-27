@@ -149,7 +149,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		}
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	// needs to be instructed which Deployment/StatefulSet/DaemonSet instances require this behavior.
 	// Update corresponding Reloader instance (instance will be deleted if Reloader is set to false)
 	resources := convertHelmResourcesToObjectReference(helmResources)
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureHelm,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureHelm,
 		resources, clusterSummary, logger)
 	if err != nil {
 		return err
@@ -225,18 +225,18 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
 		configv1alpha1.FeatureHelm, nil, []configv1alpha1.Chart{})
 	if err != nil {
 		return err
@@ -1172,12 +1172,12 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d",
 		len(chartDeployed)))
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	return updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
+	return updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
 }
 
 // undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
@@ -1370,13 +1370,13 @@ func getHelmChartConflictManager(ctx context.Context, c client.Client,
 		return defaultMessage
 	}
 
-	clusterProfileManager, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummaryManager)
-	if err != nil || clusterProfileManager == nil {
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummaryManager)
+	if err != nil || profileOwnerRef == nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile. Err: %v", clusterSummaryManagerName))
 		return defaultMessage
 	}
 
-	return fmt.Sprintf("Cannot manage it. Currently managed by %s %s", clusterProfileManager.Kind, clusterProfileManager.Name)
+	return fmt.Sprintf("Cannot manage it. Currently managed by %s %s", profileOwnerRef.Kind, profileOwnerRef.Name)
 }
 
 // createReportForUnmanagedHelmRelease creates ReleaseReport for an un-managed (by this instance) helm release
@@ -1417,12 +1417,12 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+	clusterReportName := getClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {

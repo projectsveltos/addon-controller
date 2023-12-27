@@ -255,7 +255,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
-	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
+	profile, err := configv1alpha1.GetProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, err
 		}
 
-		deployer.AddOwnerReference(policy, clusterProfile)
+		deployer.AddOwnerReference(policy, profile)
 
 		if deployingToMgmtCluster {
 			// When deploying resources in the management cluster, just setting ClusterProfile as OwnerReference is
@@ -661,7 +661,7 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
-	clusterProfile, err := configv1alpha1.GetClusterProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
+	profile, err := configv1alpha1.GetProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
@@ -709,7 +709,7 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 		for j := range list.Items {
 			r := list.Items[j]
-			rr, err := undeployStaleResource(ctx, isMgmtCluster, remoteClient, clusterProfile, clusterSummary,
+			rr, err := undeployStaleResource(ctx, isMgmtCluster, remoteClient, profile, clusterSummary,
 				r, currentPolicies, logger)
 			if err != nil {
 				return nil, err
@@ -725,7 +725,7 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 }
 
 func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient client.Client,
-	clusterProfile *configv1alpha1.ClusterProfile, clusterSummary *configv1alpha1.ClusterSummary, r unstructured.Unstructured,
+	profile client.Object, clusterSummary *configv1alpha1.ClusterSummary, r unstructured.Unstructured,
 	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) (*configv1alpha1.ResourceReport, error) {
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("considering %s/%s", r.GetNamespace(), r.GetName()))
@@ -752,7 +752,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 	// policy would be withdrawn
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, clusterProfile) &&
+		if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, profile) &&
 			!isLeavePolicies(clusterSummary, logger) {
 
 			resourceReport = &configv1alpha1.ResourceReport{
@@ -766,7 +766,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	} else {
 		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
 
-		deployer.RemoveOwnerReference(&r, clusterProfile)
+		deployer.RemoveOwnerReference(&r, profile)
 
 		if len(r.GetOwnerReferences()) != 0 {
 			// Other ClusterSummary are still deploying this very same policy
@@ -888,7 +888,7 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 // No action in DryRun mode.
 func updateClusterConfiguration(ctx context.Context, c client.Client,
 	clusterSummary *configv1alpha1.ClusterSummary,
-	clusterProfileOwnerRef *metav1.OwnerReference,
+	profileOwnerRef *metav1.OwnerReference,
 	featureID configv1alpha1.FeatureID,
 	policyDeployed []configv1alpha1.Resource,
 	chartDeployed []configv1alpha1.Chart) error {
@@ -915,19 +915,28 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		}
 
 		var index int
-		index, err = configv1alpha1.GetClusterConfigurationSectionIndex(clusterConfiguration, clusterProfileOwnerRef.Name)
+		index, err = configv1alpha1.GetClusterConfigurationSectionIndex(clusterConfiguration, profileOwnerRef.Kind,
+			profileOwnerRef.Name)
 		if err != nil {
 			return err
 		}
 
 		isPresent := false
-		for i := range clusterConfiguration.Status.ClusterProfileResources[index].Features {
-			if clusterConfiguration.Status.ClusterProfileResources[index].Features[i].FeatureID == featureID {
+
+		var profileResources *configv1alpha1.ProfileResource
+		if profileOwnerRef.Kind == configv1alpha1.ClusterProfileKind {
+			profileResources = &clusterConfiguration.Status.ClusterProfileResources[index]
+		} else {
+			profileResources = &clusterConfiguration.Status.ProfileResources[index]
+		}
+
+		for i := range profileResources.Features {
+			if profileResources.Features[i].FeatureID == featureID {
 				if policyDeployed != nil {
-					clusterConfiguration.Status.ClusterProfileResources[index].Features[i].Resources = policyDeployed
+					profileResources.Features[i].Resources = policyDeployed
 				}
 				if chartDeployed != nil {
-					clusterConfiguration.Status.ClusterProfileResources[index].Features[i].Charts = chartDeployed
+					profileResources.Features[i].Charts = chartDeployed
 				}
 				isPresent = true
 				break
@@ -935,15 +944,16 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		}
 
 		if !isPresent {
-			if clusterConfiguration.Status.ClusterProfileResources[index].Features == nil {
-				clusterConfiguration.Status.ClusterProfileResources[index].Features = make([]configv1alpha1.Feature, 0)
+			if profileResources.Features == nil {
+				profileResources.Features = make([]configv1alpha1.Feature, 0)
 			}
-			clusterConfiguration.Status.ClusterProfileResources[index].Features = append(clusterConfiguration.Status.ClusterProfileResources[index].Features,
+			profileResources.Features = append(
+				profileResources.Features,
 				configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
 			)
 		}
 
-		clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *clusterProfileOwnerRef)
+		clusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, *profileOwnerRef)
 
 		return c.Status().Update(ctx, clusterConfiguration)
 	})

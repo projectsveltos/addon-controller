@@ -48,15 +48,16 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
-	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -134,8 +135,9 @@ func main() {
 		libsveltosv1alpha1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
-	var clusterProfileController controller.Controller
+	var clusterProfileController, profileController controller.Controller
 	var clusterProfileReconciler *controllers.ClusterProfileReconciler
+	var profileReconciler *controllers.ProfileReconciler
 	if shardKey == "" {
 		// Only if shardKey is not set, start ClusterProfile reconcilers.
 		// When shardKey is set, only ClusterSummary reconciler will be started and only
@@ -144,6 +146,12 @@ func main() {
 		clusterProfileController, err = clusterProfileReconciler.SetupWithManager(mgr)
 		if err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
+			os.Exit(1)
+		}
+		profileReconciler = getProfileReconciler(mgr)
+		profileController, err = profileReconciler.SetupWithManager(mgr)
+		if err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ProfileKind)
 			os.Exit(1)
 		}
 	}
@@ -163,6 +171,7 @@ func main() {
 	setupIndexes(ctx, mgr)
 
 	startWatchers(ctx, mgr, clusterProfileReconciler, clusterProfileController,
+		profileReconciler, profileController,
 		clusterSummaryReconciler, clusterSummaryController)
 
 	go compliances.InitializeManager(ctx, ctrl.Log.WithName("addon-compliances"),
@@ -302,6 +311,7 @@ func isFluxInstalled(ctx context.Context, c client.Client) (bool, error) {
 
 func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 	clusterProfileReconciler *controllers.ClusterProfileReconciler, clusterProfileController controller.Controller,
+	profileReconciler *controllers.ProfileReconciler, profileController controller.Controller,
 	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller,
 	logger logr.Logger) {
 
@@ -323,6 +333,12 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 				setupLog.V(logsettings.LogInfo).Info("CAPI present.")
 				if clusterProfileReconciler != nil {
 					err = clusterProfileReconciler.WatchForCAPI(mgr, clusterProfileController)
+					if err != nil {
+						continue
+					}
+				}
+				if profileReconciler != nil {
+					err = profileReconciler.WatchForCAPI(mgr, profileController)
 					if err != nil {
 						continue
 					}
@@ -369,16 +385,31 @@ func fluxWatchers(ctx context.Context, mgr ctrl.Manager,
 
 func startWatchers(ctx context.Context, mgr manager.Manager,
 	clusterProfileReconciler *controllers.ClusterProfileReconciler, clusterProfileController controller.Controller,
+	profileReconciler *controllers.ProfileReconciler, profileController controller.Controller,
 	clusterSummaryReconciler *controllers.ClusterSummaryReconciler, clusterSummaryController controller.Controller) {
 
 	go capiWatchers(ctx, mgr,
 		clusterProfileReconciler, clusterProfileController,
+		profileReconciler, profileController,
 		clusterSummaryReconciler, clusterSummaryController,
 		setupLog)
 
 	go fluxWatchers(ctx, mgr,
 		clusterSummaryReconciler, clusterSummaryController,
 		setupLog)
+}
+
+func getProfileReconciler(mgr manager.Manager) *controllers.ProfileReconciler {
+	return &controllers.ProfileReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ProfileMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
+		Profiles:             make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Mux:                  sync.Mutex{},
+		ConcurrentReconciles: concurrentReconciles,
+	}
 }
 
 func getClusterProfileReconciler(mgr manager.Manager) *controllers.ClusterProfileReconciler {

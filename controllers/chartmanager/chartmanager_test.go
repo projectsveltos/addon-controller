@@ -56,7 +56,7 @@ var _ = Describe("Chart manager", func() {
 				ClusterNamespace: randomString(),
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
 							RepositoryURL:    "https://kyverno.github.io/kyverno/",

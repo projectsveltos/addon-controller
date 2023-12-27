@@ -17,22 +17,30 @@ limitations under the License.
 package controllers
 
 var (
-	UpdateClusterSummaries           = (*ClusterProfileReconciler).updateClusterSummaries
-	CreateClusterSummary             = (*ClusterProfileReconciler).createClusterSummary
-	UpdateClusterSummary             = (*ClusterProfileReconciler).updateClusterSummary
-	DeleteClusterSummary             = (*ClusterProfileReconciler).deleteClusterSummary
-	UpdateClusterConfiguration       = (*ClusterProfileReconciler).updateClusterConfiguration
-	CleanClusterConfiguration        = (*ClusterProfileReconciler).cleanClusterConfiguration
-	CleanClusterReports              = (*ClusterProfileReconciler).cleanClusterReports
-	UpdateClusterReports             = (*ClusterProfileReconciler).updateClusterReports
-	UpdateClusterSummarySyncMode     = (*ClusterProfileReconciler).updateClusterSummarySyncMode
-	GetMatchingClusters              = (*ClusterProfileReconciler).getMatchingClusters
-	GetMaxUpdate                     = (*ClusterProfileReconciler).getMaxUpdate
-	ReviseUpdatedAndUpdatingClusters = (*ClusterProfileReconciler).reviseUpdatedAndUpdatingClusters
-	GetUpdatedAndUpdatingClusters    = (*ClusterProfileReconciler).getUpdatedAndUpdatingClusters
+	UpdateClusterSummaries                = updateClusterSummaries
+	CreateClusterSummary                  = createClusterSummary
+	UpdateClusterSummary                  = updateClusterSummary
+	DeleteClusterSummary                  = deleteClusterSummary
+	UpdateClusterConfigurationWithProfile = updateClusterConfigurationWithProfile
+	CleanClusterConfiguration             = cleanClusterConfiguration
+	CleanClusterReports                   = cleanClusterReports
+	UpdateClusterReports                  = updateClusterReports
+	UpdateClusterSummarySyncMode          = updateClusterSummarySyncMode
+	GetMatchingClusters                   = getMatchingClusters
+	GetMaxUpdate                          = getMaxUpdate
+	ReviseUpdatedAndUpdatingClusters      = reviseUpdatedAndUpdatingClusters
+	GetUpdatedAndUpdatingClusters         = getUpdatedAndUpdatingClusters
+)
 
+var (
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
 	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
+)
+
+var (
+	RequeueProfileForCluster   = (*ProfileReconciler).requeueProfileForCluster
+	RequeueProfileForMachine   = (*ProfileReconciler).requeueProfileForMachine
+	LimitReferencesToNamespace = (*ProfileReconciler).limitReferencesToNamespace
 )
 
 var (

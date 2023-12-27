@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 )
 
 var (
@@ -50,7 +51,8 @@ var _ = Describe("Dependencies", func() {
 		clusterProfileDependency.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfileDependency)).To(Succeed())
 		verifyClusterProfileMatches(clusterProfileDependency)
-		verifyClusterSummary(clusterProfileDependency, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName, clusterProfileDependency.Name,
+			&clusterProfileDependency.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -59,7 +61,8 @@ var _ = Describe("Dependencies", func() {
 		clusterProfile.Spec.DependsOn = []string{clusterProfileDependency.Name}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 		verifyClusterProfileMatches(clusterProfile)
-		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName, clusterProfile.Name,
+			&clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfileDependency.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -76,7 +79,9 @@ var _ = Describe("Dependencies", func() {
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
-		clusterSummaryDependency := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummaryDependency := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -94,7 +99,9 @@ var _ = Describe("Dependencies", func() {
 		}
 
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
-		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Verifying clusterSummary is not deployed till the dependencies are provisioned")
 		Eventually(func() bool {

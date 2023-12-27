@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -86,7 +87,9 @@ var _ = Describe("SyncMode one time", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -138,7 +141,7 @@ var _ = Describe("SyncMode one time", func() {
 
 		// Since SyncMode is OneTime ClusterProfile's changes are not propagated to already existing ClusterSummary.
 		Byf("Verifying ClusterSummary still references the ConfigMap")
-		currentClusterSummary, err := getClusterSummary(context.TODO(),
+		currentClusterSummary, err := getClusterSummary(context.TODO(), controllers.ClusterProfileLabelName,
 			clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).ToNot(BeNil())

@@ -39,7 +39,6 @@ import (
 
 type currentClusterObjects struct {
 	Cluster                map[string]interface{}
-	SveltosCluster         map[string]interface{}
 	KubeadmControlPlane    map[string]interface{}
 	InfrastructureProvider map[string]interface{}
 	MgtmResources          map[string]map[string]interface{}
@@ -104,7 +103,8 @@ func fetchKubeadmControlPlane(ctx context.Context, config *rest.Config, cluster 
 // All fetched objects are in the management cluster.
 // Currently limited to Cluster and Infrastructure Provider
 func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, logger logr.Logger) (*currentClusterObjects, error) {
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	logger logr.Logger) (*currentClusterObjects, error) {
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch %s/%s", clusterNamespace, clusterName))
 
@@ -116,7 +116,6 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 
 	var cluster *clusterv1.Cluster
 	var unstructuredCluster map[string]interface{}
-	var sveltosCluster map[string]interface{}
 	var provider *unstructured.Unstructured
 	var kubeadmControlPlane *unstructured.Unstructured
 	if clusterType == libsveltosv1alpha1.ClusterTypeCapi {
@@ -135,15 +134,14 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 			return nil, err
 		}
 	} else {
-		sveltosCluster, err = runtime.DefaultUnstructuredConverter.ToUnstructured(genericCluster)
+		unstructuredCluster, err = runtime.DefaultUnstructuredConverter.ToUnstructured(genericCluster)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	result := &currentClusterObjects{
-		Cluster:        unstructuredCluster,
-		SveltosCluster: sveltosCluster,
+		Cluster: unstructuredCluster,
 	}
 	if provider != nil {
 		result.InfrastructureProvider = provider.UnstructuredContent()

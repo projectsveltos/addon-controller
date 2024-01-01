@@ -33,6 +33,8 @@ import (
 )
 
 const (
+	autoscaler = "autoscaler"
+
 	autoscalerServiceAccount = `apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -121,7 +123,7 @@ var _ = Describe("Feature", func() {
 			{
 				Resource: corev1.ObjectReference{
 					Kind: "Secret",
-					Name: "autoscaler",
+					Name: autoscaler,
 				},
 				Identifier: "AutoscalerSecret",
 			},
@@ -151,7 +153,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentServiceAccount := &corev1.ServiceAccount{}
 			return k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-" + autoscaler},
 				currentServiceAccount)
 		}, timeout, pollingInterval).Should(BeNil())
 
@@ -159,13 +161,13 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentSecret := &corev1.Secret{}
 			return k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 				currentSecret)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		mgmtCurrentSecret := &corev1.Secret{}
 		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 			mgmtCurrentSecret)).To(Succeed())
 
 		Byf("Getting client to access the workload cluster")
@@ -177,13 +179,13 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentSecret := &corev1.Secret{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 				currentSecret)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		workloadCurrentSecret := &corev1.Secret{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 			workloadCurrentSecret)).To(Succeed())
 
 		Expect(mgmtCurrentSecret.Data).ToNot(BeNil())
@@ -201,7 +203,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentServiceAccount := &corev1.ServiceAccount{}
 			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-" + autoscaler},
 				currentServiceAccount)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -210,7 +212,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentSecret := &corev1.Secret{}
 			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 				currentSecret)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -219,7 +221,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentSecret := &corev1.Secret{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: "autoscaler"},
+				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
 				currentSecret)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

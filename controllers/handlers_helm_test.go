@@ -578,7 +578,7 @@ var _ = Describe("Hash methods", func() {
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 		}
 
-		namespace := "reconcile" + randomString()
+		namespace := randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),

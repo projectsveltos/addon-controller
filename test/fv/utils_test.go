@@ -243,7 +243,7 @@ func deleteProfile(profile *configv1alpha1.Profile) {
 
 func randomString() string {
 	const length = 10
-	return util.RandomString(length)
+	return "fv-" + util.RandomString(length)
 }
 
 func getClusterSummary(ctx context.Context,

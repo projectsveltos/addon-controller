@@ -31,6 +31,10 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/sharding"
 )
 
+const (
+	predicates = "predicates"
+)
+
 var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 	var logger logr.Logger
 	var cluster *libsveltosv1alpha1.SveltosCluster
@@ -40,7 +44,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 		cluster = &libsveltosv1alpha1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
-				Namespace: "predicates" + randomString(),
+				Namespace: predicates + randomString(),
 			},
 		}
 	})
@@ -221,7 +225,7 @@ var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
-				Namespace: "predicates" + randomString(),
+				Namespace: predicates + randomString(),
 			},
 		}
 	})
@@ -378,7 +382,7 @@ var _ = Describe("ClusterProfile Predicates: MachinePredicates", func() {
 		machine = &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamMachineNamePrefix + randomString(),
-				Namespace: "predicates" + randomString(),
+				Namespace: predicates + randomString(),
 			},
 		}
 	})

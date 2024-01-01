@@ -42,6 +42,10 @@ import (
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
+const (
+	sveltosKubeconfigPostfix = "-kubeconfig"
+)
+
 // addOwnerReference adds owner as OwnerReference of obj
 func addOwnerReference(ctx context.Context, c client.Client, obj, owner client.Object) {
 	Expect(addTypeInformationToObject(testEnv.Scheme(), owner)).To(Succeed())
@@ -144,7 +148,7 @@ func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *core
 
 func randomString() string {
 	const length = 10
-	return util.RandomString(length)
+	return "a-" + util.RandomString(length)
 }
 
 func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileName, clusterName string,
@@ -239,7 +243,7 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: clusterSummary.Spec.ClusterNamespace,
-			Name:      clusterSummary.Spec.ClusterName + "-kubeconfig",
+			Name:      clusterSummary.Spec.ClusterName + sveltosKubeconfigPostfix,
 		},
 		Data: map[string][]byte{
 			"data": testEnv.Kubeconfig,

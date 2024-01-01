@@ -40,7 +40,7 @@ var _ = Describe("ClusterSummaryTransformations map functions", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "map-function" + randomString()
+		namespace = randomString()
 	})
 
 	It("RequeueClusterSummaryForReference returns matching ClusterSummary", func() {

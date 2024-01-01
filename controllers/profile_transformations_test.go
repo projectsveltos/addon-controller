@@ -42,7 +42,7 @@ var _ = Describe("Profile Transformations", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "map-function" + randomString()
+		namespace = randomString()
 	})
 
 	It("requeueProfileForCluster returns matching Profiles", func() {

@@ -41,7 +41,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "map-function" + randomString()
+		namespace = randomString()
 	})
 
 	It("requeueClusterProfileForCluster returns matching ClusterProfiles", func() {

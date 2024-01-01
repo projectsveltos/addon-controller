@@ -56,7 +56,7 @@ var _ = Describe("KustomizeRefs", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -258,7 +258,7 @@ var _ = Describe("Hash methods", func() {
 			gitRepositories = append(gitRepositories, gitRepository)
 		}
 
-		namespace := "reconcile" + randomString()
+		namespace := randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),

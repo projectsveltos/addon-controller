@@ -54,7 +54,7 @@ var _ = Describe("ClustersummaryController", func() {
 	var clusterName string
 
 	BeforeEach(func() {
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		clusterName = randomString()
 		cluster = &clusterv1.Cluster{
@@ -883,7 +883,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{

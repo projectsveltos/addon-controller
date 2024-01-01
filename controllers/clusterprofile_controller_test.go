@@ -186,7 +186,7 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		key1 := randomString()
 		value1 := randomString()

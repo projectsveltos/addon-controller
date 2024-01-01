@@ -37,7 +37,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	BeforeEach(func() {
 		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
 

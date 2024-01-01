@@ -110,7 +110,7 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
-		podName := "demo" + randomString()
+		podName := randomString()
 		Byf("Create a secret with a Pod")
 		secret := createSecretWithPolicy(configMapNs, namePrefix+randomString(), fmt.Sprintf(demoPod, podName))
 		Expect(k8sClient.Create(context.TODO(), secret)).To(Succeed())
@@ -199,7 +199,7 @@ var _ = Describe("Feature", func() {
 			policies, nil)
 
 		By("Updating Secret to reference new Pod")
-		newPodName := "prod" + randomString()
+		newPodName := randomString()
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}, currentSecret)).To(Succeed())
 		currentSecret.Data["policy0.yaml"] = []byte(fmt.Sprintf(demoPod, newPodName))

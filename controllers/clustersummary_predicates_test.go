@@ -276,7 +276,7 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 		gitRepository = &sourcev1.GitRepository{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
-				Namespace: "predicates" + randomString(),
+				Namespace: predicates + randomString(),
 			},
 		}
 

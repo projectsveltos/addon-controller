@@ -335,8 +335,8 @@ var _ = Describe("Profile: Reconciler", func() {
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-							Namespace: "c-" + randomString(),
-							Name:      "c-" + randomString(),
+							Namespace: randomString(),
+							Name:      randomString(),
 						},
 					},
 				},
@@ -348,13 +348,13 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-				Namespace: "b-" + randomString(),
-				Name:      "b-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 			{
 				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-				Namespace: "d-" + randomString(),
-				Name:      "d-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 
@@ -393,13 +393,13 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: "a-" + randomString(),
-				Name:      "b-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: "c-" + randomString(),
-				Name:      "d-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 
@@ -430,8 +430,8 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: "a-" + randomString(),
-				Name:      "b-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 
@@ -463,14 +463,14 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: "a-" + randomString(),
-				Name:      "b-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 			{
 
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				Namespace: "c-" + randomString(),
-				Name:      "d-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 
@@ -630,8 +630,8 @@ var _ = Describe("Profile: Reconciler", func() {
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-							Namespace: "c-" + randomString(),
-							Name:      "c-" + randomString(),
+							Namespace: randomString(),
+							Name:      randomString(),
 						},
 					},
 				},

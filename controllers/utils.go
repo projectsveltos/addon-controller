@@ -50,6 +50,10 @@ import (
 //+kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
 //+kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch;impersonate
 
+const (
+	nameSeparator = "--"
+)
+
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
@@ -169,12 +173,13 @@ func getClusterReportName(profileKind, profileName, clusterName string, clusterT
 	if profileKind == configv1alpha1.ProfileKind {
 		prefix = "p--"
 	}
-	return prefix + profileName + "--" + strings.ToLower(string(clusterType)) + "--" + clusterName
+	return prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
+		nameSeparator + clusterName
 }
 
 func getClusterConfigurationName(clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
 	// TODO: shorten this value
-	return strings.ToLower(string(clusterType)) + "--" + clusterName
+	return strings.ToLower(string(clusterType)) + nameSeparator + clusterName
 }
 
 // getKeyFromObject returns the Key that can be used in the internal reconciler maps.

@@ -196,8 +196,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	It("SetMatchingClusters sets ClusterProfile.Status.MatchingCluster", func() {
 		matchingClusters := []corev1.ObjectReference{
 			{
-				Namespace: "t-" + randomString(),
-				Name:      "c-" + randomString(),
+				Namespace: randomString(),
+				Name:      randomString(),
 			},
 		}
 		objects := []client.Object{clusterProfile, profile}

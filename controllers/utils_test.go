@@ -141,7 +141,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -241,7 +241,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "cs" + randomString(),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -275,7 +275,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "cs" + randomString(),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,

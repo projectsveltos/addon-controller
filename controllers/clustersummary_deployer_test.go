@@ -35,11 +35,11 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	var clusterName string
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 
 		namespace = randomString()
 
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 
 		clusterProfile = &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
@@ -184,7 +184,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		status := configv1alpha1.FeatureStatusFailed
 		statusErr := fmt.Errorf("failed to deploy")
 		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources, &status,
-			hash, statusErr, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			hash, statusErr, textlogger.NewLogger(textlogger.NewConfig()))
 
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
@@ -194,7 +194,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		status = configv1alpha1.FeatureStatusProvisioned
 		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureResources, &status,
-			hash, nil, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			hash, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioned))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(BeNil())
@@ -231,7 +231,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -244,7 +244,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
@@ -255,7 +255,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// DeployeFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run DeployFeature then validate key is not added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -292,7 +292,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
-		ResourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		ResourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
@@ -318,7 +318,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			return reflect.DeepEqual(configMap.Data, clusterConfigMap.Data)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
 
 		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
@@ -328,7 +328,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// does not match anymore the hash of all referenced ResourceRefs). In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -367,7 +367,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Client)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
 
 		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
@@ -376,7 +376,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run DeployFeature then validate key is added to InProgress
-		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("request is queued"))
 
@@ -405,7 +405,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
@@ -415,7 +415,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
 		// adds key to InProgress).
 		// So run UndeployFeature then validate key is not added to InProgress
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -442,7 +442,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
@@ -451,7 +451,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
 		// So run UndeployFeature then validate key is added to InProgress
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
@@ -479,7 +479,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, true)
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -490,7 +490,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
-		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("cleanup of Resources still in progress. Wait before redeploying"))
 	})
@@ -514,7 +514,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), c)
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, false)
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -525,7 +525,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
 
-		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Resources still in progress. Wait before cleanup"))
 	})

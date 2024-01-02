@@ -65,7 +65,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	It("Return nil,error if Profile/ClusterProfile is not specified", func() {
 		cpParams := scope.ProfileScopeParams{
 			Client: c,
-			Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger: textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		cpScope, err := scope.NewProfileScope(cpParams)
@@ -76,7 +76,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	It("Return nil,error if client is not specified", func() {
 		cpParams := scope.ProfileScopeParams{
 			Profile: clusterProfile,
-			Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		cpScope, err := scope.NewProfileScope(cpParams)
@@ -87,7 +87,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	It("Return nil,error if any resource but Profile/ClusterProfile is passed", func() {
 		cpParams := scope.ProfileScopeParams{
 			Client:  c,
-			Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			Profile: &corev1.Node{},
 		}
 
@@ -105,7 +105,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -125,7 +125,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -145,7 +145,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -162,7 +162,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -182,7 +182,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -205,7 +205,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -224,7 +224,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -261,7 +261,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -278,7 +278,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -297,7 +297,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -314,7 +314,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -334,7 +334,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)
@@ -352,7 +352,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			params := scope.ProfileScopeParams{
 				Client:  c,
 				Profile: objects[i],
-				Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+				Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			}
 
 			scope, err := scope.NewProfileScope(params)

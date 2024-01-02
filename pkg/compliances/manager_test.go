@@ -100,7 +100,7 @@ var _ = Describe("Constraints", func() {
 		Expect(testEnv.Create(context.TODO(), addonCompliance2)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance2)).To(Succeed())
 
-		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.Client, 10)
+		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Config, testEnv.Client, 10)
 		manager := compliances.GetManager()
 
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
@@ -161,7 +161,7 @@ var _ = Describe("Constraints", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), nil, c, 10)
+		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), nil, c, 10)
 		manager := compliances.GetManager()
 		compliances.ReEvaluateClusters(manager, context.TODO())
 

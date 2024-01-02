@@ -37,7 +37,7 @@ var _ = Describe("AddonCompliance watcher", func() {
 	BeforeEach(func() {
 		compliances.Reset()
 		watcherCtx, cancel = context.WithCancel(context.Background())
-		compliances.InitializeManagerWithSkip(watcherCtx, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))), testEnv.Config, testEnv.Client, 10)
+		compliances.InitializeManagerWithSkip(watcherCtx, textlogger.NewLogger(textlogger.NewConfig()), testEnv.Config, testEnv.Client, 10)
 	})
 
 	AfterEach(func() {
@@ -57,7 +57,7 @@ var _ = Describe("AddonCompliance watcher", func() {
 		manager := compliances.GetManager()
 		manager.SetReEvaluate(false)
 
-		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig()))
 
 		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
@@ -77,7 +77,7 @@ var _ = Describe("AddonCompliance watcher", func() {
 	})
 
 	It("watchAddonCompliance starts watcher which reacts to AddonCompliance update events (labels change)", func() {
-		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig()))
 
 		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{
@@ -118,7 +118,7 @@ var _ = Describe("AddonCompliance watcher", func() {
 	})
 
 	It("watchAddonCompliance starts watcher which reacts to AddonCompliance update events (spec change)", func() {
-		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		go compliances.WatchAddonCompliance(watcherCtx, testEnv.Config, textlogger.NewLogger(textlogger.NewConfig()))
 
 		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
 			ObjectMeta: metav1.ObjectMeta{

@@ -37,7 +37,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForFluxSources",
 		"reference",
@@ -104,7 +104,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForConfigMap",
 		"reference",
@@ -167,7 +167,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
 ) []reconcile.Request {
 
 	cluster := o
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForCluster",
 		"namespace",

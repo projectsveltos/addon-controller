@@ -37,7 +37,7 @@ func requeueForCluster(cluster client.Object,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
 		"cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
 
 	logger.V(logs.LogDebug).Info("reacting to Cluster change")
@@ -89,7 +89,7 @@ func requeueClusterProfileForMachine(machine client.Object,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
 ) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
 		"machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Machine change")

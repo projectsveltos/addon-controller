@@ -85,7 +85,7 @@ var _ = Describe("Template instantiation", func() {
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
 			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -99,7 +99,7 @@ var _ = Describe("Template instantiation", func() {
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
 			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
@@ -145,7 +145,7 @@ valuesTemplate: |
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
 			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})

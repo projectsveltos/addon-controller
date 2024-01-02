@@ -41,7 +41,7 @@ import (
 var _ = Describe("ResourceSummary Deployer", func() {
 	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
 		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -53,7 +53,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 
 	It("deployResourceSummaryCRD deploys ResourceSummary CRD", func() {
 		Expect(controllers.DeployResourceSummaryCRD(context.TODO(), testEnv.Config,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -78,7 +78,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterNamespace := randomString()
 		clusterSummaryName := randomString()
 		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
-			clusterNamespace, clusterSummaryName, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			clusterNamespace, clusterSummaryName, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
 		Expect(c.Get(context.TODO(),
@@ -120,7 +120,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployResourceSummaryInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
 			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, nil,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -137,7 +137,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
 			clusterNamespace, clusterName, "", clusterType,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
 
@@ -165,7 +165,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.RemoveDriftDetectionManagerFromManagementCluster(context.TODO(), clusterNamespace, clusterName,
-			clusterType, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			clusterType, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Verify resources are gone
 		Eventually(func() bool {

@@ -39,7 +39,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 	var configMap *corev1.ConfigMap
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		configMap = &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -176,7 +176,7 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 	var secret *corev1.Secret
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -272,7 +272,7 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 	var gitRepository *sourcev1.GitRepository
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		gitRepository = &sourcev1.GitRepository{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),

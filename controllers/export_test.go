@@ -20,12 +20,12 @@ var (
 	UpdateClusterSummaries                = updateClusterSummaries
 	CreateClusterSummary                  = createClusterSummary
 	UpdateClusterSummary                  = updateClusterSummary
-	DeleteClusterSummary                  = deleteClusterSummary
 	UpdateClusterConfigurationWithProfile = updateClusterConfigurationWithProfile
 	CleanClusterConfiguration             = cleanClusterConfiguration
 	CleanClusterReports                   = cleanClusterReports
-	UpdateClusterReports                  = updateClusterReports
+	CleanClusterSummaries                 = cleanClusterSummaries
 	UpdateClusterSummarySyncMode          = updateClusterSummarySyncMode
+	UpdateClusterReports                  = updateClusterReports
 	GetMatchingClusters                   = getMatchingClusters
 	GetMaxUpdate                          = getMaxUpdate
 	ReviseUpdatedAndUpdatingClusters      = reviseUpdatedAndUpdatingClusters

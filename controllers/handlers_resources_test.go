@@ -134,7 +134,7 @@ var _ = Describe("HandlersResource", func() {
 		Eventually(func() error {
 			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
-				textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+				textlogger.NewLogger(textlogger.NewConfig()))
 		}, timeout, pollingInterval).Should(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -219,7 +219,7 @@ var _ = Describe("HandlersResource", func() {
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect role0 and cluster0 to be deleted. role1 should remain as ConfigLabelName is not set on it
@@ -274,7 +274,7 @@ var _ = Describe("HandlersResource", func() {
 		}
 
 		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
-			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// wait for cache to sync
 		Eventually(func() bool {
@@ -360,7 +360,7 @@ var _ = Describe("Hash methods", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -374,7 +374,7 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.ResourcesHash(context.TODO(), c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		hash, err := controllers.ResourcesHash(context.TODO(), c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})

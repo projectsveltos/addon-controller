@@ -259,7 +259,13 @@ func updateClusterConfigurations(ctx context.Context, c client.Client, profileSc
 // - remove (Cluster)Profile as OwnerReference
 // - if no more OwnerReferences are left, delete ClusterConfigurations
 func cleanClusterConfigurations(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) error {
-	clusterConfiguratioList := &configv1alpha1.ClusterConfigurationList{}
+	clusterConfigurationList := &configv1alpha1.ClusterConfigurationList{}
+
+	listOptions := []client.ListOption{}
+	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+		listOptions = append(listOptions,
+			client.InNamespace(profileScope.Profile.GetNamespace()))
+	}
 
 	matchingClusterMap := make(map[string]bool)
 
@@ -272,13 +278,13 @@ func cleanClusterConfigurations(ctx context.Context, c client.Client, profileSco
 		matchingClusterMap[info(ref.Namespace, getClusterConfigurationName(ref.Name, clusterproxy.GetClusterType(ref)))] = true
 	}
 
-	err := c.List(ctx, clusterConfiguratioList)
+	err := c.List(ctx, clusterConfigurationList, listOptions...)
 	if err != nil {
 		return err
 	}
 
-	for i := range clusterConfiguratioList.Items {
-		cc := &clusterConfiguratioList.Items[i]
+	for i := range clusterConfigurationList.Items {
+		cc := &clusterConfigurationList.Items[i]
 
 		// If Sveltos/Cluster is still a match, continue (don't remove (Cluster)Profile as OwnerReference)
 		if _, ok := matchingClusterMap[info(cc.Namespace, cc.Name)]; ok {

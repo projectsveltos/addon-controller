@@ -175,7 +175,7 @@ var _ = Describe("KustomizeRefs", func() {
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
 			string(configv1alpha1.FeatureKustomize), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(Succeed())
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// undeployKustomizeRefs finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect ServiceAccount and ClusterRole to be deleted. ConfigMap should remain as Labels are not set on it
@@ -292,7 +292,7 @@ var _ = Describe("Hash methods", func() {
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -309,7 +309,7 @@ var _ = Describe("Hash methods", func() {
 		expectHash := h.Sum(nil)
 
 		hash, err := controllers.KustomizationHash(context.TODO(), c, clusterSummaryScope,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})

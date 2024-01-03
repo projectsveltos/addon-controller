@@ -134,9 +134,9 @@ var _ = BeforeSuite(func() {
 	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1alpha1"
 	time.Sleep(2 * time.Second)
 
-	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig()),
 		testEnv.Config, testEnv.GetClient())
-	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig()),
 		testEnv.Config, testEnv.Client, 1)
 
 	Eventually(func() bool {
@@ -150,7 +150,7 @@ var _ = BeforeSuite(func() {
 
 	// Do this read so library is initialized with CAPI present
 	_, err = clusterproxy.GetListOfClusters(context.TODO(), testEnv.Client, "",
-		textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		textlogger.NewLogger(textlogger.NewConfig()))
 	Expect(err).To(BeNil())
 })
 

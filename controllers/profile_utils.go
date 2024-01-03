@@ -75,7 +75,9 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ClusterProfileKind {
 		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
 	} else {
-		listOptions = append(listOptions, client.MatchingLabels{ProfileLabelName: profileScope.Name()})
+		listOptions = append(listOptions,
+			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
 	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -84,6 +86,9 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 		return false
 	}
 
+	if len(clusterSummaryList.Items) > 0 {
+		profileScope.Logger.V(logs.LogInfo).Info("not all clusterSummaries are gone")
+	}
 	return len(clusterSummaryList.Items) == 0
 }
 
@@ -438,7 +443,6 @@ func updateClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 	addClusterSummaryLabels(clusterSummary, profileScope, cluster)
 	// Copy annotation. Paused annotation might be set on ClusterProfile.
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
-
 	return c.Update(ctx, clusterSummary)
 }
 
@@ -468,24 +472,6 @@ func addClusterSummaryLabels(clusterSummary *configv1alpha1.ClusterSummary, prof
 			addLabel(clusterSummary, libsveltosv1alpha1.ServiceAccountNamespaceLabel, v)
 		}
 	}
-}
-
-// deleteClusterSummary deletes ClusterSummary given a ClusterProfile/Profile and a matching Sveltos/Cluster
-func deleteClusterSummary(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary) error {
-	return c.Delete(ctx, clusterSummary)
-}
-
-func updateClusterSummarySyncMode(ctx context.Context, c client.Client,
-	profile *scope.ProfileScope, clusterSummary *configv1alpha1.ClusterSummary) error {
-
-	currentClusterSummary := &configv1alpha1.ClusterSummary{}
-	err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-		currentClusterSummary)
-	if err != nil {
-		return err
-	}
-	currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = profile.GetSpec().SyncMode
-	return c.Update(ctx, currentClusterSummary)
 }
 
 // createClusterSummary creates ClusterSummary given a ClusterProfile and a matching Sveltos/Cluster
@@ -647,11 +633,11 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 
 	listOptions := []client.ListOption{}
 	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ClusterProfileKind {
-		listOptions = append(listOptions,
-			client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
+		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profileScope.Name()})
+			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
 	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
@@ -659,32 +645,53 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 		return err
 	}
 
+	// Check if any ClusterSummary instance that needs to be removed is still present
 	foundClusterSummaries := false
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
+
 		if util.IsOwnedByObject(cs, profileScope.Profile) {
 			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
-				err := deleteClusterSummary(ctx, c, cs)
+				foundClusterSummaries = true
+				err := c.Delete(ctx, cs)
 				if err != nil {
 					profileScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
 						cs.Namespace, cs.Name))
 					return err
 				}
-				foundClusterSummaries = true
 			}
-			// update SyncMode
-			err := updateClusterSummarySyncMode(ctx, c, profileScope, cs)
-			if err != nil {
-				return err
-			}
+		}
+		if err := updateClusterSummarySyncMode(ctx, c, cs, profileScope.GetSpec().SyncMode); err != nil {
+			return err
 		}
 	}
 
 	if foundClusterSummaries {
 		return fmt.Errorf("clusterSummaries still present")
 	}
-
 	return nil
+}
+
+func updateClusterSummarySyncMode(ctx context.Context, c client.Client,
+	clusterSummary *configv1alpha1.ClusterSummary, syncMode configv1alpha1.SyncMode) error {
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == syncMode {
+		return nil
+	}
+
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+		currentClusterSummary)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	clusterSummary.Spec.ClusterProfileSpec.SyncMode = syncMode
+	return c.Update(ctx, clusterSummary)
 }
 
 // ClusterReports
@@ -765,11 +772,11 @@ func cleanClusterReports(ctx context.Context, c client.Client, profile client.Ob
 	listOptions := []client.ListOption{}
 
 	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ClusterProfileKind {
-		listOptions = append(listOptions,
-			client.MatchingLabels{ClusterProfileLabelName: profile.GetName()})
+		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profile.GetName()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profile.GetName()})
+			client.MatchingLabels{ProfileLabelName: profile.GetName()},
+			client.InNamespace(profile.GetNamespace()))
 	}
 
 	clusterReportList := &configv1alpha1.ClusterReportList{}
@@ -779,7 +786,8 @@ func cleanClusterReports(ctx context.Context, c client.Client, profile client.Ob
 	}
 
 	for i := range clusterReportList.Items {
-		err = c.Delete(ctx, &clusterReportList.Items[i])
+		cr := &clusterReportList.Items[i]
+		err = c.Delete(ctx, cr)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
 				return err
@@ -961,7 +969,7 @@ func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *s
 	}
 
 	if !canRemoveFinalizer(ctx, c, profileScope) {
-		msg := "cannot rremove finalizer yet"
+		msg := "cannot remove finalizer yet"
 		logger.V(logs.LogInfo).Info(msg)
 		return fmt.Errorf("%s", msg)
 	}

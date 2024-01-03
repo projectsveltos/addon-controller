@@ -40,7 +40,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 	var cluster *libsveltosv1alpha1.SveltosCluster
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		cluster = &libsveltosv1alpha1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -221,7 +221,7 @@ var _ = Describe("ClusterProfile Predicates: ClusterPredicates", func() {
 	var cluster *clusterv1.Cluster
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -378,7 +378,7 @@ var _ = Describe("ClusterProfile Predicates: MachinePredicates", func() {
 	var machine *clusterv1.Machine
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		machine = &clusterv1.Machine{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamMachineNamePrefix + randomString(),

@@ -38,7 +38,7 @@ func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
 	clusterProfileName string, feature configv1alpha1.FeatureID, logger logr.Logger) error {
 
 	reloader, err := getReloaderInstance(ctx, remoteClient, clusterProfileName,
-		feature, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		feature, textlogger.NewLogger(textlogger.NewConfig()))
 	if err != nil {
 		return err
 	}

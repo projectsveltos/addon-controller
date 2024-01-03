@@ -162,7 +162,7 @@ var _ = Describe("Lua validations", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentName),
-			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeNil())
+			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 
 	It("luaValidation returns an error when resources do not satisfy a given lua validation. Single resource.", func() {
@@ -170,7 +170,7 @@ var _ = Describe("Lua validations", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentName),
-			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).ToNot(BeNil())
+			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig()))).ToNot(BeNil())
 	})
 	It("luaValidation returns no error when resources do not satisfy a given lua validation. Multiple resource.", func() {
 		service := `apiVersion: v1
@@ -213,7 +213,7 @@ spec:
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentAndService),
-			[]*unstructured.Unstructured{deplUnstructured, serviceUnstructured}, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).To(BeNil())
+			[]*unstructured.Unstructured{deplUnstructured, serviceUnstructured}, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 	It("luaValidation returns no error when resources do not satisfy a given lua validation. Multiple resource.", func() {
 		pod := `apiVersion: v1
@@ -233,7 +233,7 @@ spec:
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentAndService),
-			[]*unstructured.Unstructured{deplUnstructured, podUnstructured}, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))).ToNot(BeNil())
+			[]*unstructured.Unstructured{deplUnstructured, podUnstructured}, textlogger.NewLogger(textlogger.NewConfig()))).ToNot(BeNil())
 	})
 })
 
@@ -296,7 +296,7 @@ func verifyLuaPolicy(dirName string) {
 	} else {
 		By("Verifying valid resource")
 		spec := map[string][]byte{randomString(): luaPolicy}
-		err = controllers.RunLuaValidations(context.TODO(), spec, validResources, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err = controllers.RunLuaValidations(context.TODO(), spec, validResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 	}
 
@@ -306,7 +306,7 @@ func verifyLuaPolicy(dirName string) {
 	} else {
 		By("Verifying non-matching content")
 		spec := map[string][]byte{randomString(): luaPolicy}
-		err = controllers.RunLuaValidations(context.TODO(), spec, invalidResources, textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+		err = controllers.RunLuaValidations(context.TODO(), spec, invalidResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 	}
 }

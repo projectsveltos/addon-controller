@@ -65,7 +65,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 	It("Return nil,error if ClusterSummary is not specified", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Client:  c,
-			Logger:  textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:  textlogger.NewLogger(textlogger.NewConfig()),
 			Profile: clusterProfile,
 		}
 
@@ -78,7 +78,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -91,7 +91,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -106,7 +106,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -122,13 +122,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioned))
 	})
 
-	//nolint: dupl // better readibility of test
 	It("SetFailureMessage updates ClusterSummary Status FeatureSummary when not nil", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -160,7 +159,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -181,7 +180,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -212,7 +211,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -236,7 +235,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -250,13 +249,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureHelm))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1alpha1.FeatureStatusProvisioning))
 	})
-	//nolint: dupl // better readibility of test
+
 	It("SetFailureReason updates ClusterSummary Status FeatureSummary when not nil", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
@@ -288,7 +287,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -309,7 +308,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -339,7 +338,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -365,7 +364,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -389,7 +388,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -411,7 +410,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -433,7 +432,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -453,7 +452,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Client:         c,
 			Profile:        clusterProfile,
 			ClusterSummary: clusterSummary,
-			Logger:         textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)

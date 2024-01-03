@@ -62,7 +62,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		key2 := randomString()
 		value2 := randomString()
 
-		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		logger = textlogger.NewLogger(textlogger.NewConfig())
 		matchingCluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -120,7 +120,7 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		// Only clusterSelector is, so only matchingCluster is a match
 		matching, err := controllers.GetMatchingClusters(context.TODO(), c, "", profileScope,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(1))
 
@@ -136,7 +136,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		// Both clusterSelector (matchingCluster is a match) and ClusterRefs (nonMatchingCluster is referenced) are set
 		// So two clusters are now matching
 		matching, err = controllers.GetMatchingClusters(context.TODO(), c, "", profileScope,
-			textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))))
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(2))
 	})
@@ -458,7 +458,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items[0].Spec.ClusterProfileSpec.PolicyRefs)).To(Equal(2))
 	})
 
-	It("DeleteClusterSummary removes ClusterSummary for non-matching cluster", func() {
+	It("cleanClusterSummaries removes ClusterSummary for non-matching cluster", func() {
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
@@ -474,8 +474,8 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			nonMatchingCluster.Name, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, nonMatchingCluster.Name, false)
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -495,7 +495,8 @@ var _ = Describe("Profile: Reconciler", func() {
 				ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name,
+			libsveltosv1alpha1.ClusterTypeCapi)
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -505,12 +506,74 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		err := controllers.DeleteClusterSummary(context.TODO(), c, clusterSummary)
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
 		Expect(err).To(BeNil())
+
+		err = controllers.CleanClusterSummaries(context.TODO(), c, profileScope)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("clusterSummaries still present"))
 
 		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(BeZero())
+	})
+
+	It("updateClusterSummarySyncMode updates ClusterSummary SyncMode", func() {
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      clusterProfileNamePrefix + randomString(),
+				Labels: map[string]string{
+					controllers.ClusterProfileLabelName: clusterProfile.Name,
+				},
+				Finalizers: []string{configv1alpha1.ClusterSummaryFinalizer},
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
+					SyncMode: configv1alpha1.SyncModeDryRun,
+				},
+				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+			},
+		}
+
+		// Make sure to have clustersummary marked as deleted.
+		// ClusterProfile will update SyncMode for ClusterSummary representing CAPI Clusters
+		// not matching anymore. So deleted ClusterSummaries.
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterSummary.Namespace,
+			},
+		}
+
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+
+		Expect(controllers.UpdateClusterSummarySyncMode(context.TODO(), testEnv.Client, clusterSummary,
+			clusterProfile.Spec.SyncMode)).To(Succeed())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			return currentClusterSummary.Spec.ClusterProfileSpec.SyncMode == clusterProfile.Spec.SyncMode
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("updateClusterSummaries does not ClusterSummary for matching CAPI Cluster with no running control plane machine", func() {
@@ -742,7 +805,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(len(currentClusterReportList.Items)).To(Equal(0))
 	})
 
-	It("cleanClusterSummaries removes all CluterReports created for a ClusterProfile instance", func() {
+	It("cleanClusterReports removes all ClusterReports created for a ClusterProfile instance", func() {
 		clusterReport1 := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
@@ -784,64 +847,194 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err).To(BeNil())
 	})
 
-	It("updateClusterSummarySyncMode updates ClusterSummary SyncMode", func() {
-		clusterSummary := &configv1alpha1.ClusterSummary{
+	It("cleanClusterReports removes all ClusterReports instances created for a Profile instance", func() {
+		profile := configv1alpha1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
-				Name:      clusterProfileNamePrefix + randomString(),
-				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfile.Name,
-				},
-				Finalizers: []string{configv1alpha1.ClusterSummaryFinalizer},
-			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterProfileSpec: configv1alpha1.Spec{
-					SyncMode: configv1alpha1.SyncModeDryRun,
-				},
-				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+				Name:      randomString(),
 			},
 		}
+		Expect(addTypeInformationToObject(scheme, &profile)).To(Succeed())
 
-		// Make sure to have clustersummary marked as deleted.
-		// ClusterProfile will update SyncMode for ClusterSummary representing CAPI Clusters
-		// not matching anymore. So deleted ClusterSummaries.
-		now := metav1.NewTime(time.Now())
-		clusterSummary.DeletionTimestamp = &now
-
-		ns := &corev1.Namespace{
+		clusterReport1 := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterSummary.Namespace,
+				Namespace: profile.Namespace,
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+		clusterReport2 := &configv1alpha1.ClusterReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+		clusterReport3 := &configv1alpha1.ClusterReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ClusterProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ClusterProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		initObjects := []client.Object{
+			clusterReport1,
+			clusterReport2,
+			clusterReport3,
+		}
 
-		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
-			Client:         testEnv,
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		Expect(controllers.CleanClusterReports(context.TODO(), c, &profile)).To(Succeed())
+		// ClusterReport1 is gone
+		currentClusterReport := &configv1alpha1.ClusterReport{}
+		err := c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterReport1.Namespace, Name: clusterReport1.Name}, currentClusterReport)
+		Expect(err).ToNot(BeNil())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+		// ClusterReport2 is still present
+		err = c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterReport2.Namespace, Name: clusterReport2.Name}, currentClusterReport)
+		Expect(err).To(BeNil())
+
+		// ClusterReport3 is still present
+		err = c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterReport3.Namespace, Name: clusterReport3.Name}, currentClusterReport)
+		Expect(err).To(BeNil())
+	})
+
+	It("cleanClusterSummaries removes all ClusterSummary instances created for a Profile instance", func() {
+		profile := configv1alpha1.Profile{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, &profile)).To(Succeed())
+
+		clusterSummary1 := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: profile.Namespace,
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
+
+		// clusterSummary2 is created by a Profile in a different namespace with same name as Profile
+		clusterSummary2 := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
+
+		// clusterSummary3 is created by a ClusterProfile with same name as Profile
+		clusterSummary3 := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Labels: map[string]string{
+					controllers.ClusterProfileLabelName: profile.Name,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       profile.Name,
+						Kind:       configv1alpha1.ClusterProfileKind,
+						APIVersion: configv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary1,
+			clusterSummary2,
+			clusterSummary3,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
 			Logger:         logger,
-			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			Profile:        &profile,
+			ControllerName: "profile",
 		})
 		Expect(err).To(BeNil())
-		Expect(controllers.UpdateClusterSummarySyncMode(context.TODO(), testEnv.Client,
-			clusterProfileScope, clusterSummary)).To(Succeed())
 
-		// Eventual loop so testEnv Cache is synced
-		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
-			if err != nil {
-				return false
-			}
-			return currentClusterSummary.Spec.ClusterProfileSpec.SyncMode == clusterProfile.Spec.SyncMode
-		}, timeout, pollingInterval).Should(BeTrue())
+		err = controllers.CleanClusterSummaries(context.TODO(), c, profileScope)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(Equal("clusterSummaries still present"))
+
+		// ClusterSummary1 is gone
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err = c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name},
+			currentClusterSummary)
+		Expect(err).ToNot(BeNil())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+		// ClusterSummary2 is still present as in different namespace
+		err = c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary2.Namespace, Name: clusterSummary2.Name},
+			currentClusterSummary)
+		Expect(err).To(BeNil())
+
+		// ClusterSummary3 is still present as created by ClusterProfile
+		err = c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary3.Namespace, Name: clusterSummary3.Name},
+			currentClusterSummary)
+		Expect(err).To(BeNil())
 	})
 
 	It("getMaxUpdate returns max value of clusters that can be updated (fixed)", func() {

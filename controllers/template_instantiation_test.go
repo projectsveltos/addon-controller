@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -84,7 +84,8 @@ var _ = Describe("Template instantiation", func() {
       name: "{{ .Cluster.metadata.name }}-test"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -97,7 +98,8 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil, klogr.New())
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
@@ -143,7 +145,7 @@ valuesTemplate: |
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
 			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, klogr.New())
+			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})

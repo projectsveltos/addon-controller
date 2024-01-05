@@ -160,6 +160,31 @@ rules:
   - patch
   - update
 - apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:
   - kubeadmcontrolplanes

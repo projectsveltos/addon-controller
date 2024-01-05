@@ -32,14 +32,14 @@ import (
 type ClusterSummaryScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
-	ClusterProfile *configv1alpha1.ClusterProfile
+	Profile        client.Object
 	ClusterSummary *configv1alpha1.ClusterSummary
 	ControllerName string
 }
 
 // NewClusterSummaryScope creates a new ClusterSummary Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
-func NewClusterSummaryScope(params ClusterSummaryScopeParams) (*ClusterSummaryScope, error) {
+func NewClusterSummaryScope(params *ClusterSummaryScopeParams) (*ClusterSummaryScope, error) {
 	if params.Client == nil {
 		return nil, errors.New("client is required when creating a ClusterSummaryScope")
 	}
@@ -54,7 +54,7 @@ func NewClusterSummaryScope(params ClusterSummaryScopeParams) (*ClusterSummarySc
 	return &ClusterSummaryScope{
 		Logger:         params.Logger,
 		client:         params.Client,
-		ClusterProfile: params.ClusterProfile,
+		Profile:        params.Profile,
 		ClusterSummary: params.ClusterSummary,
 		patchHelper:    helper,
 		controllerName: params.ControllerName,
@@ -66,7 +66,7 @@ type ClusterSummaryScope struct {
 	logr.Logger
 	client         client.Client
 	patchHelper    *patch.Helper
-	ClusterProfile *configv1alpha1.ClusterProfile
+	Profile        client.Object
 	ClusterSummary *configv1alpha1.ClusterSummary
 	controllerName string
 }

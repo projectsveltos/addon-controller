@@ -30,6 +30,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -81,7 +82,9 @@ var _ = Describe("Template", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -112,7 +115,9 @@ var _ = Describe("Template", func() {
 		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {

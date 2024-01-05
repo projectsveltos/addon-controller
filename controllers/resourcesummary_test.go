@@ -29,7 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -40,7 +40,8 @@ import (
 
 var _ = Describe("ResourceSummary Deployer", func() {
 	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
-		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -51,7 +52,8 @@ var _ = Describe("ResourceSummary Deployer", func() {
 	})
 
 	It("deployResourceSummaryCRD deploys ResourceSummary CRD", func() {
-		Expect(controllers.DeployResourceSummaryCRD(context.TODO(), testEnv.Config, klogr.New())).To(Succeed())
+		Expect(controllers.DeployResourceSummaryCRD(context.TODO(), testEnv.Config,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -76,7 +78,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterNamespace := randomString()
 		clusterSummaryName := randomString()
 		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
-			clusterNamespace, clusterSummaryName, klogr.New())).To(Succeed())
+			clusterNamespace, clusterSummaryName, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
 		Expect(c.Get(context.TODO(),
@@ -117,7 +119,8 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployResourceSummaryInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, nil, klogr.New())).To(Succeed())
+			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
@@ -133,7 +136,8 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
 
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
-			clusterNamespace, clusterName, "", clusterType, klogr.New())).To(Succeed())
+			clusterNamespace, clusterName, "", clusterType,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
 
@@ -161,7 +165,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.RemoveDriftDetectionManagerFromManagementCluster(context.TODO(), clusterNamespace, clusterName,
-			clusterType, klogr.New())).To(Succeed())
+			clusterType, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Verify resources are gone
 		Eventually(func() bool {
@@ -230,7 +234,7 @@ func prepareCluster() *clusterv1.Cluster {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      cluster.Name + "-kubeconfig",
+			Name:      cluster.Name + sveltosKubeconfigPostfix,
 		},
 		Data: map[string][]byte{
 			"data": testEnv.Kubeconfig,

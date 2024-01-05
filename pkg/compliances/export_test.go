@@ -31,7 +31,6 @@ import (
 )
 
 var (
-	GetOpenapiPolicies         = (*manager).getOpenapiPolicies
 	ReEvaluateAddonCompliances = (*manager).reEvaluateAddonCompliances
 	ReEvaluateClusters         = (*manager).reEvaluateClusters
 	CanAddonBeDeployed         = (*manager).canAddonBeDeployed
@@ -54,7 +53,7 @@ func InitializeManagerWithSkip(ctx context.Context, l logr.Logger, config *rest.
 			managerInstance.reEvaluate.Store(true)
 
 			managerInstance.muMap = &sync.RWMutex{}
-			managerInstance.openAPIValidations = make(map[string]map[string][]byte)
+			managerInstance.luaValidations = make(map[string]map[string][]byte)
 			managerInstance.clusters = make(map[string]bool)
 
 			managerInstance.capiPresent, _ = isCAPIInstalled(ctx, c)

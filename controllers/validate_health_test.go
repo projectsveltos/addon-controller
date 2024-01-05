@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -162,7 +162,7 @@ func verifyHealthLuaPolicy(dirName string) {
 		By("Verifying valid resource")
 		for i := range validResources {
 			resource := validResources[i]
-			healthy, _, err := controllers.IsHealthy(resource, string(luaPolicy), klogr.New())
+			healthy, _, err := controllers.IsHealthy(resource, string(luaPolicy), textlogger.NewLogger(textlogger.NewConfig()))
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeTrue())
 		}
@@ -175,7 +175,7 @@ func verifyHealthLuaPolicy(dirName string) {
 		By("Verifying non-matching content")
 		for i := range invalidResources {
 			resource := invalidResources[i]
-			healthy, _, err := controllers.IsHealthy(resource, string(luaPolicy), klogr.New())
+			healthy, _, err := controllers.IsHealthy(resource, string(luaPolicy), textlogger.NewLogger(textlogger.NewConfig()))
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeFalse())
 		}

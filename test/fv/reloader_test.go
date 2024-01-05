@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -89,7 +90,9 @@ var _ = Describe("Reloader", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		ns := randomString()
 		deploymentName := randomString()
@@ -119,7 +122,8 @@ var _ = Describe("Reloader", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterProfile,
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)

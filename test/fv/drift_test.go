@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -46,11 +47,14 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
@@ -64,7 +68,9 @@ var _ = Describe("Helm", Serial, func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -96,8 +102,9 @@ var _ = Describe("Helm", Serial, func() {
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.1", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		// Verify ResourceSummary is present
 		Eventually(func() bool {

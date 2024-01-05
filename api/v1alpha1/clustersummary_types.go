@@ -157,7 +157,7 @@ type ClusterSummarySpec struct {
 
 	// ClusterProfileSpec represent the configuration that will be applied to
 	// the workload cluster.
-	ClusterProfileSpec ClusterProfileSpec `json:"clusterProfileSpec,omitempty"`
+	ClusterProfileSpec Spec `json:"clusterProfileSpec,omitempty"`
 }
 
 // ClusterSummaryStatus defines the observed state of ClusterSummary
@@ -217,10 +217,12 @@ func GetClusterSummary(ctx context.Context, c client.Client, namespace, name str
 	return clusterSummary, nil
 }
 
-// GetClusterProfileOwnerReference returns the ClusterProfile owning a given ClusterSummary
-func GetClusterProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
+// GetProfileOwnerReference returns the ClusterProfile/Profile owning a given ClusterSummary
+func GetProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerReference, error) {
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != ClusterProfileKind {
+		if ref.Kind != ClusterProfileKind &&
+			ref.Kind != ProfileKind {
+
 			continue
 		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -232,23 +234,24 @@ func GetClusterProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.Ow
 		}
 	}
 
-	return nil, fmt.Errorf("ClusterProfile owner not found")
+	return nil, fmt.Errorf("(Cluster)Profile owner not found")
 }
 
-// GetClusterProfileOwner returns the ClusterProfile owning this clusterSummary.
-// Returns nil if ClusterProfile does not exist anymore.
-func GetClusterProfileOwner(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
-) (*ClusterProfile, error) {
+// GetProfileOwner returns the (Cluster)Profile owning this clusterSummary.
+// Returns nil if (Cluster)Profile does not exist anymore.
+func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
+) (client.Object, error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
-		if ref.Kind != ClusterProfileKind {
-			continue
-		}
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
-		if gv.Group == GroupVersion.Group {
+		if gv.Group != GroupVersion.Group {
+			continue
+		}
+
+		if ref.Kind == ClusterProfileKind {
 			clusterProfile := &ClusterProfile{}
 			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
 			if err != nil {
@@ -258,6 +261,18 @@ func GetClusterProfileOwner(ctx context.Context, c client.Client, clusterSummary
 				return nil, err
 			}
 			return clusterProfile, nil
+		} else if ref.Kind == ProfileKind {
+			profile := &Profile{}
+			err := c.Get(ctx,
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: ref.Name},
+				profile)
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					return nil, nil
+				}
+				return nil, err
+			}
+			return profile, nil
 		}
 	}
 	return nil, nil

@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/libsveltos/lib/utils"
@@ -34,7 +34,9 @@ import (
 )
 
 const (
-	luaFileName = "lua_policy.lua"
+	luaFileName     = "lua_policy.lua"
+	validFileName   = "valid_resource.yaml"
+	invalidFileName = "invalid_resource.yaml"
 )
 
 const (
@@ -160,7 +162,7 @@ var _ = Describe("Lua validations", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentName),
-			[]*unstructured.Unstructured{u}, klogr.New())).To(BeNil())
+			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 
 	It("luaValidation returns an error when resources do not satisfy a given lua validation. Single resource.", func() {
@@ -168,7 +170,7 @@ var _ = Describe("Lua validations", func() {
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentName),
-			[]*unstructured.Unstructured{u}, klogr.New())).ToNot(BeNil())
+			[]*unstructured.Unstructured{u}, textlogger.NewLogger(textlogger.NewConfig()))).ToNot(BeNil())
 	})
 	It("luaValidation returns no error when resources do not satisfy a given lua validation. Multiple resource.", func() {
 		service := `apiVersion: v1
@@ -211,7 +213,7 @@ spec:
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentAndService),
-			[]*unstructured.Unstructured{deplUnstructured, serviceUnstructured}, klogr.New())).To(BeNil())
+			[]*unstructured.Unstructured{deplUnstructured, serviceUnstructured}, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 	It("luaValidation returns no error when resources do not satisfy a given lua validation. Multiple resource.", func() {
 		pod := `apiVersion: v1
@@ -231,9 +233,24 @@ spec:
 		Expect(err).To(BeNil())
 
 		Expect(controllers.LuaValidation(context.TODO(), []byte(deploymentAndService),
-			[]*unstructured.Unstructured{deplUnstructured, podUnstructured}, klogr.New())).ToNot(BeNil())
+			[]*unstructured.Unstructured{deplUnstructured, podUnstructured}, textlogger.NewLogger(textlogger.NewConfig()))).ToNot(BeNil())
 	})
+})
 
+var _ = Describe("Lua AddonCompliance", func() {
+
+	It("Verify all lua policies", func() {
+		const openAPIDir = "./compliance_policies/lua_policies"
+
+		dirs, err := os.ReadDir(openAPIDir)
+		Expect(err).To(BeNil())
+
+		for i := range dirs {
+			if dirs[i].IsDir() {
+				verifyLuaPolicies(filepath.Join(openAPIDir, dirs[i].Name()))
+			}
+		}
+	})
 })
 
 func verifyLuaPolicies(dirName string) {
@@ -279,7 +296,7 @@ func verifyLuaPolicy(dirName string) {
 	} else {
 		By("Verifying valid resource")
 		spec := map[string][]byte{randomString(): luaPolicy}
-		err = controllers.RunLuaValidations(context.TODO(), spec, validResources, klogr.New())
+		err = controllers.RunLuaValidations(context.TODO(), spec, validResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 	}
 
@@ -289,7 +306,7 @@ func verifyLuaPolicy(dirName string) {
 	} else {
 		By("Verifying non-matching content")
 		spec := map[string][]byte{randomString(): luaPolicy}
-		err = controllers.RunLuaValidations(context.TODO(), spec, invalidResources, klogr.New())
+		err = controllers.RunLuaValidations(context.TODO(), spec, invalidResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 	}
 }

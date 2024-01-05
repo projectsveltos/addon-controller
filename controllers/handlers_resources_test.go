@@ -30,7 +30,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,7 +50,7 @@ var _ = Describe("HandlersResource", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -69,12 +69,13 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -132,7 +133,8 @@ var _ = Describe("HandlersResource", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())
+				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+				textlogger.NewLogger(textlogger.NewConfig()))
 		}, timeout, pollingInterval).Should(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -216,7 +218,8 @@ var _ = Describe("HandlersResource", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{}, klogr.New())).To(Succeed())
+			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
 		// Expect role0 and cluster0 to be deleted. role1 should remain as ConfigLabelName is not set on it
@@ -271,7 +274,7 @@ var _ = Describe("HandlersResource", func() {
 		}
 
 		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
-			localReports, remoteReports, klogr.New())).To(Succeed())
+			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// wait for cache to sync
 		Eventually(func() bool {
@@ -319,7 +322,7 @@ var _ = Describe("Hash methods", func() {
 		Expect(addTypeInformationToObject(scheme, &clusterRole2)).To(Succeed())
 		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), render.AsCode(clusterRole2))
 
-		namespace := "reconcile" + randomString()
+		namespace := randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -328,7 +331,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					PolicyRefs: []configv1alpha1.PolicyRef{
 						{
 							Namespace: configMap1.Namespace, Name: configMap1.Name,
@@ -355,9 +358,9 @@ var _ = Describe("Hash methods", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -371,7 +374,7 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.ResourcesHash(context.TODO(), c, clusterSummaryScope, klogr.New())
+		hash, err := controllers.ResourcesHash(context.TODO(), c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})

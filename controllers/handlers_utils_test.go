@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -104,14 +104,14 @@ var _ = Describe("HandlersUtils", func() {
 	var namespace string
 
 	BeforeEach(func() {
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					randomString(): randomString(),
 				},
 				Annotations: map[string]string{
 					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
@@ -123,12 +123,13 @@ var _ = Describe("HandlersUtils", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -284,7 +285,8 @@ var _ = Describe("HandlersUtils", func() {
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
+			secret, map[string]string{"service": services}, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
 		validateResourceReports(resourceReports, 2, 0, 0, 0)
@@ -312,7 +314,8 @@ var _ = Describe("HandlersUtils", func() {
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, nil, klogr.New())
+			secret, map[string]string{"service": services}, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
 		validateResourceReports(resourceReports, 0, 0, 2, 0)
@@ -343,7 +346,8 @@ var _ = Describe("HandlersUtils", func() {
 		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": newContent}, clusterSummary, nil, klogr.New())
+			secret, map[string]string{"service": newContent}, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
 		validateResourceReports(resourceReports, 0, 2, 0, 0)
@@ -353,7 +357,7 @@ var _ = Describe("HandlersUtils", func() {
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
-			clusterSummary, nil, klogr.New())
+			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -393,7 +397,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, clusterSummary, nil, klogr.New())
+			testEnv.Config, testEnv.Client, secret, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
@@ -411,7 +416,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
-			testEnv.Config, testEnv.Client, configMap, clusterSummary, nil, klogr.New())
+			testEnv.Config, testEnv.Client, configMap, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
@@ -476,7 +482,7 @@ var _ = Describe("HandlersUtils", func() {
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
 		undeploy, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, nil, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
 
@@ -593,7 +599,8 @@ var _ = Describe("HandlersUtils", func() {
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
 		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		// Consistently loop so testEnv Cache is synced
@@ -617,7 +624,8 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
 		_, err = controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles, klogr.New())
+			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		// Eventual loop so testEnv Cache is synced
@@ -689,7 +697,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
 
-		Expect(controllers.HandleResourceDelete(ctx, c, depl, currentClusterSummary, klogr.New())).To(Succeed())
+		Expect(controllers.HandleResourceDelete(ctx, c, depl, currentClusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentDepl := &appsv1.Deployment{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: depl.Namespace, Name: depl.Name}, currentDepl)).To(Succeed())
@@ -729,7 +738,8 @@ subjects:
   namespace: projectcontour
 `
 		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false, klogr.New())
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(1))
 		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
@@ -787,7 +797,8 @@ subjects:
       db_password: staging-password
 `
 		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false, klogr.New())
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))
 	})

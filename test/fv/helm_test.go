@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 )
 
 var _ = Describe("Helm", func() {
@@ -56,7 +57,8 @@ var _ = Describe("Helm", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -105,7 +107,9 @@ var _ = Describe("Helm", func() {
 
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -134,8 +138,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.17.1", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for kyverno")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -161,7 +166,9 @@ var _ = Describe("Helm", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
@@ -185,8 +192,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "nginx-latest", ChartVersion: "0.17.1", Namespace: "nginx"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile to not require nginx anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -203,7 +211,9 @@ var _ = Describe("Helm", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
@@ -224,8 +234,9 @@ var _ = Describe("Helm", func() {
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.0", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm, nil, charts)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 

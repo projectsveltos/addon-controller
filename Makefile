@@ -69,8 +69,8 @@ CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
-GOLANGCI_LINT_VERSION := "v1.52.2"
-CLUSTERCTL_VERSION := "v1.6.0-rc.1"
+GOLANGCI_LINT_VERSION := "v1.55.2"
+CLUSTERCTL_VERSION := "v1.6.0"
 
 $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/controller-tools/cmd/controller-gen
@@ -243,7 +243,7 @@ create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL)
 		--control-plane-machine-count=1 \
 		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
 
-create-control-cluster: $(KIND) $(CLUSTERCTL)
+create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
@@ -252,6 +252,10 @@ create-control-cluster: $(KIND) $(CLUSTERCTL)
 	@echo wait for capd-system pod
 	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
 	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-control-plane-controller-manager -n capi-kubeadm-control-plane-system --timeout=$(TIMEOUT)
+	$(KUBECTL) wait --for=condition=Available deployment/capi-kubeadm-bootstrap-controller-manager -n capi-kubeadm-bootstrap-system --timeout=$(TIMEOUT)
+
+	@echo "sleep allowing webhook to be ready"
+	sleep 10
 
 create-workload-cluster: $(KIND) $(KUBECTL)
 	@echo "Create a workload cluster"
@@ -319,11 +323,11 @@ drift-detection-manager:
 
 .PHONY: build
 build: drift-detection-manager generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o bin/manager cmd/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	go run ./cmd/main.go
 
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.

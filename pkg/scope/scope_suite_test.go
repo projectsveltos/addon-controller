@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
@@ -41,4 +42,20 @@ func TestScope(t *testing.T) {
 func randomString() string {
 	const length = 10
 	return util.RandomString(length)
+}
+
+func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
+	gvks, _, err := scheme.ObjectKinds(obj)
+	Expect(err).To(BeNil())
+
+	for _, gvk := range gvks {
+		if gvk.Kind == "" {
+			continue
+		}
+		if gvk.Version == "" || gvk.Version == runtime.APIVersionInternal {
+			continue
+		}
+		obj.GetObjectKind().SetGroupVersionKind(gvk)
+		break
+	}
 }

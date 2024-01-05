@@ -24,7 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -53,75 +53,6 @@ var _ = Describe("Constraints", func() {
 		}
 	})
 
-	It("getOpenapiPolicies returns all openapi/lua policies in an AddonCompliance", func() {
-		cluster1 := corev1.ObjectReference{
-			Namespace: randomString(), Name: randomString(),
-			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-		}
-		cluster2 := corev1.ObjectReference{
-			Namespace: randomString(), Name: randomString(),
-			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-		}
-		cluster3 := corev1.ObjectReference{
-			Namespace: randomString(), Name: randomString(),
-			Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-		}
-		addonCompliance := &libsveltosv1alpha1.AddonCompliance{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			Status: libsveltosv1alpha1.AddonComplianceStatus{
-				MatchingClusterRefs: []corev1.ObjectReference{
-					cluster1, cluster2,
-				},
-				OpenapiValidations: map[string][]byte{
-					randomString(): []byte(randomString()),
-					randomString(): []byte(randomString()),
-					randomString(): []byte(randomString()),
-				},
-				LuaValidations: map[string][]byte{
-					randomString(): []byte(randomString()),
-					randomString(): []byte(randomString()),
-				},
-			},
-		}
-
-		Expect(testEnv.Create(context.TODO(), addonCompliance)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance)).To(Succeed())
-
-		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
-		manager := compliances.GetManager()
-
-		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
-		manager.MarkClusterReady(cluster1.Namespace, cluster1.Name, &clusterType)
-		manager.MarkClusterReady(cluster2.Namespace, cluster2.Name, &clusterType)
-		manager.MarkClusterReady(cluster3.Namespace, cluster3.Name, &clusterType)
-
-		clusterTpe := clusterproxy.GetClusterType(&cluster1)
-		policies, err := manager.GetClusterOpenapiPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
-		policies, err = manager.GetClusterLuaPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonCompliance.Status.LuaValidations)))
-
-		clusterTpe = clusterproxy.GetClusterType(&cluster2)
-		policies, err = manager.GetClusterOpenapiPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonCompliance.Status.OpenapiValidations)))
-		policies, err = manager.GetClusterLuaPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(len(addonCompliance.Status.LuaValidations)))
-
-		clusterTpe = clusterproxy.GetClusterType(&cluster3)
-		policies, err = manager.GetClusterOpenapiPolicies(cluster3.Namespace, cluster3.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(0))
-		policies, err = manager.GetClusterLuaPolicies(cluster3.Namespace, cluster3.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(policies)).To(Equal(0))
-	})
-
 	It("processAddonCompliance returns current policy map considering all AddonCompliances", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace: randomString(), Name: randomString(),
@@ -139,7 +70,7 @@ var _ = Describe("Constraints", func() {
 				MatchingClusterRefs: []corev1.ObjectReference{
 					cluster1, cluster2,
 				},
-				OpenapiValidations: map[string][]byte{
+				LuaValidations: map[string][]byte{
 					randomString(): []byte(randomString()),
 					randomString(): []byte(randomString()),
 					randomString(): []byte(randomString()),
@@ -158,7 +89,7 @@ var _ = Describe("Constraints", func() {
 				MatchingClusterRefs: []corev1.ObjectReference{
 					cluster1,
 				},
-				OpenapiValidations: map[string][]byte{
+				LuaValidations: map[string][]byte{
 					randomString(): []byte(randomString()),
 					randomString(): []byte(randomString()),
 					randomString(): []byte(randomString()),
@@ -169,7 +100,7 @@ var _ = Describe("Constraints", func() {
 		Expect(testEnv.Create(context.TODO(), addonCompliance2)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, addonCompliance2)).To(Succeed())
 
-		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), testEnv.Config, testEnv.Client, 10)
+		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Config, testEnv.Client, 10)
 		manager := compliances.GetManager()
 
 		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
@@ -178,15 +109,10 @@ var _ = Describe("Constraints", func() {
 
 		Expect(compliances.ReEvaluateAddonCompliances(manager, context.TODO())).To(Succeed())
 
-		clusterTpe := clusterproxy.GetClusterType(&cluster1)
-		result, err := manager.GetClusterOpenapiPolicies(cluster1.Namespace, cluster1.Name, &clusterTpe)
+		clusterTpe := clusterproxy.GetClusterType(&cluster2)
+		result, err := manager.GetClusterLuaPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
 		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations) + len(addonCompliance2.Status.OpenapiValidations)))
-
-		clusterTpe = clusterproxy.GetClusterType(&cluster2)
-		result, err = manager.GetClusterOpenapiPolicies(cluster2.Namespace, cluster2.Name, &clusterTpe)
-		Expect(err).To(BeNil())
-		Expect(len(result)).To(Equal(len(addonCompliance1.Status.OpenapiValidations)))
+		Expect(len(result)).To(Equal(len(addonCompliance1.Status.LuaValidations)))
 	})
 
 	It("reEvaluateClusters finds all annotated clusters and update internal clusters map", func() {
@@ -235,7 +161,7 @@ var _ = Describe("Constraints", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		compliances.InitializeManagerWithSkip(context.TODO(), klogr.New(), nil, c, 10)
+		compliances.InitializeManagerWithSkip(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), nil, c, 10)
 		manager := compliances.GetManager()
 		compliances.ReEvaluateClusters(manager, context.TODO())
 

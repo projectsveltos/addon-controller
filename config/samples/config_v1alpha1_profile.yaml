@@ -1,0 +1,12 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: Profile
+metadata:
+  labels:
+    app.kubernetes.io/name: profile
+    app.kubernetes.io/instance: profile-sample
+    app.kubernetes.io/part-of: addon-controller
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: addon-controller
+  name: profile-sample
+spec:
+  # TODO(user): Add fields here

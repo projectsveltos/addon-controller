@@ -149,7 +149,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		}
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	// needs to be instructed which Deployment/StatefulSet/DaemonSet instances require this behavior.
 	// Update corresponding Reloader instance (instance will be deleted if Reloader is set to false)
 	resources := convertHelmResourcesToObjectReference(helmResources)
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureHelm,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureHelm,
 		resources, clusterSummary, logger)
 	if err != nil {
 		return err
@@ -225,18 +225,18 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, clusterProfileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef,
+	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
 		configv1alpha1.FeatureHelm, nil, []configv1alpha1.Chart{})
 	if err != nil {
 		return err
@@ -1172,12 +1172,12 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d",
 		len(chartDeployed)))
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	return updateClusterConfiguration(ctx, c, clusterSummary, clusterProfileOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
+	return updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef, configv1alpha1.FeatureHelm, nil, chartDeployed)
 }
 
 // undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
@@ -1370,13 +1370,13 @@ func getHelmChartConflictManager(ctx context.Context, c client.Client,
 		return defaultMessage
 	}
 
-	clusterProfileManager, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummaryManager)
-	if err != nil || clusterProfileManager == nil {
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummaryManager)
+	if err != nil || profileOwnerRef == nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile. Err: %v", clusterSummaryManagerName))
 		return defaultMessage
 	}
 
-	return fmt.Sprintf("Cannot manage it. Currently managed by %s %s", clusterProfileManager.Kind, clusterProfileManager.Name)
+	return fmt.Sprintf("Cannot manage it. Currently managed by %s %s", profileOwnerRef.Kind, profileOwnerRef.Name)
 }
 
 // createReportForUnmanagedHelmRelease creates ReleaseReport for an un-managed (by this instance) helm release
@@ -1417,12 +1417,12 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	clusterProfileOwnerRef, err := configv1alpha1.GetClusterProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	clusterReportName := getClusterReportName(clusterProfileOwnerRef.Name,
+	clusterReportName := getClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -1556,12 +1556,12 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 	// This limitation (do not have any validation if installing such an Helm chart) is listed in the
 	// documentation.
 	// Workaround here is to skip running Run for Helm in DryRun mode if there are no validation.
-	openAPIValidations, luaValidations, err := getComplianceValidations(clusterSummary, logger)
+	luaValidations, err := getComplianceValidations(clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	if len(openAPIValidations) == 0 && len(luaValidations) == 0 {
+	if len(luaValidations) == 0 {
 		return nil
 	}
 
@@ -1577,12 +1577,6 @@ func validateInstallHelmResources(ctx context.Context, clusterSummary *configv1a
 	policies, err = collectHelmContent(resources.Manifest, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect helm resources %v", err))
-		return err
-	}
-
-	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, policies, openAPIValidations, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
 		return err
 	}
 
@@ -1605,12 +1599,12 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 	// This limitation (do not have any validation if installing such an Helm chart) is listed in the
 	// documentation.
 	// Workaround here is to skip running Run for Helm in DryRun mode if there are no validation.
-	openAPIValidations, luaValidations, err := getComplianceValidations(clusterSummary, logger)
+	luaValidations, err := getComplianceValidations(clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	if len(openAPIValidations) == 0 && len(luaValidations) == 0 {
+	if len(luaValidations) == 0 {
 		return nil
 	}
 
@@ -1628,12 +1622,6 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 		return err
 	}
 
-	err = validateHelmResourcesAgainstOpenAPIPolicies(ctx, policies, openAPIValidations, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against openAPI policies %v", err))
-		return err
-	}
-
 	err = validateHelmResourcesAgainstLuaPolicies(ctx, policies, luaValidations, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate helm resources against lua policies %v", err))
@@ -1643,31 +1631,9 @@ func validateUpgradeHelmResources(ctx context.Context, clusterSummary *configv1a
 	return nil
 }
 
-// validateHelmResourcesAgainstOpenAPIPolicies validates each individual resource against
-// all openAPI policies currently enforced for the managed cluster where resource need to be
-// applied
-func validateHelmResourcesAgainstOpenAPIPolicies(ctx context.Context, policies []*unstructured.Unstructured,
-	openAPIPolicies map[string][]byte, logger logr.Logger) error {
-
-	for i := range policies {
-		err := runOpenAPIValidations(ctx, openAPIPolicies, policies[i], logger)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // getComplianceValidations returns OpenAPI and Lua compliance policies for cluster
 func getComplianceValidations(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
-) (openAPIValidations, luaValidations map[string][]byte, err error) {
-
-	openAPIValidations, err = getOpenAPIValidations(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, &clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return
-	}
+) (luaValidations map[string][]byte, err error) {
 
 	luaValidations, err = getLuaValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		&clusterSummary.Spec.ClusterType, logger)

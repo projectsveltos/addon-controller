@@ -31,7 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -54,8 +54,8 @@ var _ = Describe("HandlersHelm", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
@@ -169,7 +169,7 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			HelmCharts: []configv1alpha1.HelmChart{*calicoChart},
 		}
 
@@ -213,7 +213,7 @@ var _ = Describe("HandlersHelm", func() {
 	})
 
 	It("updateStatusForeferencedHelmReleases is no-op in DryRun mode", func() {
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			HelmCharts: []configv1alpha1.HelmChart{
 				{RepositoryURL: randomString(), RepositoryName: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 					ReleaseName: randomString(), ReleaseNamespace: randomString()},
@@ -269,7 +269,7 @@ var _ = Describe("HandlersHelm", func() {
 			Status:           configv1alpha1.HelChartStatusManaging,
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			HelmCharts: []configv1alpha1.HelmChart{*contourChart},
 		}
 		// List a helm chart non referenced anymore as managed
@@ -326,7 +326,8 @@ var _ = Describe("HandlersHelm", func() {
 			},
 			Status: configv1alpha1.ClusterConfigurationStatus{
 				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
-					{ClusterProfileName: clusterProfile.Name},
+					{
+						ClusterProfileName: clusterProfile.Name},
 				},
 			},
 		}
@@ -338,7 +339,7 @@ var _ = Describe("HandlersHelm", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
-			chartDeployed, klogr.New())).To(Succeed())
+			chartDeployed, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
@@ -374,7 +375,7 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			SyncMode:   configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
 		}
@@ -386,7 +387,7 @@ var _ = Describe("HandlersHelm", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		report, err := controllers.CreateReportForUnmanagedHelmRelease(context.TODO(), c, clusterSummary,
-			helmChart, klogr.New())
+			helmChart, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(report).ToNot(BeNil())
 		Expect(report.Action).To(Equal(string(configv1alpha1.InstallHelmAction)))
@@ -402,15 +403,15 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			SyncMode:   configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{*helmChart},
 		}
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
-					clusterSummary.Spec.ClusterType),
+				Name: controllers.GetClusterReportName(configv1alpha1.ClusterProfileKind,
+					clusterProfile.Name, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -463,7 +464,7 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1alpha1.HelmChartActionUninstall,
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.ClusterProfileSpec{
+		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
 			SyncMode: configv1alpha1.SyncModeDryRun,
 			HelmCharts: []configv1alpha1.HelmChart{
 				*helmChartInstall, *helmChartUninstall,
@@ -472,8 +473,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1alpha1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterReportName(clusterProfile.Name, clusterSummary.Spec.ClusterName,
-					clusterSummary.Spec.ClusterType),
+				Name: controllers.GetClusterReportName(configv1alpha1.ClusterProfileKind,
+					clusterProfile.Name, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 			Spec: configv1alpha1.ClusterReportSpec{
@@ -504,13 +505,14 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
 
-		kubeconfig, err := clusterproxy.CreateKubeconfig(klogr.New(), testEnv.Kubeconfig)
+		kubeconfig, err := clusterproxy.CreateKubeconfig(textlogger.NewLogger(textlogger.NewConfig()), testEnv.Kubeconfig)
 		Expect(err).To(BeNil())
 
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
-		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig, klogr.New())
+		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1alpha1.DryRunReconciliationError
@@ -576,7 +578,7 @@ var _ = Describe("Hash methods", func() {
 			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 		}
 
-		namespace := "reconcile" + randomString()
+		namespace := randomString()
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -585,7 +587,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						kyvernoChart,
 						nginxChart,
@@ -600,9 +602,9 @@ var _ = Describe("Hash methods", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummaryScope, err := scope.NewClusterSummaryScope(scope.ClusterSummaryScopeParams{
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
 			Client:         c,
-			Logger:         klogr.New(),
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
@@ -616,7 +618,8 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope, klogr.New())
+		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})

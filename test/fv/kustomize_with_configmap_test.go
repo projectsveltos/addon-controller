@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -42,7 +43,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		kustomizeConfigMapName = "kustomize"
 	)
 
-	It("Deploy Kustomize resources", Label("FV", "EXTENDED"), func() {
+	It("Deploy Kustomize resources with ConfigMap", Label("FV", "EXTENDED"), func() {
 		Byf("Verifying ConfigMap kustomize exists. It is created by Makefile")
 		kustomizeConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: defaultNamespace, Name: kustomizeConfigMapName},
@@ -60,7 +61,9 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		targetNamespace := randomString()
 
@@ -78,7 +81,9 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -129,15 +134,18 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 			{kind: "ConfigMap", name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
 			{kind: "Deployment", name: currentDeployment.Name, namespace: targetNamespace, group: "apps"},
 		}
-		verifyClusterConfiguration(clusterProfile.Name, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize, policies, nil)
+		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize,
+			policies, nil)
 
 		Byf("Changing clusterprofile to not reference ConfigMap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.KustomizationRefs = []configv1alpha1.KustomizationRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(currentClusterProfile, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(controllers.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying Service is removed from the workload cluster")
 		Eventually(func() bool {

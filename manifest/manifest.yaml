@@ -193,11 +193,171 @@ spec:
                         type: object
                       type: array
                     clusterProfileName:
-                      description: ClusterProfileName is the name of the ClusterProfile
-                        matching the Cluster.
+                      description: ProfileName is the name of the ClusterProfile matching
+                        the Cluster.
                       type: string
                   required:
                   - clusterProfileName
+                  type: object
+                type: array
+              profileResources:
+                description: ProfileResources is the list of resources currently deployed
+                  in a Cluster due to Profiles
+                items:
+                  description: ProfileResource keeps info on all of the resources
+                    deployed in this Cluster due to a given Profile
+                  properties:
+                    Features:
+                      description: Features contains the list of policies deployed
+                        in the Cluster because of a given feature
+                      items:
+                        properties:
+                          charts:
+                            description: Charts is a list of helm charts deployed
+                              in the Cluster.
+                            items:
+                              properties:
+                                appVersion:
+                                  description: AppVersion is the version of the app
+                                    deployed in the Cluster.
+                                  type: string
+                                chartVersion:
+                                  description: ChartVersion is the version of the
+                                    helm chart deployed in the Cluster.
+                                  type: string
+                                lastAppliedTime:
+                                  description: LastAppliedTime identifies when this
+                                    resource was last applied to the cluster.
+                                  format: date-time
+                                  type: string
+                                namespace:
+                                  description: Namespace where chart is deployed in
+                                    the Cluster.
+                                  type: string
+                                releaseName:
+                                  description: ReleaseName name of the release deployed
+                                    in the Cluster.
+                                  minLength: 1
+                                  type: string
+                                repoURL:
+                                  description: RepoURL URL of the repo containing
+                                    the helm chart deployed in the Cluster.
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - chartVersion
+                              - lastAppliedTime
+                              - releaseName
+                              - repoURL
+                              type: object
+                            type: array
+                          featureID:
+                            description: FeatureID is an indentifier of the feature
+                              whose status is reported
+                            enum:
+                            - Resources
+                            - Helm
+                            - Kustomize
+                            type: string
+                          resources:
+                            description: Resources is a list of resources deployed
+                              in the Cluster.
+                            items:
+                              properties:
+                                group:
+                                  description: Group of the resource deployed in the
+                                    Cluster.
+                                  type: string
+                                kind:
+                                  description: Kind of the resource deployed in the
+                                    Cluster.
+                                  minLength: 1
+                                  type: string
+                                lastAppliedTime:
+                                  description: LastAppliedTime identifies when this
+                                    resource was last applied to the cluster.
+                                  format: date-time
+                                  type: string
+                                name:
+                                  description: Name of the resource deployed in the
+                                    Cluster.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: Namespace of the resource deployed
+                                    in the Cluster. Empty for resources scoped at
+                                    cluster level.
+                                  type: string
+                                owner:
+                                  description: Owner is the list of ConfigMap/Secret
+                                    containing this resource.
+                                  properties:
+                                    apiVersion:
+                                      description: API version of the referent.
+                                      type: string
+                                    fieldPath:
+                                      description: 'If referring to a piece of an
+                                        object instead of an entire object, this string
+                                        should contain a valid JSON/Go field access
+                                        statement, such as desiredState.manifest.containers[2].
+                                        For example, if the object reference is to
+                                        a container within a pod, this would take
+                                        on a value like: "spec.containers{name}" (where
+                                        "name" refers to the name of the container
+                                        that triggered the event) or if no container
+                                        name is specified "spec.containers[2]" (container
+                                        with index 2 in this pod). This syntax is
+                                        chosen only to have some well-defined way
+                                        of referencing a part of an object. TODO:
+                                        this design is not final and this field is
+                                        subject to change in the future.'
+                                      type: string
+                                    kind:
+                                      description: 'Kind of the referent. More info:
+                                        https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                                      type: string
+                                    name:
+                                      description: 'Name of the referent. More info:
+                                        https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                                      type: string
+                                    namespace:
+                                      description: 'Namespace of the referent. More
+                                        info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                                      type: string
+                                    resourceVersion:
+                                      description: 'Specific resourceVersion to which
+                                        this reference is made, if any. More info:
+                                        https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                                      type: string
+                                    uid:
+                                      description: 'UID of the referent. More info:
+                                        https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                                      type: string
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                version:
+                                  description: Version of the resource deployed in
+                                    the Cluster.
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - group
+                              - kind
+                              - name
+                              - owner
+                              - version
+                              type: object
+                            type: array
+                        required:
+                        - featureID
+                        type: object
+                      type: array
+                    profileName:
+                      description: ProfileName is the name of the Profile matching
+                        the Cluster.
+                      type: string
+                  required:
+                  - profileName
                   type: object
                 type: array
             type: object
@@ -240,7 +400,6 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClusterProfileSpec defines the desired state of ClusterProfile
             properties:
               clusterRefs:
                 description: ClusterRefs identifies clusters to associate to.
@@ -404,9 +563,10 @@ spec:
                       minLength: 1
                       type: string
                     namespace:
-                      description: Namespace of the referenced resource. Namespace
-                        can be left empty. In such a case, namespace will be implicit
-                        set to cluster's namespace.
+                      description: Namespace of the referenced resource. For ClusterProfile
+                        namespace can be left empty. In such a case, namespace will
+                        be implicit set to cluster's namespace. For Profile namespace
+                        must be left empty. The Profile namespace will be used.
                       type: string
                     path:
                       description: Path to the directory containing the kustomization.yaml
@@ -466,9 +626,10 @@ spec:
                       minLength: 1
                       type: string
                     namespace:
-                      description: Namespace of the referenced resource. Namespace
-                        can be left empty. In such a case, namespace will be implicit
-                        set to cluster's namespace.
+                      description: Namespace of the referenced resource. For ClusterProfile
+                        namespace can be left empty. In such a case, namespace will
+                        be implicit set to cluster's namespace. For Profile namespace
+                        must be left empty. Profile namespace will be used.
                       type: string
                   required:
                   - kind
@@ -643,7 +804,7 @@ spec:
                 type: array
             type: object
           status:
-            description: ClusterProfileStatus defines the observed state of ClusterProfile
+            description: Status defines the observed state of ClusterProfile/Profile
             properties:
               matchingClusters:
                 description: MatchingClusterRefs reference all the clusters currently
@@ -1378,9 +1539,11 @@ spec:
                           minLength: 1
                           type: string
                         namespace:
-                          description: Namespace of the referenced resource. Namespace
-                            can be left empty. In such a case, namespace will be implicit
-                            set to cluster's namespace.
+                          description: Namespace of the referenced resource. For ClusterProfile
+                            namespace can be left empty. In such a case, namespace
+                            will be implicit set to cluster's namespace. For Profile
+                            namespace must be left empty. The Profile namespace will
+                            be used.
                           type: string
                         path:
                           description: Path to the directory containing the kustomization.yaml
@@ -1440,9 +1603,11 @@ spec:
                           minLength: 1
                           type: string
                         namespace:
-                          description: Namespace of the referenced resource. Namespace
-                            can be left empty. In such a case, namespace will be implicit
-                            set to cluster's namespace.
+                          description: Namespace of the referenced resource. For ClusterProfile
+                            namespace can be left empty. In such a case, namespace
+                            will be implicit set to cluster's namespace. For Profile
+                            namespace must be left empty. Profile namespace will be
+                            used.
                           type: string
                       required:
                       - kind
@@ -1728,6 +1893,674 @@ spec:
     subresources:
       status: {}
 ---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.13.0
+  name: profiles.config.projectsveltos.io
+spec:
+  group: config.projectsveltos.io
+  names:
+    kind: Profile
+    listKind: ProfileList
+    plural: profiles
+    singular: profile
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Profile is the Schema for the profiles API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              clusterRefs:
+                description: ClusterRefs identifies clusters to associate to.
+                items:
+                  description: "ObjectReference contains enough information to let
+                    you inspect or modify the referred object. --- New uses of this
+                    type are discouraged because of difficulty describing its usage
+                    when embedded in APIs. 1. Ignored fields.  It includes many fields
+                    which are not generally honored.  For instance, ResourceVersion
+                    and FieldPath are both very rarely valid in actual usage. 2. Invalid
+                    usage help.  It is impossible to add specific help for individual
+                    usage.  In most embedded usages, there are particular restrictions
+                    like, \"must refer only to types A and B\" or \"UID not honored\"
+                    or \"name must be restricted\". Those cannot be well described
+                    when embedded. 3. Inconsistent validation.  Because the usages
+                    are different, the validation rules are different by usage, which
+                    makes it hard for users to predict what will happen. 4. The fields
+                    are both imprecise and overly precise.  Kind is not a precise
+                    mapping to a URL. This can produce ambiguity during interpretation
+                    and require a REST mapping.  In most cases, the dependency is
+                    on the group,resource tuple and the version of the actual struct
+                    is irrelevant. 5. We cannot easily change it.  Because this type
+                    is embedded in many locations, updates to this type will affect
+                    numerous schemas.  Don't make new APIs embed an underspecified
+                    API type they do not control. \n Instead of using this type, create
+                    a locally provided and used type that is well-focused on your
+                    reference. For example, ServiceReferences for admission registration:
+                    https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                    ."
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: 'If referring to a piece of an object instead of
+                        an entire object, this string should contain a valid JSON/Go
+                        field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within
+                        a pod, this would take on a value like: "spec.containers{name}"
+                        (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]"
+                        (container with index 2 in this pod). This syntax is chosen
+                        only to have some well-defined way of referencing a part of
+                        an object. TODO: this design is not final and this field is
+                        subject to change in the future.'
+                      type: string
+                    kind:
+                      description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                    namespace:
+                      description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                      type: string
+                    resourceVersion:
+                      description: 'Specific resourceVersion to which this reference
+                        is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                      type: string
+                    uid:
+                      description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              clusterSelector:
+                description: ClusterSelector identifies clusters to associate to.
+                type: string
+              dependsOn:
+                description: DependsOn specifies a list of other ClusterProfiles that
+                  this instance depends on. In any managed cluster that matches this
+                  ClusterProfile, the add-ons and applications defined in this instance
+                  will not be deployed until all add-ons and applications in the ClusterProfiles
+                  listed as dependencies are deployed.
+                items:
+                  type: string
+                type: array
+              helmCharts:
+                description: Helm charts is a list of helm charts that need to be
+                  deployed
+                items:
+                  properties:
+                    chartName:
+                      description: ChartName is the chart name
+                      minLength: 1
+                      type: string
+                    chartVersion:
+                      description: ChartVersion is the chart version
+                      minLength: 1
+                      type: string
+                    helmChartAction:
+                      default: Install
+                      description: HelmChartAction is the action that will be taken
+                        on the helm chart
+                      enum:
+                      - Install
+                      - Uninstall
+                      type: string
+                    releaseName:
+                      description: ReleaseName is the chart release
+                      minLength: 1
+                      type: string
+                    releaseNamespace:
+                      description: ReleaseNamespace is the namespace release will
+                        be installed
+                      minLength: 1
+                      type: string
+                    repositoryName:
+                      description: RepositoryName is the name helm chart repository
+                      minLength: 1
+                      type: string
+                    repositoryURL:
+                      description: RepositoryURL is the URL helm chart repository
+                      minLength: 1
+                      type: string
+                    values:
+                      description: 'Values holds the values for this Helm release.
+                        Go templating with the values from the referenced CAPI Cluster.
+                        Currently following can be referenced: - Cluster => CAPI Cluster
+                        for instance - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
+                        - InfrastructureProvider => the CAPI cluster infrastructure
+                        provider - SecretRef => store any confindetial information
+                        in a Secret, set SecretRef then reference it'
+                      type: string
+                  required:
+                  - chartName
+                  - chartVersion
+                  - releaseName
+                  - releaseNamespace
+                  - repositoryName
+                  - repositoryURL
+                  type: object
+                type: array
+              kustomizationRefs:
+                description: Kustomization refs is a list of kustomization paths.
+                  Kustomization will be run on those paths and the outcome will be
+                  deployed.
+                items:
+                  properties:
+                    deploymentType:
+                      default: Remote
+                      description: DeploymentType indicates whether resources need
+                        to be deployed into the management cluster (local) or the
+                        managed cluster (remote)
+                      enum:
+                      - Local
+                      - Remote
+                      type: string
+                    kind:
+                      description: 'Kind of the resource. Supported kinds are: - flux
+                        GitRepository;OCIRepository;Bucket - ConfigMap/Secret'
+                      enum:
+                      - GitRepository
+                      - OCIRepository
+                      - Bucket
+                      - ConfigMap
+                      - Secret
+                      type: string
+                    name:
+                      description: Name of the referenced resource.
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: Namespace of the referenced resource. For ClusterProfile
+                        namespace can be left empty. In such a case, namespace will
+                        be implicit set to cluster's namespace. For Profile namespace
+                        must be left empty. The Profile namespace will be used.
+                      type: string
+                    path:
+                      description: Path to the directory containing the kustomization.yaml
+                        file, or the set of plain YAMLs a kustomization.yaml should
+                        be generated for. Defaults to 'None', which translates to
+                        the root path of the SourceRef.
+                      type: string
+                    targetNamespace:
+                      description: TargetNamespace sets or overrides the namespace
+                        in the kustomization.yaml file.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              maxUpdate:
+                anyOf:
+                - type: integer
+                - type: string
+                description: 'The maximum number of clusters that can be updated concurrently.
+                  Value can be an absolute number (ex: 5) or a percentage of desired
+                  cluster (ex: 10%). Defaults to 100%. Example: when this is set to
+                  30%, when list of add-ons/applications in ClusterProfile changes,
+                  only 30% of matching clusters will be updated in parallel. Only
+                  when updates in those cluster succeed, other matching clusters are
+                  updated.'
+                pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                x-kubernetes-int-or-string: true
+              policyRefs:
+                description: PolicyRefs references all the ConfigMaps/Secrets containing
+                  kubernetes resources that need to be deployed in the matching CAPI
+                  clusters.
+                items:
+                  properties:
+                    deploymentType:
+                      default: Remote
+                      description: DeploymentType indicates whether resources need
+                        to be deployed into the management cluster (local) or the
+                        managed cluster (remote)
+                      enum:
+                      - Local
+                      - Remote
+                      type: string
+                    kind:
+                      description: 'Kind of the resource. Supported kinds are: Secrets
+                        and ConfigMaps.'
+                      enum:
+                      - Secret
+                      - ConfigMap
+                      type: string
+                    name:
+                      description: Name of the referenced resource.
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: Namespace of the referenced resource. For ClusterProfile
+                        namespace can be left empty. In such a case, namespace will
+                        be implicit set to cluster's namespace. For Profile namespace
+                        must be left empty. Profile namespace will be used.
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+              reloader:
+                default: false
+                description: Reloader indicates whether Deployment/StatefulSet/DaemonSet
+                  instances deployed by Sveltos and part of this ClusterProfile need
+                  to be restarted via rolling upgrade when a ConfigMap/Secret instance
+                  mounted as volume is modified. When set to true, when any mounted
+                  ConfigMap/Secret is modified, Sveltos automatically starts a rolling
+                  upgrade for Deployment/StatefulSet/DaemonSet instances mounting
+                  it.
+                type: boolean
+              stopMatchingBehavior:
+                default: WithdrawPolicies
+                description: StopMatchingBehavior indicates what behavior should be
+                  when a Cluster stop matching the ClusterProfile. By default all
+                  deployed Helm charts and Kubernetes resources will be withdrawn
+                  from Cluster. Setting StopMatchingBehavior to LeavePolicies will
+                  instead leave ClusterProfile deployed policies in the Cluster.
+                type: string
+              syncMode:
+                default: Continuous
+                description: SyncMode specifies how features are synced in a matching
+                  workload cluster. - OneTime means, first time a workload cluster
+                  matches the ClusterProfile, features will be deployed in such cluster.
+                  Any subsequent feature configuration change won't be applied into
+                  the matching workload clusters; - Continuous means first time a
+                  workload cluster matches the ClusterProfile, features will be deployed
+                  in such a cluster. Any subsequent feature configuration change will
+                  be applied into the matching workload clusters. - DryRun means no
+                  change will be propagated to any matching cluster. A report instead
+                  will be generated summarizing what would happen in any matching
+                  cluster because of the changes made to ClusterProfile while in DryRun
+                  mode.
+                enum:
+                - OneTime
+                - Continuous
+                - ContinuousWithDriftDetection
+                - DryRun
+                type: string
+              templateResourceRefs:
+                description: TemplateResourceRefs is a list of resource to collect
+                  from the management cluster. Those resources' values will be used
+                  to instantiate templates contained in referenced PolicyRefs and
+                  Helm charts
+                items:
+                  properties:
+                    identifier:
+                      description: Identifier is how the resource will be referred
+                        to in the template
+                      type: string
+                    resource:
+                      description: Resource references a Kubernetes instance in the
+                        management cluster to fetch and use during template instantiation.
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: 'If referring to a piece of an object instead
+                            of an entire object, this string should contain a valid
+                            JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container
+                            within a pod, this would take on a value like: "spec.containers{name}"
+                            (where "name" refers to the name of the container that
+                            triggered the event) or if no container name is specified
+                            "spec.containers[2]" (container with index 2 in this pod).
+                            This syntax is chosen only to have some well-defined way
+                            of referencing a part of an object. TODO: this design
+                            is not final and this field is subject to change in the
+                            future.'
+                          type: string
+                        kind:
+                          description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                          type: string
+                        namespace:
+                          description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                          type: string
+                        resourceVersion:
+                          description: 'Specific resourceVersion to which this reference
+                            is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                          type: string
+                        uid:
+                          description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                  required:
+                  - identifier
+                  - resource
+                  type: object
+                type: array
+              validateHealths:
+                description: ValidateHealths is a slice of Lua functions to run against
+                  the managed cluster to validate the state of those add-ons/applications
+                  is healthy
+                items:
+                  properties:
+                    featureID:
+                      description: 'FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                        This field indicates when to run this check. For instance:
+                        - if set to Helm this check will be run after all helm charts
+                        specified in the ClusterProfile are deployed. - if set to
+                        Resources this check will be run after the content of all
+                        the ConfigMaps/Secrets referenced by ClusterProfile in the
+                        PolicyRef sections is deployed'
+                      enum:
+                      - Resources
+                      - Helm
+                      - Kustomize
+                      type: string
+                    group:
+                      description: Group of the resource to fetch in the managed Cluster.
+                      type: string
+                    kind:
+                      description: Kind of the resource to fetch in the managed Cluster.
+                      minLength: 1
+                      type: string
+                    labelFilters:
+                      description: LabelFilters allows to filter resources based on
+                        current labels.
+                      items:
+                        properties:
+                          key:
+                            description: Key is the label key
+                            type: string
+                          operation:
+                            description: Operation is the comparison operation
+                            enum:
+                            - Equal
+                            - Different
+                            type: string
+                          value:
+                            description: Value is the label value
+                            type: string
+                        required:
+                        - key
+                        - operation
+                        - value
+                        type: object
+                      type: array
+                    name:
+                      description: Name is the name of this check
+                      type: string
+                    namespace:
+                      description: Namespace of the resource to fetch in the managed
+                        Cluster. Empty for resources scoped at cluster level.
+                      type: string
+                    script:
+                      description: Script is a text containing a lua script. Must
+                        return struct with field "health" representing whether object
+                        is a match (true or false)
+                      type: string
+                    version:
+                      description: Version of the resource to fetch in the managed
+                        Cluster.
+                      type: string
+                  required:
+                  - featureID
+                  - group
+                  - kind
+                  - name
+                  - version
+                  type: object
+                type: array
+            type: object
+          status:
+            description: Status defines the observed state of ClusterProfile/Profile
+            properties:
+              matchingClusters:
+                description: MatchingClusterRefs reference all the clusters currently
+                  matching ClusterProfile ClusterSelector
+                items:
+                  description: "ObjectReference contains enough information to let
+                    you inspect or modify the referred object. --- New uses of this
+                    type are discouraged because of difficulty describing its usage
+                    when embedded in APIs. 1. Ignored fields.  It includes many fields
+                    which are not generally honored.  For instance, ResourceVersion
+                    and FieldPath are both very rarely valid in actual usage. 2. Invalid
+                    usage help.  It is impossible to add specific help for individual
+                    usage.  In most embedded usages, there are particular restrictions
+                    like, \"must refer only to types A and B\" or \"UID not honored\"
+                    or \"name must be restricted\". Those cannot be well described
+                    when embedded. 3. Inconsistent validation.  Because the usages
+                    are different, the validation rules are different by usage, which
+                    makes it hard for users to predict what will happen. 4. The fields
+                    are both imprecise and overly precise.  Kind is not a precise
+                    mapping to a URL. This can produce ambiguity during interpretation
+                    and require a REST mapping.  In most cases, the dependency is
+                    on the group,resource tuple and the version of the actual struct
+                    is irrelevant. 5. We cannot easily change it.  Because this type
+                    is embedded in many locations, updates to this type will affect
+                    numerous schemas.  Don't make new APIs embed an underspecified
+                    API type they do not control. \n Instead of using this type, create
+                    a locally provided and used type that is well-focused on your
+                    reference. For example, ServiceReferences for admission registration:
+                    https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                    ."
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: 'If referring to a piece of an object instead of
+                        an entire object, this string should contain a valid JSON/Go
+                        field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within
+                        a pod, this would take on a value like: "spec.containers{name}"
+                        (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]"
+                        (container with index 2 in this pod). This syntax is chosen
+                        only to have some well-defined way of referencing a part of
+                        an object. TODO: this design is not final and this field is
+                        subject to change in the future.'
+                      type: string
+                    kind:
+                      description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                    namespace:
+                      description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                      type: string
+                    resourceVersion:
+                      description: 'Specific resourceVersion to which this reference
+                        is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                      type: string
+                    uid:
+                      description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              updatedClusters:
+                description: UpdatedClusters contains information all the cluster
+                  currently matching ClusterProfile ClusterSelector and already updated
+                  to latest ClusterProfile Spec
+                properties:
+                  clusters:
+                    description: Clusters reference all the clusters currently matching
+                      ClusterProfile ClusterSelector and already updated/being updated
+                      to ClusterProfile Spec
+                    items:
+                      description: "ObjectReference contains enough information to
+                        let you inspect or modify the referred object. --- New uses
+                        of this type are discouraged because of difficulty describing
+                        its usage when embedded in APIs. 1. Ignored fields.  It includes
+                        many fields which are not generally honored.  For instance,
+                        ResourceVersion and FieldPath are both very rarely valid in
+                        actual usage. 2. Invalid usage help.  It is impossible to
+                        add specific help for individual usage.  In most embedded
+                        usages, there are particular restrictions like, \"must refer
+                        only to types A and B\" or \"UID not honored\" or \"name must
+                        be restricted\". Those cannot be well described when embedded.
+                        3. Inconsistent validation.  Because the usages are different,
+                        the validation rules are different by usage, which makes it
+                        hard for users to predict what will happen. 4. The fields
+                        are both imprecise and overly precise.  Kind is not a precise
+                        mapping to a URL. This can produce ambiguity during interpretation
+                        and require a REST mapping.  In most cases, the dependency
+                        is on the group,resource tuple and the version of the actual
+                        struct is irrelevant. 5. We cannot easily change it.  Because
+                        this type is embedded in many locations, updates to this type
+                        will affect numerous schemas.  Don't make new APIs embed an
+                        underspecified API type they do not control. \n Instead of
+                        using this type, create a locally provided and used type that
+                        is well-focused on your reference. For example, ServiceReferences
+                        for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                        ."
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: 'If referring to a piece of an object instead
+                            of an entire object, this string should contain a valid
+                            JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container
+                            within a pod, this would take on a value like: "spec.containers{name}"
+                            (where "name" refers to the name of the container that
+                            triggered the event) or if no container name is specified
+                            "spec.containers[2]" (container with index 2 in this pod).
+                            This syntax is chosen only to have some well-defined way
+                            of referencing a part of an object. TODO: this design
+                            is not final and this field is subject to change in the
+                            future.'
+                          type: string
+                        kind:
+                          description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                          type: string
+                        namespace:
+                          description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                          type: string
+                        resourceVersion:
+                          description: 'Specific resourceVersion to which this reference
+                            is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                          type: string
+                        uid:
+                          description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  hash:
+                    description: Hash represents of a unique value for ClusterProfile
+                      Spec at a fixed point in time
+                    format: byte
+                    type: string
+                type: object
+              updatingClusters:
+                description: UpdatingClusters reference all the cluster currently
+                  matching ClusterProfile ClusterSelector and being updated
+                properties:
+                  clusters:
+                    description: Clusters reference all the clusters currently matching
+                      ClusterProfile ClusterSelector and already updated/being updated
+                      to ClusterProfile Spec
+                    items:
+                      description: "ObjectReference contains enough information to
+                        let you inspect or modify the referred object. --- New uses
+                        of this type are discouraged because of difficulty describing
+                        its usage when embedded in APIs. 1. Ignored fields.  It includes
+                        many fields which are not generally honored.  For instance,
+                        ResourceVersion and FieldPath are both very rarely valid in
+                        actual usage. 2. Invalid usage help.  It is impossible to
+                        add specific help for individual usage.  In most embedded
+                        usages, there are particular restrictions like, \"must refer
+                        only to types A and B\" or \"UID not honored\" or \"name must
+                        be restricted\". Those cannot be well described when embedded.
+                        3. Inconsistent validation.  Because the usages are different,
+                        the validation rules are different by usage, which makes it
+                        hard for users to predict what will happen. 4. The fields
+                        are both imprecise and overly precise.  Kind is not a precise
+                        mapping to a URL. This can produce ambiguity during interpretation
+                        and require a REST mapping.  In most cases, the dependency
+                        is on the group,resource tuple and the version of the actual
+                        struct is irrelevant. 5. We cannot easily change it.  Because
+                        this type is embedded in many locations, updates to this type
+                        will affect numerous schemas.  Don't make new APIs embed an
+                        underspecified API type they do not control. \n Instead of
+                        using this type, create a locally provided and used type that
+                        is well-focused on your reference. For example, ServiceReferences
+                        for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                        ."
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: 'If referring to a piece of an object instead
+                            of an entire object, this string should contain a valid
+                            JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container
+                            within a pod, this would take on a value like: "spec.containers{name}"
+                            (where "name" refers to the name of the container that
+                            triggered the event) or if no container name is specified
+                            "spec.containers[2]" (container with index 2 in this pod).
+                            This syntax is chosen only to have some well-defined way
+                            of referencing a part of an object. TODO: this design
+                            is not final and this field is subject to change in the
+                            future.'
+                          type: string
+                        kind:
+                          description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                          type: string
+                        namespace:
+                          description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                          type: string
+                        resourceVersion:
+                          description: 'Specific resourceVersion to which this reference
+                            is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                          type: string
+                        uid:
+                          description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  hash:
+                    description: Hash represents of a unique value for ClusterProfile
+                      Spec at a fixed point in time
+                    format: byte
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -1906,6 +2739,31 @@ rules:
   - config.projectsveltos.io
   resources:
   - clustersummaries/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles/status
   verbs:
   - get
   - patch
@@ -2148,7 +3006,7 @@ spec:
   template:
     metadata:
       annotations:
-        kubectl.kubernetes.io/default-container: manager
+        kubectl.kubernetes.io/default-container: controller
       labels:
         control-plane: addon-controller
     spec:

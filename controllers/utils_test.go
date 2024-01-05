@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -140,14 +141,14 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		scheme, err = setupScheme()
 		Expect(err).ToNot(HaveOccurred())
 
-		namespace = "reconcile" + randomString()
+		namespace = randomString()
 
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					randomString(): randomString(),
 				},
 			},
 		}
@@ -156,12 +157,13 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.ClusterProfileSpec{
-				ClusterSelector: selector,
+			Spec: configv1alpha1.Spec{
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(clusterProfile.Name, cluster.Name, false)
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
@@ -201,10 +203,10 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, err := configv1alpha1.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
+		owner, err := configv1alpha1.GetProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).ToNot(BeNil())
-		Expect(owner.Name).To(Equal(clusterProfile.Name))
+		Expect(owner.GetName()).To(Equal(clusterProfile.Name))
 	})
 
 	It("getClusterProfileOwner returns nil when ClusterProfile does not exist", func() {
@@ -231,7 +233,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, err := configv1alpha1.GetClusterProfileOwner(context.TODO(), c, clusterSummary)
+		owner, err := configv1alpha1.GetProfileOwner(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).To(BeNil())
 	})
@@ -239,7 +241,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {
 		clusterSummary0 := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "cs" + randomString(),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -256,8 +258,8 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, clusterProfile.Name, cluster.Namespace, cluster.Name,
-			libsveltosv1alpha1.ClusterTypeCapi)
+		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, configv1alpha1.ClusterProfileKind,
+			clusterProfile.Name, cluster.Namespace, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
@@ -273,7 +275,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		clusterSummary := &configv1alpha1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "cs" + randomString(),
+				Name: randomString(),
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
@@ -295,7 +297,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 			Spec: configv1alpha1.ClusterSummarySpec{
 				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.ClusterProfileSpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
 							RepositoryURL:    randomString(),

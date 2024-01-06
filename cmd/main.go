@@ -332,14 +332,20 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager,
 			} else {
 				setupLog.V(logsettings.LogInfo).Info("CAPI present.")
 				if clusterProfileReconciler != nil {
+					setupLog.V(logsettings.LogInfo).Info("start clusterProfile CAPI watcher.")
 					err = clusterProfileReconciler.WatchForCAPI(mgr, clusterProfileController)
 					if err != nil {
+						setupLog.V(logsettings.LogInfo).Info(
+							fmt.Sprintf("failed to start clusterProfile CAPI watcher: %v", err))
 						continue
 					}
 				}
 				if profileReconciler != nil {
+					setupLog.V(logsettings.LogInfo).Info("start profile CAPI watcher.")
 					err = profileReconciler.WatchForCAPI(mgr, profileController)
 					if err != nil {
+						setupLog.V(logsettings.LogInfo).Info(
+							fmt.Sprintf("failed to start profile CAPI watcher: %v", err))
 						continue
 					}
 				}

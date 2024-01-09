@@ -146,7 +146,8 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 		}
 		for i := range currentClusterSummary.Status.FeatureSummaries {
 			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID &&
-				currentClusterSummary.Status.FeatureSummaries[i].Status == configv1alpha1.FeatureStatusProvisioned {
+				currentClusterSummary.Status.FeatureSummaries[i].Status == configv1alpha1.FeatureStatusProvisioned &&
+				currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == nil {
 
 				return true
 			}

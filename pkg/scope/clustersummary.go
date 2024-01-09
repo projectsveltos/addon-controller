@@ -192,6 +192,11 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 	)
 }
 
+// IsContinuousWithDriftDetection returns true if ClusterProfile is set to SyncModeContinuousWithDriftDetection
+func (s *ClusterSummaryScope) IsContinuousWithDriftDetection() bool {
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
+}
+
 // IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterSummaryScope) IsContinuousSync() bool {
 	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous ||

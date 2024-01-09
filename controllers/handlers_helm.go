@@ -105,6 +105,16 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		if err != nil {
 			return err
 		}
+
+		// Since we are updating resources to watch for drift, remove helm section in ResourceSummary to eliminate
+		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
+		// a configuration drift is happening)
+		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+			clusterType, nil, nil, []libsveltosv1alpha1.HelmResources{}, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return err
+		}
 	}
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)

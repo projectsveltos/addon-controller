@@ -37,9 +37,8 @@ func requeueForCluster(cluster client.Object,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
 		"cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
-
 	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
 	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
@@ -74,7 +73,8 @@ func requeueForCluster(cluster client.Object,
 			l.V(logs.LogDebug).Info("queuing profile")
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
-					Name: k.Name,
+					Name:      k.Name,
+					Namespace: k.Namespace,
 				},
 			})
 		}
@@ -83,13 +83,12 @@ func requeueForCluster(cluster client.Object,
 	return requests
 }
 
-func requeueClusterProfileForMachine(machine client.Object,
+func requeueForMachine(machine client.Object,
 	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
-	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
-) []reconcile.Request {
+	clusterMap map[corev1.ObjectReference]*libsveltosset.Set) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
+	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
 		"machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Machine change")
@@ -135,7 +134,8 @@ func requeueClusterProfileForMachine(machine client.Object,
 				l.V(logs.LogDebug).Info("queuing profile")
 				requests = append(requests, ctrl.Request{
 					NamespacedName: client.ObjectKey{
-						Name: k.Name,
+						Name:      k.Name,
+						Namespace: k.Namespace,
 					},
 				})
 			}

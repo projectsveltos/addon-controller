@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -88,6 +89,17 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
+	var installed bool
+	installed, err = isResourceSummaryInstalled(ctx, remoteClient)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
+		return err
+	}
+
+	if !installed {
+		return nil
+	}
+
 	logger.V(logs.LogDebug).Info("collecting ResourceSummaries from cluster")
 	rsList := libsveltosv1alpha1.ResourceSummaryList{}
 	err = remoteClient.List(ctx, &rsList)
@@ -113,6 +125,21 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 	}
 
 	return nil
+}
+
+// isResourceSummaryInstalled returns true if ResourceSummary CRD is installed, false otherwise
+func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, error) {
+	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, clusterCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }
 
 func processResourceSummary(ctx context.Context, c, remoteClient client.Client,

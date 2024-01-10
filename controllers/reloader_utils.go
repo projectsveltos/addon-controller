@@ -23,7 +23,10 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -33,9 +36,34 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+// isReloaderInstalled returns true if Reloader CRD is installed, false otherwise
+func isReloaderInstalled(ctx context.Context, c client.Client) (bool, error) {
+	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+	err := c.Get(ctx, types.NamespacedName{Name: "reloaders.lib.projectsveltos.io"}, clusterCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
 // removeReloaderInstance removes Reloader instance from the managed cluster
 func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
 	clusterProfileName string, feature configv1alpha1.FeatureID, logger logr.Logger) error {
+
+	installed, err := isReloaderInstalled(ctx, remoteClient)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if Reloader is installed %v", err))
+		return err
+	}
+
+	if !installed {
+		return nil
+	}
 
 	reloader, err := getReloaderInstance(ctx, remoteClient, clusterProfileName,
 		feature, textlogger.NewLogger(textlogger.NewConfig()))

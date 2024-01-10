@@ -74,9 +74,8 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
-	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
-	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName)).
+		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
@@ -85,6 +84,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	logger.V(logs.LogDebug).Info("deploying kustomize resources")
+
+	err = handleDriftDetectionManagerDeploymentForKustomize(ctx, clusterSummary, clusterNamespace,
+		clusterName, clusterType, startDriftDetectionInMgmtCluster(o), logger)
+	if err != nil {
+		return err
+	}
 
 	localResourceReports, remoteResourceReports, err := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
 		clusterSummary, logger)
@@ -636,6 +641,34 @@ func cleanKustomizeResources(ctx context.Context, isMgmtCluster bool, destRestCo
 		return nil, err
 	}
 	return undeployed, nil
+}
+
+// handleDriftDetectionManagerDeploymentForKustomize deploys, if sync mode is SyncModeContinuousWithDriftDetection,
+// drift-detection-manager in the managed clyuster
+func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, startInMgmtCluster bool,
+	logger logr.Logger) error {
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
+		err := deployDriftDetectionManagerInCluster(ctx, getManagementClusterClient(), clusterNamespace,
+			clusterName, clusterSummary.Name, clusterType, startInMgmtCluster, logger)
+		if err != nil {
+			return err
+		}
+
+		// Since we are updating resources to watch for drift, remove kustomize section in ResourceSummary to eliminate
+		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
+		// a configuration drift is happening)
+		err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
+			clusterType, []configv1alpha1.Resource{}, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return err
+		}
+	}
+
+	return nil
 }
 
 // handleKustomizeResourceSummaryDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,

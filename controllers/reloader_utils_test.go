@@ -26,6 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -33,6 +34,8 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 var _ = Describe("Reloader utils", func() {
@@ -157,6 +160,11 @@ var _ = Describe("Reloader utils", func() {
 		feature := configv1alpha1.FeatureKustomize
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		var reloaderCRD *unstructured.Unstructured
+		reloaderCRD, err := utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
+		Expect(err).To(BeNil())
+		Expect(c.Create(context.TODO(), reloaderCRD)).To(Succeed())
 
 		Expect(controllers.CreateReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, nil)).To(Succeed())

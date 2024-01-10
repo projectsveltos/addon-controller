@@ -342,8 +342,17 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	if err := r.updateChartMap(ctx, clusterSummaryScope, logger); err != nil {
+	err = r.updateChartMap(ctx, clusterSummaryScope, logger)
+	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
+	if !clusterSummaryScope.IsContinuousWithDriftDetection() {
+		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
 	}
 
 	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {

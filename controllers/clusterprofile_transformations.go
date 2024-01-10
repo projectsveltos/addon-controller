@@ -49,5 +49,5 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueClusterProfileForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap)
+	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap)
 }

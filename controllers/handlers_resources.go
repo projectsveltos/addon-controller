@@ -171,6 +171,16 @@ func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *
 		if err != nil {
 			return err
 		}
+
+		// Since we are updating resources to watch for drift, remove resource section in ResourceSummary to eliminate
+		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
+		// a configuration drift is happening)
+		err = handleResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
+			clusterType, []configv1alpha1.Resource{}, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return err
+		}
 	}
 
 	return nil

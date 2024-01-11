@@ -51,9 +51,12 @@ func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
 	profileScope *scope.ProfileScope, logger logr.Logger) ([]corev1.ObjectReference, error) {
 
 	var matchingCluster []corev1.ObjectReference
-	var err error
 	if profileScope.GetSelector() != "" {
-		parsedSelector, _ := labels.Parse(profileScope.GetSelector())
+		parsedSelector, err := labels.Parse(profileScope.GetSelector())
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse clusterSelector: %v", err))
+			return nil, err
+		}
 		matchingCluster, err = clusterproxy.GetMatchingClusters(ctx, c, parsedSelector, namespace, logger)
 		if err != nil {
 			return nil, err

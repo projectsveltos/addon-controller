@@ -1,3 +1,19 @@
+/*
+Copyright 2022-24. projectsveltos.io. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers_test
 
 import (
@@ -116,6 +132,52 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm)).To(BeTrue())
+	})
+
+	It("IsFeatureFailedWithNonRetriableError returns false when feature has not failed", func() {
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterProfile,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		reconciler := getClusterSummaryReconciler(c, nil)
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+
+		Expect(controllers.IsFeatureFailedWithNonRetriableError(reconciler, clusterSummaryScope.ClusterSummary,
+			configv1alpha1.FeatureResources)).To(BeFalse())
+	})
+
+	It("IsFeatureFailedWithNonRetriableError returns true when feature has failed with non retriable error", func() {
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{
+				FeatureID: configv1alpha1.FeatureResources,
+				Status:    configv1alpha1.FeatureStatusFailedNonRetriable,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterProfile,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		reconciler := getClusterSummaryReconciler(c, nil)
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+
+		Expect(controllers.IsFeatureFailedWithNonRetriableError(reconciler, clusterSummaryScope.ClusterSummary,
+			configv1alpha1.FeatureResources)).To(BeTrue())
 	})
 
 	It("getHash returns nil when hash is not stored", func() {

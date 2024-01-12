@@ -1,5 +1,5 @@
 /*
-Copyright 2022-23. projectsveltos.io. All rights reserved.
+Copyright 2022-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -554,9 +554,10 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
-					reference.Kind, reference.Namespace, reference.Name))
-				continue
+				msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
+					reference.Kind, reference.Namespace, reference.Name)
+				logger.V(logs.LogInfo).Info(msg)
+				return nil, nil, &NonRetriableError{Message: msg}
 			}
 			return nil, nil, err
 		}
@@ -1145,4 +1146,25 @@ func setDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []
 	}
 
 	fs.DeployedGroupVersionKind = tmp
+}
+
+// getRestConfig returns restConfig to access remote cluster
+func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	logger logr.Logger) (*rest.Config, logr.Logger, error) {
+
+	clusterNamespace := clusterSummary.Spec.ClusterNamespace
+	clusterName := clusterSummary.Spec.ClusterName
+
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName)).
+		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
+
+	logger.V(logs.LogDebug).Info("get remote restConfig")
+	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return nil, logger, err
+	}
+
+	return remoteRestConfig, logger, nil
 }

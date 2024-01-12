@@ -1,5 +1,5 @@
 /*
-Copyright 2022-23. projectsveltos.io. All rights reserved.
+Copyright 2022-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -44,19 +44,20 @@ var (
 )
 
 var (
-	IsFeatureDeployed       = (*ClusterSummaryReconciler).isFeatureDeployed
-	GetHash                 = (*ClusterSummaryReconciler).getHash
-	UpdateFeatureStatus     = (*ClusterSummaryReconciler).updateFeatureStatus
-	DeployFeature           = (*ClusterSummaryReconciler).deployFeature
-	UndeployFeature         = (*ClusterSummaryReconciler).undeployFeature
-	GetCurrentReferences    = (*ClusterSummaryReconciler).getCurrentReferences
-	IsPaused                = (*ClusterSummaryReconciler).isPaused
-	ShouldReconcile         = (*ClusterSummaryReconciler).shouldReconcile
-	UpdateChartMap          = (*ClusterSummaryReconciler).updateChartMap
-	ShouldRedeploy          = (*ClusterSummaryReconciler).shouldRedeploy
-	CanRemoveFinalizer      = (*ClusterSummaryReconciler).canRemoveFinalizer
-	ReconcileDelete         = (*ClusterSummaryReconciler).reconcileDelete
-	AreDependenciesDeployed = (*ClusterSummaryReconciler).areDependenciesDeployed
+	IsFeatureDeployed                    = (*ClusterSummaryReconciler).isFeatureDeployed
+	IsFeatureFailedWithNonRetriableError = (*ClusterSummaryReconciler).isFeatureFailedWithNonRetriableError
+	GetHash                              = (*ClusterSummaryReconciler).getHash
+	UpdateFeatureStatus                  = (*ClusterSummaryReconciler).updateFeatureStatus
+	DeployFeature                        = (*ClusterSummaryReconciler).deployFeature
+	UndeployFeature                      = (*ClusterSummaryReconciler).undeployFeature
+	GetCurrentReferences                 = (*ClusterSummaryReconciler).getCurrentReferences
+	IsPaused                             = (*ClusterSummaryReconciler).isPaused
+	ShouldReconcile                      = (*ClusterSummaryReconciler).shouldReconcile
+	UpdateChartMap                       = (*ClusterSummaryReconciler).updateChartMap
+	ShouldRedeploy                       = (*ClusterSummaryReconciler).shouldRedeploy
+	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
+	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
+	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference

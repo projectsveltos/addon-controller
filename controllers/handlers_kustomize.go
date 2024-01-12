@@ -1,5 +1,5 @@
 /*
-Copyright 2023. projectsveltos.io. All rights reserved.
+Copyright 2023-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,12 +73,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName)).
-		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
-
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, logger, err := getRestConfig(ctx, c, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -340,6 +335,13 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 	var tmpDir string
 	tmpDir, err = prepareFileSystem(ctx, c, kustomizationRef, clusterSummary, logger)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
+				kustomizationRef.Kind, kustomizationRef.Namespace, kustomizationRef.Name)
+			logger.V(logs.LogInfo).Info(msg)
+			return nil, nil, &NonRetriableError{Message: msg}
+		}
+
 		return nil, nil, err
 	}
 
@@ -721,7 +723,6 @@ func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestCon
 		var tmpRemote []configv1alpha1.ResourceReport
 		tmpLocal, tmpRemote, err = deployKustomizeRef(ctx, c, remoteRestConfig, kustomizationRef, clusterSummary, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy kustomize resources: %v", err))
 			return nil, nil, err
 		}
 		localResourceReports = append(localResourceReports, tmpLocal...)

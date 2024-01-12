@@ -1,5 +1,5 @@
 /*
-Copyright 2022-23. projectsveltos.io. All rights reserved.
+Copyright 2022-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,18 +52,13 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName)).
-		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
-
-	err = handleDriftDetectionManagerDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-		clusterType, startDriftDetectionInMgmtCluster(o), logger)
+	remoteRestConfig, logger, err := getRestConfig(ctx, c, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	err = handleDriftDetectionManagerDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
+		clusterType, startDriftDetectionInMgmtCluster(o), logger)
 	if err != nil {
 		return err
 	}
@@ -262,9 +257,8 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
-	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
-	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName)).
+		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	logger.V(logs.LogDebug).Info("undeployResources")
 
@@ -283,10 +277,9 @@ func undeployResources(ctx context.Context, c client.Client,
 	var resourceReports []configv1alpha1.ResourceReport
 
 	// Undeploy from management cluster
-	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
+	if _, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
-		map[string]configv1alpha1.Resource{}, logger)
-	if err != nil {
+		map[string]configv1alpha1.Resource{}, logger); err != nil {
 		return err
 	}
 

@@ -52,7 +52,7 @@ const (
 	FeatureKustomize = FeatureID("Kustomize")
 )
 
-// +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;Removing;Removed
+// +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;FailedNonRetriable;Removing;Removed
 type FeatureStatus string
 
 const (
@@ -67,6 +67,10 @@ const (
 	// FeatureStatusFailed indicates that configuring the feature
 	// in the workload cluster failed
 	FeatureStatusFailed = FeatureStatus("Failed")
+
+	// FeatureStatusFailedNonRetriable indicates that configuring the feature
+	// in the workload cluster failed with a non retriable error
+	FeatureStatusFailedNonRetriable = FeatureStatus("FailedNonRetriable")
 
 	// FeatureStatusRemoving indicates that feature is being
 	// removed

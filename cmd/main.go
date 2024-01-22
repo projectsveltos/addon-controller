@@ -57,7 +57,6 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -173,9 +172,6 @@ func main() {
 	startWatchers(ctx, mgr, clusterProfileReconciler, clusterProfileController,
 		profileReconciler, profileController,
 		clusterSummaryReconciler, clusterSummaryController)
-
-	go compliances.InitializeManager(ctx, ctrl.Log.WithName("addon-compliances"),
-		mgr.GetConfig(), mgr.GetClient(), addonComplianceTimer)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {

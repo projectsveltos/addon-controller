@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
@@ -130,6 +131,62 @@ const (
 	HelmChartActionUninstall = HelmChartAction("Uninstall")
 )
 
+type HelmOptions struct {
+	// SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
+	// By default, CRDs are installed if not already present.
+	// +kubebuilder:default:=false
+	// +optional
+	SkipCRDs bool `json:"skipCRDs,omitempty"`
+
+	// Create the release namespace if not present. Defaults to true
+	// +kubebuilder:default:=true
+	// +optional
+	CreateNamespace bool `json:"createNamespace,omitempty"`
+
+	// if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
+	// are in a ready state before marking the release as successful. It will wait for as long as --timeout
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	Wait bool `json:"wait,omitempty"`
+
+	// if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful.
+	// It will wait for as long as --timeout
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	WaitForJobs bool `json:"waitForJobs,omitempty"`
+
+	// time to wait for any individual Kubernetes operation (like Jobs for hooks) (default 5m0s)
+	// +optional
+	Timeout *metav1.Duration `json:"timeout,omitempty"`
+
+	// prevent hooks from running during install
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DisableHooks bool `json:"disableHooks,omitempty"`
+
+	// if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DisableOpenAPIValidation bool `json:"disableOpenAPIValidation,omitempty"`
+
+	// if set, the installation process deletes the installation on failure.
+	// The --wait flag will be set automatically if --atomic is used
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	Atomic bool `json:"atomic,omitempty"`
+
+	// update dependencies if they are missing before installing the chart
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DependencyUpdate bool `json:"dependencyUpdate,omitempty"`
+}
+
 type HelmChart struct {
 	// RepositoryURL is the URL helm chart repository
 	// +kubebuilder:validation:MinLength=1
@@ -169,6 +226,10 @@ type HelmChart struct {
 	// +kubebuilder:default:=Install
 	// +optional
 	HelmChartAction HelmChartAction `json:"helmChartAction,omitempty"`
+
+	// Options allows to set flags which are used during installation.
+	// +optional
+	Options *HelmOptions `json:"options,omitempty"`
 }
 
 type KustomizationRef struct {

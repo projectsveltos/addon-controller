@@ -113,9 +113,6 @@ var _ = Describe("HandlersUtils", func() {
 				Labels: map[string]string{
 					randomString(): randomString(),
 				},
-				Annotations: map[string]string{
-					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
-				},
 			},
 		}
 

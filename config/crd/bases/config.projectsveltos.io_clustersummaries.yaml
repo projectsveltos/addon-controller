@@ -146,6 +146,64 @@ spec:
                           - Install
                           - Uninstall
                           type: string
+                        options:
+                          description: Options allows to set flags which are used
+                            during installation.
+                          properties:
+                            atomic:
+                              default: false
+                              description: if set, the installation process deletes
+                                the installation on failure. The --wait flag will
+                                be set automatically if --atomic is used Default to
+                                false
+                              type: boolean
+                            createNamespace:
+                              default: true
+                              description: Create the release namespace if not present.
+                                Defaults to true
+                              type: boolean
+                            dependencyUpdate:
+                              default: false
+                              description: update dependencies if they are missing
+                                before installing the chart Default to false
+                              type: boolean
+                            disableHooks:
+                              default: false
+                              description: prevent hooks from running during install
+                                Default to false
+                              type: boolean
+                            disableOpenAPIValidation:
+                              default: false
+                              description: if set, the installation process will not
+                                validate rendered templates against the Kubernetes
+                                OpenAPI Schema Default to false
+                              type: boolean
+                            skipCRDs:
+                              default: false
+                              description: SkipCRDs controls whether CRDs should be
+                                installed during install/upgrade operation. By default,
+                                CRDs are installed if not already present.
+                              type: boolean
+                            timeout:
+                              description: time to wait for any individual Kubernetes
+                                operation (like Jobs for hooks) (default 5m0s)
+                              type: string
+                            wait:
+                              default: false
+                              description: if set, will wait until all Pods, PVCs,
+                                Services, and minimum number of Pods of a Deployment,
+                                StatefulSet, or ReplicaSet are in a ready state before
+                                marking the release as successful. It will wait for
+                                as long as --timeout Default to false
+                              type: boolean
+                            waitForJobs:
+                              default: false
+                              description: if set and --wait enabled, will wait until
+                                all Jobs have been completed before marking the release
+                                as successful. It will wait for as long as --timeout
+                                Default to false
+                              type: boolean
+                          type: object
                         releaseName:
                           description: ReleaseName is the chart release
                           minLength: 1

@@ -564,11 +564,6 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		return nil, nil, err
 	}
 
-	err = validateUnstructred(ctx, true, objectsToDeployRemotely, clusterSummary, logger)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {

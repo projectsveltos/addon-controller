@@ -192,58 +192,8 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		Name:      referencedObject.GetName(),
 	}
 
-	err = validateUnstructred(ctx, deployingToMgmtCluster, resources, clusterSummary, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
 		configv1alpha1.FeatureResources, clusterSummary, logger)
-}
-
-func validateUnstructred(ctx context.Context, deployingToMgmtCluster bool,
-	resources []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) error {
-
-	err := validateUnstructredAgainstLuaPolicies(ctx, deployingToMgmtCluster, resources,
-		clusterSummary, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Info("resources are not compliant with LUA policies")
-		return err
-	}
-
-	return nil
-}
-
-// validateUnstructredAgainstLuaPolicies validates all resources against all lua policies currently
-// enforced for the managed cluster where resources need to be applied.
-// Lua policies can be written to validate single resources (each deployment replica must be at least 3)
-// or combined resources (each deployment must be exposed by a service).
-func validateUnstructredAgainstLuaPolicies(ctx context.Context, deployingToMgmtCluster bool,
-	referencedUnstructured []*unstructured.Unstructured, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) error {
-
-	// validations are only enforced when posting to managed clusters
-	if deployingToMgmtCluster {
-		return nil
-	}
-
-	var luaPolicies map[string][]byte
-	luaPolicies, err := getLuaValidations(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		&clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("validating resource against %d lua policies",
-		len(luaPolicies)))
-
-	err = runLuaValidations(ctx, luaPolicies, referencedUnstructured, logger)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // deployUnstructured deploys referencedUnstructured objects.

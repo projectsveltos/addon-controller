@@ -38,7 +38,6 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
@@ -316,12 +315,4 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
-
-	// Make sure compliances manager is aware of this cluster
-	Eventually(func() bool {
-		manager := compliances.GetManager()
-		clusterType := libsveltosv1alpha1.ClusterTypeCapi
-		_, err := manager.GetClusterLuaPolicies(cluster.Namespace, cluster.Name, &clusterType)
-		return err == nil
-	}, timeout, pollingInterval).Should(BeTrue())
 }

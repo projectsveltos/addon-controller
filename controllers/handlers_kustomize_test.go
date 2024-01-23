@@ -65,9 +65,6 @@ var _ = Describe("KustomizeRefs", func() {
 				Labels: map[string]string{
 					"dc": "eng",
 				},
-				Annotations: map[string]string{
-					libsveltosv1alpha1.GetClusterAnnotation(): "ok",
-				},
 			},
 		}
 

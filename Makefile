@@ -284,7 +284,6 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_debuggingconfigurations.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_sveltosclusters.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/config/crd/bases/lib.projectsveltos.io_addoncompliances.yaml
 
 	# Install projectsveltos addon-controller components
 	@echo 'Install projectsveltos addon-controller components'
@@ -293,9 +292,6 @@ deploy-projectsveltos: $(KUSTOMIZE)
 
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
-
-	# Install addon-compliance-controller
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/addon-compliance-controller/$(TAG)/manifest/manifest.yaml
 
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)

@@ -39,7 +39,6 @@ import (
 	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
@@ -110,12 +109,6 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
 
-	var addonComplianceCRD *unstructured.Unstructured
-	addonComplianceCRD, err = utils.GetUnstructured(libsveltoscrd.GetAddonComplianceCRDYAML())
-	Expect(err).To(BeNil())
-	Expect(testEnv.Create(context.TODO(), addonComplianceCRD)).To(Succeed())
-	Expect(waitForObject(context.TODO(), testEnv, addonComplianceCRD)).To(Succeed())
-
 	var reloaderCRD *unstructured.Unstructured
 	reloaderCRD, err = utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
 	Expect(err).To(BeNil())
@@ -136,13 +129,6 @@ var _ = BeforeSuite(func() {
 
 	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig()),
 		testEnv.Config, testEnv.GetClient())
-	compliances.InitializeManager(ctx, textlogger.NewLogger(textlogger.NewConfig()),
-		testEnv.Config, testEnv.Client, 1)
-
-	Eventually(func() bool {
-		manager := compliances.GetManager()
-		return manager.IsReady()
-	}, timeout, pollingInterval).Should(BeTrue())
 
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)

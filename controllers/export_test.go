@@ -149,9 +149,6 @@ const (
 )
 
 var (
-	RunLuaValidations = runLuaValidations
-	LuaValidation     = luaValidation
-
 	IsHealthy      = isHealthy
 	FetchResources = fetchResources
 )

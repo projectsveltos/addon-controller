@@ -255,6 +255,13 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
 	}
+
+	for i := range profile.Spec.HelmCharts {
+		hc := &profile.Spec.HelmCharts[i]
+		if hc.Credentials != nil {
+			hc.Credentials.Namespace = profile.Namespace
+		}
+	}
 }
 
 func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {

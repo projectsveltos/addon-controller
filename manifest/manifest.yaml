@@ -577,6 +577,19 @@ spec:
                       description: RepositoryURL is the URL helm chart repository
                       minLength: 1
                       type: string
+                    secret:
+                      description: reference to a secret containing OCI credentials
+                      properties:
+                        name:
+                          description: name is unique within a namespace to reference
+                            a secret resource.
+                          type: string
+                        namespace:
+                          description: namespace defines the space within which the
+                            secret name must be unique.
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
                     values:
                       description: 'Values holds the values for this Helm release.
                         Go templating with the values from the referenced CAPI Cluster.
@@ -1615,6 +1628,19 @@ spec:
                           description: RepositoryURL is the URL helm chart repository
                           minLength: 1
                           type: string
+                        secret:
+                          description: reference to a secret containing OCI credentials
+                          properties:
+                            name:
+                              description: name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
                         values:
                           description: 'Values holds the values for this Helm release.
                             Go templating with the values from the referenced CAPI
@@ -2229,6 +2255,19 @@ spec:
                       description: RepositoryURL is the URL helm chart repository
                       minLength: 1
                       type: string
+                    secret:
+                      description: reference to a secret containing OCI credentials
+                      properties:
+                        name:
+                          description: name is unique within a namespace to reference
+                            a secret resource.
+                          type: string
+                        namespace:
+                          description: namespace defines the space within which the
+                            secret name must be unique.
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
                     values:
                       description: 'Values holds the values for this Helm release.
                         Go templating with the values from the referenced CAPI Cluster.

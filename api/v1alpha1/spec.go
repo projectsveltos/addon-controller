@@ -185,6 +185,10 @@ type HelmOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	DependencyUpdate bool `json:"dependencyUpdate,omitempty"`
+
+	// Labels that would be added to release metadata.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 type HelmChart struct {

@@ -1572,6 +1572,14 @@ func getDependenciesUpdateValue(options *configv1alpha1.HelmOptions) bool {
 	return false
 }
 
+func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
+	if options != nil {
+		return options.Labels
+	}
+
+	return map[string]string{}
+}
+
 func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig string) (*action.Install, error) {
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
 	if err != nil {
@@ -1586,7 +1594,6 @@ func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig s
 	installClient.WaitForJobs = getWaitForJobsHelmValue(requestedChart.Options)
 	installClient.CreateNamespace = getCreateNamespaceHelmValue(requestedChart.Options)
 	installClient.SkipCRDs = getSkipCRDsHelmValue(requestedChart.Options)
-	installClient.IncludeCRDs = true
 	installClient.Atomic = getAtomicHelmValue(requestedChart.Options)
 	installClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
 	installClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
@@ -1596,6 +1603,7 @@ func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig s
 			return nil, err
 		}
 	}
+	installClient.Labels = getLabelsValue(requestedChart.Options)
 
 	return installClient, nil
 }
@@ -1618,6 +1626,7 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 			return nil, err
 		}
 	}
+	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
 
 	return upgradeClient, nil
 }

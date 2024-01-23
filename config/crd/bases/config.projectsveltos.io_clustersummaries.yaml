@@ -178,6 +178,11 @@ spec:
                                 validate rendered templates against the Kubernetes
                                 OpenAPI Schema Default to false
                               type: boolean
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: Labels that would be added to release metadata.
+                              type: object
                             skipCRDs:
                               default: false
                               description: SkipCRDs controls whether CRDs should be

@@ -3,7 +3,7 @@ module github.com/projectsveltos/addon-controller
 go 1.21
 
 require (
-	github.com/Masterminds/semver v1.5.0
+	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
@@ -12,20 +12,19 @@ require (
 	github.com/fluxcd/source-controller/api v1.2.3
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.1
-	github.com/gofrs/flock v0.8.1
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/onsi/gomega v1.31.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.21.2-0.20240120111559-a243ee94d3fc
+	github.com/projectsveltos/libsveltos v0.22.0
 	github.com/prometheus/client_golang v1.18.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.14.0
-	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.14.0
 	k8s.io/api v0.29.1
 	k8s.io/apiextensions-apiserver v0.29.1
 	k8s.io/apimachinery v0.29.1
+	k8s.io/cli-runtime v0.29.1
 	k8s.io/client-go v0.29.1
 	k8s.io/component-base v0.29.1
 	k8s.io/klog/v2 v2.120.0
@@ -42,7 +41,6 @@ require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -167,9 +165,9 @@ require (
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.7.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.29.1 // indirect
-	k8s.io/cli-runtime v0.29.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240103195357-a9f8850cb432 // indirect
 	k8s.io/kubectl v0.29.1 // indirect
 	oras.land/oras-go v1.2.4 // indirect

@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= dev
+TAG ?= v0.22.0
 
 .PHONY: all
 all: build
@@ -304,6 +304,7 @@ prepare-configmap-with-kustomize: $(KUBECTL)
 set-manifest-image:
 	$(info Updating kustomize image patch file for manager resource)
 	sed -i'' -e 's@image: .*@image: '"${MANIFEST_IMG}:$(MANIFEST_TAG)"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@--version=.*@--version=$(TAG)"@' ./config/default/manager_auth_proxy_patch.yaml
 
 set-manifest-pull-policy:
 	$(info Updating kustomize pull policy file for manager resource)

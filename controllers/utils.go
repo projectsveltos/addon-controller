@@ -54,6 +54,10 @@ const (
 	nameSeparator = "--"
 )
 
+var (
+	version string
+)
+
 type NonRetriableError struct {
 	Message string
 }
@@ -352,4 +356,12 @@ func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bo
 	}
 
 	return true
+}
+
+func SetVersion(v string) {
+	version = v
+}
+
+func getVersion() string {
+	return version
 }

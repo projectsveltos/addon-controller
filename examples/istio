@@ -1,0 +1,31 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: istio
+spec:
+  clusterSelector: env=fv
+  syncMode: Continuous
+  helmCharts:
+  - repositoryURL:    https://istio-release.storage.googleapis.com/charts
+    repositoryName:   istio
+    chartName:        istio/base
+    chartVersion:     1.20.2
+    releaseName:      istio-base
+    releaseNamespace: istio-system
+    helmChartAction:  Install
+    options:
+      createNamespace: true
+  - repositoryURL:    https://istio-release.storage.googleapis.com/charts
+    repositoryName:   istio
+    chartName:        istio/istiod
+    chartVersion:     1.20.2
+    releaseName:      istiod
+    releaseNamespace: istio-system
+    helmChartAction:  Install
+  - repositoryURL:    https://istio-release.storage.googleapis.com/charts
+    repositoryName:   istio
+    chartName:        istio/gateway
+    chartVersion:     1.20.2
+    releaseName:      istio-ingress
+    releaseNamespace: istio-system
+    helmChartAction:  Install

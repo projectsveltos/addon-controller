@@ -347,11 +347,18 @@ func verifyClusterProfileMatches(clusterProfile *configv1alpha1.ClusterProfile) 
 	Eventually(func() bool {
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
 		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
-		return err == nil &&
-			len(currentClusterProfile.Status.MatchingClusterRefs) == 1 &&
-			currentClusterProfile.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
-			currentClusterProfile.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name &&
-			currentClusterProfile.Status.MatchingClusterRefs[0].APIVersion == clusterv1.GroupVersion.String()
+		if err != nil {
+			return false
+		}
+		for i := range currentClusterProfile.Status.MatchingClusterRefs {
+			if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
+				currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
+				currentClusterProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+
+				return true
+			}
+		}
+		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 
@@ -364,11 +371,18 @@ func verifyProfileMatches(profile *configv1alpha1.Profile) {
 		err := k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: profile.Namespace, Name: profile.Name},
 			currentProfile)
-		return err == nil &&
-			len(currentProfile.Status.MatchingClusterRefs) == 1 &&
-			currentProfile.Status.MatchingClusterRefs[0].Namespace == kindWorkloadCluster.Namespace &&
-			currentProfile.Status.MatchingClusterRefs[0].Name == kindWorkloadCluster.Name &&
-			currentProfile.Status.MatchingClusterRefs[0].APIVersion == clusterv1.GroupVersion.String()
+		if err != nil {
+			return false
+		}
+		for i := range currentProfile.Status.MatchingClusterRefs {
+			if currentProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
+				currentProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
+				currentProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+
+				return true
+			}
+		}
+		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 }
 

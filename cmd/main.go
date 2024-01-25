@@ -57,7 +57,6 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/pkg/compliances"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -75,6 +74,7 @@ var (
 	restConfigBurst      int
 	webhookPort          int
 	syncPeriod           time.Duration
+	version              string
 )
 
 const (
@@ -167,15 +167,13 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	setupChecks(mgr)
+	controllers.SetVersion(version)
 
 	setupIndexes(ctx, mgr)
 
 	startWatchers(ctx, mgr, clusterProfileReconciler, clusterProfileController,
 		profileReconciler, profileController,
 		clusterSummaryReconciler, clusterSummaryController)
-
-	go compliances.InitializeManager(ctx, ctrl.Log.WithName("addon-compliances"),
-		mgr.GetConfig(), mgr.GetClient(), addonComplianceTimer)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
@@ -221,6 +219,11 @@ func initFlags(fs *pflag.FlagSet) {
 		"concurrent-reconciles",
 		defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
+
+	fs.StringVar(&version,
+		"version",
+		"",
+		"current sveltos version")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,

@@ -67,7 +67,12 @@ func requeueForCluster(cluster client.Object,
 	// now matching the Cluster
 	for k := range profileSelectors {
 		profileSelector := profileSelectors[k]
-		parsedSelector, _ := labels.Parse(string(profileSelector))
+		parsedSelector, err := labels.Parse(string(profileSelector))
+		if err != nil {
+			// When clusterSelector is fixed, this ClusterProfile/Profile
+			// instance will be reconciled
+			continue
+		}
 		if parsedSelector.Matches(labels.Set(cluster.GetLabels())) {
 			l := logger.WithValues("profile", k.Name)
 			l.V(logs.LogDebug).Info("queuing profile")
@@ -128,7 +133,12 @@ func requeueForMachine(machine client.Object,
 		// matching the Cluster
 		for k := range profileSelectors {
 			profileSelector := profileSelectors[k]
-			parsedSelector, _ := labels.Parse(string(profileSelector))
+			parsedSelector, err := labels.Parse(string(profileSelector))
+			if err != nil {
+				// When clusterSelector is fixed, this ClusterProfile/Profile
+				// instance will be reconciled
+				continue
+			}
 			if parsedSelector.Matches(labels.Set(clusterLabels)) {
 				l := logger.WithValues("profile", k.Name)
 				l.V(logs.LogDebug).Info("queuing profile")

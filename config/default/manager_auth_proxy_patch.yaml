@@ -39,3 +39,4 @@ spec:
         - "--report-mode=0"
         - --shard-key=
         - "--v=5"
+        - "--version=main"

@@ -219,22 +219,6 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
-  - addoncompliances
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - addoncompliances/status
-  verbs:
-  - get
-  - list
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - debuggingconfigurations
   verbs:
   - get

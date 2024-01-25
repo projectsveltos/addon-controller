@@ -1,5 +1,5 @@
 /*
-Copyright 2022. projectsveltos.io. All rights reserved.
+Copyright 2022-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -123,6 +124,15 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
 		if *status == configv1alpha1.FeatureStatusProvisioned {
 			return nil
+		}
+		if resultError != nil {
+			// Check if error is a NonRetriableError type
+			var nonRetriableError *NonRetriableError
+			if errors.As(resultError, &nonRetriableError) {
+				nonRetriableStatus := configv1alpha1.FeatureStatusFailedNonRetriable
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
+				return nil
+			}
 		}
 		if *status == configv1alpha1.FeatureStatusProvisioning {
 			return fmt.Errorf("feature is still being provisioned")
@@ -309,6 +319,21 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alp
 	return false
 }
 
+// isFeatureFailedWithNonRetriableError returns true if feature is marked as failed with a non retriable error
+func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterSummary *configv1alpha1.ClusterSummary,
+	featureID configv1alpha1.FeatureID) bool {
+
+	for i := range clusterSummary.Status.FeatureSummaries {
+		fs := clusterSummary.Status.FeatureSummaries[i]
+		if fs.FeatureID == featureID {
+			if fs.Status == configv1alpha1.FeatureStatusFailedNonRetriable {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // isFeatureRemoved returns true if feature is marked as removed (present in FeatureSummaries and status
 // is set to Removed).
 func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1alpha1.ClusterSummary,
@@ -362,8 +387,8 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioning, hash)
 	case configv1alpha1.FeatureStatusRemoving:
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusRemoving, hash)
-	case configv1alpha1.FeatureStatusFailed:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusFailed, hash)
+	case configv1alpha1.FeatureStatusFailed, configv1alpha1.FeatureStatusFailedNonRetriable:
+		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash)
 		err := statusError.Error()
 		clusterSummaryScope.SetFailureMessage(featureID, &err)
 	}
@@ -402,6 +427,17 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.Clu
 	}
 
 	deployed := r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, f.id)
+	isErrorNonRetriable := false
+	if !deployed {
+		isErrorNonRetriable = r.isFeatureFailedWithNonRetriableError(clusterSummaryScope.ClusterSummary, f.id)
+	}
+
+	if isErrorNonRetriable && isConfigSame {
+		// feature failed with a non retriable error and nothing has changed. Nothing to do.
+		logger.V(logs.LogDebug).Info("feature failed with non-retriable error and hash has not changed")
+		return false
+	}
+
 	if deployed && isConfigSame {
 		// feature is deployed and nothing has changed. Nothing to do.
 		logger.V(logs.LogDebug).Info("feature is deployed and hash has not changed")

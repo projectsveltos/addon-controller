@@ -27,19 +27,6 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
-var (
-	paralusValues = `deploy:
-  postgresql:
-    address: "my-pgsql-host:5432"
-    username: "user"
-    password: "pa$$word"
-    database: "dbname"
-  filebeat:
-    enable: false
-  fluentbit:
-    enable: false`
-)
-
 var _ = Describe("Dependencies", func() {
 	const (
 		namePrefix = "dependencies-"
@@ -69,16 +56,17 @@ var _ = Describe("Dependencies", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
-				RepositoryURL:    "https://kubevela.github.io/charts",
-				RepositoryName:   "kubevela",
-				ChartName:        "kubevela/vela-core",
-				ChartVersion:     "1.9.6",
-				ReleaseName:      "kubevela-core-latest",
-				ReleaseNamespace: "vela-system",
+				RepositoryURL:    "https://charts.bitnami.com/bitnami",
+				RepositoryName:   "airflow",
+				ChartName:        "bitnami/airflow",
+				ChartVersion:     "16.2.1",
+				ReleaseName:      "airflow",
+				ReleaseNamespace: "airflow",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
 		clusterSummaryDependency := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -87,13 +75,12 @@ var _ = Describe("Dependencies", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
-				RepositoryURL:    "https://paralus.github.io/helm-charts",
-				RepositoryName:   "paralus",
-				ChartName:        "paralus/ztka",
-				ChartVersion:     "0.2.6",
-				ReleaseName:      "paralus-latest",
-				ReleaseNamespace: "paralus",
-				Values:           paralusValues,
+				RepositoryURL:    "https://charts.bitnami.com/bitnami",
+				RepositoryName:   "bitnami",
+				ChartName:        "bitnami/external-dns",
+				ChartVersion:     "6.30.1",
+				ReleaseName:      "external-dns",
+				ReleaseNamespace: "external-dns",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}

@@ -21,16 +21,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2/textlogger"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosutils "github.com/projectsveltos/libsveltos/lib/utils"
+)
+
+const (
+	luaFileName     = "lua_policy.lua"
+	validFileName   = "valid_resource.yaml"
+	invalidFileName = "invalid_resource.yaml"
 )
 
 var _ = Describe("Lua Health Policies", func() {
@@ -180,4 +189,34 @@ func verifyHealthLuaPolicy(dirName string) {
 			Expect(healthy).To(BeFalse())
 		}
 	}
+}
+
+func getResources(dirName, fileName string) []*unstructured.Unstructured {
+	resourceFileName := filepath.Join(dirName, fileName)
+
+	_, err := os.Stat(resourceFileName)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	Expect(err).To(BeNil())
+
+	content, err := os.ReadFile(resourceFileName)
+	Expect(err).To(BeNil())
+
+	separator := "---"
+
+	resources := make([]*unstructured.Unstructured, 0)
+	elements := strings.Split(string(content), separator)
+	for i := range elements {
+		if elements[i] == "" {
+			continue
+		}
+
+		u, err := libsveltosutils.GetUnstructured([]byte(elements[i]))
+		Expect(err).To(BeNil())
+
+		resources = append(resources, u)
+	}
+
+	return resources
 }

@@ -54,6 +54,18 @@ const (
 	nameSeparator = "--"
 )
 
+var (
+	version string
+)
+
+type NonRetriableError struct {
+	Message string
+}
+
+func (r *NonRetriableError) Error() string {
+	return r.Message
+}
+
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
@@ -344,4 +356,12 @@ func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bo
 	}
 
 	return true
+}
+
+func SetVersion(v string) {
+	version = v
+}
+
+func getVersion() string {
+	return version
 }

@@ -354,6 +354,12 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		}
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		// Use the version. This will cause drift-detection, Sveltos CRDs
+		// to be redeployed on upgrade
+		config += getVersion()
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

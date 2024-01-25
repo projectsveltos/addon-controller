@@ -40,7 +40,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 	const interval = 10 * time.Second
 
 	for {
-		logger.V(logs.LogDebug).Info("collecting ResourceSummaries")
+		logger.V(logs.LogVerbose).Info("collecting ResourceSummaries")
 		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", shardkey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
@@ -100,7 +100,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	logger.V(logs.LogDebug).Info("collecting ResourceSummaries from cluster")
+	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")
 	rsList := libsveltosv1alpha1.ResourceSummaryList{}
 	err = remoteClient.List(ctx, &rsList)
 	if err != nil {

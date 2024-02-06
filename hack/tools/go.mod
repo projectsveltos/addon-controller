@@ -5,11 +5,11 @@ go 1.21
 require (
 	github.com/a8m/envsubst v1.1.0
 	github.com/onsi/ginkgo/v2 v2.15.0
-	golang.org/x/oauth2 v0.14.0
+	golang.org/x/oauth2 v0.15.0
 	k8s.io/client-go v0.29.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240116121732-6747c42ce339
 	sigs.k8s.io/controller-tools v0.13.0
-	sigs.k8s.io/kind v0.20.0
+	sigs.k8s.io/kind v0.21.0
 )
 
 require (

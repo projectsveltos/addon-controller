@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -350,11 +351,20 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 			if err == nil {
 				config += render.AsCode(configmap.Data)
 			}
-		} else {
+		} else if reference.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, secret)
 			if err == nil {
 				config += render.AsCode(secret.Data)
+			}
+		} else {
+			var source client.Object
+			source, err = getSource(ctx, c, namespace, reference.Name, reference.Kind)
+			if err == nil && source == nil {
+				s := source.(sourcev1.Source)
+				if s.GetArtifact() != nil {
+					config += s.GetArtifact().Revision
+				}
 			}
 		}
 		if err != nil {

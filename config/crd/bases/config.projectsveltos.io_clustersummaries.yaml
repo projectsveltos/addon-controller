@@ -329,10 +329,13 @@ spec:
                           type: string
                         kind:
                           description: 'Kind of the resource. Supported kinds are:
-                            Secrets and ConfigMaps.'
+                            - ConfigMap/Secret - flux GitRepository;OCIRepository;Bucket'
                           enum:
-                          - Secret
+                          - GitRepository
+                          - OCIRepository
+                          - Bucket
                           - ConfigMap
+                          - Secret
                           type: string
                         name:
                           description: Name of the referenced resource.
@@ -344,6 +347,11 @@ spec:
                             will be implicit set to cluster's namespace. For Profile
                             namespace must be left empty. Profile namespace will be
                             used.
+                          type: string
+                        path:
+                          description: Path to the directory containing the YAML files.
+                            Defaults to 'None', which translates to the root path
+                            of the SourceRef. Used only for GitRepository;OCIRepository;Bucket
                           type: string
                       required:
                       - kind

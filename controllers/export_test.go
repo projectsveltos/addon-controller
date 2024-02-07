@@ -88,6 +88,7 @@ var (
 	HandleResourceDelete          = handleResourceDelete
 	GetSecret                     = getSecret
 	GetReferenceResourceNamespace = getReferenceResourceNamespace
+	ReadFiles                     = readFiles
 
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs

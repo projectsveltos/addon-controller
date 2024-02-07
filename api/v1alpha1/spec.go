@@ -308,9 +308,17 @@ type PolicyRef struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
-	// Kind of the resource. Supported kinds are: Secrets and ConfigMaps.
-	// +kubebuilder:validation:Enum=Secret;ConfigMap
+	// Kind of the resource. Supported kinds are:
+	// - ConfigMap/Secret
+	// - flux GitRepository;OCIRepository;Bucket
+	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
 	Kind string `json:"kind"`
+
+	// Path to the directory containing the YAML files.
+	// Defaults to 'None', which translates to the root path of the SourceRef.
+	// Used only for GitRepository;OCIRepository;Bucket
+	// +optional
+	Path string `json:"path,omitempty"`
 
 	// DeploymentType indicates whether resources need to be deployed
 	// into the management cluster (local) or the managed cluster (remote)

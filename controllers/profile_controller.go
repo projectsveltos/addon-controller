@@ -175,7 +175,7 @@ func (r *ProfileReconciler) reconcileNormal(
 	logger := profileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling Profile")
 
-	if !controllerutil.ContainsFinalizer(&configv1alpha1.ClusterSummary{}, configv1alpha1.ProfileFinalizer) {
+	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1alpha1.ProfileFinalizer) {
 		if err := addFinalizer(ctx, profileScope, configv1alpha1.ProfileFinalizer); err != nil {
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}

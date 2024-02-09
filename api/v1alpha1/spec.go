@@ -234,6 +234,10 @@ type HelmChart struct {
 	// Options allows to set flags which are used during installation.
 	// +optional
 	Options *HelmOptions `json:"options,omitempty"`
+
+	// reference to a secret containing OCI credentials
+	// +optional
+	Credentials *corev1.SecretReference `json:"secret,omitempty"`
 }
 
 type KustomizationRef struct {

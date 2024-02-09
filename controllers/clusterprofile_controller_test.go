@@ -54,6 +54,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
 			},
 		}
+		Expect(addTypeInformationToObject(scheme, clusterProfile)).To(Succeed())
 	})
 
 	It("Adds finalizer", func() {
@@ -61,7 +62,8 @@ var _ = Describe("Profile: Reconciler", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
 			Client:            c,
@@ -76,6 +78,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterProfileName := client.ObjectKey{
 			Name: clusterProfile.Name,
 		}
+
 		_, err := reconciler.Reconcile(context.TODO(), ctrl.Request{
 			NamespacedName: clusterProfileName,
 		})

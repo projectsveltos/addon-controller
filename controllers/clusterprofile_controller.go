@@ -105,7 +105,6 @@ type ClusterProfileReconciler struct {
 func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
-
 	// Fecth the ClusterProfile instance
 	clusterProfile := &configv1alpha1.ClusterProfile{}
 	if err := r.Get(ctx, req.NamespacedName, clusterProfile); err != nil {
@@ -141,7 +140,6 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if !clusterProfile.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, profileScope), nil
 	}
-
 	// Handle non-deleted clusterProfile
 	return r.reconcileNormal(ctx, profileScope), nil
 }
@@ -171,7 +169,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	logger := profileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile")
 
-	if !controllerutil.ContainsFinalizer(&configv1alpha1.ClusterSummary{}, configv1alpha1.ClusterProfileFinalizer) {
+	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1alpha1.ClusterProfileFinalizer) {
 		if err := addFinalizer(ctx, profileScope, configv1alpha1.ClusterProfileFinalizer); err != nil {
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}

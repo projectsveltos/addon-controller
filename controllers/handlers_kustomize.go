@@ -29,10 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/fluxcd/pkg/http/fetch"
-	"github.com/fluxcd/pkg/tar"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -274,9 +271,8 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace, kustomizationRef.Namespace)
 		if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-			namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace,
-				kustomizationRef.Namespace)
 			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
@@ -287,8 +283,6 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			}
 			config += render.AsCode(configMap.BinaryData)
 		} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
-			namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace,
-				kustomizationRef.Namespace)
 			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
@@ -299,7 +293,7 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			}
 			config += render.AsCode(secret.Data)
 		} else {
-			source, err := getSource(ctx, c, kustomizationRef, clusterSummaryScope.ClusterSummary)
+			source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
 				return nil, err
@@ -307,8 +301,9 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			if source == nil {
 				continue
 			}
-			if source.GetArtifact() != nil {
-				config += source.GetArtifact().Revision
+			s := source.(sourcev1.Source)
+			if s.GetArtifact() != nil {
+				config += s.GetArtifact().Revision
 			}
 		}
 	}
@@ -342,13 +337,6 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 	var tmpDir string
 	tmpDir, err = prepareFileSystem(ctx, c, kustomizationRef, clusterSummary, logger)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
-				kustomizationRef.Kind, kustomizationRef.Namespace, kustomizationRef.Name)
-			logger.V(logs.LogInfo).Info(msg)
-			return nil, nil, &NonRetriableError{Message: msg}
-		}
-
 		return nil, nil, err
 	}
 
@@ -388,7 +376,18 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
 	}
 
-	return prepareFileSystemWithFluxSource(ctx, c, kustomizationRef, clusterSummary, logger)
+	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+	if err != nil {
+		return "", err
+	}
+
+	if source == nil {
+		return "", fmt.Errorf("source %s %s/%s not found", kustomizationRef.Kind, namespace, kustomizationRef.Name)
+	}
+
+	s := source.(sourcev1.Source)
+	return prepareFileSystemWithFluxSource(s, logger)
 }
 
 func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
@@ -449,52 +448,6 @@ func prepareFileSystemWithData(binaryData map[string][]byte,
 	}
 
 	logger.V(logs.LogDebug).Info("extracted .tar.gz")
-	return tmpDir, nil
-}
-
-func prepareFileSystemWithFluxSource(ctx context.Context, c client.Client,
-	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (string, error) {
-
-	source, err := getSource(ctx, c, kustomizationRef, clusterSummary)
-	if err != nil {
-		return "", err
-	}
-
-	if source == nil {
-		return "", fmt.Errorf("source %s %s/%s not found",
-			kustomizationRef.Kind, kustomizationRef.Namespace, kustomizationRef.Name)
-	}
-
-	if source.GetArtifact() == nil {
-		msg := "Source is not ready, artifact not found"
-		logger.V(logs.LogInfo).Info(msg)
-		return "", err
-	}
-
-	// Update status with the reconciliation progress.
-	// revision := source.GetArtifact().Revision
-
-	// Create tmp dir.
-	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s-%s", kustomizationRef.Namespace, kustomizationRef.Name))
-	if err != nil {
-		err = fmt.Errorf("tmp dir error: %w", err)
-		return "", err
-	}
-
-	artifactFetcher := fetch.NewArchiveFetcher(
-		1,
-		tar.UnlimitedUntarSize,
-		tar.UnlimitedUntarSize,
-		os.Getenv("SOURCE_CONTROLLER_LOCALHOST"),
-	)
-
-	// Download artifact and extract files to the tmp dir.
-	err = artifactFetcher.Fetch(source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)
-	if err != nil {
-		return "", err
-	}
-
 	return tmpDir, nil
 }
 
@@ -579,54 +532,6 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	return localReports, remoteReports, err
-}
-
-func getSource(ctx context.Context, c client.Client, kustomizationRef *configv1alpha1.KustomizationRef,
-	clusterSummary *configv1alpha1.ClusterSummary) (sourcev1.Source, error) {
-
-	var src sourcev1.Source
-	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	namespacedName := types.NamespacedName{
-		Namespace: namespace,
-		Name:      kustomizationRef.Name,
-	}
-
-	switch kustomizationRef.Kind {
-	case sourcev1.GitRepositoryKind:
-		var repository sourcev1.GitRepository
-		err := c.Get(ctx, namespacedName, &repository)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, nil
-			}
-			return nil, fmt.Errorf("unable to get source '%s': %w", namespacedName, err)
-		}
-		src = &repository
-	case sourcev1b2.OCIRepositoryKind:
-		var repository sourcev1b2.OCIRepository
-		err := c.Get(ctx, namespacedName, &repository)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, nil
-			}
-			return src, fmt.Errorf("unable to get source '%s': %w", namespacedName, err)
-		}
-		src = &repository
-	case sourcev1b2.BucketKind:
-		var bucket sourcev1b2.Bucket
-		err := c.Get(ctx, namespacedName, &bucket)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return nil, nil
-			}
-			return src, fmt.Errorf("unable to get source '%s': %w", namespacedName, err)
-		}
-		src = &bucket
-	default:
-		return src, fmt.Errorf("source `%s` kind '%s' not supported",
-			kustomizationRef.Name, kustomizationRef.Kind)
-	}
-	return src, nil
 }
 
 func cleanKustomizeResources(ctx context.Context, isMgmtCluster bool, destRestConfig *rest.Config,

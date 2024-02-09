@@ -21,10 +21,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -55,6 +58,7 @@ const (
 	separator                = "---\n"
 	reasonLabel              = "projectsveltos.io/reason"
 	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
+	pathAnnotation           = "path"
 )
 
 func getClusterSummaryAnnotationValue(clusterSummary *configv1alpha1.ClusterSummary) string {
@@ -99,12 +103,10 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (reports []configv1alpha1.ResourceReport, err error) {
+) ([]configv1alpha1.ResourceReport, error) {
 
-	reports, err =
-		deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data, clusterSummary,
-			mgtmResources, logger)
-	return
+	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
+		clusterSummary, mgtmResources, logger)
 }
 
 // deployContentOfSecret deploys policies contained in a Secret.
@@ -114,17 +116,71 @@ func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, 
 func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
 	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (reports []configv1alpha1.ResourceReport, err error) {
+) ([]configv1alpha1.ResourceReport, error) {
 
 	data := make(map[string]string)
 	for key, value := range secret.Data {
 		data[key] = string(value)
 	}
 
-	reports, err =
-		deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data, clusterSummary,
-			mgtmResources, logger)
-	return
+	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data,
+		clusterSummary, mgtmResources, logger)
+}
+
+func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
+	destClient client.Client, source client.Object, path string, clusterSummary *configv1alpha1.ClusterSummary,
+	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) ([]configv1alpha1.ResourceReport, error) {
+
+	s := source.(sourcev1.Source)
+
+	tmpDir, err := prepareFileSystemWithFluxSource(s, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if tmpDir == "" {
+		return nil, nil
+	}
+
+	defer os.RemoveAll(tmpDir)
+
+	// check build path exists
+	dirPath := filepath.Join(tmpDir, path)
+	_, err = os.Stat(dirPath)
+	if err != nil {
+		logger.Error(err, "source path not found")
+		return nil, err
+	}
+
+	var content map[string]string
+	content, err = readFiles(dirPath)
+	if err != nil {
+		logger.Error(err, "failed to read content")
+		return nil, err
+	}
+
+	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, source, content,
+		clusterSummary, mgtmResources, logger)
+}
+
+func readFiles(dir string) (map[string]string, error) {
+	files := make(map[string]string)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			files[filepath.Base(path)] = string(content)
+		}
+		return nil
+	})
+	return files, err
 }
 
 // updateResource creates or updates a resource in a CAPI Cluster.
@@ -498,9 +554,15 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: namespace, Name: reference.Name})
-		} else {
+		} else if reference.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			object, err = getSecret(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: namespace, Name: reference.Name})
+		} else {
+			object, err = getSource(ctx, controlClusterClient, namespace, reference.Name, reference.Kind)
+			if object != nil {
+				// Path is needed when we need to collect resources.
+				object.SetAnnotations(map[string]string{pathAnnotation: reference.Path})
+			}
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -587,13 +649,21 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			tmpResourceReports, err =
 				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap,
 					clusterSummary, mgtmResources, l)
-		} else {
+		} else if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
 				deployContentOfSecret(ctx, deployingToMgmtCluster, destConfig, destClient, secret,
 					clusterSummary, mgtmResources, l)
+		} else {
+			source := referencedObjects[i]
+			logger.V(logs.LogDebug).Info("deploying Source content")
+			annotations := source.GetAnnotations()
+			path := annotations[pathAnnotation]
+			tmpResourceReports, err =
+				deployContentOfSource(ctx, deployingToMgmtCluster, destConfig, destClient, source, path,
+					clusterSummary, mgtmResources, logger)
 		}
 
 		if err != nil {
@@ -1024,25 +1094,35 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 	reports := localResourceReports
 	reports = append(reports, remoteResourceReports...)
 
-	gvks := make([]schema.GroupVersionKind, 0)
-	gvkMap := make(map[schema.GroupVersionKind]bool)
-	for i := range reports {
-		gvk := schema.GroupVersionKind{
-			Group:   reports[i].Resource.Group,
-			Version: reports[i].Resource.Version,
-			Kind:    reports[i].Resource.Kind,
-		}
-		if _, ok := gvkMap[gvk]; !ok {
-			gvks = append(gvks, gvk)
-			gvkMap[gvk] = true
-		}
-	}
-
-	// update status with list of GroupVersionKinds deployed in a Managed and Management Cluster
-	setDeployedGroupVersionKind(clusterSummary, gvks, featureID)
+	c := getManagementClusterClient()
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return getManagementClusterClient().Status().Update(ctx, clusterSummary)
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)
+		if err != nil {
+			return err
+		}
+
+		gvks := make([]schema.GroupVersionKind, 0)
+		gvkMap := make(map[schema.GroupVersionKind]bool)
+		for i := range reports {
+			gvk := schema.GroupVersionKind{
+				Group:   reports[i].Resource.Group,
+				Version: reports[i].Resource.Version,
+				Kind:    reports[i].Resource.Kind,
+			}
+			if _, ok := gvkMap[gvk]; !ok {
+				gvks = append(gvks, gvk)
+				gvkMap[gvk] = true
+			}
+		}
+
+		// update status with list of GroupVersionKinds deployed in a Managed and Management Cluster
+		setDeployedGroupVersionKind(currentClusterSummary, gvks, featureID)
+
+		return getManagementClusterClient().Status().Update(ctx, currentClusterSummary)
 	})
 	return err
 }

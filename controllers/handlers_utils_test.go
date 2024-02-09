@@ -19,6 +19,8 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -662,6 +664,37 @@ var _ = Describe("HandlersUtils", func() {
 			Namespace: depl.GetNamespace(),
 		})
 		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{name: {}})).To(BeFalse())
+	})
+
+	It("readFiles loads content of all files in a directory", func() {
+		dir, err := os.MkdirTemp("", "my-temp-dir")
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(dir)
+
+		const permission0600 = 0600
+		err = os.WriteFile(filepath.Join(dir, "file1.txt"), []byte(serviceTemplate), permission0600)
+		Expect(err).To(BeNil())
+
+		// Create a subdirectory
+		const subdir = "subdir"
+		err = os.MkdirAll(filepath.Join(dir, subdir), 0755)
+		Expect(err).To(BeNil())
+
+		err = os.WriteFile(filepath.Join(dir, subdir, "file2.txt"), []byte(deplTemplate), permission0600)
+		Expect(err).To(BeNil())
+
+		result, err := controllers.ReadFiles(dir)
+		Expect(err).To(BeNil())
+
+		Expect(result).ToNot(BeEmpty())
+
+		v, ok := result["file1.txt"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(serviceTemplate))
+
+		v, ok = result["file2.txt"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(deplTemplate))
 	})
 
 	It("handleResourceDelete leaves policies on Cluster when mode is LeavePolicies", func() {

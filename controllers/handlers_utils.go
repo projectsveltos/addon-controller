@@ -537,6 +537,19 @@ func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace
 	return clusterNamespace
 }
 
+func appendPathAnnotations(object client.Object, reference *configv1alpha1.PolicyRef) {
+	if object == nil {
+		return
+	}
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	annotations[pathAnnotation] = reference.Path
+	// Path is needed when we need to collect resources.
+	object.SetAnnotations(annotations)
+}
+
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
 // local contains all configMaps/Secrets whose content need to be deployed locally (in the management cluster)
 // remote contains all configMap/Secrets whose content need to be deployed remotely (in the managed cluster)
@@ -559,10 +572,7 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 				types.NamespacedName{Namespace: namespace, Name: reference.Name})
 		} else {
 			object, err = getSource(ctx, controlClusterClient, namespace, reference.Name, reference.Kind)
-			if object != nil {
-				// Path is needed when we need to collect resources.
-				object.SetAnnotations(map[string]string{pathAnnotation: reference.Path})
-			}
+			appendPathAnnotations(object, reference)
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {

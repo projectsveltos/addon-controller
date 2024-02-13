@@ -90,6 +90,9 @@ var (
 	GetReferenceResourceNamespace = getReferenceResourceNamespace
 	ReadFiles                     = readFiles
 
+	AddExtraLabels      = addExtraLabels
+	AddExtraAnnotations = addExtraAnnotations
+
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 

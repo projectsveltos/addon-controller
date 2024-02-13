@@ -45,6 +45,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -1039,6 +1041,11 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels != nil ||
+		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations != nil {
+
+		return addExtraMetadata(ctx, requestedChart, clusterSummary, kubeconfig, logger)
+	}
 	return nil
 }
 
@@ -1094,6 +1101,12 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 	if err != nil {
 		return err
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels != nil ||
+		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations != nil {
+
+		return addExtraMetadata(ctx, requestedChart, clusterSummary, kubeconfig, logger)
 	}
 
 	return nil
@@ -1635,4 +1648,53 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
 
 	return upgradeClient, nil
+}
+
+func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger) error {
+
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	statusObject := action.NewStatus(actionConfig)
+	results, err := statusObject.Run(requestedChart.ReleaseName)
+	if err != nil {
+		return err
+	}
+
+	resources, err := collectHelmContent(results.Manifest, logger)
+	if err != nil {
+		return err
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		logger.Error(err, "BuildConfigFromFlags")
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("adding extra labels/annotations to %d resources", len(resources))
+	for i := range resources {
+		r := resources[i]
+
+		var dr dynamic.ResourceInterface
+		dr, err = utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), r.GetNamespace())
+		if err != nil {
+			return err
+		}
+
+		addExtraLabels(r, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
+		addExtraAnnotations(r, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+
+		err = updateResource(ctx, dr, clusterSummary, r, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
+				r.GetKind(), r.GetNamespace(), r.GetName(), err))
+			return err
+		}
+	}
+
+	return nil
 }

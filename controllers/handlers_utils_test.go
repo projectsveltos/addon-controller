@@ -666,6 +666,62 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{name: {}})).To(BeFalse())
 	})
 
+	It("addExtraLabels adds extra labels on unstructured", func() {
+		u := &unstructured.Unstructured{}
+		extraLabels := map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+
+		controllers.AddExtraLabels(u, extraLabels)
+		labels := u.GetLabels()
+		Expect(labels).ToNot(BeNil())
+		for k := range extraLabels {
+			Expect(labels[k]).To(Equal(extraLabels[k]))
+		}
+
+		// Add extra labels again
+		extraLabels = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+
+		controllers.AddExtraLabels(u, extraLabels)
+		labels = u.GetLabels()
+		Expect(labels).ToNot(BeNil())
+		for k := range extraLabels {
+			Expect(labels[k]).To(Equal(extraLabels[k]))
+		}
+	})
+
+	It("addExtraAnnotations adds extra annotations on unstructured", func() {
+		u := &unstructured.Unstructured{}
+		extraAnnotations := map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+
+		controllers.AddExtraAnnotations(u, extraAnnotations)
+		annotations := u.GetAnnotations()
+		Expect(annotations).ToNot(BeNil())
+		for k := range extraAnnotations {
+			Expect(annotations[k]).To(Equal(extraAnnotations[k]))
+		}
+
+		// Add extra annotations again
+		extraAnnotations = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+
+		controllers.AddExtraAnnotations(u, extraAnnotations)
+		annotations = u.GetAnnotations()
+		Expect(annotations).ToNot(BeNil())
+		for k := range extraAnnotations {
+			Expect(annotations[k]).To(Equal(extraAnnotations[k]))
+		}
+	})
+
 	It("readFiles loads content of all files in a directory", func() {
 		dir, err := os.MkdirTemp("", "my-temp-dir")
 		Expect(err).To(BeNil())

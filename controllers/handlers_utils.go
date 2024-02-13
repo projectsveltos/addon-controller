@@ -307,6 +307,9 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 
 		deployer.AddOwnerReference(policy, profile)
 
+		addExtraLabels(policy, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
+		addExtraAnnotations(policy, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+
 		if deployingToMgmtCluster {
 			// When deploying resources in the management cluster, just setting ClusterProfile as OwnerReference is
 			// not enough. We also need to track which ClusterSummary is creating the resource. Otherwise while
@@ -338,6 +341,52 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	return reports, nil
+}
+
+// addExtraLabels adds ExtraLabels to policy.
+// If policy already has a label with a key present in `ExtraLabels`, the value from `ExtraLabels` will
+// override the existing value.
+func addExtraLabels(policy *unstructured.Unstructured, extraLabels map[string]string) {
+	if extraLabels == nil {
+		return
+	}
+
+	if len(extraLabels) == 0 {
+		return
+	}
+
+	lbls := policy.GetLabels()
+	if lbls == nil {
+		lbls = map[string]string{}
+	}
+	for k := range extraLabels {
+		lbls[k] = extraLabels[k]
+	}
+
+	policy.SetLabels(lbls)
+}
+
+// addExtraAnnotations adds ExtraAnnotations to policy.
+// If policy already has an annotation with a key present in `ExtraAnnotations`, the value from `ExtraAnnotations`
+// will override the existing value.
+func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map[string]string) {
+	if extraAnnotations == nil {
+		return
+	}
+
+	if len(extraAnnotations) == 0 {
+		return
+	}
+
+	annotations := policy.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+	for k := range extraAnnotations {
+		annotations[k] = extraAnnotations[k]
+	}
+
+	policy.SetAnnotations(annotations)
 }
 
 // getResource returns sveltos Resource and the resource hash hash

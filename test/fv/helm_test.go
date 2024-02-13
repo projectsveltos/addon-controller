@@ -24,6 +24,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -113,6 +115,17 @@ var _ = Describe("Helm", func() {
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
+
+		Byf("Verifying kyverno deployment has proper labels/annotations")
+		depl := &appsv1.Deployment{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl))
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depl)
+		Expect(err).To(BeNil())
+		var u unstructured.Unstructured
+		u.SetUnstructuredContent(content)
+		verifyExtraLabels(&u, clusterProfile.Spec.ExtraLabels)
+		verifyExtraAnnotations(&u, clusterProfile.Spec.ExtraAnnotations)
 
 		Byf("Verifying wildfly deployment is created in the workload cluster")
 		Eventually(func() error {

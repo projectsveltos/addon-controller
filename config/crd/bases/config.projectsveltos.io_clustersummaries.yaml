@@ -133,9 +133,7 @@ spec:
                       cluster based on this ClusterProfile/Profile instance. **Important:**
                       If a resource deployed by Sveltos already has a annotation with
                       a key present in `ExtraAnnotations`, the value from `ExtraAnnotations`
-                      will override the existing value. **Important:** ExtraAnnotations
-                      do not trigger a reconciliation. Changing ExtraAnnotations after
-                      resources are deployed won''t trigegr Sveltos to redeploy those'
+                      will override the existing value.'
                     type: object
                   extraLabels:
                     additionalProperties:
@@ -145,9 +143,7 @@ spec:
                       on this ClusterProfile/Profile instance. **Important:** If a
                       resource deployed by Sveltos already has a label with a key
                       present in `ExtraLabels`, the value from `ExtraLabels` will
-                      override the existing value. **Important:** ExtraLabels do not
-                      trigger a reconciliation. Changing ExtraLabels after resources
-                      are deployed won''t trigegr Sveltos to redeploy those'
+                      override the existing value.'
                     type: object
                   helmCharts:
                     description: Helm charts is a list of helm charts that need to
@@ -631,6 +627,12 @@ spec:
                     conflictMessage:
                       description: Status indicates whether ClusterSummary can manage
                         the helm chart or there is a conflict
+                      type: string
+                    metadataHash:
+                      description: MetadataHash represents of a unique value for the
+                        extra metadata, extraLabels and extraAnnotations, deployed
+                        on this helm chart
+                      format: byte
                       type: string
                     releaseName:
                       description: ReleaseName is the chart release

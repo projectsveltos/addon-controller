@@ -397,6 +397,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		config += getVersion()
 	}
 
+	metadataHash := getMetadataHash(clusterSummary)
+	if metadataHash != nil {
+		config += string(metadataHash)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

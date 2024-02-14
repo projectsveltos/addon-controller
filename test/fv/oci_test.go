@@ -54,7 +54,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
 				RepositoryName:   "oci-vault",
 				ChartName:        "oci://registry-1.docker.io/bitnamicharts/vault",
-				ChartVersion:     "0.6.0",
+				ChartVersion:     "0.7.2",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -83,7 +83,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "vault", ChartVersion: "0.6.0", Namespace: "vault"},
+			{ReleaseName: "vault", ChartVersion: "0.7.2", Namespace: "vault"},
 		}
 
 		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
@@ -97,7 +97,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
 				RepositoryName:   "oci-vault",
 				ChartName:        "oci://registry-1.docker.io/bitnamicharts/vault",
-				ChartVersion:     "0.5.0",
+				ChartVersion:     "0.6.0",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
@@ -120,7 +120,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts = []configv1alpha1.Chart{
-			{ReleaseName: "vault", ChartVersion: "0.5.0", Namespace: "vault"},
+			{ReleaseName: "vault", ChartVersion: "0.6.0", Namespace: "vault"},
 		}
 
 		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,

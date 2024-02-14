@@ -274,6 +274,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
 		resource, policyHash := getResource(policy, referencedObject, featureID, logger)
+		metadataHash := getMetadataHash(clusterSummary)
+		if metadataHash != nil {
+			policyHash += string(metadataHash)
+		}
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())

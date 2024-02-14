@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -41,11 +42,17 @@ import (
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
@@ -75,14 +82,15 @@ const (
 )
 
 type releaseInfo struct {
-	ReleaseName      string      `json:"releaseName"`
-	ReleaseNamespace string      `json:"releaseNamespace"`
-	Revision         string      `json:"revision"`
-	Updated          metav1.Time `json:"updated"`
-	Status           string      `json:"status"`
-	Chart            string      `json:"chart"`
-	ChartVersion     string      `json:"chart_version"`
-	AppVersion       string      `json:"app_version"`
+	ReleaseName      string            `json:"releaseName"`
+	ReleaseNamespace string            `json:"releaseNamespace"`
+	Revision         string            `json:"revision"`
+	Updated          metav1.Time       `json:"updated"`
+	Status           string            `json:"status"`
+	Chart            string            `json:"chart"`
+	ChartVersion     string            `json:"chart_version"`
+	AppVersion       string            `json:"app_version"`
+	ReleaseLabels    map[string]string `json:"release_labels"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -362,6 +370,11 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += getVersion()
 	}
 
+	metadataHash := getMetadataHash(clusterSummary)
+	if metadataHash != nil {
+		config += string(metadataHash)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -590,8 +603,16 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		if err != nil {
 			return nil, nil, err
 		}
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
 	} else if shouldUpgrade(currentRelease, currentChart, clusterSummary) {
 		report, err = handleUpgrade(ctx, clusterSummary, mgtmResources, currentChart, currentRelease, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -609,11 +630,17 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		}
 		report.Message = notInstalledMessage
 	} else {
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		logger.V(logs.LogDebug).Info("no action for helm release")
 		report = &configv1alpha1.ReleaseReport{
 			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 			ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
 		}
+
 		report.Message = "Already managing this helm release and specified version already installed"
 	}
 
@@ -929,6 +956,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string) (*releaseI
 		Chart:            results.Chart.Metadata.Name,
 		ChartVersion:     results.Chart.Metadata.Version,
 		AppVersion:       results.Chart.AppVersion(),
+		ReleaseLabels:    results.Labels,
 	}
 
 	var t metav1.Time
@@ -1041,11 +1069,6 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels != nil ||
-		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations != nil {
-
-		return addExtraMetadata(ctx, requestedChart, clusterSummary, kubeconfig, logger)
-	}
 	return nil
 }
 
@@ -1101,12 +1124,6 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 	if err != nil {
 		return err
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels != nil ||
-		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations != nil {
-
-		return addExtraMetadata(ctx, requestedChart, clusterSummary, kubeconfig, logger)
 	}
 
 	return nil
@@ -1595,7 +1612,6 @@ func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
 	if options != nil {
 		return options.Labels
 	}
-
 	return map[string]string{}
 }
 
@@ -1653,6 +1669,21 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
 	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger) error {
 
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
+	// Current hash of current metadata (extraLabels and extraAnnotations)
+	metadataHash := getMetadataHash(clusterSummary)
+
+	// Get hash of last deployed metadata
+	lastDeployedMetadataHash := getMetadataHashFromHelmChartSummary(requestedChart, clusterSummary)
+
+	if reflect.DeepEqual(metadataHash, lastDeployedMetadataHash) {
+		return nil
+	}
+
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
 	if err != nil {
 		return err
@@ -1675,12 +1706,19 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info("adding extra labels/annotations to %d resources", len(resources))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("adding extra labels/annotations to %d resources", len(resources)))
 	for i := range resources {
 		r := resources[i]
 
+		// For some helm charts, collectHelmContent returns an empty namespace for namespaced resources
+		// If resource is a namespaced one and namespace is empty, set namespace to release namespace.
+		namespace, err := getResourceNamespace(r, requestedChart.ReleaseNamespace, config)
+		if err != nil {
+			return err
+		}
+
 		var dr dynamic.ResourceInterface
-		dr, err = utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), r.GetNamespace())
+		dr, err = utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), namespace)
 		if err != nil {
 			return err
 		}
@@ -1693,6 +1731,78 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
 				r.GetKind(), r.GetNamespace(), r.GetName(), err))
 			return err
+		}
+	}
+
+	return updateMetadataHashOnHelmChartSummary(ctx, requestedChart, metadataHash, clusterSummary)
+}
+
+func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string, config *rest.Config) (string, error) {
+	namespace := r.GetNamespace()
+	if namespace == "" {
+		gvk := schema.GroupVersionKind{
+			Group:   r.GroupVersionKind().Group,
+			Kind:    r.GetKind(),
+			Version: r.GroupVersionKind().Version,
+		}
+
+		dc, err := discovery.NewDiscoveryClientForConfig(config)
+		if err != nil {
+			return "", err
+		}
+
+		mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
+
+		var mapping *meta.RESTMapping
+		mapping, err = mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err != nil {
+			return "", err
+		}
+		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+			namespace = releaseNamespace
+		}
+	}
+
+	return namespace, nil
+}
+
+func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
+	metadataHash []byte, clusterSummary *configv1alpha1.ClusterSummary) error {
+
+	c := getManagementClusterClient()
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
+		if err != nil {
+			return err
+		}
+
+		for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+			rs := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+			if rs.ReleaseName == requestedChart.ReleaseName &&
+				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+				rs.MetadataHash = metadataHash
+			}
+		}
+
+		return c.Status().Update(ctx, currentClusterSummary)
+	})
+
+	return err
+}
+
+func getMetadataHashFromHelmChartSummary(requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary) []byte {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.MetadataHash
 		}
 	}
 

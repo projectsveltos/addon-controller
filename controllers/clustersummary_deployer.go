@@ -376,6 +376,7 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	logger = logger.WithValues("hash", fmt.Sprintf("%x", hash), "status", *status)
 	logger.V(logs.LogDebug).Info("updating clustersummary status")
 	now := metav1.NewTime(time.Now())
+
 	switch *status {
 	case configv1alpha1.FeatureStatusProvisioned:
 		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioned, hash)

@@ -1681,7 +1681,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 	lastDeployedMetadataHash := getMetadataHashFromHelmChartSummary(requestedChart, clusterSummary)
 
 	if reflect.DeepEqual(metadataHash, lastDeployedMetadataHash) {
-		return nil
+		return updateMetadataHashOnHelmChartSummary(ctx, requestedChart, metadataHash, clusterSummary)
 	}
 
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)

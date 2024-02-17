@@ -67,7 +67,6 @@ rules:
 kind: Pod
 metadata:
   name: %s
-  namespace: default
   labels:
     environment: production
     app: nginx

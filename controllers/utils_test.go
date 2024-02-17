@@ -38,6 +38,7 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -287,6 +288,20 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		value, err := controllers.GetMgmtResourceName(clusterSummary, ref)
 		Expect(err).To(BeNil())
 		Expect(value).To(Equal(cluster.Namespace + "-" + cluster.Name))
+	})
+
+	It("isNamespaced returns true for namespaced resources", func() {
+		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
+		Expect(err).To(BeNil())
+		isNamespaced, err := controllers.IsNamespaced(clusterRole, testEnv.Config)
+		Expect(err).To(BeNil())
+		Expect(isNamespaced).To(BeFalse())
+
+		deployment, err := utils.GetUnstructured([]byte(fmt.Sprintf(deplTemplate, randomString())))
+		Expect(err).To(BeNil())
+		isNamespaced, err = controllers.IsNamespaced(deployment, testEnv.Config)
+		Expect(err).To(BeNil())
+		Expect(isNamespaced).To(BeTrue())
 	})
 
 	It("isClusterProvisioned returns true when all Features are marked Provisioned", func() {

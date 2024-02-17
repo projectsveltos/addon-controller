@@ -42,17 +42,12 @@ import (
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
@@ -1740,25 +1735,11 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string, config *rest.Config) (string, error) {
 	namespace := r.GetNamespace()
 	if namespace == "" {
-		gvk := schema.GroupVersionKind{
-			Group:   r.GroupVersionKind().Group,
-			Kind:    r.GetKind(),
-			Version: r.GroupVersionKind().Version,
-		}
-
-		dc, err := discovery.NewDiscoveryClientForConfig(config)
+		namespacedResource, err := isNamespaced(r, config)
 		if err != nil {
 			return "", err
 		}
-
-		mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
-
-		var mapping *meta.RESTMapping
-		mapping, err = mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err != nil {
-			return "", err
-		}
-		if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+		if namespacedResource {
 			namespace = releaseNamespace
 		}
 	}

@@ -252,6 +252,22 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		configv1alpha1.FeatureResources, clusterSummary, logger)
 }
 
+// setNamespaceIfUnset sets namespace to default for namespaced resource with unset namespace
+func setNamespaceIfUnset(policy *unstructured.Unstructured, destConfig *rest.Config) error {
+	if policy.GetNamespace() == "" {
+		isResourceNamespaced, err := isNamespaced(policy, destConfig)
+		if err != nil {
+			return err
+		}
+
+		if isResourceNamespaced {
+			policy.SetNamespace("default")
+		}
+	}
+
+	return nil
+}
+
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
@@ -269,6 +285,11 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	reports = make([]configv1alpha1.ResourceReport, 0)
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
+
+		err := setNamespaceIfUnset(policy, destConfig)
+		if err != nil {
+			return nil, err
+		}
 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))

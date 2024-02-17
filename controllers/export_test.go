@@ -114,6 +114,7 @@ var (
 	InstantiateTemplateValues = instantiateTemplateValues
 
 	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
+	IsNamespaced               = isNamespaced
 )
 
 type (

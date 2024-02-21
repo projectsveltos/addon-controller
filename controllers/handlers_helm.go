@@ -461,8 +461,8 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		return nil, nil, err
 	}
 
-	var mgtmResources map[string]*unstructured.Unstructured
-	mgtmResources, err = collectMgmtResources(ctx, clusterSummary)
+	var mgmtResources map[string]*unstructured.Unstructured
+	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -485,7 +485,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 
 		var report *configv1alpha1.ReleaseReport
 		var currentRelease *releaseInfo
-		currentRelease, report, err = handleChart(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -512,12 +512,12 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 }
 
 func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	var report *configv1alpha1.ReleaseReport
 	logger.V(logs.LogDebug).Info("install helm release")
-	err := doInstallRelease(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+	err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -529,13 +529,13 @@ func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 }
 
 func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	currentRelease *releaseInfo, kubeconfig string,
 	logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	var report *configv1alpha1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
-	err := doUpgradeRelease(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+	err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +581,7 @@ func handleUninstall(clusterSummary *configv1alpha1.ClusterSummary, currentChart
 }
 
 func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1alpha1.ReleaseReport, error) {
 
 	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
@@ -599,7 +599,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 	}
 
 	if shouldInstall(currentRelease, currentChart) {
-		report, err = handleInstall(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+		report, err = handleInstall(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -608,7 +608,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 			return nil, nil, err
 		}
 	} else if shouldUpgrade(currentRelease, currentChart, clusterSummary) {
-		report, err = handleUpgrade(ctx, clusterSummary, mgtmResources, currentChart, currentRelease, kubeconfig, logger)
+		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1037,7 +1037,7 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1alpha1
 // doInstallRelease installs helm release in the CAPI Cluster.
 // No action in DryRun mode.
 func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -1059,7 +1059,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgtmResources, requestedChart, logger)
+	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1094,7 +1094,7 @@ func doUninstallRelease(clusterSummary *configv1alpha1.ClusterSummary, requested
 // doUpgradeRelease upgrades helm release in the CAPI Cluster.
 // No action in DryRun mode.
 func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -1116,7 +1116,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgtmResources, requestedChart, logger)
+	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1421,12 +1421,12 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 }
 
 func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	logger logr.Logger) (chartutil.Values, error) {
 
 	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		requestedChart.ChartName, requestedChart.Values, mgtmResources, logger)
+		requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}

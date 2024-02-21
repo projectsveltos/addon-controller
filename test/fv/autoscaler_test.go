@@ -59,10 +59,10 @@ type: kubernetes.io/service-account-token`
 kind: Secret
 metadata:
   name: autoscaler
-  namespace: {{ (index .MgtmResources "AutoscalerSecret").metadata.namespace }}
+  namespace: {{ (index .MgmtResources "AutoscalerSecret").metadata.namespace }}
 data:
-  token: {{ (index .MgtmResources "AutoscalerSecret").data.token }}
-  ca.crt: {{ $data:=(index .MgtmResources "AutoscalerSecret").data }} {{ (index $data "ca.crt") }}`
+  token: {{ (index .MgmtResources "AutoscalerSecret").data.token }}
+  ca.crt: {{ $data:=(index .MgmtResources "AutoscalerSecret").data }} {{ (index $data "ca.crt") }}`
 )
 
 var _ = Describe("Feature", func() {

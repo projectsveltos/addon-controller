@@ -102,11 +102,11 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // and kind.group::name for cluster wide policies.
 func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1alpha1.ResourceReport, error) {
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
-		clusterSummary, mgtmResources, logger)
+		clusterSummary, mgmtResources, logger)
 }
 
 // deployContentOfSecret deploys policies contained in a Secret.
@@ -115,7 +115,7 @@ func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, 
 // and kind.group::name for cluster wide policies.
 func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1alpha1.ResourceReport, error) {
 
 	data := make(map[string]string)
@@ -124,12 +124,12 @@ func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, des
 	}
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data,
-		clusterSummary, mgtmResources, logger)
+		clusterSummary, mgmtResources, logger)
 }
 
 func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, source client.Object, path string, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1alpha1.ResourceReport, error) {
 
 	s := source.(sourcev1.Source)
@@ -161,7 +161,7 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 	}
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, source, content,
-		clusterSummary, mgtmResources, logger)
+		clusterSummary, mgmtResources, logger)
 }
 
 func readFiles(dir string) (map[string]string, error) {
@@ -233,11 +233,11 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 // and kind.group::name for cluster wide policies.
 func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config, destClient client.Client,
 	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
 	instantiateTemplate := instantiateTemplate(referencedObject, logger)
-	resources, err := collectContent(ctx, clusterSummary, mgtmResources, data, instantiateTemplate, logger)
+	resources, err := collectContent(ctx, clusterSummary, mgmtResources, data, instantiateTemplate, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +442,7 @@ func removeCommentsAndEmptyLines(text string) string {
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
 func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, data map[string]string,
+	mgmtResources map[string]*unstructured.Unstructured, data map[string]string,
 	instantiateTemplate bool, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
@@ -461,7 +461,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 			if instantiateTemplate {
 				instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-					clusterSummary.GetName(), section, mgtmResources, logger)
+					clusterSummary.GetName(), section, mgmtResources, logger)
 				if err != nil {
 					return nil, err
 				}
@@ -661,8 +661,8 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		return nil, nil, err
 	}
 
-	var mgtmResources map[string]*unstructured.Unstructured
-	mgtmResources, err = collectMgmtResources(ctx, clusterSummary)
+	var mgmtResources map[string]*unstructured.Unstructured
+	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -680,7 +680,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		}
 	}
 	tmpResourceReports, err = deployObjects(ctx, true, c, localConfig, objectsToDeployLocally, clusterSummary,
-		mgtmResources, logger)
+		mgmtResources, logger)
 	localReports = append(localReports, tmpResourceReports...)
 	if err != nil {
 		return localReports, nil, err
@@ -688,7 +688,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 
 	// Deploy all resources that need to be deployed in the managed cluster
 	tmpResourceReports, err = deployObjects(ctx, false, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
-		mgtmResources, logger)
+		mgmtResources, logger)
 	remoteReports = append(remoteReports, tmpResourceReports...)
 	if err != nil {
 		return localReports, remoteReports, err
@@ -700,7 +700,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 // deployObjects deploys content of referencedObjects
 func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient client.Client, destConfig *rest.Config,
 	referencedObjects []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
 	for i := range referencedObjects {
@@ -711,14 +711,14 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
 				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap,
-					clusterSummary, mgtmResources, l)
+					clusterSummary, mgmtResources, l)
 		} else if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
 				deployContentOfSecret(ctx, deployingToMgmtCluster, destConfig, destClient, secret,
-					clusterSummary, mgtmResources, l)
+					clusterSummary, mgmtResources, l)
 		} else {
 			source := referencedObjects[i]
 			logger.V(logs.LogDebug).Info("deploying Source content")
@@ -726,7 +726,7 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			path := annotations[pathAnnotation]
 			tmpResourceReports, err =
 				deployContentOfSource(ctx, deployingToMgmtCluster, destConfig, destClient, source, path,
-					clusterSummary, mgtmResources, logger)
+					clusterSummary, mgmtResources, logger)
 		}
 
 		if err != nil {

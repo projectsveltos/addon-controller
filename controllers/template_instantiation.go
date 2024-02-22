@@ -41,7 +41,7 @@ type currentClusterObjects struct {
 	Cluster                map[string]interface{}
 	KubeadmControlPlane    map[string]interface{}
 	InfrastructureProvider map[string]interface{}
-	MgtmResources          map[string]map[string]interface{}
+	MgmtResources          map[string]map[string]interface{}
 }
 
 func fetchResource(ctx context.Context, config *rest.Config, namespace, name, apiVersion, kind string,
@@ -154,19 +154,19 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
 	clusterType libsveltosv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
-	mgtmResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
 	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return "", err
 	}
 
-	if mgtmResources != nil {
-		objects.MgtmResources = make(map[string]map[string]interface{})
-		for k := range mgtmResources {
+	if mgmtResources != nil {
+		objects.MgmtResources = make(map[string]map[string]interface{})
+		for k := range mgmtResources {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("using mgmt resource %s %s/%s with identifier %s",
-				mgtmResources[k].GetKind(), mgtmResources[k].GetNamespace(), mgtmResources[k].GetName(), k))
-			objects.MgtmResources[k] = mgtmResources[k].UnstructuredContent()
+				mgmtResources[k].GetKind(), mgmtResources[k].GetNamespace(), mgmtResources[k].GetName(), k))
+			objects.MgmtResources[k] = mgmtResources[k].UnstructuredContent()
 		}
 	}
 

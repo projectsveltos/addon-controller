@@ -809,7 +809,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	return nil
 }
 
-// upgradeRelease upgrades helm release in CAPI cluster.
+// upgradeRelease upgrades helm release in managed cluster.
 // No action in DryRun mode.
 func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
@@ -865,7 +865,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	hisClient.Max = 1
 	_, err = hisClient.Run(requestedChart.ReleaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = installRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+		err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 		if err != nil {
 			return err
 		}
@@ -1657,6 +1657,7 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 		}
 	}
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
+	upgradeClient.ResetValues = true
 
 	return upgradeClient, nil
 }

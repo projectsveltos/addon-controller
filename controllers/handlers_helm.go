@@ -1669,8 +1669,8 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 		return nil
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations == nil &&
-		clusterSummary.Spec.ClusterProfileSpec.ExtraLabels == nil {
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels == nil &&
+		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations == nil {
 
 		return nil
 	}

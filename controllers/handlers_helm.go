@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1670,15 +1669,13 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 		return nil
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations == nil &&
+		clusterSummary.Spec.ClusterProfileSpec.ExtraLabels == nil {
+		return nil
+	}
+
 	// Current hash of current metadata (extraLabels and extraAnnotations)
 	metadataHash := getMetadataHash(clusterSummary)
-
-	// Get hash of last deployed metadata
-	lastDeployedMetadataHash := getMetadataHashFromHelmChartSummary(requestedChart, clusterSummary)
-
-	if reflect.DeepEqual(metadataHash, lastDeployedMetadataHash) {
-		return updateMetadataHashOnHelmChartSummary(ctx, requestedChart, metadataHash, clusterSummary)
-	}
 
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
 	if err != nil {
@@ -1774,19 +1771,4 @@ func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *c
 	})
 
 	return err
-}
-
-func getMetadataHashFromHelmChartSummary(requestedChart *configv1alpha1.HelmChart,
-	clusterSummary *configv1alpha1.ClusterSummary) []byte {
-
-	for i := range clusterSummary.Status.HelmReleaseSummaries {
-		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if rs.ReleaseName == requestedChart.ReleaseName &&
-			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
-
-			return rs.MetadataHash
-		}
-	}
-
-	return nil
 }

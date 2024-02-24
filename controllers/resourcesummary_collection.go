@@ -27,6 +27,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -115,11 +116,11 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 			// ignore deleted ClassifierReport
 			continue
 		}
-		if rs.Status.ResourcesChanged || rs.Status.HelmResourcesChanged {
+		if rs.Status.ResourcesChanged || rs.Status.HelmResourcesChanged || rs.Status.KustomizeResourcesChanged {
 			// process resourceSummary
 			err = processResourceSummary(ctx, c, remoteClient, rs, l)
 			if err != nil {
-				return nil
+				return err
 			}
 		}
 	}
@@ -160,45 +161,59 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 	var clusterSummaryNamespace string
 	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel]
 	if !ok {
-		logger.V(logs.LogInfo).Info("clusterSummaryspace name label not set. Cannot process it")
+		logger.V(logs.LogInfo).Info("clusterSummary namespace label not set. Cannot process it")
 		return nil
 	}
 
-	clusterSummary := &configv1alpha1.ClusterSummary{}
-	err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, clusterSummary)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logs.LogInfo).Info("clusterSummary not found. Nothing to do.")
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		clusterSummary := &configv1alpha1.ClusterSummary{}
+		err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
+			clusterSummary)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				logger.V(logs.LogInfo).Info("clusterSummary not found. Nothing to do.")
+				return nil
+			}
+			return err
+		}
+
+		if !clusterSummary.DeletionTimestamp.IsZero() {
+			logger.V(logs.LogInfo).Info("clusterSummary is marked for deletion. Nothing to do.")
 			return nil
 		}
-		return err
-	}
 
-	if !clusterSummary.DeletionTimestamp.IsZero() {
-		logger.V(logs.LogInfo).Info("clusterSummary is marked for deletion. Nothing to do.")
-		return nil
-	}
-
-	l := logger.WithValues("clusterSummary", clusterSummary.Name)
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
-			if rs.Status.HelmResourcesChanged {
-				l.V(logs.LogDebug).Info("redeploy helm")
-				clusterSummary.Status.FeatureSummaries[i].Hash = nil
-				clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
-			}
-		} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
-			if rs.Status.ResourcesChanged {
-				l.V(logs.LogDebug).Info("redeploy resources")
-				clusterSummary.Status.FeatureSummaries[i].Hash = nil
-				clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+		l := logger.WithValues("clusterSummary", clusterSummary.Name)
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				if rs.Status.HelmResourcesChanged {
+					l.V(logs.LogDebug).Info("redeploy helm")
+					clusterSummary.Status.FeatureSummaries[i].Hash = nil
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+				}
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				if rs.Status.ResourcesChanged {
+					l.V(logs.LogDebug).Info("redeploy resources")
+					clusterSummary.Status.FeatureSummaries[i].Hash = nil
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+				}
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+				if rs.Status.KustomizeResourcesChanged {
+					l.V(logs.LogDebug).Info("redeploy kustomization resources")
+					clusterSummary.Status.FeatureSummaries[i].Hash = nil
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+				}
 			}
 		}
-	}
 
-	err = c.Status().Update(ctx, clusterSummary)
+		err = c.Status().Update(ctx, clusterSummary)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update ClusterSummary status: %v", err))
+			return err
+		}
+		return nil
+	})
+
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update ClusterSummary status: %v", err))
 		return err
 	}
 

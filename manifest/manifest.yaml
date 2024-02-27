@@ -3350,10 +3350,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.24.0
+        - --version=dev
         command:
         - /manager
-        image: projectsveltos/addon-controller-amd64:v0.24.0
+        image: projectsveltos/addon-controller-amd64:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

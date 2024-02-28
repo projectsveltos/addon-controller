@@ -45,13 +45,6 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				return true
 			}
 
-			// return true if Cluster.Spec.Paused has changed from true to false
-			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
-				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated ClusterProfiles.")
-				return true
-			}
-
 			// a label change migth change which clusters match which clusterprofile
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
@@ -65,6 +58,20 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				log.V(logs.LogVerbose).Info(
 					"Cluster annotations changed. Will attempt to reconcile associated ClusterProfiles.",
 				)
+				return true
+			}
+
+			// return true if Cluster.Spec.Paused has changed from true to false
+			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
+				log.V(logs.LogVerbose).Info(
+					"Cluster was unpaused. Will attempt to reconcile associated ClusterProfiles.")
+				return true
+			}
+
+			// return true if Cluster.Status.ControlPlaneReady has changed from false to true
+			if !oldCluster.Status.ControlPlaneReady && newCluster.Status.ControlPlaneReady {
+				log.V(logs.LogVerbose).Info(
+					"Cluster was not ready. Will attempt to reconcile associated ClusterProfiles.")
 				return true
 			}
 

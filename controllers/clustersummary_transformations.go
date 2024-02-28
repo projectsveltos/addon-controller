@@ -176,7 +176,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
 		cluster.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to CAPI Cluster change")
+	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()

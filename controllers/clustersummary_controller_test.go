@@ -65,6 +65,9 @@ var _ = Describe("ClustersummaryController", func() {
 					"dc": "eng",
 				},
 			},
+			Status: clusterv1.ClusterStatus{
+				ControlPlaneReady: true,
+			},
 		}
 
 		clusterProfile = &configv1alpha1.ClusterProfile{
@@ -92,9 +95,40 @@ var _ = Describe("ClustersummaryController", func() {
 
 		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
+		cluster.Status.ControlPlaneReady = true
+
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
+	})
+
+	It("isReady returns true if CAPI Cluster has Status.ControlPlaneReady set to true", func() {
+		cluster.Status.ControlPlaneReady = true
+
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
+
+		cluster.Status.ControlPlaneReady = false
+		Expect(c.Status().Update(context.TODO(), cluster)).To(Succeed())
+
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
 	})
 
 	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {
@@ -964,6 +998,13 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		currentCluster := clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			&currentCluster)).To(Succeed())
+		currentCluster.Status.ControlPlaneReady = true
+		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
@@ -1033,6 +1074,16 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
+		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+		currentCluster := clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			&currentCluster)).To(Succeed())
+		currentCluster.Status.ControlPlaneReady = true
+		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
@@ -1040,10 +1091,6 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, nonReferencingClusterSummary, clusterProfile)
-
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
-		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      referencingClusterSummary.Name,

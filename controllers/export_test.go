@@ -52,6 +52,7 @@ var (
 	UndeployFeature                      = (*ClusterSummaryReconciler).undeployFeature
 	GetCurrentReferences                 = (*ClusterSummaryReconciler).getCurrentReferences
 	IsPaused                             = (*ClusterSummaryReconciler).isPaused
+	IsReady                              = (*ClusterSummaryReconciler).isReady
 	ShouldReconcile                      = (*ClusterSummaryReconciler).shouldReconcile
 	UpdateChartMap                       = (*ClusterSummaryReconciler).updateChartMap
 	ShouldRedeploy                       = (*ClusterSummaryReconciler).shouldRedeploy

@@ -284,6 +284,12 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 
 	Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+	currentCluster := clusterv1.Cluster{}
+	Expect(testEnv.Client.Get(context.TODO(),
+		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+		&currentCluster)).To(Succeed())
+	currentCluster.Status.ControlPlaneReady = true
+	Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 	// This method is invoked by different tests in parallel, all touching same clusterConfiguration.
 	// So add this logic in a Retry

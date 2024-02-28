@@ -204,6 +204,17 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
+	isReady, err := r.isReady(ctx, clusterSummary)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+	if !isReady {
+		logger.V(logs.LogInfo).Info("cluster is not ready.")
+		// if cluster is not ready, do nothing and don't queue for reconciliation.
+		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
+		return reconcile.Result{}, r.updateMaps(ctx, clusterSummaryScope, logger)
+	}
+
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
 	// changes.
 	defer func() {
@@ -760,6 +771,13 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 		}
 	}
 
+	if len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureKustomize) {
+			logger.V(logs.LogDebug).Info("Mode set to one time. Kustomization resources not deployed yet. Reconciliation is needed.")
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -810,6 +828,23 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectR
 		r.ReferenceMap[*entry] = s
 	}
 	return s
+}
+
+// isReady returns true if Sveltos/Cluster is ready
+func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
+	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+
+	isClusterReady, err := clusterproxy.IsClusterReady(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return isClusterReady, nil
 }
 
 // isPaused returns true if Sveltos/Cluster is paused or ClusterSummary has paused annotation.

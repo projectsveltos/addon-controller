@@ -59,6 +59,8 @@ var (
 	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
+	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
+	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference

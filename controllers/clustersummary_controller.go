@@ -204,6 +204,19 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
+	// Always close the scope when exiting this function so we can persist any ClusterSummary
+	// changes.
+	defer func() {
+		if err = clusterSummaryScope.Close(ctx); err != nil {
+			reterr = err
+		}
+	}()
+
+	// Handle deleted clusterSummary
+	if !clusterSummary.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, clusterSummaryScope, logger)
+	}
+
 	isReady, err := r.isReady(ctx, clusterSummary)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
@@ -213,19 +226,6 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
 		return reconcile.Result{}, r.updateMaps(ctx, clusterSummaryScope, logger)
-	}
-
-	// Always close the scope when exiting this function so we can persist any ClusterSummary
-	// changes.
-	defer func() {
-		if err := clusterSummaryScope.Close(ctx); err != nil {
-			reterr = err
-		}
-	}()
-
-	// Handle deleted clusterSummary
-	if !clusterSummary.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, clusterSummaryScope, logger)
 	}
 
 	// Handle non-deleted clusterSummary

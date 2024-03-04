@@ -16,23 +16,7 @@ limitations under the License.
 */
 package driftdetection
 
-var driftDetectionInMgmtClusterYAML = []byte(`apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    control-plane: $NAME
-  name: $NAME-metrics-service
-  namespace: projectsveltos
-spec:
-  ports:
-  - name: https
-    port: 8443
-    protocol: TCP
-    targetPort: https
-  selector:
-    control-plane: $NAME
----
-apiVersion: apps/v1
+var driftDetectionInMgmtClusterYAML = []byte(`apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -53,8 +37,7 @@ spec:
     spec:
       containers:
       - args:
-        - --health-probe-bind-address=:8081
-        - --metrics-bind-address=127.0.0.1:8080
+        - --diagnostics-address=:8443
         - --v=5
         - --cluster-namespace=
         - --cluster-name=
@@ -65,16 +48,27 @@ spec:
         - /manager
         image: projectsveltos/drift-detection-manager-amd64:main
         livenessProbe:
+          failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 8081
+            port: healthz
+            scheme: HTTP
           initialDelaySeconds: 15
           periodSeconds: 20
         name: manager
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        - containerPort: 9440
+          name: healthz
+          protocol: TCP
         readinessProbe:
+          failureThreshold: 3
           httpGet:
             path: /readyz
-            port: 8081
+            port: healthz
+            scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
@@ -83,29 +77,6 @@ spec:
             memory: 128Mi
           requests:
             cpu: 10m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=0
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.12.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 5m
             memory: 64Mi
         securityContext:
           allowPrivilegeEscalation: false

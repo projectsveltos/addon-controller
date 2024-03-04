@@ -65,6 +65,9 @@ var _ = Describe("ClustersummaryController", func() {
 					"dc": "eng",
 				},
 			},
+			Status: clusterv1.ClusterStatus{
+				ControlPlaneReady: true,
+			},
 		}
 
 		clusterProfile = &configv1alpha1.ClusterProfile{
@@ -92,9 +95,40 @@ var _ = Describe("ClustersummaryController", func() {
 
 		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
+		cluster.Status.ControlPlaneReady = true
+
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
+	})
+
+	It("isReady returns true if CAPI Cluster has Status.ControlPlaneReady set to true", func() {
+		cluster.Status.ControlPlaneReady = true
+
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
+
+		cluster.Status.ControlPlaneReady = false
+		Expect(c.Status().Update(context.TODO(), cluster)).To(Succeed())
+
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
 	})
 
 	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {
@@ -284,6 +318,167 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
+	It("setFailureMessage set failure message for every features in ClusterSummary", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    randomString(),
+				RepositoryName:   randomString(),
+				ChartName:        randomString(),
+				ChartVersion:     randomString(),
+				ReleaseName:      randomString(),
+				ReleaseNamespace: randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+				Path:      randomString(),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		failureMsg := randomString()
+		controllers.SetFailureMessage(reconciler, clusterSummaryScope, failureMsg)
+
+		featureHelmVerified := false
+		featureResourcesVerified := false
+		featureKustomizeVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureHelmVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureResourcesVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureKustomizeVerified = true
+			}
+		}
+
+		Expect(featureHelmVerified).To(BeTrue())
+		Expect(featureResourcesVerified).To(BeTrue())
+		Expect(featureKustomizeVerified).To(BeTrue())
+	})
+
+	It("resetFeatureStatus set failure message for every features in ClusterSummary", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    randomString(),
+				RepositoryName:   randomString(),
+				ChartName:        randomString(),
+				ChartVersion:     randomString(),
+				ReleaseName:      randomString(),
+				ReleaseNamespace: randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+				Path:      randomString(),
+			},
+		}
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1alpha1.FeatureKustomize, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
+
+		featureHelmVerified := false
+		featureResourcesVerified := false
+		featureKustomizeVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureHelmVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureResourcesVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureKustomizeVerified = true
+			}
+		}
+
+		Expect(featureHelmVerified).To(BeTrue())
+		Expect(featureResourcesVerified).To(BeTrue())
+		Expect(featureKustomizeVerified).To(BeTrue())
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
@@ -964,6 +1159,13 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		currentCluster := clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			&currentCluster)).To(Succeed())
+		currentCluster.Status.ControlPlaneReady = true
+		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
@@ -1033,6 +1235,16 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
+		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+		currentCluster := clusterv1.Cluster{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			&currentCluster)).To(Succeed())
+		currentCluster.Status.ControlPlaneReady = true
+		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
@@ -1040,10 +1252,6 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, nonReferencingClusterSummary, clusterProfile)
-
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
-		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      referencingClusterSummary.Name,

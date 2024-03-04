@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
@@ -555,4 +556,36 @@ func verifyClusterConfigurationPolicies(deployedFeatures []configv1alpha1.Featur
 	}
 
 	return true
+}
+
+func verifyExtraLabels(u *unstructured.Unstructured, extraLabels map[string]string) {
+	if extraLabels == nil {
+		return
+	}
+
+	if len(extraLabels) == 0 {
+		return
+	}
+
+	labels := u.GetLabels()
+	Expect(labels).ToNot(BeNil())
+	for k := range extraLabels {
+		Expect(labels[k]).To(Equal(extraLabels[k]))
+	}
+}
+
+func verifyExtraAnnotations(u *unstructured.Unstructured, extraAnnotations map[string]string) {
+	if extraAnnotations == nil {
+		return
+	}
+
+	if len(extraAnnotations) == 0 {
+		return
+	}
+
+	annotations := u.GetAnnotations()
+	Expect(annotations).ToNot(BeNil())
+	for k := range extraAnnotations {
+		Expect(annotations[k]).To(Equal(extraAnnotations[k]))
+	}
 }

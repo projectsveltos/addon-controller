@@ -129,7 +129,7 @@ var _ = Describe("Template instantiation", func() {
 		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 
-		values := `{{ $pwd := printf "%s" (index .MgtmResources "Secret").data.password }}
+		values := `{{ $pwd := printf "%s" (index .MgmtResources "Secret").data.password }}
 valuesTemplate: |
 		password: "{{b64dec $pwd}}"`
 

@@ -27,6 +27,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -65,7 +67,6 @@ rules:
 kind: Pod
 metadata:
   name: %s
-  namespace: default
   labels:
     environment: production
     app: nginx
@@ -84,6 +85,14 @@ var _ = Describe("Feature", func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.ExtraLabels = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+		clusterProfile.Spec.ExtraAnnotations = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -157,6 +166,17 @@ var _ = Describe("Feature", func() {
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: defaultNamespace, Name: podName}, currentPod)
 		}, timeout, pollingInterval).Should(BeNil())
+
+		Byf("Verifying Pod has proper labels/annotations")
+		currentPod := &corev1.Pod{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: defaultNamespace, Name: podName}, currentPod)).To(Succeed())
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(currentPod)
+		Expect(err).To(BeNil())
+		var u unstructured.Unstructured
+		u.SetUnstructuredContent(content)
+		verifyExtraLabels(&u, clusterProfile.Spec.ExtraLabels)
+		verifyExtraAnnotations(&u, clusterProfile.Spec.ExtraAnnotations)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)

@@ -45,6 +45,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,14 +76,15 @@ const (
 )
 
 type releaseInfo struct {
-	ReleaseName      string      `json:"releaseName"`
-	ReleaseNamespace string      `json:"releaseNamespace"`
-	Revision         string      `json:"revision"`
-	Updated          metav1.Time `json:"updated"`
-	Status           string      `json:"status"`
-	Chart            string      `json:"chart"`
-	ChartVersion     string      `json:"chart_version"`
-	AppVersion       string      `json:"app_version"`
+	ReleaseName      string            `json:"releaseName"`
+	ReleaseNamespace string            `json:"releaseNamespace"`
+	Revision         string            `json:"revision"`
+	Updated          metav1.Time       `json:"updated"`
+	Status           string            `json:"status"`
+	Chart            string            `json:"chart"`
+	ChartVersion     string            `json:"chart_version"`
+	AppVersion       string            `json:"app_version"`
+	ReleaseLabels    map[string]string `json:"release_labels"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -360,6 +364,11 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += getVersion()
 	}
 
+	metadataHash := getMetadataHash(clusterSummary)
+	if metadataHash != nil {
+		config += string(metadataHash)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -446,8 +455,8 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		return nil, nil, err
 	}
 
-	var mgtmResources map[string]*unstructured.Unstructured
-	mgtmResources, err = collectMgmtResources(ctx, clusterSummary)
+	var mgmtResources map[string]*unstructured.Unstructured
+	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -470,7 +479,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 
 		var report *configv1alpha1.ReleaseReport
 		var currentRelease *releaseInfo
-		currentRelease, report, err = handleChart(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -497,12 +506,12 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 }
 
 func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	var report *configv1alpha1.ReleaseReport
 	logger.V(logs.LogDebug).Info("install helm release")
-	err := doInstallRelease(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+	err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -514,13 +523,13 @@ func handleInstall(ctx context.Context, clusterSummary *configv1alpha1.ClusterSu
 }
 
 func handleUpgrade(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	currentRelease *releaseInfo, kubeconfig string,
 	logger logr.Logger) (*configv1alpha1.ReleaseReport, error) {
 
 	var report *configv1alpha1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
-	err := doUpgradeRelease(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+	err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +575,7 @@ func handleUninstall(clusterSummary *configv1alpha1.ClusterSummary, currentChart
 }
 
 func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1alpha1.ReleaseReport, error) {
 
 	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
@@ -584,12 +593,20 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 	}
 
 	if shouldInstall(currentRelease, currentChart) {
-		report, err = handleInstall(ctx, clusterSummary, mgtmResources, currentChart, kubeconfig, logger)
+		report, err = handleInstall(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
 	} else if shouldUpgrade(currentRelease, currentChart, clusterSummary) {
-		report, err = handleUpgrade(ctx, clusterSummary, mgtmResources, currentChart, currentRelease, kubeconfig, logger)
+		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -607,11 +624,17 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		}
 		report.Message = notInstalledMessage
 	} else {
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		logger.V(logs.LogDebug).Info("no action for helm release")
 		report = &configv1alpha1.ReleaseReport{
 			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 			ChartVersion: currentChart.ChartVersion, Action: string(configv1alpha1.NoHelmAction),
 		}
+
 		report.Message = "Already managing this helm release and specified version already installed"
 	}
 
@@ -785,7 +808,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	return nil
 }
 
-// upgradeRelease upgrades helm release in CAPI cluster.
+// upgradeRelease upgrades helm release in managed cluster.
 // No action in DryRun mode.
 func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
@@ -841,7 +864,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	hisClient.Max = 1
 	_, err = hisClient.Run(requestedChart.ReleaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = installRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+		err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 		if err != nil {
 			return err
 		}
@@ -927,6 +950,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string) (*releaseI
 		Chart:            results.Chart.Metadata.Name,
 		ChartVersion:     results.Chart.Metadata.Version,
 		AppVersion:       results.Chart.AppVersion(),
+		ReleaseLabels:    results.Labels,
 	}
 
 	var t metav1.Time
@@ -1007,7 +1031,7 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1alpha1
 // doInstallRelease installs helm release in the CAPI Cluster.
 // No action in DryRun mode.
 func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -1029,7 +1053,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgtmResources, requestedChart, logger)
+	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1064,7 +1088,7 @@ func doUninstallRelease(clusterSummary *configv1alpha1.ClusterSummary, requested
 // doUpgradeRelease upgrades helm release in the CAPI Cluster.
 // No action in DryRun mode.
 func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -1086,7 +1110,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgtmResources, requestedChart, logger)
+	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1391,12 +1415,12 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 }
 
 func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	mgtmResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
+	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1alpha1.HelmChart,
 	logger logr.Logger) (chartutil.Values, error) {
 
 	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		requestedChart.ChartName, requestedChart.Values, mgtmResources, logger)
+		requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1582,7 +1606,6 @@ func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
 	if options != nil {
 		return options.Labels
 	}
-
 	return map[string]string{}
 }
 
@@ -1633,6 +1656,120 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 		}
 	}
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
+	upgradeClient.ResetValues = true
 
 	return upgradeClient, nil
+}
+
+func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary, kubeconfig string, logger logr.Logger) error {
+
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+		return nil
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels == nil &&
+		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations == nil {
+
+		return nil
+	}
+
+	// Current hash of current metadata (extraLabels and extraAnnotations)
+	metadataHash := getMetadataHash(clusterSummary)
+
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	statusObject := action.NewStatus(actionConfig)
+	results, err := statusObject.Run(requestedChart.ReleaseName)
+	if err != nil {
+		return err
+	}
+
+	resources, err := collectHelmContent(results.Manifest, logger)
+	if err != nil {
+		return err
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		logger.Error(err, "BuildConfigFromFlags")
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("adding extra labels/annotations to %d resources", len(resources)))
+	for i := range resources {
+		r := resources[i]
+
+		// For some helm charts, collectHelmContent returns an empty namespace for namespaced resources
+		// If resource is a namespaced one and namespace is empty, set namespace to release namespace.
+		namespace, err := getResourceNamespace(r, requestedChart.ReleaseNamespace, config)
+		if err != nil {
+			return err
+		}
+
+		var dr dynamic.ResourceInterface
+		dr, err = utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), namespace)
+		if err != nil {
+			return err
+		}
+
+		addExtraLabels(r, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
+		addExtraAnnotations(r, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+
+		err = updateResource(ctx, dr, clusterSummary, r, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
+				r.GetKind(), r.GetNamespace(), r.GetName(), err))
+			return err
+		}
+	}
+
+	return updateMetadataHashOnHelmChartSummary(ctx, requestedChart, metadataHash, clusterSummary)
+}
+
+func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string, config *rest.Config) (string, error) {
+	namespace := r.GetNamespace()
+	if namespace == "" {
+		namespacedResource, err := isNamespaced(r, config)
+		if err != nil {
+			return "", err
+		}
+		if namespacedResource {
+			namespace = releaseNamespace
+		}
+	}
+
+	return namespace, nil
+}
+
+func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
+	metadataHash []byte, clusterSummary *configv1alpha1.ClusterSummary) error {
+
+	c := getManagementClusterClient()
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
+		if err != nil {
+			return err
+		}
+
+		for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+			rs := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+			if rs.ReleaseName == requestedChart.ReleaseName &&
+				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+				rs.MetadataHash = metadataHash
+			}
+		}
+
+		return c.Status().Update(ctx, currentClusterSummary)
+	})
+
+	return err
 }

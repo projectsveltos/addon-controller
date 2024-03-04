@@ -420,4 +420,18 @@ type Spec struct {
 	// the managed cluster to validate the state of those add-ons/applications
 	// is healthy
 	ValidateHealths []ValidateHealth `json:"validateHealths,omitempty"`
+
+	// ExtraLabels: These labels will be added by Sveltos to all Kubernetes resources deployed in
+	// a managed cluster based on this ClusterProfile/Profile instance.
+	// **Important:** If a resource deployed by Sveltos already has a label with a key present in
+	// `ExtraLabels`, the value from `ExtraLabels` will override the existing value.
+	// +optional
+	ExtraLabels map[string]string `json:"extraLabels,omitempty"`
+
+	// ExtraAnnotations: These annotations will be added by Sveltos to all Kubernetes resources
+	// deployed in a managed cluster based on this ClusterProfile/Profile instance.
+	// **Important:** If a resource deployed by Sveltos already has a annotation with a key present in
+	// `ExtraAnnotations`, the value from `ExtraAnnotations` will override the existing value.
+	// +optional
+	ExtraAnnotations map[string]string `json:"extraAnnotations,omitempty"`
 }

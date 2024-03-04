@@ -52,12 +52,15 @@ var (
 	UndeployFeature                      = (*ClusterSummaryReconciler).undeployFeature
 	GetCurrentReferences                 = (*ClusterSummaryReconciler).getCurrentReferences
 	IsPaused                             = (*ClusterSummaryReconciler).isPaused
+	IsReady                              = (*ClusterSummaryReconciler).isReady
 	ShouldReconcile                      = (*ClusterSummaryReconciler).shouldReconcile
 	UpdateChartMap                       = (*ClusterSummaryReconciler).updateChartMap
 	ShouldRedeploy                       = (*ClusterSummaryReconciler).shouldRedeploy
 	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
+	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
+	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
@@ -90,6 +93,9 @@ var (
 	GetReferenceResourceNamespace = getReferenceResourceNamespace
 	ReadFiles                     = readFiles
 
+	AddExtraLabels      = addExtraLabels
+	AddExtraAnnotations = addExtraAnnotations
+
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 
@@ -111,6 +117,7 @@ var (
 	InstantiateTemplateValues = instantiateTemplateValues
 
 	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
+	IsNamespaced               = isNamespaced
 )
 
 type (

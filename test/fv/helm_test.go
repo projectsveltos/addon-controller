@@ -24,6 +24,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -114,9 +116,20 @@ var _ = Describe("Helm", func() {
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
+		Byf("Verifying kyverno deployment has proper labels/annotations")
+		depl := &appsv1.Deployment{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl))
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depl)
+		Expect(err).To(BeNil())
+		var u unstructured.Unstructured
+		u.SetUnstructuredContent(content)
+		verifyExtraLabels(&u, clusterProfile.Spec.ExtraLabels)
+		verifyExtraAnnotations(&u, clusterProfile.Spec.ExtraAnnotations)
+
 		Byf("Verifying wildfly deployment is created in the workload cluster")
 		Eventually(func() error {
-			depl := &appsv1.Deployment{}
+			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "wildfly", Name: "wildfly"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
@@ -133,7 +146,7 @@ var _ = Describe("Helm", func() {
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
 			nil, charts)
 
-		Byf("Changing ClusterProfile requiring different chart version for kyverno")
+		Byf("Changing ClusterProfile requiring different chart version for kyverno and update extra labels")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
 			{
@@ -155,6 +168,12 @@ var _ = Describe("Helm", func() {
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}
+		currentClusterProfile.Spec.ExtraLabels = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+		currentClusterProfile.Spec.ExtraAnnotations = nil
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
@@ -163,14 +182,14 @@ var _ = Describe("Helm", func() {
 
 		Byf("Verifying kyverno deployment is still present in the workload cluster")
 		Eventually(func() error {
-			depl := &appsv1.Deployment{}
+			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying wildfly deployment is still in the workload cluster")
 		Eventually(func() error {
-			depl := &appsv1.Deployment{}
+			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "wildfly", Name: "wildfly"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
@@ -186,6 +205,15 @@ var _ = Describe("Helm", func() {
 		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
 			nil, charts)
+
+		Byf("Verifying kyverno deployment has proper labels/annotations")
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl))
+		content, err = runtime.DefaultUnstructuredConverter.ToUnstructured(depl)
+		Expect(err).To(BeNil())
+		u.SetUnstructuredContent(content)
+		verifyExtraLabels(&u, currentClusterProfile.Spec.ExtraLabels)
+		verifyExtraAnnotations(&u, currentClusterProfile.Spec.ExtraAnnotations)
 
 		Byf("Changing ClusterProfile to not require wildfly anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

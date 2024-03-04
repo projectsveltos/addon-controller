@@ -19,7 +19,9 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -30,12 +32,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -364,4 +371,65 @@ func SetVersion(v string) {
 
 func getVersion() string {
 	return version
+}
+
+// getMetadataHash returns hash of current ExtraLabels and ExtraAnnotations
+func getMetadataHash(clusterSummary *configv1alpha1.ClusterSummary) []byte {
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels == nil &&
+		clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations == nil {
+
+		return nil
+	}
+
+	h := sha256.New()
+	var config string
+
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraLabels != nil {
+		sortedKey := getSortedKeys(clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
+		for i := range sortedKey {
+			key := sortedKey[i]
+			config += clusterSummary.Spec.ClusterProfileSpec.ExtraLabels[key]
+		}
+	}
+	if clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations != nil {
+		sortedKey := getSortedKeys(clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+		for i := range sortedKey {
+			key := sortedKey[i]
+			config += clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations[key]
+		}
+	}
+
+	h.Write([]byte(config))
+	return h.Sum(nil)
+}
+
+func getSortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func isNamespaced(r *unstructured.Unstructured, config *rest.Config) (bool, error) {
+	gvk := schema.GroupVersionKind{
+		Group:   r.GroupVersionKind().Group,
+		Kind:    r.GetKind(),
+		Version: r.GroupVersionKind().Version,
+	}
+
+	dc, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		return false, err
+	}
+
+	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
+
+	var mapping *meta.RESTMapping
+	mapping, err = mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err != nil {
+		return false, err
+	}
+	return mapping.Scope.Name() == meta.RESTScopeNameNamespace, nil
 }

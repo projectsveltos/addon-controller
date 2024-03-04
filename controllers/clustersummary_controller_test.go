@@ -320,6 +320,167 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
 	})
 
+	It("setFailureMessage set failure message for every features in ClusterSummary", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    randomString(),
+				RepositoryName:   randomString(),
+				ChartName:        randomString(),
+				ChartVersion:     randomString(),
+				ReleaseName:      randomString(),
+				ReleaseNamespace: randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+				Path:      randomString(),
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		failureMsg := randomString()
+		controllers.SetFailureMessage(reconciler, clusterSummaryScope, failureMsg)
+
+		featureHelmVerified := false
+		featureResourcesVerified := false
+		featureKustomizeVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureHelmVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureResourcesVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
+				featureKustomizeVerified = true
+			}
+		}
+
+		Expect(featureHelmVerified).To(BeTrue())
+		Expect(featureResourcesVerified).To(BeTrue())
+		Expect(featureKustomizeVerified).To(BeTrue())
+	})
+
+	It("resetFeatureStatus set failure message for every features in ClusterSummary", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    randomString(),
+				RepositoryName:   randomString(),
+				ChartName:        randomString(),
+				ChartVersion:     randomString(),
+				ReleaseName:      randomString(),
+				ReleaseNamespace: randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+			{
+				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+				Path:      randomString(),
+			},
+		}
+
+		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1alpha1.FeatureKustomize, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:            c,
+			Scheme:            scheme,
+			Deployer:          nil,
+			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
+			PolicyMux:         sync.Mutex{},
+		}
+
+		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
+
+		featureHelmVerified := false
+		featureResourcesVerified := false
+		featureKustomizeVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureHelmVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureResourcesVerified = true
+			}
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
+				featureKustomizeVerified = true
+			}
+		}
+
+		Expect(featureHelmVerified).To(BeTrue())
+		Expect(featureResourcesVerified).To(BeTrue())
+		Expect(featureKustomizeVerified).To(BeTrue())
+	})
+
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{

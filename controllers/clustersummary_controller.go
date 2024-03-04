@@ -223,6 +223,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	if !isReady {
 		logger.V(logs.LogInfo).Info("cluster is not ready.")
+		r.setFailureMessage(clusterSummaryScope, "cluster is not ready")
+		r.resetFeatureStatus(clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
 		return reconcile.Result{}, r.updateMaps(ctx, clusterSummaryScope, logger)
@@ -1082,4 +1084,28 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 	}
 
 	return true, dependencyMessage, nil
+}
+
+func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.ClusterSummaryScope, failureMessage string) {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
+		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureHelm, &failureMessage)
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
+		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureResources, &failureMessage)
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
+		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureKustomize, &failureMessage)
+	}
+}
+
+func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status configv1alpha1.FeatureStatus) {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
+		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureHelm, status, nil)
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
+		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureResources, status, nil)
+	}
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
+		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureKustomize, status, nil)
+	}
 }

@@ -115,6 +115,18 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), reloaderCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, reloaderCRD)).To(Succeed())
 
+	var setCRD *unstructured.Unstructured
+	setCRD, err = utils.GetUnstructured(libsveltoscrd.GetSetCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), setCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, setCRD)).To(Succeed())
+
+	var clusterSetCRD *unstructured.Unstructured
+	clusterSetCRD, err = utils.GetUnstructured(libsveltoscrd.GetClusterSetCRDYAML())
+	Expect(err).To(BeNil())
+	Expect(testEnv.Create(context.TODO(), clusterSetCRD)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv, clusterSetCRD)).To(Succeed())
+
 	projectsveltosNs := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "projectsveltos",

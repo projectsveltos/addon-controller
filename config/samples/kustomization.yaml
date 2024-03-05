@@ -1,4 +1,7 @@
 ## Append samples of your project ##
 resources:
 - config_v1alpha1_profile.yaml
+- config_v1alpha1_clusterprofile.yaml
+- config_v1alpha1_clusterreport.yaml
+- config_v1alpha1_clustersummary.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

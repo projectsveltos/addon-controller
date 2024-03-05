@@ -117,6 +117,8 @@ type ClusterSummaryReconciler struct {
 	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references ConfigMap 1 only and looking
 	// at ClusterSummaryMap we know it used to reference ConfigMap 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
 	// update, we update ClusterSummaryMap (so new value will be A => 1)
+
+	ctrl controller.Controller
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
@@ -217,7 +219,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.reconcileDelete(ctx, clusterSummaryScope, logger)
 	}
 
-	isReady, err := r.isReady(ctx, clusterSummary)
+	isReady, err := r.isReady(ctx, clusterSummary, logger)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
@@ -241,12 +243,18 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
+
+	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
 	// If Sveltos/Cluster is not found, there is nothing to clean up.
 	isPresent, isDeleted, err := r.isClusterPresent(ctx, clusterSummaryScope)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
-	if isPresent {
+	if isPresent && isReady { // if cluster is not ready, do not try to clean up. It would fail.
 		// Cleanup
 		paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 		if err != nil {
@@ -376,9 +384,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager,
-) (controller.Controller, error) {
-
+func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.ClusterSummary{}).
 		WithOptions(controller.Options{
@@ -386,7 +392,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		}).
 		Build(r)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating controller")
+		return errors.Wrap(err, "error creating controller")
 	}
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
@@ -399,7 +405,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// When ConfigMap changes, according to ConfigMapPredicates,
@@ -409,7 +415,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// When Secret changes, according to SecretPredicates,
@@ -425,7 +431,9 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
-	return c, err
+	r.ctrl = c
+
+	return err
 }
 
 func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
@@ -834,10 +842,21 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectR
 
 // isReady returns true if Sveltos/Cluster is ready
 func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (bool, error) {
 
-	isClusterReady, err := clusterproxy.IsClusterReady(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	clusterRef := &corev1.ObjectReference{
+		Namespace: clusterSummary.Spec.ClusterNamespace,
+		Name:      clusterSummary.Spec.ClusterName,
+	}
+	if clusterSummary.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
+		clusterRef.Kind = libsveltosv1alpha1.SveltosClusterKind
+		clusterRef.APIVersion = libsveltosv1alpha1.GroupVersion.String()
+	} else {
+		clusterRef.Kind = clusterKind
+		clusterRef.APIVersion = clusterv1.GroupVersion.String()
+	}
+
+	isClusterReady, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, clusterRef, logger)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -1019,7 +1038,7 @@ func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
 		clusterInfo.Kind = string(libsveltosv1alpha1.ClusterTypeSveltos)
 		clusterInfo.APIVersion = libsveltosv1alpha1.GroupVersion.String()
 	case libsveltosv1alpha1.ClusterTypeCapi:
-		clusterInfo.Kind = "Cluster"
+		clusterInfo.Kind = clusterKind
 		clusterInfo.APIVersion = clusterv1.GroupVersion.String()
 	}
 
@@ -1108,4 +1127,8 @@ func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
 		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureKustomize, status, nil)
 	}
+}
+
+func (r *ClusterSummaryReconciler) GetController() controller.Controller {
+	return r.ctrl
 }

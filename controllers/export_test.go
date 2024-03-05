@@ -35,12 +35,14 @@ var (
 var (
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
 	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
+	GetClustersFromClusterSets      = (*ClusterProfileReconciler).getClustersFromClusterSets
 )
 
 var (
 	RequeueProfileForCluster   = (*ProfileReconciler).requeueProfileForCluster
 	RequeueProfileForMachine   = (*ProfileReconciler).requeueProfileForMachine
 	LimitReferencesToNamespace = (*ProfileReconciler).limitReferencesToNamespace
+	GetClustersFromSets        = (*ProfileReconciler).getClustersFromSets
 )
 
 var (
@@ -174,4 +176,13 @@ var (
 
 var (
 	GetMgmtResourceName = getMgmtResourceName
+)
+
+var (
+	SelectClusters     = selectClusters
+	SelectMoreClusters = selectMoreClusters
+)
+
+var (
+	RemoveDuplicates = removeDuplicates
 )

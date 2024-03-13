@@ -94,6 +94,26 @@ func getProfile(namespace, namePrefix string, clusterLabels map[string]string) *
 	return profile
 }
 
+func getClusterSet(namePrefix string, clusterLabels map[string]string) *libsveltosv1alpha1.ClusterSet {
+	selector := ""
+	for k := range clusterLabels {
+		if selector != "" {
+			selector += ","
+		}
+		selector += fmt.Sprintf("%s=%s", k, clusterLabels[k])
+	}
+	clusterSet := &libsveltosv1alpha1.ClusterSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namePrefix + randomString(),
+		},
+		Spec: libsveltosv1alpha1.Spec{
+			ClusterSelector: libsveltosv1alpha1.Selector(selector),
+		},
+	}
+
+	return clusterSet
+}
+
 func getClusterSummaryOwnerReference(clusterSummary *configv1alpha1.ClusterSummary) (client.Object, error) {
 	Byf("Checking clusterSummary %s owner reference is set", clusterSummary.Name)
 	for _, ref := range clusterSummary.OwnerReferences {
@@ -379,6 +399,27 @@ func verifyProfileMatches(profile *configv1alpha1.Profile) {
 			if currentProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
 				currentProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
 				currentProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+
+				return true
+			}
+		}
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func verifyClusterSetMatches(clusterSet *libsveltosv1alpha1.ClusterSet) {
+	Byf("Verifying Cluster %s/%s is a match for ClusterSet %s",
+		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterSet.Name)
+	Eventually(func() bool {
+		currentClusterSet := &libsveltosv1alpha1.ClusterSet{}
+		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)
+		if err != nil {
+			return false
+		}
+		for i := range currentClusterSet.Status.MatchingClusterRefs {
+			if currentClusterSet.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
+				currentClusterSet.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
+				currentClusterSet.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
 
 				return true
 			}

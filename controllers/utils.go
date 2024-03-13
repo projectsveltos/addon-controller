@@ -48,6 +48,7 @@ import (
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -59,6 +60,7 @@ import (
 
 const (
 	nameSeparator = "--"
+	clusterKind   = "Cluster"
 )
 
 var (
@@ -432,4 +434,14 @@ func isNamespaced(r *unstructured.Unstructured, config *rest.Config) (bool, erro
 		return false, err
 	}
 	return mapping.Scope.Name() == meta.RESTScopeNameNamespace, nil
+}
+
+// removeDuplicates removes duplicates entries in the references slice
+func removeDuplicates(references []corev1.ObjectReference) []corev1.ObjectReference {
+	set := libsveltosset.Set{}
+	for i := range references {
+		set.Insert(&references[i])
+	}
+
+	return set.Items()
 }

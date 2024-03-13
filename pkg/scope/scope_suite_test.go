@@ -26,11 +26,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
 func setupScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	Expect(configv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(libsveltosv1alpha1.AddToScheme(scheme)).To(Succeed())
 	return scheme
 }
 

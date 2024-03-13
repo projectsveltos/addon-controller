@@ -22,6 +22,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
@@ -35,7 +37,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap)
+	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind)
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
@@ -49,5 +51,19 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap)
+	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind)
+}
+
+func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
+	ctx context.Context, o client.Object,
+) []reconcile.Request {
+
+	clusterSet := o
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	addTypeInformationToObject(r.Scheme, clusterSet)
+
+	return requeueForSet(clusterSet, r.ClusterSetMap, configv1alpha1.ClusterProfileKind)
 }

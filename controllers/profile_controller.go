@@ -18,11 +18,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -49,6 +52,10 @@ type ProfileReconciler struct {
 
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
+
+	// key: Set; value: set of Profiles currently referencing the Set
+	SetMap map[corev1.ObjectReference]*libsveltosset.Set
+
 	// key: Sveltos/Cluster; value: set of all Profiles matching the Cluster
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
 	// key: Profile; value: set of Sveltos/CAPI Clusters matched
@@ -88,6 +95,8 @@ type ProfileReconciler struct {
 	// Profile matches Sveltos/Cluster 1 only and looking at ProfileMap we know it used to reference
 	// Svetos/CAPI Cluster 1 and 2.
 	// So we can remove 2 => A from ClusterMap. Only after this update, we update ProfileMap (so new value will be A => 1)
+
+	ctrl controller.Controller
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=profiles,verbs=get;list;watch;update;patch
@@ -183,12 +192,19 @@ func (r *ProfileReconciler) reconcileNormal(
 
 	// Limit the search of matching cluster to the Profile namespace
 	matchingCluster, err := getMatchingClusters(ctx, r.Client, profileScope.Profile.GetNamespace(),
-		profileScope, logger)
+		profileScope.GetSelector(), profileScope.GetSpec().ClusterRefs, logger)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
-	profileScope.SetMatchingClusterRefs(matchingCluster)
+	// Get all clusters from referenced Sets
+	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.GetSpec().SetRefs, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+	}
+	matchingCluster = append(matchingCluster, clusterSetClusters...)
+
+	profileScope.SetMatchingClusterRefs(removeDuplicates(matchingCluster))
 
 	r.updateMaps(profileScope)
 
@@ -201,7 +217,7 @@ func (r *ProfileReconciler) reconcileNormal(
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Controller, error) {
+func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
 		For(&configv1alpha1.Profile{}).
 		WithOptions(controller.Options{
@@ -209,7 +225,7 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Contr
 		}).
 		Build(r)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating controller")
+		return errors.Wrap(err, "error creating controller")
 	}
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
@@ -220,7 +236,33 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) (controller.Contr
 		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForCluster),
 		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 	)
-	return c, err
+	if err != nil {
+		return err
+	}
+
+	// When ClusterSet changes, according to SetPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.ClusterSet{}),
+		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
+		SetPredicates(mgr.GetLogger().WithValues("predicate", "clustersetpredicate")),
+	)
+	if err != nil {
+		return err
+	}
+
+	// When Set changes, according to SetPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Set{}),
+		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
+		SetPredicates(mgr.GetLogger().WithValues("predicate", "setpredicate")),
+	)
+	if err != nil {
+		return err
+	}
+
+	r.ctrl = c
+
+	return nil
 }
 
 func (r *ProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
@@ -255,6 +297,10 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
 	}
+
+	for i := range profile.Spec.SetRefs {
+		profile.Spec.SetRefs[i].Namespace = profile.Namespace
+	}
 }
 
 func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
@@ -266,14 +312,23 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 	delete(r.ProfileMap, *profileInfo)
 	delete(r.Profiles, *profileInfo)
 
+	// ClusterMap contains for each cluster, set of Profiles matching
+	// that cluster. Remove Profile from this map
 	for i := range r.ClusterMap {
 		profileSet := r.ClusterMap[i]
+		profileSet.Erase(profileInfo)
+	}
+
+	// SetMap contains for each set, list of Profiles referencing
+	// such Set. Remove ClusterProfile from this map
+	for i := range r.SetMap {
+		profileSet := r.SetMap[i]
 		profileSet.Erase(profileInfo)
 	}
 }
 
 func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
-	currentClusters := getCurrentClusterSet(profileScope)
+	currentClusters := getCurrentClusterSet(profileScope.GetStatus().MatchingClusterRefs)
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
@@ -291,15 +346,52 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 		cluster := profileScope.GetStatus().MatchingClusterRefs[i]
 		clusterInfo := &corev1.ObjectReference{Namespace: cluster.Namespace, Name: cluster.Name,
 			Kind: cluster.Kind, APIVersion: cluster.APIVersion}
-		getClusterMapForEntry(r.ClusterMap, clusterInfo).Insert(profileInfo)
+		getConsumersForEntry(r.ClusterMap, clusterInfo).Insert(profileInfo)
 	}
 
 	// For each Cluster not matched anymore, remove Profile as consumer
 	for i := range toBeRemoved {
 		clusterName := toBeRemoved[i]
-		getClusterMapForEntry(r.ClusterMap, &clusterName).Erase(profileInfo)
+		getConsumersForEntry(r.ClusterMap, &clusterName).Erase(profileInfo)
+	}
+
+	// For each referenced Set, add Profile as consumer
+	for i := range profileScope.GetSpec().SetRefs {
+		set := profileScope.GetSpec().SetRefs[i]
+		setInfo := &corev1.ObjectReference{Namespace: set.Namespace, Name: set.Name,
+			Kind: libsveltosv1alpha1.SetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
+		getConsumersForEntry(r.SetMap, setInfo).Insert(profileInfo)
 	}
 
 	r.ProfileMap[*profileInfo] = currentClusters
 	r.Profiles[*profileInfo] = profileScope.GetSpec().ClusterSelector
+}
+
+func (r *ProfileReconciler) GetController() controller.Controller {
+	return r.ctrl
+}
+
+func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, setRefs []corev1.ObjectReference,
+	logger logr.Logger) ([]corev1.ObjectReference, error) {
+
+	clusters := make([]corev1.ObjectReference, 0)
+	for i := range setRefs {
+		set := &libsveltosv1alpha1.Set{}
+		if err := r.Client.Get(ctx,
+			types.NamespacedName{Namespace: setRefs[i].Namespace, Name: setRefs[i].Name},
+			set); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get set %s/%s",
+				setRefs[i].Namespace, setRefs[i].Name))
+			return nil, err
+		}
+
+		if set.Status.SelectedClusterRefs != nil {
+			clusters = append(clusters, set.Status.SelectedClusterRefs...)
+		}
+	}
+
+	return clusters, nil
 }

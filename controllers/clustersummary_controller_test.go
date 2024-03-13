@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -123,12 +124,12 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:         sync.Mutex{},
 		}
 
-		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeTrue())
 
 		cluster.Status.ControlPlaneReady = false
 		Expect(c.Status().Update(context.TODO(), cluster)).To(Succeed())
 
-		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
+		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeFalse())
 	})
 
 	It("isPaused returns true if CAPI Cluster has Spec.Paused set", func() {

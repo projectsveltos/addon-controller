@@ -47,12 +47,12 @@ import (
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
-func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
-	profileScope *scope.ProfileScope, logger logr.Logger) ([]corev1.ObjectReference, error) {
+func getMatchingClusters(ctx context.Context, c client.Client, namespace string, clusterSelector string,
+	clusterRefs []corev1.ObjectReference, logger logr.Logger) ([]corev1.ObjectReference, error) {
 
 	var matchingCluster []corev1.ObjectReference
-	if profileScope.GetSelector() != "" {
-		parsedSelector, err := labels.Parse(profileScope.GetSelector())
+	if clusterSelector != "" {
+		parsedSelector, err := labels.Parse(clusterSelector)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse clusterSelector: %v", err))
 			return nil, err
@@ -63,7 +63,7 @@ func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
 		}
 	}
 
-	matchingCluster = append(matchingCluster, profileScope.GetSpec().ClusterRefs...)
+	matchingCluster = append(matchingCluster, clusterRefs...)
 
 	return matchingCluster, nil
 }
@@ -1025,10 +1025,10 @@ func reconcileNormalCommon(ctx context.Context, c client.Client, profileScope *s
 	return nil
 }
 
-func getCurrentClusterSet(profileScope *scope.ProfileScope) *libsveltosset.Set {
+func getCurrentClusterSet(matchingClusterRefs []corev1.ObjectReference) *libsveltosset.Set {
 	currentClusters := &libsveltosset.Set{}
-	for i := range profileScope.GetStatus().MatchingClusterRefs {
-		cluster := profileScope.GetStatus().MatchingClusterRefs[i]
+	for i := range matchingClusterRefs {
+		cluster := matchingClusterRefs[i]
 		clusterInfo := &corev1.ObjectReference{
 			Namespace:  cluster.Namespace,
 			Name:       cluster.Name,
@@ -1040,13 +1040,13 @@ func getCurrentClusterSet(profileScope *scope.ProfileScope) *libsveltosset.Set {
 	return currentClusters
 }
 
-func getClusterMapForEntry(clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
+func getConsumersForEntry(currentMap map[corev1.ObjectReference]*libsveltosset.Set,
 	entry *corev1.ObjectReference) *libsveltosset.Set {
 
-	s := clusterMap[*entry]
+	s := currentMap[*entry]
 	if s == nil {
 		s = &libsveltosset.Set{}
-		clusterMap[*entry] = s
+		currentMap[*entry] = s
 	}
 	return s
 }

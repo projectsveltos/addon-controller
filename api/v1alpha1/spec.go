@@ -348,6 +348,12 @@ type Spec struct {
 	// +optional
 	ClusterRefs []corev1.ObjectReference `json:"clusterRefs,omitempty"`
 
+	// SetRefs identifies referenced (cluster)Sets.
+	// - ClusterProfile can reference ClusterSet;
+	// - Profile can reference Set;
+	// +optional
+	SetRefs []corev1.ObjectReference `json:"setRefs,omitempty"`
+
 	// SyncMode specifies how features are synced in a matching workload cluster.
 	// - OneTime means, first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such cluster. Any subsequent feature configuration

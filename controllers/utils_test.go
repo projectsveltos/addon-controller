@@ -210,6 +210,36 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		Expect(owner.GetName()).To(Equal(clusterProfile.Name))
 	})
 
+	It("removeDuplicates removes duplicates from a slice", func() {
+		ref1 := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       randomString(),
+			APIVersion: randomString(),
+		}
+
+		ref2 := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       randomString(),
+			APIVersion: randomString(),
+		}
+
+		ref3 := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       randomString(),
+			APIVersion: randomString(),
+		}
+
+		original := []corev1.ObjectReference{ref1, ref2, ref1, ref3, ref2, ref3}
+		result := controllers.RemoveDuplicates(original)
+		Expect(len(result)).To(Equal(3))
+		Expect(result).To(ContainElement(ref1))
+		Expect(result).To(ContainElement(ref2))
+		Expect(result).To(ContainElement(ref3))
+	})
+
 	It("getClusterProfileOwner returns nil when ClusterProfile does not exist", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 

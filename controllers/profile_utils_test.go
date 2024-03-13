@@ -72,6 +72,9 @@ var _ = Describe("Profile: Reconciler", func() {
 					key2: value2,
 				},
 			},
+			Status: clusterv1.ClusterStatus{
+				ControlPlaneReady: true,
+			},
 		}
 		Expect(addTypeInformationToObject(scheme, matchingCluster)).To(Succeed())
 
@@ -82,6 +85,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				Labels: map[string]string{
 					key2: value2,
 				},
+			},
+			Status: clusterv1.ClusterStatus{
+				ControlPlaneReady: true,
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, nonMatchingCluster)).To(Succeed())
@@ -108,7 +114,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			clusterProfile,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
 			Client:         c,
@@ -119,8 +125,8 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err).To(BeNil())
 
 		// Only clusterSelector is, so only matchingCluster is a match
-		matching, err := controllers.GetMatchingClusters(context.TODO(), c, "", profileScope,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		matching, err := controllers.GetMatchingClusters(context.TODO(), c, "", profileScope.GetSelector(),
+			profileScope.GetSpec().ClusterRefs, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(1))
 
@@ -135,8 +141,8 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		// Both clusterSelector (matchingCluster is a match) and ClusterRefs (nonMatchingCluster is referenced) are set
 		// So two clusters are now matching
-		matching, err = controllers.GetMatchingClusters(context.TODO(), c, "", profileScope,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		matching, err = controllers.GetMatchingClusters(context.TODO(), c, "", profileScope.GetSelector(),
+			profileScope.GetSpec().ClusterRefs, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(matching)).To(Equal(2))
 	})
@@ -576,7 +582,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
-	It("updateClusterSummaries does not ClusterSummary for matching CAPI Cluster with no running control plane machine", func() {
+	It("updateClusterSummaries does not create ClusterSummary for matching CAPI Cluster not ready", func() {
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace:  matchingCluster.Namespace,
@@ -585,6 +591,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				APIVersion: clusterv1.GroupVersion.String(),
 			},
 		}
+
+		matchingCluster.Status.ControlPlaneReady = false
+
 		initObjects := []client.Object{
 			clusterProfile,
 			nonMatchingCluster,

@@ -49,4 +49,14 @@ resources:
   kind: Profile
   path: github.com/projectsveltos/addon-controller/api/v1alpha1
   version: v1alpha1
+- controller: true
+  domain: projectsveltos.io
+  group: lib
+  kind: Set
+  version: v1alpha1
+- controller: true
+  domain: projectsveltos.io
+  group: lib
+  kind: ClusterSet
+  version: v1alpha1
 version: "3"

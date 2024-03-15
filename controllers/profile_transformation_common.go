@@ -35,7 +35,8 @@ import (
 func requeueForCluster(cluster client.Object,
 	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
-	clusterMap map[corev1.ObjectReference]*libsveltosset.Set) []reconcile.Request {
+	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
+	kindType string) []reconcile.Request {
 
 	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
 		"cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
@@ -45,17 +46,17 @@ func requeueForCluster(cluster client.Object,
 	clusterInfo := corev1.ObjectReference{APIVersion: apiVersion, Kind: kind,
 		Namespace: cluster.GetNamespace(), Name: cluster.GetName()}
 
-	clusterCurrentlyMatching := getClusterMapForEntry(clusterMap, &clusterInfo)
+	profileCurrentlyMatching := getConsumersForEntry(clusterMap, &clusterInfo)
 
 	clusterLabels[clusterInfo] = cluster.GetLabels()
 
 	// Get all (Cluster)Profiles previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, clusterCurrentlyMatching.Len())
-	consumers := clusterCurrentlyMatching.Items()
+	requests := make([]ctrl.Request, profileCurrentlyMatching.Len())
+	consumers := profileCurrentlyMatching.Items()
 
 	for i := range consumers {
-		l := logger.WithValues("profile", consumers[i].Name)
-		l.V(logs.LogDebug).Info("queuing profile")
+		l := logger.WithValues(kindType, consumers[i].Name)
+		l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kindType))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
 				Name: consumers[i].Name,
@@ -74,8 +75,8 @@ func requeueForCluster(cluster client.Object,
 			continue
 		}
 		if parsedSelector.Matches(labels.Set(cluster.GetLabels())) {
-			l := logger.WithValues("profile", k.Name)
-			l.V(logs.LogDebug).Info("queuing profile")
+			l := logger.WithValues(kindType, k.Name)
+			l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kindType))
 			requests = append(requests, ctrl.Request{
 				NamespacedName: client.ObjectKey{
 					Name:      k.Name,
@@ -91,7 +92,8 @@ func requeueForCluster(cluster client.Object,
 func requeueForMachine(machine client.Object,
 	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
-	clusterMap map[corev1.ObjectReference]*libsveltosset.Set) []reconcile.Request {
+	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
+	kind string) []reconcile.Request {
 
 	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
 		"machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
@@ -111,13 +113,13 @@ func requeueForMachine(machine client.Object,
 
 	clusterInfo := corev1.ObjectReference{
 		APIVersion: clusterv1.GroupVersion.String(),
-		Kind:       "Cluster",
+		Kind:       clusterKind,
 		Namespace:  machine.GetNamespace(),
 		Name:       clusterNameLabel}
 
 	// Get all ClusterProfile previously matching this cluster and reconcile those
-	requests := make([]ctrl.Request, getClusterMapForEntry(clusterMap, &clusterInfo).Len())
-	consumers := getClusterMapForEntry(clusterMap, &clusterInfo).Items()
+	requests := make([]ctrl.Request, getConsumersForEntry(clusterMap, &clusterInfo).Len())
+	consumers := getConsumersForEntry(clusterMap, &clusterInfo).Items()
 
 	for i := range consumers {
 		requests[i] = ctrl.Request{
@@ -140,8 +142,8 @@ func requeueForMachine(machine client.Object,
 				continue
 			}
 			if parsedSelector.Matches(labels.Set(clusterLabels)) {
-				l := logger.WithValues("profile", k.Name)
-				l.V(logs.LogDebug).Info("queuing profile")
+				l := logger.WithValues(kind, k.Name)
+				l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kind))
 				requests = append(requests, ctrl.Request{
 					NamespacedName: client.ObjectKey{
 						Name:      k.Name,

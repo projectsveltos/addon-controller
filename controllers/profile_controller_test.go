@@ -17,16 +17,21 @@ limitations under the License.
 package controllers_test
 
 import (
+	"context"
+	"fmt"
 	"sync"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2/textlogger"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -35,52 +40,64 @@ import (
 )
 
 var _ = Describe("Profile Controller", func() {
-	It("limitReferencesToNamespace resets any reference to be within namespace", func() {
+	var profile *configv1alpha1.Profile
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig())
+
 		namespace := randomString()
-		profile := &configv1alpha1.Profile{
+		profile = &configv1alpha1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
 				Namespace: namespace,
+				Name:      clusterProfileNamePrefix + randomString(),
 			},
 			Spec: configv1alpha1.Spec{
-				ClusterRefs: []corev1.ObjectReference{
-					{
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
-					{
-						Namespace: namespace,
-						Name:      randomString(),
-					},
+				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, profile)).To(Succeed())
+	})
+
+	It("limitReferencesToNamespace resets any reference to be within namespace", func() {
+		profile.Spec = configv1alpha1.Spec{
+			ClusterRefs: []corev1.ObjectReference{
+				{
+					Namespace: randomString(),
+					Name:      randomString(),
 				},
-				PolicyRefs: []configv1alpha1.PolicyRef{
-					{
-						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
-					{
-						Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
+				{
+					Namespace: profile.Namespace,
+					Name:      randomString(),
 				},
-				KustomizationRefs: []configv1alpha1.KustomizationRef{
-					{
-						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
-					{
-						Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
-					{
-						Kind:      sourcev1.GitRepositoryKind,
-						Namespace: randomString(),
-						Name:      randomString(),
-					},
+			},
+			PolicyRefs: []configv1alpha1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+				{
+					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+			},
+			KustomizationRefs: []configv1alpha1.KustomizationRef{
+				{
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+				{
+					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+				{
+					Kind:      sourcev1.GitRepositoryKind,
+					Namespace: randomString(),
+					Name:      randomString(),
 				},
 			},
 		}
@@ -104,15 +121,111 @@ var _ = Describe("Profile Controller", func() {
 		controllers.LimitReferencesToNamespace(reconciler, profile)
 
 		for i := range profile.Spec.ClusterRefs {
-			Expect(profile.Spec.ClusterRefs[i].Namespace).To(Equal(namespace))
+			Expect(profile.Spec.ClusterRefs[i].Namespace).To(Equal(profile.Namespace))
 		}
 
 		for i := range profile.Spec.PolicyRefs {
-			Expect(profile.Spec.PolicyRefs[i].Namespace).To(Equal(namespace))
+			Expect(profile.Spec.PolicyRefs[i].Namespace).To(Equal(profile.Namespace))
 		}
 
 		for i := range profile.Spec.KustomizationRefs {
-			Expect(profile.Spec.KustomizationRefs[i].Namespace).To(Equal(namespace))
+			Expect(profile.Spec.KustomizationRefs[i].Namespace).To(Equal(profile.Namespace))
+		}
+	})
+
+	It("getClustersFromClusterSets gets cluster selected by referenced sets", func() {
+		set1 := &libsveltosv1alpha1.Set{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: profile.Namespace,
+			},
+			Status: libsveltosv1alpha1.Status{
+				SelectedClusterRefs: []corev1.ObjectReference{
+					{
+						Namespace: profile.Namespace, Name: randomString(),
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+					{
+						Namespace: profile.Namespace, Name: randomString(),
+						Kind: clusterKind, APIVersion: clusterv1.GroupVersion.String(),
+					},
+				},
+			},
+		}
+
+		set2 := &libsveltosv1alpha1.Set{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: profile.Namespace,
+			},
+			Status: libsveltosv1alpha1.Status{
+				SelectedClusterRefs: []corev1.ObjectReference{
+					{
+						Namespace: profile.Namespace, Name: randomString(),
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+					{
+						Namespace: profile.Namespace, Name: randomString(),
+						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					},
+				},
+			},
+		}
+
+		profile.Spec.SetRefs = []corev1.ObjectReference{
+			{
+				Namespace:  profile.Namespace,
+				Name:       set1.Name,
+				Kind:       libsveltosv1alpha1.ClusterSetKind,
+				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			},
+			{
+				Namespace:  profile.Namespace,
+				Name:       set2.Name,
+				Kind:       libsveltosv1alpha1.ClusterSetKind,
+				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			},
+		}
+
+		initObjects := []client.Object{
+			set1,
+			set2,
+			profile,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ProfileReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			SetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+			Mux:           sync.Mutex{},
+		}
+
+		clusters, err := controllers.GetClustersFromSets(reconciler, context.TODO(),
+			profile.Spec.SetRefs, logger)
+		Expect(err).To(BeNil())
+		Expect(clusters).ToNot(BeNil())
+		for i := range set1.Status.SelectedClusterRefs {
+			Expect(clusters).To(ContainElement(corev1.ObjectReference{
+				Namespace:  set1.Status.SelectedClusterRefs[i].Namespace,
+				Name:       set1.Status.SelectedClusterRefs[i].Name,
+				Kind:       set1.Status.SelectedClusterRefs[i].Kind,
+				APIVersion: set1.Status.SelectedClusterRefs[i].APIVersion,
+			}))
+		}
+		for i := range set2.Status.SelectedClusterRefs {
+			Expect(clusters).To(ContainElement(corev1.ObjectReference{
+				Namespace:  set2.Status.SelectedClusterRefs[i].Namespace,
+				Name:       set2.Status.SelectedClusterRefs[i].Name,
+				Kind:       set2.Status.SelectedClusterRefs[i].Kind,
+				APIVersion: set2.Status.SelectedClusterRefs[i].APIVersion,
+			}))
 		}
 	})
 })

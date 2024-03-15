@@ -21,6 +21,7 @@ import (
 
 	"github.com/go-logr/logr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -41,14 +42,14 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if oldCluster == nil {
-				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile ClusterProfile")
+				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
 			// a label change migth change which clusters match which clusterprofile
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
-					"Cluster labels changed. Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster labels changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
@@ -56,7 +57,7 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// if sharding is used, cluster sharding annotation must be copied over ClusterSummary
 			if !reflect.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
 				log.V(logs.LogVerbose).Info(
-					"Cluster annotations changed. Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster annotations changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
@@ -64,20 +65,29 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// return true if Cluster.Spec.Paused has changed from true to false
 			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated ClusterProfiles.")
+					"Cluster was unpaused. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
-			// return true if Cluster.Status.ControlPlaneReady has changed from false to true
-			if !oldCluster.Status.ControlPlaneReady && newCluster.Status.ControlPlaneReady {
+			// return true if Cluster.Status.ControlPlaneReady has changed
+			if oldCluster.Status.ControlPlaneReady != newCluster.Status.ControlPlaneReady {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was not ready. Will attempt to reconcile associated ClusterProfiles.")
+					"Cluster ControlPlaneReady changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
+				return true
+			}
+
+			if oldCluster.Status.Phase != string(clusterv1.ClusterPhaseDeleting) &&
+				newCluster.Status.Phase == string(clusterv1.ClusterPhaseDeleting) {
+
+				log.V(logs.LogVerbose).Info(
+					"Cluster is beng deleted. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions. \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -90,12 +100,13 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// Only need to trigger a reconcile if the Cluster.Spec.Paused is false
 			if !cluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster is not paused.  Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster is not paused.  Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions. \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -104,7 +115,7 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster deleted.  Will attempt to reconcile associated ClusterProfiles.")
+				"Cluster deleted.  Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -113,7 +124,8 @@ func ClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions. \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 	}
@@ -132,27 +144,27 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 			)
 
 			if oldCluster == nil {
-				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile ClusterProfile")
+				log.V(logs.LogVerbose).Info("Old Cluster is nil. Reconcile (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
 			// return true if Cluster.Spec.Paused has changed from true to false
 			if oldCluster.Spec.Paused && !newCluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was unpaused. Will attempt to reconcile associated ClusterProfiles.")
+					"Cluster was unpaused. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
-			if !oldCluster.Status.Ready && newCluster.Status.Ready {
+			if oldCluster.Status.Ready != newCluster.Status.Ready {
 				log.V(logs.LogVerbose).Info(
-					"Cluster was not ready. Will attempt to reconcile associated ClusterProfiles.")
+					"Cluster Status.Ready changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 				return true
 			}
 
 			// a label change migth change which clusters match which clusterprofile
 			if !reflect.DeepEqual(oldCluster.Labels, newCluster.Labels) {
 				log.V(logs.LogVerbose).Info(
-					"Cluster labels changed. Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster labels changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
@@ -160,14 +172,15 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// if sharding is used, cluster sharding annotation must be copied over ClusterSummary
 			if !reflect.DeepEqual(oldCluster.Annotations, newCluster.Annotations) {
 				log.V(logs.LogVerbose).Info(
-					"Cluster annotations changed. Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster annotations changed. Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
 
 			// otherwise, return false
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions.  \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
@@ -180,12 +193,13 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 			// Only need to trigger a reconcile if the Cluster.Spec.Paused is false
 			if !cluster.Spec.Paused {
 				log.V(logs.LogVerbose).Info(
-					"Cluster is not paused.  Will attempt to reconcile associated ClusterProfiles.",
+					"Cluster is not paused.  Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.",
 				)
 				return true
 			}
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions. \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
@@ -194,7 +208,7 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster deleted.  Will attempt to reconcile associated ClusterProfiles.")
+				"Cluster deleted.  Will attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.")
 			return true
 		},
 		GenericFunc: func(e event.GenericEvent) bool {
@@ -203,7 +217,8 @@ func SveltosClusterPredicates(logger logr.Logger) predicate.Funcs {
 				"cluster", e.Object.GetName(),
 			)
 			log.V(logs.LogVerbose).Info(
-				"Cluster did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+				`Cluster did not match expected conditions. \
+				Will not attempt to reconcile associated (Cluster)Profiles/(Cluster)Set.`)
 			return false
 		},
 	}
@@ -274,6 +289,74 @@ func MachinePredicates(logger logr.Logger) predicate.Funcs {
 			)
 			log.V(logs.LogVerbose).Info(
 				"Machine did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles.")
+			return false
+		},
+	}
+}
+
+// SetPredicates predicates for ClusterSet/Set. ClusterProfileReconciler watches ClusterSet/Set events
+// and react to those by reconciling itself based on following predicates
+func SetPredicates(logger logr.Logger) predicate.Funcs {
+	getStatus := func(o client.Object) *libsveltosv1alpha1.Status {
+		addTypeInformationToObject(getManager().Scheme(), o)
+		switch o.GetObjectKind().GroupVersionKind().Kind {
+		case libsveltosv1alpha1.ClusterSetKind:
+			clusterSet := o.(*libsveltosv1alpha1.ClusterSet)
+			return &clusterSet.Status
+		case libsveltosv1alpha1.SetKind:
+			set := o.(*libsveltosv1alpha1.Set)
+			return &set.Status
+		}
+
+		return nil
+	}
+
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			newStatus := getStatus(e.ObjectNew)
+			oldStatus := getStatus(e.ObjectOld)
+
+			log := logger.WithValues("predicate", "updateEvent",
+				"namespace", e.ObjectNew.GetNamespace(),
+				"set", e.ObjectNew.GetName(),
+			)
+
+			if oldStatus == nil {
+				log.V(logs.LogVerbose).Info("Old (Cluster)Set Status is nil. Reconcile ClusterProfiles/Profiles")
+				return true
+			}
+
+			// if (cluster)set selected clusters have changed, reconcile
+			if !reflect.DeepEqual(oldStatus.SelectedClusterRefs, newStatus.SelectedClusterRefs) {
+				log.V(logs.LogVerbose).Info(
+					"(Cluster)Set selected clusters has changed. Will attempt to reconcile associated ClusterProfiles/Profiles.")
+				return true
+			}
+
+			// otherwise, return false
+			log.V(logs.LogVerbose).Info(
+				"(Cluster)Set did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles/Profiles.")
+			return false
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			return false
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			log := logger.WithValues("predicate", "deleteEvent",
+				"namespace", e.Object.GetNamespace(),
+				"set", e.Object.GetName(),
+			)
+			log.V(logs.LogVerbose).Info(
+				"(Cluster)Set did match expected conditions.  Will attempt to reconcile associated ClusterProfiles/Profiles.")
+			return true
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			log := logger.WithValues("predicate", "genericEvent",
+				"namespace", e.Object.GetNamespace(),
+				"set", e.Object.GetName(),
+			)
+			log.V(logs.LogVerbose).Info(
+				"(Cluster)Set did not match expected conditions.  Will not attempt to reconcile associated ClusterProfiles/Profiles.")
 			return false
 		},
 	}

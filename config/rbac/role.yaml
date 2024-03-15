@@ -231,11 +231,63 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clustersets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - clustersets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - clustersets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - debuggingconfigurations
   verbs:
   - get
   - list
   - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sets/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sets/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:

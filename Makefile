@@ -123,7 +123,8 @@ manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt generate ## Generate W
 	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
-	./scripts/extract_deployment.sh manifest/manifest.yaml manifest/deployment-shard.yaml
+	./scripts/extract_deployment-shard.sh manifest/manifest.yaml manifest/deployment-shard.yaml
+	./scripts/extract_deployment-agentless.sh manifest/manifest.yaml manifest/deployment-agentless.yaml
 
 .PHONY: generate
 generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -204,6 +205,17 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 	sed -e "s/{{.SHARD}}/shard1/g"  manifest/deployment-shard.yaml > test/addon-controller-deployment-shard.yaml
 	$(KUBECTL) apply -f test/addon-controller-deployment-shard.yaml
 	rm -f test/addon-controller-deployment-shard.yaml
+	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: fv-agentless
+fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml
+	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml 
+	cp manifest/deployment-agentless.yaml test/addon-controller-deployment-agentless.yaml
+	$(KUBECTL) apply -f test/addon-controller-deployment-agentless.yaml
+	rm -f test/addon-controller-deployment-agentless.yaml
+	@echo "Waiting for projectsveltos addon-controller to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
 .PHONY: create-cluster

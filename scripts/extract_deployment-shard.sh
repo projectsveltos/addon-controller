@@ -22,7 +22,7 @@ while IFS= read -r line; do
     fi
 
     if [[ $in_section == true ]]; then
-        # Replace "shard-key=" with "shard-key='shard1'"
+        # Replace "shard-key=" with "shard-key='{{.SHARD}}'"
         if [[ $line == *"shard-key"* ]]; then
             line=$(echo "$line" | sed "s/shard-key=/shard-key={{.SHARD}}/")
         fi

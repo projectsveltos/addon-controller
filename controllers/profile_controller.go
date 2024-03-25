@@ -240,16 +240,6 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	// When ClusterSet changes, according to SetPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.ClusterSet{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
-		SetPredicates(mgr.GetLogger().WithValues("predicate", "clustersetpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
 	// When Set changes, according to SetPredicates,
 	// one or more ClusterProfiles need to be reconciled.
 	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Set{}),

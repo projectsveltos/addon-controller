@@ -232,16 +232,6 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	// When Set changes, according to SetPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Set{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
-		SetPredicates(mgr.GetLogger().WithValues("predicate", "setpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 

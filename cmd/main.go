@@ -379,6 +379,7 @@ func getProfileReconciler(mgr manager.Manager) *controllers.ProfileReconciler {
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("profilereconciler"),
 	}
 }
 
@@ -393,6 +394,7 @@ func getClusterProfileReconciler(mgr manager.Manager) *controllers.ClusterProfil
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("clusterprofilereconciler"),
 	}
 }
 
@@ -413,6 +415,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("clustersummaryreconciler"),
 	}
 }
 
@@ -426,6 +429,7 @@ func getSetReconciler(mgr manager.Manager) *controllers.SetReconciler {
 		SetMap:               make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Sets:                 make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Logger:               ctrl.Log.WithName("setreconciler"),
 	}
 }
 
@@ -439,6 +443,7 @@ func getClusterSetReconciler(mgr manager.Manager) *controllers.ClusterSetReconci
 		ClusterSetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterSets:          make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Logger:               ctrl.Log.WithName("clustersetreconciler"),
 	}
 }
 

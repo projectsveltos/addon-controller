@@ -20,6 +20,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -43,6 +44,7 @@ type ClusterSetReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
+	Logger               logr.Logger
 
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex

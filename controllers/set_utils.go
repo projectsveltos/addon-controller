@@ -20,10 +20,11 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/go-logr/logr"
 
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -98,10 +99,9 @@ func selectMoreClusters(setScope *scope.SetScope) {
 
 func requeueForSet(set client.Object,
 	setMap map[corev1.ObjectReference]*libsveltosset.Set,
-	kindType string) []reconcile.Request {
+	kindType string, logger logr.Logger) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
-		"set", fmt.Sprintf("%s/%s", set.GetNamespace(), set.GetName()))
+	logger = logger.WithValues("set", fmt.Sprintf("%s/%s", set.GetNamespace(), set.GetName()))
 	logger.V(logs.LogDebug).Info("reacting to (Cluster)Set change")
 
 	apiVersion, kind := set.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()

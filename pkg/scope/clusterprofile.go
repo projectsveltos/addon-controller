@@ -88,6 +88,11 @@ func (s *ProfileScope) Close(ctx context.Context) error {
 	return s.PatchObject(ctx)
 }
 
+// Namespace returns the Profile namespace.
+func (s *ProfileScope) Namespace() string {
+	return s.Profile.GetNamespace()
+}
+
 // Name returns the Profile name.
 func (s *ProfileScope) Name() string {
 	return s.Profile.GetName()

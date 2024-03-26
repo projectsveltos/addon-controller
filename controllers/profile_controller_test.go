@@ -172,19 +172,9 @@ var _ = Describe("Profile Controller", func() {
 			},
 		}
 
-		profile.Spec.SetRefs = []corev1.ObjectReference{
-			{
-				Namespace:  profile.Namespace,
-				Name:       set1.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
-			{
-				Namespace:  profile.Namespace,
-				Name:       set2.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
+		profile.Spec.SetRefs = []string{
+			set1.Name,
+			set2.Name,
 		}
 
 		initObjects := []client.Object{
@@ -208,7 +198,7 @@ var _ = Describe("Profile Controller", func() {
 		}
 
 		clusters, err := controllers.GetClustersFromSets(reconciler, context.TODO(),
-			profile.Spec.SetRefs, logger)
+			profile.Namespace, profile.Spec.SetRefs, logger)
 		Expect(err).To(BeNil())
 		Expect(clusters).ToNot(BeNil())
 		for i := range set1.Status.SelectedClusterRefs {

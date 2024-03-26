@@ -133,17 +133,9 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterProfile.Spec.SetRefs = []corev1.ObjectReference{
-			{
-				Name:       clusterSet1.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
-			{
-				Name:       clusterSet2.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
+		clusterProfile.Spec.SetRefs = []string{
+			clusterSet1.Name,
+			clusterSet2.Name,
 		}
 
 		initObjects := []client.Object{

@@ -60,13 +60,7 @@ var _ = Describe("ClusterSet", func() {
 		Byf("Creating ClusterProfile referencing ClusterSet")
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.ClusterSelector = ""
-		clusterProfile.Spec.SetRefs = []corev1.ObjectReference{
-			{
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-				Name:       clusterSet.Name,
-			},
-		}
+		clusterProfile.Spec.SetRefs = []string{clusterSet.Name}
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 

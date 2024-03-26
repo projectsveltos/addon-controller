@@ -59,8 +59,7 @@ type ProfileReconciler struct {
 
 	// key: Sveltos/Cluster; value: set of all Profiles matching the Cluster
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
-	// key: Profile; value: set of Sveltos/CAPI Clusters matched
-	ProfileMap map[corev1.ObjectReference]*libsveltosset.Set
+
 	// key: Profile; value Profile Selector
 	Profiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
@@ -296,7 +295,6 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 
 	profileInfo := getKeyFromObject(r.Scheme, profileScope.Profile)
 
-	delete(r.ProfileMap, *profileInfo)
 	delete(r.Profiles, *profileInfo)
 
 	// ClusterMap contains for each cluster, set of Profiles matching
@@ -315,17 +313,16 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 }
 
 func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
-	currentClusters := getCurrentClusterSet(profileScope.GetStatus().MatchingClusterRefs)
-
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
 	profileInfo := getKeyFromObject(r.Scheme, profileScope.Profile)
 
-	// Get list of Clusters not matched anymore by Profile
-	var toBeRemoved []corev1.ObjectReference
-	if v, ok := r.ProfileMap[*profileInfo]; ok {
-		toBeRemoved = v.Difference(currentClusters)
+	for k, l := range r.ClusterMap {
+		l.Erase(profileInfo)
+		if l.Len() == 0 {
+			delete(r.ClusterMap, k)
+		}
 	}
 
 	// For each currently matching Cluster, add Profile as consumer
@@ -336,10 +333,11 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 		getConsumersForEntry(r.ClusterMap, clusterInfo).Insert(profileInfo)
 	}
 
-	// For each Cluster not matched anymore, remove Profile as consumer
-	for i := range toBeRemoved {
-		clusterName := toBeRemoved[i]
-		getConsumersForEntry(r.ClusterMap, &clusterName).Erase(profileInfo)
+	for k, l := range r.SetMap {
+		l.Erase(profileInfo)
+		if l.Len() == 0 {
+			delete(r.SetMap, k)
+		}
 	}
 
 	// For each referenced Set, add Profile as consumer
@@ -350,7 +348,6 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 		getConsumersForEntry(r.SetMap, setInfo).Insert(profileInfo)
 	}
 
-	r.ProfileMap[*profileInfo] = currentClusters
 	r.Profiles[*profileInfo] = profileScope.GetSpec().ClusterSelector
 }
 

@@ -31,7 +31,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -90,34 +89,7 @@ type ClusterSummaryReconciler struct {
 	ConcurrentReconciles int
 	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	ReferenceMap         map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
-	ClusterSummaryMap    map[types.NamespacedName]*libsveltosset.Set   // key: ClusterSummary namespace/name; value: set of referenced resources
-
-	// key: Sveltos/Cluster; value: set of all ClusterSummaries for that Cluster
-	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
-
-	// Reason for the two maps:
-	// ClusterSummary references ConfigMaps/Secrets containing policies to be deployed in a Sveltos/Cluster.
-	// When a ConfigMap/Secret changes, all the ClusterSummaries referencing it need to be reconciled.
-	// In order to achieve so, ClusterSummary reconciler could watch for ConfigMaps/Secrets. When a ConfigMap/Secret spec changes,
-	// find all the ClusterSummaries currently referencing it and reconcile those. Problem is no I/O should be present inside a MapFunc
-	// (given a ConfigMap/Secret, return all the ClusterSummary referencing such ConfigMap/Secret).
-	// In the MapFunc, if the list ClusterSummaries operation failed, we would be unable to retry or re-enqueue the ClusterSummaries
-	// referencing the ConfigMap that changed.
-	// Instead the approach taken is following:
-	// - when a ClusterSummary is reconciled, update the ReferenceMap;
-	// - in the MapFunc, given the ConfigMap/Secret that changed, we can immeditaly get all the ClusterSummaries needing a reconciliation (by
-	// using the ReferenceMap);
-	// - if a ClusterSummary is referencing a ConfigMap/Secret but its reconciliation is still queued, when ConfigMap/Secret changes,
-	// ReferenceMap won't have such ClusterSummary. This is not a problem as ClusterSummary reconciliation is already queued and will happen.
-	//
-	// The ClusterSummaryMap is used to update ReferenceMap. Consider following scenarios to understand the need:
-	// 1. ClusterSummary A references ConfigMaps 1 and 2. When reconciled, ReferenceMap will have 1 => A and 2 => A;
-	// and ClusterSummaryMap A => 1,2
-	// 2. ClusterSummary A changes and now references ConfigMap 1 only. We ned to remove the entry 2 => A in ReferenceMap. But
-	// when we reconcile ClusterSummary we have its current version we don't have its previous version. So we use ClusterSummaryMap (at this
-	// point value stored here corresponds to reconciliation #1. We know currently ClusterSummary references ConfigMap 1 only and looking
-	// at ClusterSummaryMap we know it used to reference ConfigMap 1 and 2. So we can remove 2 => A from ReferenceMap. Only after this
-	// update, we update ClusterSummaryMap (so new value will be A => 1)
+	ClusterMap           map[corev1.ObjectReference]*libsveltosset.Set // key: Sveltos/Cluster; value: set of all ClusterSummaries for that Cluster
 
 	ctrl controller.Controller
 }
@@ -662,8 +634,6 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
 
-	delete(r.ClusterSummaryMap, types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()})
-
 	clusterSummaryInfo := getKeyFromObject(r.Scheme, clusterSummaryScope.ClusterSummary)
 
 	for i := range r.ClusterMap {
@@ -699,15 +669,15 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 	clusterInfo := getKeyFromObject(r.Scheme, clusterObject)
 
 	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
-		Kind: configv1alpha1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
+		Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummaryScope.Namespace(),
 		Name: clusterSummaryScope.Name()}
 	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
 
-	// Get list of References not referenced anymore by ClusterSummary
-	var toBeRemoved []corev1.ObjectReference
-	clusterSummaryName := types.NamespacedName{Namespace: clusterSummaryScope.Namespace(), Name: clusterSummaryScope.Name()}
-	if v, ok := r.ClusterSummaryMap[clusterSummaryName]; ok {
-		toBeRemoved = v.Difference(currentReferences)
+	for k, l := range r.ReferenceMap {
+		l.Erase(&clusterSummaryInfo)
+		if l.Len() == 0 {
+			delete(r.ReferenceMap, k)
+		}
 	}
 
 	// For each currently referenced instance, add ClusterSummary as consumer
@@ -723,21 +693,6 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 		)
 	}
 
-	// For each resource not reference anymore, remove ClusterSummary as consumer
-	for i := range toBeRemoved {
-		referencedResource := toBeRemoved[i]
-		r.getReferenceMapForEntry(&referencedResource).Erase(
-			&corev1.ObjectReference{
-				APIVersion: configv1alpha1.GroupVersion.String(),
-				Kind:       configv1alpha1.ClusterSummaryKind,
-				Namespace:  clusterSummaryScope.Namespace(),
-				Name:       clusterSummaryScope.Name(),
-			},
-		)
-	}
-
-	// Update list of resources currently referenced by ClusterSummary
-	r.ClusterSummaryMap[clusterSummaryName] = currentReferences
 	return nil
 }
 

@@ -59,6 +59,8 @@ var _ = Describe("Profile Transformations", func() {
 			},
 		}
 
+		Expect(addTypeInformationToObject(scheme, cluster)).To(BeNil())
+
 		matchingProfile := &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
@@ -72,7 +74,8 @@ var _ = Describe("Profile Transformations", func() {
 
 		nonMatchingProfile := &configv1alpha1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterProfileNamePrefix + randomString(),
+				Name:      clusterProfileNamePrefix + randomString(),
+				Namespace: cluster.Namespace,
 			},
 			Spec: configv1alpha1.Spec{
 				ClusterSelector: libsveltosv1alpha1.Selector(
@@ -88,61 +91,45 @@ var _ = Describe("Profile Transformations", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
+		reconciler := &controllers.ProfileReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+			Mux:           sync.Mutex{},
 		}
 
 		By("Setting ProfileReconciler internal structures")
 		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion,
-			Kind: configv1alpha1.ClusterProfileKind, Name: matchingProfile.Name}
-		reconciler.ClusterProfiles[matchingInfo] = matchingProfile.Spec.ClusterSelector
+			Kind: configv1alpha1.ProfileKind, Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}
 
 		nonMatchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion,
-			Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingProfile.Name}
-		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingProfile.Spec.ClusterSelector
+			Kind: configv1alpha1.ProfileKind, Namespace: nonMatchingProfile.Namespace, Name: nonMatchingProfile.Name}
 
 		// ClusterMap contains, per ClusterName, list of ClusterProfiles matching it.
-		clusterProfileSet := &libsveltosset.Set{}
-		clusterProfileSet.Insert(&matchingInfo)
+		profileSet := &libsveltosset.Set{}
+		profileSet.Insert(&matchingInfo)
 		clusterInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion,
 			Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name}
-		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
-
-		// ProfileMap contains, per Profile, list of matched Clusters.
-		clusterSet1 := &libsveltosset.Set{}
-		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
-
-		clusterSet2 := &libsveltosset.Set{}
-		clusterSet2.Insert(&clusterInfo)
-		reconciler.ClusterProfileMap[matchingInfo] = clusterSet2
+		reconciler.ClusterMap[clusterInfo] = profileSet
 
 		By("Expect only matchingProfile to be requeued")
-		requests := controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
-		expected := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingProfile.Name}}
+		requests := controllers.RequeueProfileForCluster(reconciler, context.TODO(), cluster)
+		expected := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}}
 		Expect(requests).To(ContainElement(expected))
 
 		By("Changing Profile ClusterSelector again to have two ClusterProfiles match")
 		nonMatchingProfile.Spec.ClusterSelector = matchingProfile.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingProfile)).To(Succeed())
 
-		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingProfile.Spec.ClusterSelector
+		profileSet.Insert(&nonMatchingInfo)
+		reconciler.ClusterMap[clusterInfo] = profileSet
 
-		clusterSet1.Insert(&clusterInfo)
-		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
-
-		clusterProfileSet.Insert(&nonMatchingInfo)
-		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
-
-		requests = controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
-		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingProfile.Name}}
+		requests = controllers.RequeueProfileForCluster(reconciler, context.TODO(), cluster)
+		expected = reconcile.Request{NamespacedName: types.NamespacedName{Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}}
 		Expect(requests).To(ContainElement(expected))
-		expected = reconcile.Request{NamespacedName: types.NamespacedName{Name: nonMatchingProfile.Name}}
+		expected = reconcile.Request{NamespacedName: types.NamespacedName{Namespace: nonMatchingProfile.Namespace, Name: nonMatchingProfile.Name}}
 		Expect(requests).To(ContainElement(expected))
 	})
 
@@ -206,7 +193,6 @@ var _ = Describe("Profile Transformations", func() {
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
@@ -232,15 +218,6 @@ var _ = Describe("Profile Transformations", func() {
 			Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name}
 		reconciler.ClusterMap[clusterInfo] = profileSet
 
-		// ProfileMap contains, per Profile, list of matched Clusters.
-		clusterSet1 := &libsveltosset.Set{}
-		reconciler.ProfileMap[nonMatchingInfo1] = clusterSet1
-		reconciler.ProfileMap[nonMatchingInfo2] = clusterSet1
-
-		clusterSet2 := &libsveltosset.Set{}
-		clusterSet2.Insert(&clusterInfo)
-		reconciler.ProfileMap[matchingInfo] = clusterSet2
-
 		By("Expect only matchingProfile to be requeued")
 		requests := controllers.RequeueProfileForCluster(reconciler, context.TODO(), cluster)
 		expected := reconcile.Request{NamespacedName: types.NamespacedName{
@@ -256,9 +233,6 @@ var _ = Describe("Profile Transformations", func() {
 
 		reconciler.Profiles[nonMatchingInfo1] = nonMatchingProfile1.Spec.ClusterSelector
 		reconciler.Profiles[nonMatchingInfo2] = nonMatchingProfile2.Spec.ClusterSelector
-
-		clusterSet1.Insert(&clusterInfo)
-		reconciler.ProfileMap[nonMatchingInfo1] = clusterSet1
 
 		profileSet.Insert(&nonMatchingInfo1)
 		reconciler.ClusterMap[clusterInfo] = profileSet

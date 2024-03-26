@@ -48,6 +48,8 @@ func requeueForCluster(cluster client.Object,
 
 	profileCurrentlyMatching := getConsumersForEntry(clusterMap, &clusterInfo)
 
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC %d", profileCurrentlyMatching.Len()))
+
 	clusterLabels[clusterInfo] = cluster.GetLabels()
 
 	// Get all (Cluster)Profiles previously matching this cluster and reconcile those
@@ -59,7 +61,8 @@ func requeueForCluster(cluster client.Object,
 		l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kindType))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Namespace: consumers[i].Namespace,
+				Name:      consumers[i].Name,
 			},
 		}
 	}
@@ -123,7 +126,8 @@ func requeueForMachine(machine client.Object,
 	for i := range consumers {
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Namespace: consumers[i].Namespace,
+				Name:      consumers[i].Name,
 			},
 		}
 	}

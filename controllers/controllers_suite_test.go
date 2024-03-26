@@ -30,7 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -161,25 +160,23 @@ var _ = AfterSuite(func() {
 
 func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
 	return &controllers.ClusterSummaryReconciler{
-		Client:            c,
-		Scheme:            scheme,
-		Deployer:          dep,
-		ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-		PolicyMux:         sync.Mutex{},
+		Client:       c,
+		Scheme:       scheme,
+		Deployer:     dep,
+		ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+		PolicyMux:    sync.Mutex{},
 	}
 }
 
 func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileReconciler {
 	return &controllers.ClusterProfileReconciler{
-		Client:            c,
-		Scheme:            scheme,
-		ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-		ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-		Mux:               sync.Mutex{},
+		Client:          c,
+		Scheme:          scheme,
+		ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+		Mux:             sync.Mutex{},
 	}
 }
 
@@ -188,7 +185,6 @@ func getProfileReconciler(c client.Client) *controllers.ProfileReconciler {
 		Client:        c,
 		Scheme:        scheme,
 		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 		Mux:           sync.Mutex{},

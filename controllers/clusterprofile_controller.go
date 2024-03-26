@@ -48,6 +48,7 @@ type ClusterProfileReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
+	Logger               logr.Logger
 
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex

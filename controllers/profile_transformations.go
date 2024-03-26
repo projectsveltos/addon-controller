@@ -37,7 +37,7 @@ func (r *ProfileReconciler) requeueProfileForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind)
+	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
 }
 
 func (r *ProfileReconciler) requeueProfileForMachine(
@@ -51,7 +51,7 @@ func (r *ProfileReconciler) requeueProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueForMachine(machine, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind)
+	return requeueForMachine(machine, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
 }
 
 func (r *ProfileReconciler) requeueProfileForSet(
@@ -65,5 +65,5 @@ func (r *ProfileReconciler) requeueProfileForSet(
 
 	addTypeInformationToObject(r.Scheme, set)
 
-	return requeueForSet(set, r.SetMap, configv1alpha1.ProfileKind)
+	return requeueForSet(set, r.SetMap, configv1alpha1.ProfileKind, r.Logger)
 }

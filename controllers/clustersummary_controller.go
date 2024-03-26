@@ -82,6 +82,7 @@ type ClusterSummaryReconciler struct {
 	*rest.Config
 	client.Client
 	Scheme               *runtime.Scheme
+	Logger               logr.Logger
 	ReportMode           ReportMode
 	AgentInMgmtCluster   bool   // if true, indicates drift-detection-manager needs to be started in the management cluster
 	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled

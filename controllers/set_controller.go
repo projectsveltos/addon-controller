@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
 	"github.com/projectsveltos/addon-controller/pkg/scope"
@@ -44,6 +45,7 @@ type SetReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
+	Logger               logr.Logger
 
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex

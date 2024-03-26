@@ -26,6 +26,20 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
 
+func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
+	ctx context.Context, o client.Object,
+) []reconcile.Request {
+
+	clusterSet := o
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	addTypeInformationToObject(r.Scheme, clusterSet)
+
+	return requeueForSet(clusterSet, r.ClusterSetMap, configv1alpha1.ClusterProfileKind, r.Logger)
+}
+
 func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
@@ -37,7 +51,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind)
+	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
@@ -51,19 +65,5 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind)
-}
-
-func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
-	ctx context.Context, o client.Object,
-) []reconcile.Request {
-
-	clusterSet := o
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	addTypeInformationToObject(r.Scheme, clusterSet)
-
-	return requeueForSet(clusterSet, r.ClusterSetMap, configv1alpha1.ClusterProfileKind)
+	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
 }

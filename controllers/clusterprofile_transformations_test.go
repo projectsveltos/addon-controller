@@ -82,13 +82,12 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
 		}
 
 		By("Setting ClusterProfileReconciler internal structures")
@@ -103,14 +102,6 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		clusterInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: cluster.Kind, Namespace: cluster.Namespace, Name: cluster.Name}
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
 
-		// ClusterProfileMap contains, per ClusterProfile, list of matched Clusters.
-		clusterSet1 := &libsveltosset.Set{}
-		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
-
-		clusterSet2 := &libsveltosset.Set{}
-		clusterSet2.Insert(&clusterInfo)
-		reconciler.ClusterProfileMap[matchingInfo] = clusterSet2
-
 		By("Expect only matchingClusterProfile to be requeued")
 		requests := controllers.RequeueClusterProfileForCluster(reconciler, context.TODO(), cluster)
 		expected := reconcile.Request{NamespacedName: types.NamespacedName{Name: matchingClusterProfile.Name}}
@@ -121,9 +112,6 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		Expect(c.Update(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
-
-		clusterSet1.Insert(&clusterInfo)
-		reconciler.ClusterProfileMap[nonMatchingInfo] = clusterSet1
 
 		clusterProfileSet.Insert(&nonMatchingInfo)
 		reconciler.ClusterMap[clusterInfo] = clusterProfileSet
@@ -141,8 +129,6 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		Expect(c.Update(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
 		emptySet := &libsveltosset.Set{}
-		reconciler.ClusterProfileMap[matchingInfo] = emptySet
-		reconciler.ClusterProfileMap[nonMatchingInfo] = emptySet
 		reconciler.ClusterMap[clusterInfo] = emptySet
 
 		reconciler.ClusterProfiles[matchingInfo] = matchingClusterProfile.Spec.ClusterSelector

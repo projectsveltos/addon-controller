@@ -102,12 +102,11 @@ var _ = Describe("ClusterSummaryTransformations map functions", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		set := libsveltosset.Set{}

@@ -115,13 +115,12 @@ var _ = Describe("ClustersummaryController", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeTrue())
@@ -142,13 +141,12 @@ var _ = Describe("ClustersummaryController", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
@@ -172,13 +170,12 @@ var _ = Describe("ClustersummaryController", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
@@ -204,13 +201,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
@@ -241,13 +237,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.UpdateChartMap(reconciler, context.TODO(), clusterSummaryScope,
@@ -309,13 +304,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
@@ -361,13 +355,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		failureMsg := randomString()
@@ -445,13 +438,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
@@ -508,13 +500,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
@@ -551,13 +542,12 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          nil,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     nil,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		Expect(controllers.ShouldReconcile(reconciler, clusterSummaryScope,
@@ -576,13 +566,12 @@ var _ = Describe("ClustersummaryController", func() {
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryName := client.ObjectKey{
@@ -622,13 +611,12 @@ var _ = Describe("ClustersummaryController", func() {
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
@@ -679,13 +667,12 @@ var _ = Describe("ClustersummaryController", func() {
 
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
@@ -743,13 +730,12 @@ var _ = Describe("ClustersummaryController", func() {
 		deployer := fakedeployer.GetClient(context.TODO(),
 			textlogger.NewLogger(textlogger.NewConfig()), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
@@ -805,13 +791,12 @@ var _ = Describe("ClustersummaryController", func() {
 
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
@@ -992,13 +977,12 @@ var _ = Describe("ClustersummaryController", func() {
 
 		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			Deployer:          deployer,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ReferenceMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterSummaryMap: make(map[types.NamespacedName]*libsveltosset.Set),
-			PolicyMux:         sync.Mutex{},
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
 		}
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{

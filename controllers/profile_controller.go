@@ -199,7 +199,7 @@ func (r *ProfileReconciler) reconcileNormal(
 	}
 
 	// Get all clusters from referenced Sets
-	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.GetSpec().SetRefs, logger)
+	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.Namespace(), profileScope.GetSpec().SetRefs, logger)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
@@ -288,10 +288,6 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
 	}
-
-	for i := range profile.Spec.SetRefs {
-		profile.Spec.SetRefs[i].Namespace = profile.Namespace
-	}
 }
 
 func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
@@ -349,7 +345,7 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 	// For each referenced Set, add Profile as consumer
 	for i := range profileScope.GetSpec().SetRefs {
 		set := profileScope.GetSpec().SetRefs[i]
-		setInfo := &corev1.ObjectReference{Namespace: set.Namespace, Name: set.Name,
+		setInfo := &corev1.ObjectReference{Namespace: profileScope.Namespace(), Name: set,
 			Kind: libsveltosv1alpha1.SetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
 		getConsumersForEntry(r.SetMap, setInfo).Insert(profileInfo)
 	}
@@ -362,20 +358,20 @@ func (r *ProfileReconciler) GetController() controller.Controller {
 	return r.ctrl
 }
 
-func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, setRefs []corev1.ObjectReference,
+func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, namespace string, setRefs []string,
 	logger logr.Logger) ([]corev1.ObjectReference, error) {
 
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range setRefs {
 		set := &libsveltosv1alpha1.Set{}
 		if err := r.Client.Get(ctx,
-			types.NamespacedName{Namespace: setRefs[i].Namespace, Name: setRefs[i].Name},
+			types.NamespacedName{Namespace: namespace, Name: setRefs[i]},
 			set); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get set %s/%s",
-				setRefs[i].Namespace, setRefs[i].Name))
+				namespace, setRefs[i]))
 			return nil, err
 		}
 

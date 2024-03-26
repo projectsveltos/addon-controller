@@ -324,7 +324,7 @@ func (r *ClusterProfileReconciler) updateMaps(profileScope *scope.ProfileScope) 
 	// For each referenced ClusterSet, add ClusterProfile as consumer
 	for i := range profileScope.GetSpec().SetRefs {
 		clusterSet := profileScope.GetSpec().SetRefs[i]
-		clusterSetInfo := &corev1.ObjectReference{Name: clusterSet.Name,
+		clusterSetInfo := &corev1.ObjectReference{Name: clusterSet,
 			Kind: libsveltosv1alpha1.ClusterSetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
 		getConsumersForEntry(r.ClusterSetMap, clusterSetInfo).Insert(clusterProfileInfo)
 	}
@@ -337,20 +337,19 @@ func (r *ClusterProfileReconciler) GetController() controller.Controller {
 	return r.ctrl
 }
 
-func (r *ClusterProfileReconciler) getClustersFromClusterSets(ctx context.Context, clusterSetRefs []corev1.ObjectReference,
+func (r *ClusterProfileReconciler) getClustersFromClusterSets(ctx context.Context, clusterSetRefs []string,
 	logger logr.Logger) ([]corev1.ObjectReference, error) {
 
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range clusterSetRefs {
 		clusterSet := &libsveltosv1alpha1.ClusterSet{}
 		if err := r.Client.Get(ctx,
-			types.NamespacedName{Name: clusterSetRefs[i].Name},
+			types.NamespacedName{Name: clusterSetRefs[i]},
 			clusterSet); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get set %s/%s",
-				clusterSetRefs[i].Namespace, clusterSetRefs[i].Name))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusterSet %s", clusterSetRefs[i]))
 			return nil, err
 		}
 

@@ -779,7 +779,7 @@ func (in *Spec) DeepCopyInto(out *Spec) {
 	}
 	if in.SetRefs != nil {
 		in, out := &in.SetRefs, &out.SetRefs
-		*out = make([]corev1.ObjectReference, len(*in))
+		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 	if in.MaxUpdate != nil {

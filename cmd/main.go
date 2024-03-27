@@ -20,6 +20,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"sync"
 	"syscall"
@@ -462,6 +464,15 @@ func getDiagnosticsOptions() metricsserver.Options {
 		BindAddress:    diagnosticsAddress,
 		SecureServing:  true,
 		FilterProvider: filters.WithAuthenticationAndAuthorization,
+		ExtraHandlers: map[string]http.Handler{
+			// Add pprof handler.
+			"/debug/pprof/":        http.HandlerFunc(pprof.Index),
+			"/debug/pprof/cmdline": http.HandlerFunc(pprof.Cmdline),
+			"/debug/pprof/profile": http.HandlerFunc(pprof.Profile),
+			"/debug/pprof/symbol":  http.HandlerFunc(pprof.Symbol),
+			"/debug/pprof/trace":   http.HandlerFunc(pprof.Trace),
+			"/debug/pprof/heap":    pprof.Handler("heap"),
+		},
 	}
 }
 

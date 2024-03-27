@@ -682,7 +682,8 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, url string, logger logr.Lo
 
 // installRelease installs helm release in the CAPI cluster.
 // No action in DryRun mode.
-func installRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
+func installRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -741,7 +742,7 @@ func installRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	}
 
 	installClient.DryRun = false
-	_, err = installClient.Run(chartRequested, values)
+	_, err = installClient.RunWithContext(ctx, chartRequested, values)
 	if err != nil {
 		return err
 	}
@@ -810,7 +811,8 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 
 // upgradeRelease upgrades helm release in managed cluster.
 // No action in DryRun mode.
-func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
+func upgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	settings *cli.EnvSettings, requestedChart *configv1alpha1.HelmChart,
 	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -864,7 +866,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	hisClient.Max = 1
 	_, err = hisClient.Run(requestedChart.ReleaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+		err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 		if err != nil {
 			return err
 		}
@@ -874,7 +876,7 @@ func upgradeRelease(clusterSummary *configv1alpha1.ClusterSummary, settings *cli
 	}
 
 	upgradeClient.DryRun = false
-	_, err = upgradeClient.Run(requestedChart.ReleaseName, chartRequested, values)
+	_, err = upgradeClient.RunWithContext(ctx, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		return err
 	}
@@ -1058,7 +1060,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	err = installRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+	err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 	if err != nil {
 		return err
 	}
@@ -1115,7 +1117,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.Cluste
 		return err
 	}
 
-	err = upgradeRelease(clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
 	if err != nil {
 		return err
 	}

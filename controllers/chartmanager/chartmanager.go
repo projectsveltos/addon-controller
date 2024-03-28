@@ -367,7 +367,7 @@ func (m *instance) getClusterSummaryKey(clusterSummaryName string) string {
 	return clusterSummaryName
 }
 
-// getReleaseInfoFromKey returns helm release given a key
+// getReleaseInfoFromKey returns helm release for given a key
 func getReleaseInfoFromKey(releaseKey string) *HelmReleaseInfo {
 	info := strings.Split(releaseKey, keySeparator)
 	return &HelmReleaseInfo{

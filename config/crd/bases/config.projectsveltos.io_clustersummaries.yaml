@@ -203,6 +203,12 @@ spec:
                                 if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
                                 Default to false
                               type: boolean
+                            enableClientCache:
+                              default: false
+                              description: EnableClientCache is a flag to enable Helm
+                                client cache. If it is not specified, it will be set
+                                to false.
+                              type: boolean
                             labels:
                               additionalProperties:
                                 type: string

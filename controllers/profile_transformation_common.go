@@ -48,8 +48,6 @@ func requeueForCluster(cluster client.Object,
 
 	profileCurrentlyMatching := getConsumersForEntry(clusterMap, &clusterInfo)
 
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("MGIANLUC %d", profileCurrentlyMatching.Len()))
-
 	clusterLabels[clusterInfo] = cluster.GetLabels()
 
 	// Get all (Cluster)Profiles previously matching this cluster and reconcile those

@@ -189,6 +189,11 @@ type HelmOptions struct {
 	// Labels that would be added to release metadata.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// EnableClientCache is a flag to enable Helm client cache. If it is not specified, it will be set to false.
+	// +kubebuilder:default=false
+	// +optional
+	EnableClientCache bool `json:"enableClientCache,omitempty"`
 }
 
 type HelmChart struct {

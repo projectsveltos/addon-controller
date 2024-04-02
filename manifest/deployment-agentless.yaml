@@ -51,6 +51,9 @@ spec:
             scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 10
+        resources:
+          requests:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

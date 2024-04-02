@@ -69,7 +69,10 @@ spec:
           periodSeconds: 10
         volumeMounts:
         - mountPath: /tmp
-          name: tmp            
+          name: tmp
+        resources:
+          requests:
+            memory: 256Mi
       serviceAccountName: controller
       terminationGracePeriodSeconds: 10
       volumes:

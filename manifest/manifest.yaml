@@ -564,6 +564,12 @@ spec:
                             if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
                             Default to false
                           type: boolean
+                        enableClientCache:
+                          default: false
+                          description: EnableClientCache is a flag to enable Helm
+                            client cache. If it is not specified, it will be set to
+                            false.
+                          type: boolean
                         labels:
                           additionalProperties:
                             type: string
@@ -1690,6 +1696,12 @@ spec:
                                 if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
                                 Default to false
                               type: boolean
+                            enableClientCache:
+                              default: false
+                              description: EnableClientCache is a flag to enable Helm
+                                client cache. If it is not specified, it will be set
+                                to false.
+                              type: boolean
                             labels:
                               additionalProperties:
                                 type: string
@@ -2373,6 +2385,12 @@ spec:
                           description: |-
                             if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
                             Default to false
+                          type: boolean
+                        enableClientCache:
+                          default: false
+                          description: EnableClientCache is a flag to enable Helm
+                            client cache. If it is not specified, it will be set to
+                            false.
                           type: boolean
                         labels:
                           additionalProperties:
@@ -3454,6 +3472,9 @@ spec:
             scheme: HTTP
           initialDelaySeconds: 5
           periodSeconds: 10
+        resources:
+          requests:
+            memory: 256Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -29,6 +28,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -579,7 +579,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1alpha1.ReleaseReport, error) {
 
 	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
-		currentChart.ReleaseNamespace, kubeconfig)
+		currentChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(currentChart.Options))
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 		return nil, nil, err
 	}
@@ -638,7 +638,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		report.Message = "Already managing this helm release and specified version already installed"
 	}
 
-	currentRelease, err = getReleaseInfo(currentChart.ReleaseName, currentChart.ReleaseNamespace, kubeconfig)
+	currentRelease, err = getReleaseInfo(currentChart.ReleaseName, currentChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(currentChart.Options))
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 		return nil, nil, err
 	}
@@ -672,6 +672,7 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, url string, logger logr.Lo
 
 	storage.Update(entry)
 	const permissions = 0o644
+
 	err = storage.WriteFile(settings.RepositoryConfig, permissions)
 	if err != nil {
 		return err
@@ -748,6 +749,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	}
 
 	logger.V(logs.LogDebug).Info("installing release done")
+
 	return nil
 }
 
@@ -780,7 +782,7 @@ func checkDependencies(chartRequested *chart.Chart, installClient *action.Instal
 // uninstallRelease removes helm release from a CAPI Cluster.
 // No action in DryRun mode.
 func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
-	releaseName, releaseNamespace, kubeconfig string, logger logr.Logger) error {
+	releaseName, releaseNamespace, kubeconfig string, helmChart *configv1alpha1.HelmChart, logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
@@ -790,7 +792,12 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace)
 	logger.V(logs.LogDebug).Info("uninstalling release")
 
-	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig)
+	enableClientCache := false
+	if helmChart != nil {
+		enableClientCache = getEnableClientCacheValue(helmChart.Options)
+	}
+
+	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, enableClientCache)
 	if err != nil {
 		return err
 	}
@@ -799,6 +806,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	uninstallClient.DryRun = false
 	uninstallClient.Wait = false
 	uninstallClient.DisableHooks = false
+	uninstallClient.KeepHistory = false
 
 	_, err = uninstallClient.Run(releaseName)
 	if err != nil {
@@ -806,6 +814,7 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 	}
 
 	logger.V(logs.LogDebug).Info("uninstalling release done")
+
 	return nil
 }
 
@@ -835,7 +844,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 		chartName = defaultUploadPath + "/" + chartName
 	}
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return err
 	}
@@ -882,6 +891,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	}
 
 	logger.V(logs.LogDebug).Info("upgrading release done")
+
 	return nil
 }
 
@@ -889,7 +899,7 @@ func debugf(format string, v ...interface{}) {
 	helmLogger.V(logs.LogDebug).Info(fmt.Sprintf(format, v...))
 }
 
-func actionConfigInit(namespace, kubeconfig string) (*action.Configuration, error) {
+func actionConfigInit(namespace, kubeconfig string, enableClientCache bool) (*action.Configuration, error) {
 	settings := getSettings(namespace)
 
 	actionConfig := new(action.Configuration)
@@ -902,7 +912,7 @@ func actionConfigInit(namespace, kubeconfig string) (*action.Configuration, erro
 
 	registryClient, err := registry.NewClient(
 		registry.ClientOptDebug(settings.Debug),
-		registry.ClientOptEnableCache(true),
+		registry.ClientOptEnableCache(enableClientCache),
 	)
 	if err != nil {
 		return nil, err
@@ -931,8 +941,8 @@ func isChartInstallable(ch *chart.Chart) bool {
 	return false
 }
 
-func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string) (*releaseInfo, error) {
-	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig)
+func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, enableClientCache bool) (*releaseInfo, error) {
+	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, enableClientCache)
 
 	if err != nil {
 		return nil, err
@@ -1084,7 +1094,7 @@ func doUninstallRelease(clusterSummary *configv1alpha1.ClusterSummary, requested
 		requestedChart.RepositoryName))
 
 	return uninstallRelease(clusterSummary, requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
-		kubeconfig, logger)
+		kubeconfig, requestedChart, logger)
 }
 
 // doUpgradeRelease upgrades helm release in the CAPI Cluster.
@@ -1172,7 +1182,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 				managedHelmReleases[i].Name, managedHelmReleases[i].Namespace))
 
 			_, err := getReleaseInfo(managedHelmReleases[i].Name,
-				managedHelmReleases[i].Namespace, kubeconfig)
+				managedHelmReleases[i].Namespace, kubeconfig, false)
 			if err != nil {
 				if errors.Is(err, driver.ErrReleaseNotFound) {
 					continue
@@ -1181,7 +1191,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 			}
 
 			if err := uninstallRelease(clusterSummary, managedHelmReleases[i].Name, managedHelmReleases[i].Namespace,
-				kubeconfig, logger); err != nil {
+				kubeconfig, nil, logger); err != nil {
 				return nil, err
 			}
 
@@ -1449,7 +1459,7 @@ func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
 		l := logger.WithValues("chart", currentChart.ChartName, "releaseNamespace", currentChart.ReleaseNamespace)
 		l.V(logs.LogDebug).Info("collecting resources for helm chart")
 		if chartManager.CanManageChart(clusterSummary, currentChart) {
-			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig)
+			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(currentChart.Options))
 
 			if err != nil {
 				return nil, err
@@ -1532,6 +1542,14 @@ func getSettings(namespace string) *cli.EnvSettings {
 	return settings
 }
 
+func getEnableClientCacheValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.EnableClientCache
+	}
+
+	return false
+}
+
 func getWaitHelmValue(options *configv1alpha1.HelmOptions) bool {
 	if options != nil {
 		return options.Wait
@@ -1612,7 +1630,7 @@ func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
 }
 
 func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig string) (*action.Install, error) {
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -1680,7 +1698,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 	// Current hash of current metadata (extraLabels and extraAnnotations)
 	metadataHash := getMetadataHash(clusterSummary)
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig)
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return err
 	}

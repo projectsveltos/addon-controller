@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -58,6 +60,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
@@ -86,6 +89,8 @@ const (
 	defaultReconcilers   = 10
 	defaultWorkers       = 20
 	defaulReportMode     = int(controllers.CollectFromManagementCluster)
+	mebibytes_bytes      = 1 << 20
+	gibibytes_per_bytes  = 1 << 30
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -108,7 +113,6 @@ func main() {
 	reportMode = controllers.ReportMode(tmpReportMode)
 
 	ctrl.SetLogger(klog.Background())
-
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                getDiagnosticsOptions(),
@@ -135,12 +139,14 @@ func main() {
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
-
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
-	logsettings.RegisterForLogSettings(ctx,
+	logs.RegisterForLogSettings(ctx,
 		libsveltosv1alpha1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
+
+	debug.SetMemoryLimit(gibibytes_per_bytes)
+	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
 	startControllersAndWatchers(ctx, mgr)
 
@@ -170,7 +176,7 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
 		"The address the diagnostics endpoint binds to. Per default metrics are served via https and with"+
 			"authentication/authorization. To serve via http and without authentication/authorization set --insecure-diagnostics."+
-			"If --insecure-diagnostics is not set the diagnostics endpoint also serves pprof endpoints and an endpoint to change the log level.")
+			"If --insecure-diagnostics is not set the diagnostics endpoint also serves pprof endpoints")
 
 	fs.BoolVar(&insecureDiagnostics, "insecure-diagnostics", false,
 		"Enable insecure diagnostics serving. For more details see the description of --diagnostics-address.")
@@ -544,4 +550,24 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 	watchersForFlux = append(watchersForFlux, clusterSummaryReconciler)
 
 	startWatchers(ctx, mgr, watchersForCAPI, watchersForFlux)
+}
+
+// printMemUsage memory stats. Call GC
+func printMemUsage(logger logr.Logger) {
+	for {
+		time.Sleep(time.Minute)
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		// For info on each, see: /pkg/runtime/#MemStats
+		l := logger.WithValues("Alloc (MiB)", bToMb(m.Alloc)).
+			WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
+			WithValues("Sys (MiB)", bToMb(m.Sys)).
+			WithValues("NumGC", m.NumGC)
+		l.V(logs.LogInfo).Info("memory stats")
+		runtime.GC()
+	}
+}
+
+func bToMb(b uint64) uint64 {
+	return b / mebibytes_bytes
 }

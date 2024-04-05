@@ -189,6 +189,11 @@ type HelmOptions struct {
 	// Labels that would be added to release metadata.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// EnableClientCache is a flag to enable Helm client cache. If it is not specified, it will be set to false.
+	// +kubebuilder:default=false
+	// +optional
+	EnableClientCache bool `json:"enableClientCache,omitempty"`
 }
 
 type HelmChart struct {
@@ -352,7 +357,7 @@ type Spec struct {
 	// - ClusterProfile can reference ClusterSet;
 	// - Profile can reference Set;
 	// +optional
-	SetRefs []corev1.ObjectReference `json:"setRefs,omitempty"`
+	SetRefs []string `json:"setRefs,omitempty"`
 
 	// SyncMode specifies how features are synced in a matching workload cluster.
 	// - OneTime means, first time a workload cluster matches the ClusterProfile,

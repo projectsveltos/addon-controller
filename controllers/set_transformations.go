@@ -36,5 +36,5 @@ func (r *SetReconciler) requeueSetForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1alpha1.SetKind)
+	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1alpha1.SetKind, r.Logger)
 }

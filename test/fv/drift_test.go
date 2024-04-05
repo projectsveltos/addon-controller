@@ -19,10 +19,12 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -84,16 +86,40 @@ var _ = Describe("Helm", Serial, func() {
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Verifying drift detection manager deployment is created in the workload cluster")
-		Eventually(func() bool {
-			depl := &appsv1.Deployment{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "drift-detection-manager"}, depl)
-			if err != nil {
-				return false
-			}
-			return *depl.Spec.Replicas == depl.Status.ReadyReplicas
-		}, timeout, pollingInterval).Should(BeTrue())
+		if isAgentLessMode() {
+			Byf("Verifying drift detection manager deployment is created in the management cluster")
+			Eventually(func() bool {
+				listOptions := []client.ListOption{
+					client.MatchingLabels(
+						map[string]string{
+							"cluster-name":      kindWorkloadCluster.Name,
+							"cluster-namespace": kindWorkloadCluster.Namespace,
+						},
+					),
+				}
+
+				depls := &appsv1.DeploymentList{}
+				err = k8sClient.List(context.TODO(), depls, listOptions...)
+				if err != nil {
+					return false
+				}
+				if len(depls.Items) != 1 {
+					return false
+				}
+				return *depls.Items[0].Spec.Replicas == depls.Items[0].Status.ReadyReplicas
+			}, timeout, pollingInterval).Should(BeTrue())
+		} else {
+			Byf("Verifying drift detection manager deployment is created in the workload cluster")
+			Eventually(func() bool {
+				depl := &appsv1.Deployment{}
+				err = workloadClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: "projectsveltos", Name: "drift-detection-manager"}, depl)
+				if err != nil {
+					return false
+				}
+				return *depl.Spec.Replicas == depl.Status.ReadyReplicas
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
@@ -171,3 +197,22 @@ var _ = Describe("Helm", Serial, func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
+
+func isAgentLessMode() bool {
+	By("Getting addon-controller pod")
+	addonControllerDepl := &appsv1.Deployment{}
+	Expect(k8sClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller"},
+		addonControllerDepl)).To(Succeed())
+
+	Expect(len(addonControllerDepl.Spec.Template.Spec.Containers)).To(Equal(1))
+
+	for i := range addonControllerDepl.Spec.Template.Spec.Containers[0].Args {
+		if strings.Contains(addonControllerDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster") {
+			By("Addon-controller in agentless mode")
+			return true
+		}
+	}
+
+	return false
+}

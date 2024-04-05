@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     control-plane: addon-controller
-  name: addon-controller-{{.SHARD}}
+  name: addon-controller
   namespace: projectsveltos
 spec:
   replicas: 1
@@ -21,7 +21,7 @@ spec:
       - args:
         - --diagnostics-address=:8443
         - --report-mode=0
-        - --shard-key={{.SHARD}}
+        - --agent-in-mgmt-cluster
         - --v=5
         - --version=main
         command:

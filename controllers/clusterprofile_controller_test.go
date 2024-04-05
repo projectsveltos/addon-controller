@@ -71,13 +71,12 @@ var _ = Describe("Profile: Reconciler", func() {
 			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
 		}
 
 		clusterProfileName := client.ObjectKey{
@@ -133,17 +132,9 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterProfile.Spec.SetRefs = []corev1.ObjectReference{
-			{
-				Name:       clusterSet1.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
-			{
-				Name:       clusterSet2.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
+		clusterProfile.Spec.SetRefs = []string{
+			clusterSet1.Name,
+			clusterSet2.Name,
 		}
 
 		initObjects := []client.Object{
@@ -156,13 +147,12 @@ var _ = Describe("Profile: Reconciler", func() {
 			WithObjects(initObjects...).Build()
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
 		}
 
 		clusters, err := controllers.GetClustersFromClusterSets(reconciler, context.TODO(),
@@ -214,13 +204,12 @@ var _ = Describe("Profile: Reconciler", func() {
 		addOwnerReference(ctx, c, clusterSummary, clusterProfile)
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:            c,
-			Scheme:            scheme,
-			ClusterMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfileMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles:   make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
-			ClusterLabels:     make(map[corev1.ObjectReference]map[string]string),
-			Mux:               sync.Mutex{},
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
 		}
 
 		clusterProfileName := client.ObjectKey{

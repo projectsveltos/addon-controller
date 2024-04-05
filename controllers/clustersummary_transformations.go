@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -37,7 +36,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
+	logger := r.Logger.WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForFluxSources",
 		"reference",
@@ -104,7 +103,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
+	logger := r.Logger.WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForConfigMap",
 		"reference",
@@ -167,7 +166,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
 ) []reconcile.Request {
 
 	cluster := o
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithValues(
+	logger := r.Logger.WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForCluster",
 		"namespace",

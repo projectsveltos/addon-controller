@@ -21,11 +21,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	"github.com/go-logr/logr"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -36,10 +37,9 @@ func requeueForCluster(cluster client.Object,
 	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
-	kindType string) []reconcile.Request {
+	kindType string, logger logr.Logger) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
-		"cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
+	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
 	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
 	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
@@ -59,7 +59,8 @@ func requeueForCluster(cluster client.Object,
 		l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kindType))
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Namespace: consumers[i].Namespace,
+				Name:      consumers[i].Name,
 			},
 		}
 	}
@@ -93,10 +94,9 @@ func requeueForMachine(machine client.Object,
 	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
-	kind string) []reconcile.Request {
+	kind string, logger logr.Logger) []reconcile.Request {
 
-	logger := textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(logs.LogInfo))).WithValues(
-		"machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
+	logger = logger.WithValues("machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
 
 	logger.V(logs.LogDebug).Info("reacting to CAPI Machine change")
 
@@ -124,7 +124,8 @@ func requeueForMachine(machine client.Object,
 	for i := range consumers {
 		requests[i] = ctrl.Request{
 			NamespacedName: client.ObjectKey{
-				Name: consumers[i].Name,
+				Namespace: consumers[i].Namespace,
+				Name:      consumers[i].Name,
 			},
 		}
 	}

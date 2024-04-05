@@ -112,7 +112,6 @@ var _ = Describe("Profile Controller", func() {
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
@@ -172,19 +171,9 @@ var _ = Describe("Profile Controller", func() {
 			},
 		}
 
-		profile.Spec.SetRefs = []corev1.ObjectReference{
-			{
-				Namespace:  profile.Namespace,
-				Name:       set1.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
-			{
-				Namespace:  profile.Namespace,
-				Name:       set2.Name,
-				Kind:       libsveltosv1alpha1.ClusterSetKind,
-				APIVersion: libsveltosv1alpha1.GroupVersion.String(),
-			},
+		profile.Spec.SetRefs = []string{
+			set1.Name,
+			set2.Name,
 		}
 
 		initObjects := []client.Object{
@@ -201,14 +190,13 @@ var _ = Describe("Profile Controller", func() {
 			Scheme:        scheme,
 			SetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
 		}
 
 		clusters, err := controllers.GetClustersFromSets(reconciler, context.TODO(),
-			profile.Spec.SetRefs, logger)
+			profile.Namespace, profile.Spec.SetRefs, logger)
 		Expect(err).To(BeNil())
 		Expect(clusters).ToNot(BeNil())
 		for i := range set1.Status.SelectedClusterRefs {

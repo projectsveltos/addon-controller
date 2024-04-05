@@ -49,6 +49,7 @@ type ProfileReconciler struct {
 	client.Client
 	Scheme               *runtime.Scheme
 	ConcurrentReconciles int
+	Logger               logr.Logger
 
 	// use a Mutex to update Map as MaxConcurrentReconciles is higher than one
 	Mux sync.Mutex
@@ -58,8 +59,7 @@ type ProfileReconciler struct {
 
 	// key: Sveltos/Cluster; value: set of all Profiles matching the Cluster
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
-	// key: Profile; value: set of Sveltos/CAPI Clusters matched
-	ProfileMap map[corev1.ObjectReference]*libsveltosset.Set
+
 	// key: Profile; value Profile Selector
 	Profiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
 
@@ -198,7 +198,7 @@ func (r *ProfileReconciler) reconcileNormal(
 	}
 
 	// Get all clusters from referenced Sets
-	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.GetSpec().SetRefs, logger)
+	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.Namespace(), profileScope.GetSpec().SetRefs, logger)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
@@ -235,16 +235,6 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
 		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForCluster),
 		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When ClusterSet changes, according to SetPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.ClusterSet{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
-		SetPredicates(mgr.GetLogger().WithValues("predicate", "clustersetpredicate")),
 	)
 	if err != nil {
 		return err
@@ -297,10 +287,6 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
 	}
-
-	for i := range profile.Spec.SetRefs {
-		profile.Spec.SetRefs[i].Namespace = profile.Namespace
-	}
 }
 
 func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
@@ -309,7 +295,6 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 
 	profileInfo := getKeyFromObject(r.Scheme, profileScope.Profile)
 
-	delete(r.ProfileMap, *profileInfo)
 	delete(r.Profiles, *profileInfo)
 
 	// ClusterMap contains for each cluster, set of Profiles matching
@@ -328,17 +313,16 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 }
 
 func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
-	currentClusters := getCurrentClusterSet(profileScope.GetStatus().MatchingClusterRefs)
-
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
 	profileInfo := getKeyFromObject(r.Scheme, profileScope.Profile)
 
-	// Get list of Clusters not matched anymore by Profile
-	var toBeRemoved []corev1.ObjectReference
-	if v, ok := r.ProfileMap[*profileInfo]; ok {
-		toBeRemoved = v.Difference(currentClusters)
+	for k, l := range r.ClusterMap {
+		l.Erase(profileInfo)
+		if l.Len() == 0 {
+			delete(r.ClusterMap, k)
+		}
 	}
 
 	// For each currently matching Cluster, add Profile as consumer
@@ -349,21 +333,21 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 		getConsumersForEntry(r.ClusterMap, clusterInfo).Insert(profileInfo)
 	}
 
-	// For each Cluster not matched anymore, remove Profile as consumer
-	for i := range toBeRemoved {
-		clusterName := toBeRemoved[i]
-		getConsumersForEntry(r.ClusterMap, &clusterName).Erase(profileInfo)
+	for k, l := range r.SetMap {
+		l.Erase(profileInfo)
+		if l.Len() == 0 {
+			delete(r.SetMap, k)
+		}
 	}
 
 	// For each referenced Set, add Profile as consumer
 	for i := range profileScope.GetSpec().SetRefs {
 		set := profileScope.GetSpec().SetRefs[i]
-		setInfo := &corev1.ObjectReference{Namespace: set.Namespace, Name: set.Name,
+		setInfo := &corev1.ObjectReference{Namespace: profileScope.Namespace(), Name: set,
 			Kind: libsveltosv1alpha1.SetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
 		getConsumersForEntry(r.SetMap, setInfo).Insert(profileInfo)
 	}
 
-	r.ProfileMap[*profileInfo] = currentClusters
 	r.Profiles[*profileInfo] = profileScope.GetSpec().ClusterSelector
 }
 
@@ -371,20 +355,20 @@ func (r *ProfileReconciler) GetController() controller.Controller {
 	return r.ctrl
 }
 
-func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, setRefs []corev1.ObjectReference,
+func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, namespace string, setRefs []string,
 	logger logr.Logger) ([]corev1.ObjectReference, error) {
 
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range setRefs {
 		set := &libsveltosv1alpha1.Set{}
 		if err := r.Client.Get(ctx,
-			types.NamespacedName{Namespace: setRefs[i].Namespace, Name: setRefs[i].Name},
+			types.NamespacedName{Namespace: namespace, Name: setRefs[i]},
 			set); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue
 			}
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get set %s/%s",
-				setRefs[i].Namespace, setRefs[i].Name))
+				namespace, setRefs[i]))
 			return nil, err
 		}
 

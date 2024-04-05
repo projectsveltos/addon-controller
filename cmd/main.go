@@ -20,7 +20,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"net/http/pprof"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -56,6 +60,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
@@ -84,6 +89,8 @@ const (
 	defaultReconcilers   = 10
 	defaultWorkers       = 20
 	defaulReportMode     = int(controllers.CollectFromManagementCluster)
+	mebibytes_bytes      = 1 << 20
+	gibibytes_per_bytes  = 1 << 30
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -106,7 +113,6 @@ func main() {
 	reportMode = controllers.ReportMode(tmpReportMode)
 
 	ctrl.SetLogger(klog.Background())
-
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                getDiagnosticsOptions(),
@@ -133,12 +139,14 @@ func main() {
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
-
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
-	logsettings.RegisterForLogSettings(ctx,
+	logs.RegisterForLogSettings(ctx,
 		libsveltosv1alpha1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
+
+	debug.SetMemoryLimit(gibibytes_per_bytes)
+	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
 	startControllersAndWatchers(ctx, mgr)
 
@@ -168,7 +176,7 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
 		"The address the diagnostics endpoint binds to. Per default metrics are served via https and with"+
 			"authentication/authorization. To serve via http and without authentication/authorization set --insecure-diagnostics."+
-			"If --insecure-diagnostics is not set the diagnostics endpoint also serves pprof endpoints and an endpoint to change the log level.")
+			"If --insecure-diagnostics is not set the diagnostics endpoint also serves pprof endpoints")
 
 	fs.BoolVar(&insecureDiagnostics, "insecure-diagnostics", false,
 		"Enable insecure diagnostics serving. For more details see the description of --diagnostics-address.")
@@ -374,11 +382,11 @@ func getProfileReconciler(mgr manager.Manager) *controllers.ProfileReconciler {
 		Scheme:               mgr.GetScheme(),
 		SetMap:               make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ProfileMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Profiles:             make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("profilereconciler"),
 	}
 }
 
@@ -388,11 +396,11 @@ func getClusterProfileReconciler(mgr manager.Manager) *controllers.ClusterProfil
 		Scheme:               mgr.GetScheme(),
 		ClusterSetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfileMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("clusterprofilereconciler"),
 	}
 }
 
@@ -410,9 +418,9 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		Deployer:             d,
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterSummaryMap:    make(map[types.NamespacedName]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		Logger:               ctrl.Log.WithName("clustersummaryreconciler"),
 	}
 }
 
@@ -426,6 +434,7 @@ func getSetReconciler(mgr manager.Manager) *controllers.SetReconciler {
 		SetMap:               make(map[corev1.ObjectReference]*libsveltosset.Set),
 		Sets:                 make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Logger:               ctrl.Log.WithName("setreconciler"),
 	}
 }
 
@@ -439,6 +448,7 @@ func getClusterSetReconciler(mgr manager.Manager) *controllers.ClusterSetReconci
 		ClusterSetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterSets:          make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
+		Logger:               ctrl.Log.WithName("clustersetreconciler"),
 	}
 }
 
@@ -460,6 +470,15 @@ func getDiagnosticsOptions() metricsserver.Options {
 		BindAddress:    diagnosticsAddress,
 		SecureServing:  true,
 		FilterProvider: filters.WithAuthenticationAndAuthorization,
+		ExtraHandlers: map[string]http.Handler{
+			// Add pprof handler.
+			"/debug/pprof/":        http.HandlerFunc(pprof.Index),
+			"/debug/pprof/cmdline": http.HandlerFunc(pprof.Cmdline),
+			"/debug/pprof/profile": http.HandlerFunc(pprof.Profile),
+			"/debug/pprof/symbol":  http.HandlerFunc(pprof.Symbol),
+			"/debug/pprof/trace":   http.HandlerFunc(pprof.Trace),
+			"/debug/pprof/heap":    pprof.Handler("heap"),
+		},
 	}
 }
 
@@ -531,4 +550,24 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 	watchersForFlux = append(watchersForFlux, clusterSummaryReconciler)
 
 	startWatchers(ctx, mgr, watchersForCAPI, watchersForFlux)
+}
+
+// printMemUsage memory stats. Call GC
+func printMemUsage(logger logr.Logger) {
+	for {
+		time.Sleep(time.Minute)
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		// For info on each, see: /pkg/runtime/#MemStats
+		l := logger.WithValues("Alloc (MiB)", bToMb(m.Alloc)).
+			WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
+			WithValues("Sys (MiB)", bToMb(m.Sys)).
+			WithValues("NumGC", m.NumGC)
+		l.V(logs.LogInfo).Info("memory stats")
+		runtime.GC()
+	}
+}
+
+func bToMb(b uint64) uint64 {
+	return b / mebibytes_bytes
 }

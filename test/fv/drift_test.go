@@ -62,10 +62,18 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.0.1",
+				ChartVersion:     "v3.1.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				Values: `admissionController:
+  replicas: 1
+backgroundController:
+  replicas: 1
+cleanupController:
+  replicas: 1
+reportsController:
+  replicas: 1`,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -80,11 +88,16 @@ var _ = Describe("Helm", Serial, func() {
 		Expect(workloadClient).ToNot(BeNil())
 
 		Byf("Verifying Kyverno deployment is created in the workload cluster")
-		Eventually(func() error {
+		Eventually(func() bool {
+			expectedReplicas := int32(1)
 			depl := &appsv1.Deployment{}
-			return workloadClient.Get(context.TODO(),
+			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
-		}, timeout, pollingInterval).Should(BeNil())
+			if err != nil {
+				return false
+			}
+			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		if isAgentLessMode() {
 			Byf("Verifying drift detection manager deployment is created in the management cluster")
@@ -125,7 +138,7 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
 
 		charts := []configv1alpha1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.1", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.4", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
@@ -154,7 +167,7 @@ var _ = Describe("Helm", Serial, func() {
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
 				imageChanged = true
-				depl.Spec.Template.Spec.Containers[i].Image = "ghcr.io/kyverno/kyverno:v1.8.0"
+				depl.Spec.Template.Spec.Containers[i].Image = "ghcr.io/kyverno/kyverno:v1.11.0"
 			}
 		}
 		Expect(imageChanged).To(BeTrue())
@@ -164,8 +177,8 @@ var _ = Describe("Helm", Serial, func() {
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
-				By("Kyverno image is set to v1.8.0")
-				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal("ghcr.io/kyverno/kyverno:v1.8.0"))
+				By("Kyverno image is set to v1.11.0")
+				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal("ghcr.io/kyverno/kyverno:v1.11.0"))
 			}
 		}
 
@@ -179,12 +192,49 @@ var _ = Describe("Helm", Serial, func() {
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/kyverno:v1.10.0"
+					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/kyverno:v1.11.4"
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.8.5")
+		By("Kyverno image is reset to v1.11.4")
+
+		By("Change values section")
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				RepositoryURL:    "https://kyverno.github.io/kyverno/",
+				RepositoryName:   "kyverno",
+				ChartName:        "kyverno/kyverno",
+				ChartVersion:     "v3.1.4",
+				ReleaseName:      "kyverno-latest",
+				ReleaseNamespace: "kyverno",
+				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				Values: `admissionController:
+  replicas: 3
+backgroundController:
+  replicas: 1
+cleanupController:
+  replicas: 1
+reportsController:
+  replicas: 1`,
+			},
+		}
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+		Byf("Verifying Kyverno deployment is updated in the workload cluster")
+		Eventually(func() bool {
+			expectedReplicas := int32(3)
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+			if err != nil {
+				return false
+			}
+			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
 

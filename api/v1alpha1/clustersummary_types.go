@@ -141,10 +141,9 @@ type HelmChartSummary struct {
 	// chart or there is a conflict
 	Status HelmChartStatus `json:"status"`
 
-	// MetadataHash represents of a unique value for the extra metadata, extraLabels
-	// and extraAnnotations, deployed on this helm chart
+	// ValuesHash represents of a unique value for the values section
 	// +optional
-	MetadataHash []byte `json:"metadataHash,omitempty"`
+	ValuesHash []byte `json:"valuesHash,omitempty"`
 
 	// Status indicates whether ClusterSummary can manage the helm
 	// chart or there is a conflict

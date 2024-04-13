@@ -50,12 +50,11 @@ func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger)
 		return "", err
 	}
 
-	artifactFetcher := fetch.NewArchiveFetcher(
-		1,
-		tar.UnlimitedUntarSize,
-		tar.UnlimitedUntarSize,
-		os.Getenv("SOURCE_CONTROLLER_LOCALHOST"),
-	)
+	artifactFetcher := fetch.New(
+		fetch.WithRetries(1),
+		fetch.WithMaxDownloadSize(tar.UnlimitedUntarSize),
+		fetch.WithUntar(tar.WithMaxUntarSize(tar.UnlimitedUntarSize)),
+		fetch.WithHostnameOverwrite(os.Getenv("SOURCE_CONTROLLER_LOCALHOST")))
 
 	// Download artifact and extract files to the tmp dir.
 	err = artifactFetcher.Fetch(source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)

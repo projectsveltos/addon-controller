@@ -2161,12 +2161,6 @@ spec:
                         Status indicates whether ClusterSummary can manage the helm
                         chart or there is a conflict
                       type: string
-                    metadataHash:
-                      description: |-
-                        MetadataHash represents of a unique value for the extra metadata, extraLabels
-                        and extraAnnotations, deployed on this helm chart
-                      format: byte
-                      type: string
                     releaseName:
                       description: ReleaseName is the chart release
                       minLength: 1
@@ -2183,6 +2177,11 @@ spec:
                       enum:
                       - Managing
                       - Conflict
+                      type: string
+                    valuesHash:
+                      description: ValuesHash represents of a unique value for the
+                        values section
+                      format: byte
                       type: string
                   required:
                   - releaseName

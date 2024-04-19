@@ -364,11 +364,6 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += getVersion()
 	}
 
-	metadataHash := getMetadataHash(clusterSummary)
-	if metadataHash != nil {
-		config += string(metadataHash)
-	}
-
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -483,6 +478,11 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		if err != nil {
 			return nil, nil, err
 		}
+		err = updateValueHashOnHelmChartSummary(ctx, currentChart, clusterSummary)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		releaseReports = append(releaseReports, *report)
 
 		if currentRelease != nil {
@@ -1003,6 +1003,13 @@ func shouldUpgrade(currentRelease *releaseInfo, requestedChart *configv1alpha1.H
 	clusterSummary *configv1alpha1.ClusterSummary) bool {
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeContinuousWithDriftDetection {
+		oldValueHash := getValueHashFromHelmChartSummary(requestedChart, clusterSummary)
+
+		// If Values configuration has changed, trigger an upgrade
+		if string(oldValueHash) != requestedChart.Values {
+			return true
+		}
+
 		// With drift detection mode, there is reconciliation due to configuration drift even
 		// when version is same. So skip this check in SyncModeContinuousWithDriftDetection
 		if currentRelease != nil {
@@ -1256,6 +1263,8 @@ func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
 					ReleaseName:      currentChart.ReleaseName,
 					ReleaseNamespace: currentChart.ReleaseNamespace,
 					Status:           configv1alpha1.HelChartStatusManaging,
+					ValuesHash:       getValueHashFromHelmChartSummary(currentChart, clusterSummary), // if a value is currently stored, keep it.
+					// after chart is deployed such value will be updated
 				}
 				currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
 			} else {
@@ -1695,9 +1704,6 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 		return nil
 	}
 
-	// Current hash of current metadata (extraLabels and extraAnnotations)
-	metadataHash := getMetadataHash(clusterSummary)
-
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return err
@@ -1748,7 +1754,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmCh
 		}
 	}
 
-	return updateMetadataHashOnHelmChartSummary(ctx, requestedChart, metadataHash, clusterSummary)
+	return nil
 }
 
 func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string, config *rest.Config) (string, error) {
@@ -1766,10 +1772,12 @@ func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string,
 	return namespace, nil
 }
 
-func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
-	metadataHash []byte, clusterSummary *configv1alpha1.ClusterSummary) error {
+func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary) error {
 
 	c := getManagementClusterClient()
+
+	valuesHash := []byte(requestedChart.Values)
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
@@ -1784,7 +1792,7 @@ func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *c
 			if rs.ReleaseName == requestedChart.ReleaseName &&
 				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
-				rs.MetadataHash = metadataHash
+				rs.ValuesHash = valuesHash
 			}
 		}
 
@@ -1792,4 +1800,21 @@ func updateMetadataHashOnHelmChartSummary(ctx context.Context, requestedChart *c
 	})
 
 	return err
+}
+
+// getValueHashFromHelmChartSummary returns the valueHash stored for this chart
+// in the ClusterSummary
+func getValueHashFromHelmChartSummary(requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary) []byte {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.ValuesHash
+		}
+	}
+
+	return nil
 }

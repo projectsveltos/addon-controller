@@ -13,7 +13,7 @@ require (
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.1
 	github.com/onsi/ginkgo/v2 v2.17.1
-	github.com/onsi/gomega v1.32.0
+	github.com/onsi/gomega v1.33.0
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.28.1-0.20240419092300-7e0826a881e6
 	github.com/prometheus/client_golang v1.19.0
@@ -29,7 +29,7 @@ require (
 	k8s.io/component-base v0.29.4
 	k8s.io/klog/v2 v2.120.1
 	k8s.io/utils v0.0.0-20240310230437-4693a0247e57
-	sigs.k8s.io/cluster-api v1.7.0
+	sigs.k8s.io/cluster-api v1.7.1
 	sigs.k8s.io/controller-runtime v0.17.3
 	sigs.k8s.io/kustomize/api v0.17.1
 	sigs.k8s.io/kustomize/kyaml v0.17.0

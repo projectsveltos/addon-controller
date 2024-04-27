@@ -77,6 +77,9 @@ type Chart struct {
 	// +optional
 	AppVersion string `json:"appVersion,omitempty"`
 
+	// The URL to an icon file.
+	Icon string `json:"icon,omitempty"`
+
 	// LastAppliedTime identifies when this resource was last applied to the cluster.
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime"`
 }

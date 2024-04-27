@@ -85,6 +85,7 @@ type releaseInfo struct {
 	ChartVersion     string            `json:"chart_version"`
 	AppVersion       string            `json:"app_version"`
 	ReleaseLabels    map[string]string `json:"release_labels"`
+	Icon             string            `json:"icon"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -497,6 +498,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 					ChartVersion:    currentRelease.ChartVersion,
 					AppVersion:      currentRelease.AppVersion,
 					LastAppliedTime: &currentRelease.Updated,
+					Icon:            currentRelease.Icon,
 				})
 			}
 		}
@@ -963,6 +965,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, enableClie
 		ChartVersion:     results.Chart.Metadata.Version,
 		AppVersion:       results.Chart.AppVersion(),
 		ReleaseLabels:    results.Labels,
+		Icon:             results.Chart.Metadata.Icon,
 	}
 
 	var t metav1.Time

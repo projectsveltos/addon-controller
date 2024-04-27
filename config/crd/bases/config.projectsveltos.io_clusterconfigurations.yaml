@@ -69,6 +69,9 @@ spec:
                                   description: ChartVersion is the version of the
                                     helm chart deployed in the Cluster.
                                   type: string
+                                icon:
+                                  description: The URL to an icon file.
+                                  type: string
                                 lastAppliedTime:
                                   description: LastAppliedTime identifies when this
                                     resource was last applied to the cluster.
@@ -230,6 +233,9 @@ spec:
                                 chartVersion:
                                   description: ChartVersion is the version of the
                                     helm chart deployed in the Cluster.
+                                  type: string
+                                icon:
+                                  description: The URL to an icon file.
                                   type: string
                                 lastAppliedTime:
                                   description: LastAppliedTime identifies when this

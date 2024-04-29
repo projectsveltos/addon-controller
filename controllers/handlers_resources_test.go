@@ -365,8 +365,8 @@ var _ = Describe("Hash methods", func() {
 
 		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
-		config += render.AsCode(configMap1.Data)
-		config += render.AsCode(configMap2.Data)
+		config += controllers.GetStringDataSectionHash(configMap1.Data)
+		config += controllers.GetStringDataSectionHash(configMap2.Data)
 		h := sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)

@@ -328,6 +328,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
+
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: configMap.Namespace,
@@ -354,12 +355,12 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
-		ResourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
+		resourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
 			{
 				FeatureID: configv1alpha1.FeatureResources,
-				Hash:      ResourcesHash,
+				Hash:      resourcesHash,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
 			},
 		}

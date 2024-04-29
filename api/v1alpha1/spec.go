@@ -1,5 +1,5 @@
 /*
-Copyright 2023. projectsveltos.io. All rights reserved.
+Copyright 2023-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -118,6 +118,23 @@ const (
 	// be in the managed cluster
 	DeploymentTypeRemote = DeploymentType("Remote")
 )
+
+type ValueFrom struct {
+	// Namespace of the referenced resource.
+	// For ClusterProfile namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	// For Profile namespace must be left empty. The Profile namespace will be used.
+	Namespace string `json:"namespace"`
+
+	// Name of the referenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the resource. Supported kinds are:
+	// - ConfigMap/Secret
+	// +kubebuilder:validation:Enum=ConfigMap;Secret
+	Kind string `json:"kind"`
+}
 
 // HelmChartAction specifies action on an helm chart
 // +kubebuilder:validation:Enum:=Install;Uninstall
@@ -277,6 +294,41 @@ type KustomizationRef struct {
 	// +kubebuilder:default:=Remote
 	// +optional
 	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+
+	// Values is a map[string]string type that allows to define a set of key-value pairs.
+	// These key-value pairs can optionally leverage Go templates for further processing.
+	// With Sveltos, you can define key-value pairs where the values can be Go templates.
+	// These templates have access to management cluster information during deployment. This allows
+	// to do more than just replace placeholders. Variables can be used to dynamically
+	// construct values based on other resources or variables within the Kustomize output.
+	// For example, imagine you have a Region key with a template value like:
+	// '{{ index .Cluster.metadata.labels "region" }}'.
+	// This template retrieves the region label from the cluster instance metadata.
+	// Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+	// The output itself can also contain templates, like:
+	// region: '{{ default "west" .Region }}'.
+	// This way, the final output from Kustomize will have the region set dynamically based on
+	// the actual region retrieved earlier.
+	// +optional
+	Values map[string]string `json:"values,omitempty"`
+
+	// ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+	// it is possible to define key-value pairs. These key-value pairs can optionally leverage
+	// Go templates for further processing.
+	// With Sveltos, you can define key-value pairs where the values can be Go templates.
+	// These templates have access to management cluster information during deployment. This allows
+	// to do more than just replace placeholders. Variables can be used to dynamically
+	// construct values based on other resources or variables within the Kustomize output.
+	// For example, imagine you have a Region key with a template value like:
+	// '{{ index .Cluster.metadata.labels "region" }}'.
+	// This template retrieves the region label from the cluster instance metadata.
+	// Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+	// The output itself can also contain templates, like:
+	// region: '{{ default "west" .Region }}'.
+	// This way, the final output from Kustomize will have the region set dynamically based on
+	// the actual region retrieved earlier.
+	// +optional
+	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching

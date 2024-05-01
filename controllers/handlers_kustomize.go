@@ -313,9 +313,11 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			}
 		}
 
-		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary, kustomizationRef, logger)
+		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
+			kustomizationRef, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get hash from referenced ConfigMap/Secret in ValuesFrom %v", err))
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to get hash from referenced ConfigMap/Secret in ValuesFrom %v", err))
 			return nil, err
 		}
 
@@ -334,6 +336,13 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		// Use the version. This will cause drift-detection, Sveltos CRDs
 		// to be redeployed on upgrade
 		config += getVersion()
+	}
+
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureHelm {
+			config += render.AsCode(h)
+		}
 	}
 
 	h.Write([]byte(config))
@@ -396,67 +405,13 @@ func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterS
 func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
 
-	values := make(map[string]string)
-	for i := range kustomizationRef.ValuesFrom {
-		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.ValuesFrom[i].Namespace)
-		if kustomizationRef.ValuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.ValuesFrom[i].Name})
-			if err != nil {
-				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, kustomizationRef.ValuesFrom[i].Name)
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				return nil, errors.Wrapf(err, msg)
-			}
-			for key, value := range configMap.Data {
-				values[key] = value
-			}
-		} else if kustomizationRef.ValuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.ValuesFrom[i].Name})
-			if err != nil {
-				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, kustomizationRef.ValuesFrom[i].Name)
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				return nil, errors.Wrapf(err, msg)
-			}
-			for key, value := range secret.Data {
-				values[key] = string(value)
-			}
-		}
-	}
-
-	return values, nil
+	return getValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
 }
 
 func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (string, error) {
 
-	var config string
-	for i := range kustomizationRef.ValuesFrom {
-		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.ValuesFrom[i].Namespace)
-		if kustomizationRef.ValuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.ValuesFrom[i].Name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
-				return "", err
-			}
-			if configMap == nil {
-				continue
-			}
-			config += getDataSectionHash(configMap.Data)
-			config += getDataSectionHash(configMap.BinaryData)
-		} else if kustomizationRef.ValuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.ValuesFrom[i].Name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
-				return "", err
-			}
-			if secret == nil {
-				continue
-			}
-			config += getDataSectionHash(secret.Data)
-			config += getDataSectionHash(secret.StringData)
-		}
-	}
-
-	return config, nil
+	return getValuesFromResourceHash(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, logger)
 }
 
 func getKustomizationRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {

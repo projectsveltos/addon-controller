@@ -124,6 +124,8 @@ var (
 	CreateReportForUnmanagedHelmRelease      = createReportForUnmanagedHelmRelease
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
 	HandleCharts                             = handleCharts
+	GetHelmReferenceResourceHash             = getHelmReferenceResourceHash
+	GetHelmChartValuesHash                   = getHelmChartValuesHash
 
 	InstantiateTemplateValues = instantiateTemplateValues
 

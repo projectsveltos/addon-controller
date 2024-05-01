@@ -823,11 +823,37 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
 		referencedResourceNamespace := randomString()
+
+		kustomizeValueFrom := configv1alpha1.ValueFrom{
+			Namespace: referencedResourceNamespace,
+			Name:      randomString(),
+			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+		}
+
+		helmValueFrom := configv1alpha1.ValueFrom{
+			Namespace: referencedResourceNamespace,
+			Name:      randomString(),
+			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+		}
+
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
 			{
 				Namespace: referencedResourceNamespace,
 				Name:      randomString(),
 				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			},
+		}
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+			{
+				Namespace:  referencedResourceNamespace,
+				Name:       randomString(),
+				Kind:       string(libsveltosv1alpha1.SecretReferencedResourceKind),
+				ValuesFrom: []configv1alpha1.ValueFrom{kustomizeValueFrom},
+			},
+		}
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+			{
+				ValuesFrom: []configv1alpha1.ValueFrom{helmValueFrom},
 			},
 		}
 
@@ -837,9 +863,7 @@ var _ = Describe("ClustersummaryController", func() {
 			textlogger.NewLogger(textlogger.NewConfig()), clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
-		Expect(set.Len()).To(Equal(1))
-		items := set.Items()
-		Expect(items[0].Namespace).To(Equal(referencedResourceNamespace))
+		Expect(set.Len()).To(Equal(4))
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects using cluster namespace when not set", func() {

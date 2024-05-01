@@ -310,6 +310,69 @@ spec:
                       maxLength: 63
                       minLength: 1
                       type: string
+                    values:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Values is a map[string]string type that allows to define a set of key-value pairs.
+                        These key-value pairs can optionally leverage Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      type: object
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to define key-value pairs. These key-value pairs can optionally leverage
+                        Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - kind
                   - name

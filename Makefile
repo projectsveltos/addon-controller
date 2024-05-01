@@ -363,7 +363,6 @@ docker-push: ## Push docker image with the manager.
 docker-buildx: ## docker build for multiple arch and push to docker hub
 	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(CONTROLLER_IMG):$(TAG) .
 
-
 .PHONY: load-image
 load-image: docker-build $(KIND)
 	$(KIND) load docker-image $(CONTROLLER_IMG):$(TAG) --name $(CONTROL_CLUSTER_NAME)

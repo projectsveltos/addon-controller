@@ -95,7 +95,9 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if err != nil {
 		return err
 	}
+
 	hash := r.getHash(clusterSummaryScope, f.id)
+
 	isConfigSame := reflect.DeepEqual(hash, currentHash)
 	if !isConfigSame {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("configuration has changed. Current hash %x. Previous hash %x",

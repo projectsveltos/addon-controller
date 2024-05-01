@@ -417,6 +417,30 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		// all Features are marked as provisioned
 		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeTrue())
 	})
+
+	It("stringifyMap and parseMapFromString convert a map[string]string to string and back", func() {
+		myMap := map[string]string{
+			randomString(): randomString(),
+			randomString(): fmt.Sprintf("{{ %s }}", randomString()),
+			randomString(): `{{ .Cluster.spec.clusterNetwork.pods.cidrBlocks }}`,
+			randomString(): `{{ (index .MgmtResources "AutoscalerSecret").data.token }}`,
+			randomString(): `{{ index .Cluster.metadata.labels "region" }}`,
+			randomString(): `{{ .Cluster.metadata.spec.topology.version }}`,
+			randomString(): randomString() + randomString(),
+		}
+
+		stringfiedMap, err := controllers.StringifyMap(myMap)
+		Expect(err).To(BeNil())
+
+		result, err := controllers.ParseMapFromString(stringfiedMap)
+		Expect(err).To(BeNil())
+
+		for k := range myMap {
+			v, ok := result[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(myMap[k]))
+		}
+	})
 })
 
 func getClusterRef(cluster client.Object) *corev1.ObjectReference {

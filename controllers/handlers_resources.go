@@ -349,13 +349,15 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 			configmap := &corev1.ConfigMap{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, configmap)
 			if err == nil {
-				config += render.AsCode(configmap.Data)
+				config += getDataSectionHash(configmap.Data)
+				config += getDataSectionHash(configmap.BinaryData)
 			}
 		} else if reference.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, secret)
 			if err == nil {
-				config += render.AsCode(secret.Data)
+				config += getDataSectionHash(secret.Data)
+				config += getDataSectionHash(secret.StringData)
 			}
 		} else {
 			var source client.Object
@@ -464,7 +466,7 @@ func deployResourceSummary(ctx context.Context, c client.Client,
 		clusterType, resources, nil, nil, logger)
 }
 
-// deployPolicyRefs deploys in a CAPI Cluster the policies contained in the Data section of each
+// deployPolicyRefs deploys in a managed Cluster the policies contained in the Data section of each
 // referenced ConfigMap/Secret
 func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.Config,
 	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,

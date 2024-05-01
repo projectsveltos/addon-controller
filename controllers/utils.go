@@ -20,13 +20,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
+	"github.com/gdexlab/go-render/render"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -403,4 +406,45 @@ func removeDuplicates(references []corev1.ObjectReference) []corev1.ObjectRefere
 	}
 
 	return set.Items()
+}
+
+// getDataSectionHash sorts map and return the hash
+func getDataSectionHash[T any](data map[string]T) string {
+	var keys []string
+	for k := range data {
+		keys = append(keys, k)
+	}
+
+	// Sort keys (ascending order)
+	sort.Strings(keys)
+
+	var config string
+	for i := range keys {
+		config += render.AsCode(data[keys[i]])
+	}
+
+	return config
+}
+
+// stringifyMap converts a map[string]string to a string representation
+func stringifyMap(data map[string]string) (string, error) {
+	jsonData, err := yaml.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	// Return the JSON string representation
+	return string(jsonData), nil
+}
+
+// parseMapFromString converts a string representation back to map[string]string
+func parseMapFromString(data string) (map[string]string, error) {
+	// Create an empty map to store the parsed data
+	result := map[string]string{}
+	// Unmarshal the JSON string into the map
+	err := yaml.Unmarshal([]byte(data), &result)
+	if err != nil {
+		return nil, err
+	}
+	// Return the parsed map
+	return result, nil
 }

@@ -286,6 +286,17 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
+		r.limitKustomizationRefsToNamespace(profile, &profile.Spec.KustomizationRefs[i])
+	}
+}
+
+// limitKustomizationRefsToNamespace reset Namespace of all ConfigMap/Secret
+// instances referenced by kustomizationRef.
+func (r *ProfileReconciler) limitKustomizationRefsToNamespace(profile *configv1alpha1.Profile,
+	kustomizationRef *configv1alpha1.KustomizationRef) {
+
+	for i := range kustomizationRef.ValuesFrom {
+		kustomizationRef.ValuesFrom[i].Namespace = profile.Namespace
 	}
 }
 

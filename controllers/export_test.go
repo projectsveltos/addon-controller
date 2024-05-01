@@ -101,9 +101,18 @@ var (
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs
 
-	UndeployKustomizeRefs = undeployKustomizeRefs
-	KustomizationHash     = kustomizationHash
-	ExtractTarGz          = extractTarGz
+	UndeployKustomizeRefs             = undeployKustomizeRefs
+	KustomizationHash                 = kustomizationHash
+	GetKustomizeReferenceResourceHash = getKustomizeReferenceResourceHash
+	ExtractTarGz                      = extractTarGz
+	//nolint: gocritic // getDataSectionHash is generic and needs instantiation
+	GetStringDataSectionHash = func(aMap map[string]string) string { return getDataSectionHash(aMap) }
+	//nolint: gocritic // getDataSectionHash is generic and needs instantiation
+	GetByteDataSectionHash                  = func(aMap map[string][]byte) string { return getDataSectionHash(aMap) }
+	InstantiateKustomizeSubstituteValues    = instantiateKustomizeSubstituteValues
+	GetKustomizeSubstituteValuesFrom        = getKustomizeSubstituteValuesFrom
+	GetKustomizeSubstituteValues            = getKustomizeSubstituteValues
+	InstantiateResourceWithSubstituteValues = instantiateResourceWithSubstituteValues
 
 	HelmHash                                 = helmHash
 	ShouldInstall                            = shouldInstall
@@ -120,6 +129,8 @@ var (
 
 	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
 	IsNamespaced               = isNamespaced
+	StringifyMap               = stringifyMap
+	ParseMapFromString         = parseMapFromString
 )
 
 type (

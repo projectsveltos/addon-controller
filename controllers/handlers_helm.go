@@ -1716,6 +1716,7 @@ func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig s
 			return nil, err
 		}
 	}
+	installClient.Replace = true
 	installClient.Labels = getLabelsValue(requestedChart.Options)
 
 	return installClient, nil

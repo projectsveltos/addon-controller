@@ -27,12 +27,68 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+)
+
+var (
+	cleanupControllerValues = `cleanupController:
+  livenessProbe:
+    httpGet:
+      path: /health/liveness
+      port: 9443
+      scheme: HTTPS
+    initialDelaySeconds: 16
+    periodSeconds: %d
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  readinessProbe:
+    httpGet:
+      path: /health/readiness
+      port: 9443
+      scheme: HTTPS
+    initialDelaySeconds: 6
+    periodSeconds: %d
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1`
+
+	admissionControllerValues = `admissionController:
+  livenessProbe:
+    httpGet:
+      path: /health/liveness
+      port: 9443
+      scheme: HTTPS
+    initialDelaySeconds: 16
+    periodSeconds: %d
+    timeoutSeconds: 5
+    failureThreshold: 2
+    successThreshold: 1
+
+  readinessProbe:
+    httpGet:
+      path: /health/readiness
+      port: 9443
+      scheme: HTTPS
+    initialDelaySeconds: 6
+    periodSeconds: %d
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1`
+)
+
+const (
+	kyvernoNamespace            = "kyverno"
+	admissionControllerDeplName = "kyverno-admission-controller"
+	cleanupControllerDeplName   = "kyverno-cleanup-controller"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -41,7 +97,7 @@ var _ = Describe("Helm", Serial, func() {
 		kyvernoImageName = "kyverno"
 	)
 
-	It("React to configuration drift", Label("FV", "EXTENDED"), func() {
+	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
@@ -51,6 +107,27 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+
+		livenessPeriodSecond := int32(31)
+		readinessPeriodSecond := int32(11)
+
+		configMapNamespace := randomString()
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNamespace,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), ns))
+
+		Byf("Creating ConfigMap to hold cleanup controller values")
+		cleanupControllerConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(cleanupControllerValues, livenessPeriodSecond, readinessPeriodSecond))
+		Expect(k8sClient.Create(context.TODO(), cleanupControllerConfigMap)).To(Succeed())
+
+		Byf("Creating ConfigMap to hold admission controller values")
+		admissionControllerConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(admissionControllerValues, livenessPeriodSecond, readinessPeriodSecond))
+		Expect(k8sClient.Create(context.TODO(), admissionControllerConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1alpha1.ClusterProfile{}
@@ -74,6 +151,18 @@ cleanupController:
   replicas: 1
 reportsController:
   replicas: 1`,
+				ValuesFrom: []configv1alpha1.ValueFrom{
+					{
+						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						Namespace: cleanupControllerConfigMap.Namespace,
+						Name:      cleanupControllerConfigMap.Name,
+					},
+					{
+						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						Namespace: admissionControllerConfigMap.Namespace,
+						Name:      admissionControllerConfigMap.Name,
+					},
+				},
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -92,12 +181,18 @@ reportsController:
 			expectedReplicas := int32(1)
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 			if err != nil {
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying helm values")
+		verifyHelmValues(workloadClient, kyvernoNamespace, admissionControllerDeplName,
+			livenessPeriodSecond, readinessPeriodSecond)
+		verifyHelmValues(workloadClient, kyvernoNamespace, cleanupControllerDeplName,
+			livenessPeriodSecond, readinessPeriodSecond)
 
 		if isAgentLessMode() {
 			Byf("Verifying drift detection manager deployment is created in the management cluster")
@@ -245,6 +340,10 @@ reportsController:
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-latest"}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		currentNs := &corev1.Namespace{}
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNamespace}, currentNs)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 	})
 })
 
@@ -265,4 +364,24 @@ func isAgentLessMode() bool {
 	}
 
 	return false
+}
+
+// verifyHelmValues verifies periodSecond is set on both livenessProbe and ReadinessProbe
+func verifyHelmValues(workloadClient client.Client, deploymentNamespace, deploymentName string,
+	livenessPeriodSecond, readyPeriodSecond int32) {
+
+	depl := &appsv1.Deployment{}
+	Expect(workloadClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: deploymentNamespace, Name: deploymentName},
+		depl)).To(Succeed())
+
+	Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
+
+	Byf("Verifying ReadinessProbe.PeriodSeconds on deployment %s/%s is %d", deploymentNamespace, deploymentName, readyPeriodSecond)
+	Expect(depl.Spec.Template.Spec.Containers[0].ReadinessProbe).ToNot(BeNil())
+	Expect(depl.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(readyPeriodSecond))
+
+	Byf("Verifying LivenessProbe.PeriodSeconds on deployment %s/%s is %d", deploymentNamespace, deploymentName, livenessPeriodSecond)
+	Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe).ToNot(BeNil())
+	Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(livenessPeriodSecond))
 }

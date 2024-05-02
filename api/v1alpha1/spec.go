@@ -238,15 +238,20 @@ type HelmChart struct {
 	// +kubebuilder:validation:MinLength=1
 	ReleaseNamespace string `json:"releaseNamespace"`
 
-	// Values holds the values for this Helm release.
-	// Go templating with the values from the referenced CAPI Cluster.
-	// Currently following can be referenced:
-	// - Cluster => CAPI Cluster for instance
-	// - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-	// - InfrastructureProvider => the CAPI cluster infrastructure provider
-	// - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+	// Values field allows to define configuration for the Helm release.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment.
 	// +optional
 	Values string `json:"values,omitempty"`
+
+	// ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+	// it is possible to store configuration for the Helm release.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment.
+	// +optional
+	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
 
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install

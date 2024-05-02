@@ -625,14 +625,45 @@ spec:
                       type: string
                     values:
                       description: |-
-                        Values holds the values for this Helm release.
-                        Go templating with the values from the referenced CAPI Cluster.
-                        Currently following can be referenced:
-                        - Cluster => CAPI Cluster for instance
-                        - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                        - InfrastructureProvider => the CAPI cluster infrastructure provider
-                        - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                        Values field allows to define configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
                       type: string
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to store configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - chartName
                   - chartVersion
@@ -1820,14 +1851,45 @@ spec:
                           type: string
                         values:
                           description: |-
-                            Values holds the values for this Helm release.
-                            Go templating with the values from the referenced CAPI Cluster.
-                            Currently following can be referenced:
-                            - Cluster => CAPI Cluster for instance
-                            - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                            - InfrastructureProvider => the CAPI cluster infrastructure provider
-                            - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                            Values field allows to define configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment.
                           type: string
+                        valuesFrom:
+                          description: |-
+                            ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                            it is possible to store configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment.
+                          items:
+                            properties:
+                              kind:
+                                description: |-
+                                  Kind of the resource. Supported kinds are:
+                                  - ConfigMap/Secret
+                                enum:
+                                - ConfigMap
+                                - Secret
+                                type: string
+                              name:
+                                description: Name of the referenced resource.
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referenced resource.
+                                  For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                  be implicit set to cluster's namespace.
+                                  For Profile namespace must be left empty. The Profile namespace will be used.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            - namespace
+                            type: object
+                          type: array
                       required:
                       - chartName
                       - chartVersion
@@ -2572,14 +2634,45 @@ spec:
                       type: string
                     values:
                       description: |-
-                        Values holds the values for this Helm release.
-                        Go templating with the values from the referenced CAPI Cluster.
-                        Currently following can be referenced:
-                        - Cluster => CAPI Cluster for instance
-                        - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                        - InfrastructureProvider => the CAPI cluster infrastructure provider
-                        - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                        Values field allows to define configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
                       type: string
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to store configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - chartName
                   - chartVersion

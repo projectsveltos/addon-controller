@@ -751,6 +751,14 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 }
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := r.getPolicyRefReferences(clusterSummaryScope)
+	currentReferences.Append(r.getKustomizationRefReferences(clusterSummaryScope))
+	currentReferences.Append(r.getHelmChartsReferences(clusterSummaryScope))
+	return currentReferences
+}
+
+// getPolicyRefReferences get all references considering the PolicyRef section
+func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
@@ -765,6 +773,12 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 			Name:       referencedName,
 		})
 	}
+	return currentReferences
+}
+
+// getKustomizationRefReferences get all references considering the KustomizationRef section
+func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name
@@ -793,7 +807,6 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 		valuesFromReferences := getKustomizationValueFrom(clusterSummaryScope, kr)
 		currentReferences.Append(valuesFromReferences)
 	}
-
 	return currentReferences
 }
 
@@ -812,6 +825,39 @@ func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, k
 		currentValuesFromReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
 			Kind:       kr.ValuesFrom[i].Kind,
+			Namespace:  namespace,
+			Name:       referencedName,
+		})
+	}
+
+	return currentValuesFromReferences
+}
+
+// getHelmChartsReferences get all references considering the HelmChart section
+func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := &libsveltosset.Set{}
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		hc := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		valuesFromReferences := getHelmChartValueFrom(clusterSummaryScope, hc)
+		currentReferences.Append(valuesFromReferences)
+	}
+	return currentReferences
+}
+
+// getHelmChartValueFrom gets referenced ConfigMap/Secret in a HelmChart.
+// HelmChart can reference both ConfigMap/Secret each containing configuration for the helm release.
+func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1alpha1.HelmChart) *libsveltosset.Set {
+	currentValuesFromReferences := &libsveltosset.Set{}
+
+	for i := range hc.ValuesFrom {
+		referencedNamespace := hc.ValuesFrom[i].Namespace
+		referencedName := hc.ValuesFrom[i].Name
+
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		currentValuesFromReferences.Insert(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       hc.ValuesFrom[i].Kind,
 			Namespace:  namespace,
 			Name:       referencedName,
 		})

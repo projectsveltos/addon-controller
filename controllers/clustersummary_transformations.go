@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -32,8 +33,29 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxGitRepository(
+	ctx context.Context, o *sourcev1.GitRepository,
+) []reconcile.Request {
+
+	return r.requeueClusterSummaryForFluxSource(ctx, o)
+}
+
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxOCIRepository(
+	ctx context.Context, o *sourcev1b2.OCIRepository,
+) []reconcile.Request {
+
+	return r.requeueClusterSummaryForFluxSource(ctx, o)
+}
+
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxBucket(
+	ctx context.Context, o *sourcev1b2.Bucket,
+) []reconcile.Request {
+
+	return r.requeueClusterSummaryForFluxSource(ctx, o)
+}
+
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
-	ctx context.Context, o client.Object,
+	_ context.Context, o client.Object,
 ) []reconcile.Request {
 
 	logger := r.Logger.WithValues(
@@ -160,12 +182,27 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 }
 
 // requeueClusterSummaryForCluster is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
-// for ClusterSummary to update when its own Sveltos/Cluster gets updated.
-func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
-	ctx context.Context, o client.Object,
+// for ClusterSummary to update when its own Sveltos Cluster gets updated.
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForSveltosCluster(
+	ctx context.Context, cluster client.Object,
 ) []reconcile.Request {
 
-	cluster := o
+	return r.requeueClusterSummaryForACluster(ctx, cluster)
+}
+
+// requeueClusterSummaryForCluster is a handler.ToRequestsFunc to be used to enqueue requests for reconciliation
+// for ClusterSummary to update when its own Cluster gets updated.
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForCluster(
+	ctx context.Context, cluster *clusterv1.Cluster,
+) []reconcile.Request {
+
+	return r.requeueClusterSummaryForACluster(ctx, cluster)
+}
+
+func (r *ClusterSummaryReconciler) requeueClusterSummaryForACluster(
+	_ context.Context, cluster client.Object,
+) []reconcile.Request {
+
 	logger := r.Logger.WithValues(
 		"objectMapper",
 		"requeueClusterSummaryForCluster",

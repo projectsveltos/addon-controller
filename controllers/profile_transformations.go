@@ -26,7 +26,7 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 )
 
-func (r *ProfileReconciler) requeueProfileForCluster(
+func (r *ProfileReconciler) requeueProfileForSveltosCluster(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
@@ -40,11 +40,21 @@ func (r *ProfileReconciler) requeueProfileForCluster(
 	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
 }
 
-func (r *ProfileReconciler) requeueProfileForMachine(
-	ctx context.Context, o client.Object,
+func (r *ProfileReconciler) requeueProfileForCluster(
+	ctx context.Context, cluster *clusterv1.Cluster,
 ) []reconcile.Request {
 
-	machine := o.(*clusterv1.Machine)
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	addTypeInformationToObject(r.Scheme, cluster)
+
+	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
+}
+
+func (r *ProfileReconciler) requeueProfileForMachine(
+	ctx context.Context, machine *clusterv1.Machine,
+) []reconcile.Request {
 
 	addTypeInformationToObject(r.Scheme, machine)
 

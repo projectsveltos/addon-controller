@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -157,6 +158,12 @@ func (r *ClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
+		Watches(&libsveltosv1alpha1.SveltosCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSetForSveltosCluster),
+			builder.WithPredicates(
+				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+			),
+		).
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
@@ -165,25 +172,22 @@ func (r *ClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
-	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
-	// one or more ClusterSets need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSetForCluster),
-		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
-	)
-
 	r.ctrl = c
 
 	return err
 }
 
 func (r *ClusterSetReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
+	sourceCluster := source.Kind[*clusterv1.Cluster](
+		mgr.GetCache(),
+		&clusterv1.Cluster{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSetForCluster),
+		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+	)
+
 	// When cluster-api cluster changes, according to ClusterPredicates,
-	// one or more ClusterSets need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSetForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(sourceCluster); err != nil {
 		return err
 	}
 

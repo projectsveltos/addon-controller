@@ -35,6 +35,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -361,6 +362,24 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
+		Watches(&libsveltosv1alpha1.SveltosCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForSveltosCluster),
+			builder.WithPredicates(
+				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+			),
+		).
+		Watches(&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
+			builder.WithPredicates(
+				ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
+			),
+		).
+		Watches(&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
+			builder.WithPredicates(
+				SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+			),
+		).
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
@@ -368,33 +387,6 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
-
-	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When ConfigMap changes, according to ConfigMapPredicates,
-	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When Secret changes, according to SecretPredicates,
-	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
-	)
 
 	if r.ReportMode == CollectFromManagementCluster {
 		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, mgr.GetLogger())
@@ -408,38 +400,57 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 }
 
 func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
-	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	return c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
+	sourceCluster := source.Kind[*clusterv1.Cluster](
+		mgr.GetCache(),
+		&clusterv1.Cluster{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
+		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
+
+	// When cluster-api cluster changes, according to ClusterPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(sourceCluster); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.Controller) error {
 	// When a Flux source (GitRepository/OCIRepository/Bucket) changes, one or more ClusterSummaries
 	// need to be reconciled.
 
-	err := c.Watch(source.Kind(mgr.GetCache(), &sourcev1.GitRepository{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceGitRepository := source.Kind[*sourcev1.GitRepository](
+		mgr.GetCache(),
+		&sourcev1.GitRepository{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxGitRepository),
+		FluxGitRepositoryPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
-	if err != nil {
+	if err := c.Watch(sourceGitRepository); err != nil {
 		return err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.OCIRepository{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceOCIRepository := source.Kind[*sourcev1b2.OCIRepository](
+		mgr.GetCache(),
+		&sourcev1b2.OCIRepository{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxOCIRepository),
+		FluxOCIRepositoryPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
-	if err != nil {
+	if err := c.Watch(sourceOCIRepository); err != nil {
 		return err
 	}
 
-	return c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.Bucket{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceBucket := source.Kind[*sourcev1b2.Bucket](
+		mgr.GetCache(),
+		&sourcev1b2.Bucket{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxBucket),
+		FluxBucketPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
+	if err := c.Watch(sourceBucket); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {

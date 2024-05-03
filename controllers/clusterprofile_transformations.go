@@ -40,11 +40,21 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
 	return requeueForSet(clusterSet, r.ClusterSetMap, configv1alpha1.ClusterProfileKind, r.Logger)
 }
 
-func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
+func (r *ClusterProfileReconciler) requeueClusterProfileForSveltosCluster(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
-	cluster := o
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	addTypeInformationToObject(r.Scheme, o)
+
+	return requeueForCluster(o, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
+}
+
+func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
+	ctx context.Context, cluster *clusterv1.Cluster,
+) []reconcile.Request {
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
@@ -55,10 +65,8 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
-	ctx context.Context, o client.Object,
+	ctx context.Context, machine *clusterv1.Machine,
 ) []reconcile.Request {
-
-	machine := o.(*clusterv1.Machine)
 
 	addTypeInformationToObject(r.Scheme, machine)
 

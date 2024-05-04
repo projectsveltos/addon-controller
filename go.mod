@@ -9,17 +9,17 @@ require (
 	github.com/dariubs/percent v1.0.0
 	github.com/fluxcd/pkg/http/fetch v0.11.0
 	github.com/fluxcd/pkg/tar v0.7.0
-	github.com/fluxcd/source-controller/api v1.2.5
+	github.com/fluxcd/source-controller/api v1.3.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.1
 	github.com/onsi/ginkgo/v2 v2.17.2
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.28.1-0.20240419092300-7e0826a881e6
+	github.com/projectsveltos/libsveltos v0.29.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/text v0.14.0
+	golang.org/x/text v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.14.4
 	k8s.io/api v0.30.0
@@ -68,8 +68,8 @@ require (
 	github.com/exponent-io/jsonpath v0.0.0-20151013193312-d6023ce2651d // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fluxcd/pkg/apis/acl v0.1.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.3.0 // indirect
+	github.com/fluxcd/pkg/apis/acl v0.3.0 // indirect
+	github.com/fluxcd/pkg/apis/meta v1.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
@@ -177,7 +177,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.30.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	k8s.io/kubectl v0.29.4 // indirect
+	k8s.io/kubectl v0.30.0 // indirect
 	oras.land/oras-go v1.2.4 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

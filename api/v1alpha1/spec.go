@@ -155,11 +155,6 @@ type HelmOptions struct {
 	// +optional
 	SkipCRDs bool `json:"skipCRDs,omitempty"`
 
-	// Create the release namespace if not present. Defaults to true
-	// +kubebuilder:default:=true
-	// +optional
-	CreateNamespace bool `json:"createNamespace,omitempty"`
-
 	// if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
 	// are in a ready state before marking the release as successful. It will wait for as long as --timeout
 	// Default to false
@@ -178,7 +173,7 @@ type HelmOptions struct {
 	// +optional
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
 
-	// prevent hooks from running during install
+	// prevent hooks from running during install/upgrade/uninstall
 	// Default to false
 	// +kubebuilder:default:=false
 	// +optional
@@ -190,7 +185,7 @@ type HelmOptions struct {
 	// +optional
 	DisableOpenAPIValidation bool `json:"disableOpenAPIValidation,omitempty"`
 
-	// if set, the installation process deletes the installation on failure.
+	// if set, the installation process deletes the installation/upgrades on failure.
 	// The --wait flag will be set automatically if --atomic is used
 	// Default to false
 	// +kubebuilder:default:=false
@@ -211,6 +206,95 @@ type HelmOptions struct {
 	// +kubebuilder:default=false
 	// +optional
 	EnableClientCache bool `json:"enableClientCache,omitempty"`
+
+	// Description is the description of an helm operation
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// HelmInstallOptions are options specific to helm install
+	// +optional
+	InstallOptions HelmInstallOptions `json:"installOptions,omitempty"`
+
+	// HelmUpgradeOptions are options specific to helm upgrade
+	// +optional
+	UpgradeOptions HelmUpgradeOptions `json:"upgradeOptions,omitempty"`
+
+	// HelmUninstallOptions are options specific to helm uninstall
+	// +optional
+	UninstallOptions HelmUninstallOptions `json:"uninstallOptions,omitempty"`
+}
+
+type HelmInstallOptions struct {
+	// Create the release namespace if not present. Defaults to true
+	// +kubebuilder:default:=true
+	// +optional
+	CreateNamespace bool `json:"createNamespace,omitempty"`
+
+	// Replaces if set indicates to replace an older release with this one
+	// +kubebuilder:default:=true
+	// +optional
+	Replace bool `json:"replace,omitempty"`
+}
+
+type HelmUpgradeOptions struct {
+	// Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+	// This should be used with caution.
+	// +kubebuilder:default:=false
+	// +optional
+	Force bool `json:"force,omitempty"`
+
+	// ResetValues will reset the values to the chart's built-ins rather than merging with existing.
+	// +kubebuilder:default:=false
+	// +optional
+	ResetValues bool `json:"resetValues,omitempty"`
+
+	// ReuseValues copies values from the current release to a new release if the
+	// new release does not have any values. If the request already has values,
+	// or if there are no values in the current release, this does nothing.
+	// This is skipped if the ResetValues flag is set, in which case the
+	// request values are not altered.
+	// +kubebuilder:default:=false
+	// +optional
+	ReuseValues bool `json:"reuseValues,omitempty"`
+
+	// ResetThenReuseValues will reset the values to the chart's built-ins then merge with user's last supplied values.
+	// +kubebuilder:default:=false
+	// +optional
+	ResetThenReuseValues bool `json:"resetThenReuseValues,omitempty"`
+
+	// Recreate will (if true) recreate pods after a rollback.
+	// +kubebuilder:default:=false
+	// +optional
+	Recreate bool `json:"recreate,omitempty"`
+
+	// MaxHistory limits the maximum number of revisions saved per release
+	// Default to 2
+	// +kubebuilder:default=2
+	// +optional
+	MaxHistory int `json:"maxHistory,omitempty"`
+
+	// CleanupOnFail will, if true, cause the upgrade to delete newly-created resources on a failed update.
+	// +kubebuilder:default:=false
+	// +optional
+	CleanupOnFail bool `json:"cleanupOnFail,omitempty"`
+
+	// SubNotes determines whether sub-notes are rendered in the chart.
+	// +kubebuilder:default:=false
+	// +optional
+	SubNotes bool `json:"subNotes,omitempty"`
+}
+
+type HelmUninstallOptions struct {
+	// When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+	// but it keeps the release information. This allows to see details about the uninstalled release
+	// using the helm history command.
+	// +optional
+	KeepHistory bool `json:"keepHistory,omitempty"`
+
+	// DeletionPropagation
+	// +kubebuilder:validation:Enum:=orphan;foreground;background
+	// +optional
+	DeletionPropagation string `json:"deletionPropagation,omitempty"`
 }
 
 type HelmChart struct {

@@ -71,9 +71,11 @@ var (
 )
 
 const (
-	writeFilePermission = 0644
-	lockTimeout         = 30
-	notInstalledMessage = "Not installed yet and action is uninstall"
+	writeFilePermission        = 0644
+	lockTimeout                = 30
+	notInstalledMessage        = "Not installed yet and action is uninstall"
+	defaultMaxHistory          = 2
+	defaultDeletionPropagation = "background"
 )
 
 type releaseInfo struct {
@@ -305,10 +307,17 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 					logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
 				} else {
-					err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
-					if err != nil {
-						if !errors.Is(err, driver.ErrReleaseNotFound) {
-							return nil, err
+					currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
+						currentChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(currentChart.Options))
+					if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+						return nil, err
+					}
+					if currentRelease != nil && currentRelease.Status != string(release.StatusUninstalled) {
+						err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+						if err != nil {
+							if !errors.Is(err, driver.ErrReleaseNotFound) {
+								return nil, err
+							}
 						}
 					}
 				}
@@ -821,11 +830,10 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 		return err
 	}
 
-	uninstallClient := action.NewUninstall(actionConfig)
-	uninstallClient.DryRun = false
-	uninstallClient.Wait = false
-	uninstallClient.DisableHooks = false
-	uninstallClient.KeepHistory = false
+	uninstallClient, err := getHelmUninstallClient(helmChart, actionConfig)
+	if err != nil {
+		return err
+	}
 
 	_, err = uninstallClient.Run(releaseName)
 	if err != nil {
@@ -1067,6 +1075,10 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, requestedCh
 // shouldUninstall returns true if action is uninstall there is a release installed currently
 func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart) bool {
 	if currentRelease == nil {
+		return false
+	}
+
+	if currentRelease.Status == string(release.StatusUninstalled) {
 		return false
 	}
 
@@ -1632,7 +1644,7 @@ func getWaitForJobsHelmValue(options *configv1alpha1.HelmOptions) bool {
 
 func getCreateNamespaceHelmValue(options *configv1alpha1.HelmOptions) bool {
 	if options != nil {
-		return options.CreateNamespace
+		return options.InstallOptions.CreateNamespace
 	}
 
 	return true // for backward compatibility
@@ -1693,6 +1705,97 @@ func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
 	return map[string]string{}
 }
 
+func getReplaceValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.InstallOptions.Replace
+	}
+	return true
+}
+
+func getForceValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.Force
+	}
+	return false
+}
+
+func getReuseValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ReuseValues
+	}
+	return false
+}
+
+func getResetValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ResetValues
+	}
+	return false
+}
+
+func getResetThenReuseValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ResetThenReuseValues
+	}
+	return false
+}
+
+func getDescriptionValue(options *configv1alpha1.HelmOptions) string {
+	if options != nil {
+		return options.Description
+	}
+
+	return ""
+}
+
+func getKeepHistoryValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UninstallOptions.KeepHistory
+	}
+
+	return false
+}
+
+func getDeletionPropagation(options *configv1alpha1.HelmOptions) string {
+	if options != nil {
+		return options.UninstallOptions.DeletionPropagation
+	}
+
+	return defaultDeletionPropagation
+}
+
+func getMaxHistoryValue(options *configv1alpha1.HelmOptions) int {
+	if options != nil {
+		return options.UpgradeOptions.MaxHistory
+	}
+
+	return defaultMaxHistory
+}
+
+func getCleanupOnFailValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.CleanupOnFail
+	}
+
+	return false
+}
+
+func getSubNotesValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.SubNotes
+	}
+
+	return false
+}
+
+func getRecreateValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.Recreate
+	}
+
+	return false
+}
+
 func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig string) (*action.Install, error) {
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
@@ -1716,8 +1819,9 @@ func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig s
 			return nil, err
 		}
 	}
-	installClient.Replace = true
+	installClient.Replace = getReplaceValue(requestedChart.Options)
 	installClient.Labels = getLabelsValue(requestedChart.Options)
+	installClient.Description = getDescriptionValue(requestedChart.Options)
 
 	return installClient, nil
 }
@@ -1740,10 +1844,39 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 			return nil, err
 		}
 	}
+	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
+	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
+	upgradeClient.ResetThenReuseValues = getResetThenReuseValues(requestedChart.Options)
+	upgradeClient.Force = getForceValue(requestedChart.Options)
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
-	upgradeClient.ResetValues = true
+	upgradeClient.Description = getDescriptionValue(requestedChart.Options)
+	upgradeClient.MaxHistory = getMaxHistoryValue(requestedChart.Options)
+	upgradeClient.CleanupOnFail = getCleanupOnFailValue(requestedChart.Options)
+	upgradeClient.SubNotes = getSubNotesValue(requestedChart.Options)
+	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
 
 	return upgradeClient, nil
+}
+
+func getHelmUninstallClient(requestedChart *configv1alpha1.HelmChart, actionConfig *action.Configuration) (*action.Uninstall, error) {
+	uninstallClient := action.NewUninstall(actionConfig)
+	uninstallClient.DryRun = false
+	if requestedChart != nil {
+		if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
+			var err error
+			uninstallClient.Timeout, err = time.ParseDuration(timeout.String())
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
+		uninstallClient.Wait = getWaitHelmValue(requestedChart.Options)
+		uninstallClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
+		uninstallClient.KeepHistory = getKeepHistoryValue(requestedChart.Options)
+		uninstallClient.DeletionPropagation = getDeletionPropagation(requestedChart.Options)
+	}
+	return uninstallClient, nil
 }
 
 func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmChart,

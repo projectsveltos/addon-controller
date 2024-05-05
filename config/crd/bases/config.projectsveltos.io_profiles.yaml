@@ -160,14 +160,9 @@ spec:
                         atomic:
                           default: false
                           description: |-
-                            if set, the installation process deletes the installation on failure.
+                            if set, the installation process deletes the installation/upgrades on failure.
                             The --wait flag will be set automatically if --atomic is used
                             Default to false
-                          type: boolean
-                        createNamespace:
-                          default: true
-                          description: Create the release namespace if not present.
-                            Defaults to true
                           type: boolean
                         dependencyUpdate:
                           default: false
@@ -175,10 +170,13 @@ spec:
                             update dependencies if they are missing before installing the chart
                             Default to false
                           type: boolean
+                        description:
+                          description: Description is the description of an helm operation
+                          type: string
                         disableHooks:
                           default: false
                           description: |-
-                            prevent hooks from running during install
+                            prevent hooks from running during install/upgrade/uninstall
                             Default to false
                           type: boolean
                         disableOpenAPIValidation:
@@ -193,6 +191,21 @@ spec:
                             client cache. If it is not specified, it will be set to
                             false.
                           type: boolean
+                        installOptions:
+                          description: HelmInstallOptions are options specific to
+                            helm install
+                          properties:
+                            createNamespace:
+                              default: true
+                              description: Create the release namespace if not present.
+                                Defaults to true
+                              type: boolean
+                            replace:
+                              default: true
+                              description: Replaces if set indicates to replace an
+                                older release with this one
+                              type: boolean
+                          type: object
                         labels:
                           additionalProperties:
                             type: string
@@ -208,6 +221,77 @@ spec:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
                           type: string
+                        uninstallOptions:
+                          description: HelmUninstallOptions are options specific to
+                            helm uninstall
+                          properties:
+                            deletionPropagation:
+                              description: DeletionPropagation
+                              enum:
+                              - orphan
+                              - foreground
+                              - background
+                              type: string
+                            keepHistory:
+                              description: |-
+                                When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+                                but it keeps the release information. This allows to see details about the uninstalled release
+                                using the helm history command.
+                              type: boolean
+                          type: object
+                        upgradeOptions:
+                          description: HelmUpgradeOptions are options specific to
+                            helm upgrade
+                          properties:
+                            cleanupOnFail:
+                              default: false
+                              description: CleanupOnFail will, if true, cause the
+                                upgrade to delete newly-created resources on a failed
+                                update.
+                              type: boolean
+                            force:
+                              default: false
+                              description: |-
+                                Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+                                This should be used with caution.
+                              type: boolean
+                            maxHistory:
+                              default: 2
+                              description: |-
+                                MaxHistory limits the maximum number of revisions saved per release
+                                Default to 2
+                              type: integer
+                            recreate:
+                              default: false
+                              description: Recreate will (if true) recreate pods after
+                                a rollback.
+                              type: boolean
+                            resetThenReuseValues:
+                              default: false
+                              description: ResetThenReuseValues will reset the values
+                                to the chart's built-ins then merge with user's last
+                                supplied values.
+                              type: boolean
+                            resetValues:
+                              default: false
+                              description: ResetValues will reset the values to the
+                                chart's built-ins rather than merging with existing.
+                              type: boolean
+                            reuseValues:
+                              default: false
+                              description: |-
+                                ReuseValues copies values from the current release to a new release if the
+                                new release does not have any values. If the request already has values,
+                                or if there are no values in the current release, this does nothing.
+                                This is skipped if the ResetValues flag is set, in which case the
+                                request values are not altered.
+                              type: boolean
+                            subNotes:
+                              default: false
+                              description: SubNotes determines whether sub-notes are
+                                rendered in the chart.
+                              type: boolean
+                          type: object
                         wait:
                           default: false
                           description: |-

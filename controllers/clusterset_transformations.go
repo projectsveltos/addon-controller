@@ -19,17 +19,30 @@ package controllers
 import (
 	"context"
 
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 )
 
-func (r *ClusterSetReconciler) requeueClusterSetForCluster(
+func (r *ClusterSetReconciler) requeueClusterSetForSveltosCluster(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {
 
 	cluster := o
+
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	addTypeInformationToObject(r.Scheme, cluster)
+
+	return requeueForCluster(cluster, r.ClusterSets, r.ClusterLabels, r.ClusterMap, libsveltosv1alpha1.ClusterSetKind, r.Logger)
+}
+
+func (r *ClusterSetReconciler) requeueClusterSetForCluster(
+	ctx context.Context, cluster *clusterv1.Cluster,
+) []reconcile.Request {
 
 	r.Mux.Lock()
 	defer r.Mux.Unlock()

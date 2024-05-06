@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -223,6 +224,18 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
+		Watches(&libsveltosv1alpha1.Set{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
+			builder.WithPredicates(
+				SetPredicates(mgr.GetLogger().WithValues("predicate", "setpredicate")),
+			),
+		).
+		Watches(&libsveltosv1alpha1.SveltosCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSveltosCluster),
+			builder.WithPredicates(
+				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+			),
+		).
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
@@ -230,25 +243,6 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
-	// When projectsveltos cluster changes, according to SveltosClusterPredicates,
-	// one or more Profiles need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForCluster),
-		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When Set changes, according to SetPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.Set{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
-		SetPredicates(mgr.GetLogger().WithValues("predicate", "setpredicate")),
-	)
-	if err != nil {
-		return err
-	}
 
 	r.ctrl = c
 
@@ -256,22 +250,32 @@ func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *ProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
+	sourceCluster := source.Kind[*clusterv1.Cluster](
+		mgr.GetCache(),
+		&clusterv1.Cluster{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueProfileForCluster),
+		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+	)
+
 	// When cluster-api cluster changes, according to ClusterPredicates,
-	// one or more Profiles need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	); err != nil {
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(sourceCluster); err != nil {
 		return err
 	}
+
+	sourceMachine := source.Kind[*clusterv1.Machine](
+		mgr.GetCache(),
+		&clusterv1.Machine{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueProfileForMachine),
+		MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "machinepredicate")},
+	)
+
 	// When cluster-api machine changes, according to ClusterPredicates,
-	// one or more Profiles need to be reconciled.
-	if err := c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Machine{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueProfileForMachine),
-		MachinePredicates(mgr.GetLogger().WithValues("predicate", "machinepredicate")),
-	); err != nil {
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(sourceMachine); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -286,6 +290,17 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 
 	for i := range profile.Spec.KustomizationRefs {
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
+		r.limitKustomizationRefsToNamespace(profile, &profile.Spec.KustomizationRefs[i])
+	}
+}
+
+// limitKustomizationRefsToNamespace reset Namespace of all ConfigMap/Secret
+// instances referenced by kustomizationRef.
+func (r *ProfileReconciler) limitKustomizationRefsToNamespace(profile *configv1alpha1.Profile,
+	kustomizationRef *configv1alpha1.KustomizationRef) {
+
+	for i := range kustomizationRef.ValuesFrom {
+		kustomizationRef.ValuesFrom[i].Namespace = profile.Namespace
 	}
 }
 

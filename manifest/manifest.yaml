@@ -7,7 +7,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clusterconfigurations.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -72,6 +72,9 @@ spec:
                                 chartVersion:
                                   description: ChartVersion is the version of the
                                     helm chart deployed in the Cluster.
+                                  type: string
+                                icon:
+                                  description: The URL to an icon file.
                                   type: string
                                 lastAppliedTime:
                                   description: LastAppliedTime identifies when this
@@ -235,6 +238,9 @@ spec:
                                   description: ChartVersion is the version of the
                                     helm chart deployed in the Cluster.
                                   type: string
+                                icon:
+                                  description: The URL to an icon file.
+                                  type: string
                                 lastAppliedTime:
                                   description: LastAppliedTime identifies when this
                                     resource was last applied to the cluster.
@@ -380,7 +386,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clusterprofiles.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -537,14 +543,9 @@ spec:
                         atomic:
                           default: false
                           description: |-
-                            if set, the installation process deletes the installation on failure.
+                            if set, the installation process deletes the installation/upgrades on failure.
                             The --wait flag will be set automatically if --atomic is used
                             Default to false
-                          type: boolean
-                        createNamespace:
-                          default: true
-                          description: Create the release namespace if not present.
-                            Defaults to true
                           type: boolean
                         dependencyUpdate:
                           default: false
@@ -552,10 +553,13 @@ spec:
                             update dependencies if they are missing before installing the chart
                             Default to false
                           type: boolean
+                        description:
+                          description: Description is the description of an helm operation
+                          type: string
                         disableHooks:
                           default: false
                           description: |-
-                            prevent hooks from running during install
+                            prevent hooks from running during install/upgrade/uninstall
                             Default to false
                           type: boolean
                         disableOpenAPIValidation:
@@ -570,6 +574,21 @@ spec:
                             client cache. If it is not specified, it will be set to
                             false.
                           type: boolean
+                        installOptions:
+                          description: HelmInstallOptions are options specific to
+                            helm install
+                          properties:
+                            createNamespace:
+                              default: true
+                              description: Create the release namespace if not present.
+                                Defaults to true
+                              type: boolean
+                            replace:
+                              default: true
+                              description: Replaces if set indicates to replace an
+                                older release with this one
+                              type: boolean
+                          type: object
                         labels:
                           additionalProperties:
                             type: string
@@ -585,6 +604,77 @@ spec:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
                           type: string
+                        uninstallOptions:
+                          description: HelmUninstallOptions are options specific to
+                            helm uninstall
+                          properties:
+                            deletionPropagation:
+                              description: DeletionPropagation
+                              enum:
+                              - orphan
+                              - foreground
+                              - background
+                              type: string
+                            keepHistory:
+                              description: |-
+                                When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+                                but it keeps the release information. This allows to see details about the uninstalled release
+                                using the helm history command.
+                              type: boolean
+                          type: object
+                        upgradeOptions:
+                          description: HelmUpgradeOptions are options specific to
+                            helm upgrade
+                          properties:
+                            cleanupOnFail:
+                              default: false
+                              description: CleanupOnFail will, if true, cause the
+                                upgrade to delete newly-created resources on a failed
+                                update.
+                              type: boolean
+                            force:
+                              default: false
+                              description: |-
+                                Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+                                This should be used with caution.
+                              type: boolean
+                            maxHistory:
+                              default: 2
+                              description: |-
+                                MaxHistory limits the maximum number of revisions saved per release
+                                Default to 2
+                              type: integer
+                            recreate:
+                              default: false
+                              description: Recreate will (if true) recreate pods after
+                                a rollback.
+                              type: boolean
+                            resetThenReuseValues:
+                              default: false
+                              description: ResetThenReuseValues will reset the values
+                                to the chart's built-ins then merge with user's last
+                                supplied values.
+                              type: boolean
+                            resetValues:
+                              default: false
+                              description: ResetValues will reset the values to the
+                                chart's built-ins rather than merging with existing.
+                              type: boolean
+                            reuseValues:
+                              default: false
+                              description: |-
+                                ReuseValues copies values from the current release to a new release if the
+                                new release does not have any values. If the request already has values,
+                                or if there are no values in the current release, this does nothing.
+                                This is skipped if the ResetValues flag is set, in which case the
+                                request values are not altered.
+                              type: boolean
+                            subNotes:
+                              default: false
+                              description: SubNotes determines whether sub-notes are
+                                rendered in the chart.
+                              type: boolean
+                          type: object
                         wait:
                           default: false
                           description: |-
@@ -619,14 +709,45 @@ spec:
                       type: string
                     values:
                       description: |-
-                        Values holds the values for this Helm release.
-                        Go templating with the values from the referenced CAPI Cluster.
-                        Currently following can be referenced:
-                        - Cluster => CAPI Cluster for instance
-                        - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                        - InfrastructureProvider => the CAPI cluster infrastructure provider
-                        - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                        Values field allows to define configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
                       type: string
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to store configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - chartName
                   - chartVersion
@@ -687,6 +808,69 @@ spec:
                       maxLength: 63
                       minLength: 1
                       type: string
+                    values:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Values is a map[string]string type that allows to define a set of key-value pairs.
+                        These key-value pairs can optionally leverage Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      type: object
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to define key-value pairs. These key-value pairs can optionally leverage
+                        Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - kind
                   - name
@@ -1180,7 +1364,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clusterreports.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -1496,7 +1680,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: clustersummaries.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -1669,14 +1853,9 @@ spec:
                             atomic:
                               default: false
                               description: |-
-                                if set, the installation process deletes the installation on failure.
+                                if set, the installation process deletes the installation/upgrades on failure.
                                 The --wait flag will be set automatically if --atomic is used
                                 Default to false
-                              type: boolean
-                            createNamespace:
-                              default: true
-                              description: Create the release namespace if not present.
-                                Defaults to true
                               type: boolean
                             dependencyUpdate:
                               default: false
@@ -1684,10 +1863,14 @@ spec:
                                 update dependencies if they are missing before installing the chart
                                 Default to false
                               type: boolean
+                            description:
+                              description: Description is the description of an helm
+                                operation
+                              type: string
                             disableHooks:
                               default: false
                               description: |-
-                                prevent hooks from running during install
+                                prevent hooks from running during install/upgrade/uninstall
                                 Default to false
                               type: boolean
                             disableOpenAPIValidation:
@@ -1702,6 +1885,21 @@ spec:
                                 client cache. If it is not specified, it will be set
                                 to false.
                               type: boolean
+                            installOptions:
+                              description: HelmInstallOptions are options specific
+                                to helm install
+                              properties:
+                                createNamespace:
+                                  default: true
+                                  description: Create the release namespace if not
+                                    present. Defaults to true
+                                  type: boolean
+                                replace:
+                                  default: true
+                                  description: Replaces if set indicates to replace
+                                    an older release with this one
+                                  type: boolean
+                              type: object
                             labels:
                               additionalProperties:
                                 type: string
@@ -1717,6 +1915,78 @@ spec:
                               description: time to wait for any individual Kubernetes
                                 operation (like Jobs for hooks) (default 5m0s)
                               type: string
+                            uninstallOptions:
+                              description: HelmUninstallOptions are options specific
+                                to helm uninstall
+                              properties:
+                                deletionPropagation:
+                                  description: DeletionPropagation
+                                  enum:
+                                  - orphan
+                                  - foreground
+                                  - background
+                                  type: string
+                                keepHistory:
+                                  description: |-
+                                    When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+                                    but it keeps the release information. This allows to see details about the uninstalled release
+                                    using the helm history command.
+                                  type: boolean
+                              type: object
+                            upgradeOptions:
+                              description: HelmUpgradeOptions are options specific
+                                to helm upgrade
+                              properties:
+                                cleanupOnFail:
+                                  default: false
+                                  description: CleanupOnFail will, if true, cause
+                                    the upgrade to delete newly-created resources
+                                    on a failed update.
+                                  type: boolean
+                                force:
+                                  default: false
+                                  description: |-
+                                    Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+                                    This should be used with caution.
+                                  type: boolean
+                                maxHistory:
+                                  default: 2
+                                  description: |-
+                                    MaxHistory limits the maximum number of revisions saved per release
+                                    Default to 2
+                                  type: integer
+                                recreate:
+                                  default: false
+                                  description: Recreate will (if true) recreate pods
+                                    after a rollback.
+                                  type: boolean
+                                resetThenReuseValues:
+                                  default: false
+                                  description: ResetThenReuseValues will reset the
+                                    values to the chart's built-ins then merge with
+                                    user's last supplied values.
+                                  type: boolean
+                                resetValues:
+                                  default: false
+                                  description: ResetValues will reset the values to
+                                    the chart's built-ins rather than merging with
+                                    existing.
+                                  type: boolean
+                                reuseValues:
+                                  default: false
+                                  description: |-
+                                    ReuseValues copies values from the current release to a new release if the
+                                    new release does not have any values. If the request already has values,
+                                    or if there are no values in the current release, this does nothing.
+                                    This is skipped if the ResetValues flag is set, in which case the
+                                    request values are not altered.
+                                  type: boolean
+                                subNotes:
+                                  default: false
+                                  description: SubNotes determines whether sub-notes
+                                    are rendered in the chart.
+                                  type: boolean
+                              type: object
                             wait:
                               default: false
                               description: |-
@@ -1751,14 +2021,45 @@ spec:
                           type: string
                         values:
                           description: |-
-                            Values holds the values for this Helm release.
-                            Go templating with the values from the referenced CAPI Cluster.
-                            Currently following can be referenced:
-                            - Cluster => CAPI Cluster for instance
-                            - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                            - InfrastructureProvider => the CAPI cluster infrastructure provider
-                            - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                            Values field allows to define configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment.
                           type: string
+                        valuesFrom:
+                          description: |-
+                            ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                            it is possible to store configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment.
+                          items:
+                            properties:
+                              kind:
+                                description: |-
+                                  Kind of the resource. Supported kinds are:
+                                  - ConfigMap/Secret
+                                enum:
+                                - ConfigMap
+                                - Secret
+                                type: string
+                              name:
+                                description: Name of the referenced resource.
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referenced resource.
+                                  For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                  be implicit set to cluster's namespace.
+                                  For Profile namespace must be left empty. The Profile namespace will be used.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            - namespace
+                            type: object
+                          type: array
                       required:
                       - chartName
                       - chartVersion
@@ -1819,6 +2120,69 @@ spec:
                           maxLength: 63
                           minLength: 1
                           type: string
+                        values:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Values is a map[string]string type that allows to define a set of key-value pairs.
+                            These key-value pairs can optionally leverage Go templates for further processing.
+                            With Sveltos, you can define key-value pairs where the values can be Go templates.
+                            These templates have access to management cluster information during deployment. This allows
+                            to do more than just replace placeholders. Variables can be used to dynamically
+                            construct values based on other resources or variables within the Kustomize output.
+                            For example, imagine you have a Region key with a template value like:
+                            '{{ index .Cluster.metadata.labels "region" }}'.
+                            This template retrieves the region label from the cluster instance metadata.
+                            Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                            The output itself can also contain templates, like:
+                            region: '{{ default "west" .Region }}'.
+                            This way, the final output from Kustomize will have the region set dynamically based on
+                            the actual region retrieved earlier.
+                          type: object
+                        valuesFrom:
+                          description: |-
+                            ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                            it is possible to define key-value pairs. These key-value pairs can optionally leverage
+                            Go templates for further processing.
+                            With Sveltos, you can define key-value pairs where the values can be Go templates.
+                            These templates have access to management cluster information during deployment. This allows
+                            to do more than just replace placeholders. Variables can be used to dynamically
+                            construct values based on other resources or variables within the Kustomize output.
+                            For example, imagine you have a Region key with a template value like:
+                            '{{ index .Cluster.metadata.labels "region" }}'.
+                            This template retrieves the region label from the cluster instance metadata.
+                            Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                            The output itself can also contain templates, like:
+                            region: '{{ default "west" .Region }}'.
+                            This way, the final output from Kustomize will have the region set dynamically based on
+                            the actual region retrieved earlier.
+                          items:
+                            properties:
+                              kind:
+                                description: |-
+                                  Kind of the resource. Supported kinds are:
+                                  - ConfigMap/Secret
+                                enum:
+                                - ConfigMap
+                                - Secret
+                                type: string
+                              name:
+                                description: Name of the referenced resource.
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referenced resource.
+                                  For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                  be implicit set to cluster's namespace.
+                                  For Profile namespace must be left empty. The Profile namespace will be used.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            - namespace
+                            type: object
+                          type: array
                       required:
                       - kind
                       - name
@@ -2201,7 +2565,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   name: profiles.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -2358,14 +2722,9 @@ spec:
                         atomic:
                           default: false
                           description: |-
-                            if set, the installation process deletes the installation on failure.
+                            if set, the installation process deletes the installation/upgrades on failure.
                             The --wait flag will be set automatically if --atomic is used
                             Default to false
-                          type: boolean
-                        createNamespace:
-                          default: true
-                          description: Create the release namespace if not present.
-                            Defaults to true
                           type: boolean
                         dependencyUpdate:
                           default: false
@@ -2373,10 +2732,13 @@ spec:
                             update dependencies if they are missing before installing the chart
                             Default to false
                           type: boolean
+                        description:
+                          description: Description is the description of an helm operation
+                          type: string
                         disableHooks:
                           default: false
                           description: |-
-                            prevent hooks from running during install
+                            prevent hooks from running during install/upgrade/uninstall
                             Default to false
                           type: boolean
                         disableOpenAPIValidation:
@@ -2391,6 +2753,21 @@ spec:
                             client cache. If it is not specified, it will be set to
                             false.
                           type: boolean
+                        installOptions:
+                          description: HelmInstallOptions are options specific to
+                            helm install
+                          properties:
+                            createNamespace:
+                              default: true
+                              description: Create the release namespace if not present.
+                                Defaults to true
+                              type: boolean
+                            replace:
+                              default: true
+                              description: Replaces if set indicates to replace an
+                                older release with this one
+                              type: boolean
+                          type: object
                         labels:
                           additionalProperties:
                             type: string
@@ -2406,6 +2783,77 @@ spec:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
                           type: string
+                        uninstallOptions:
+                          description: HelmUninstallOptions are options specific to
+                            helm uninstall
+                          properties:
+                            deletionPropagation:
+                              description: DeletionPropagation
+                              enum:
+                              - orphan
+                              - foreground
+                              - background
+                              type: string
+                            keepHistory:
+                              description: |-
+                                When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+                                but it keeps the release information. This allows to see details about the uninstalled release
+                                using the helm history command.
+                              type: boolean
+                          type: object
+                        upgradeOptions:
+                          description: HelmUpgradeOptions are options specific to
+                            helm upgrade
+                          properties:
+                            cleanupOnFail:
+                              default: false
+                              description: CleanupOnFail will, if true, cause the
+                                upgrade to delete newly-created resources on a failed
+                                update.
+                              type: boolean
+                            force:
+                              default: false
+                              description: |-
+                                Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+                                This should be used with caution.
+                              type: boolean
+                            maxHistory:
+                              default: 2
+                              description: |-
+                                MaxHistory limits the maximum number of revisions saved per release
+                                Default to 2
+                              type: integer
+                            recreate:
+                              default: false
+                              description: Recreate will (if true) recreate pods after
+                                a rollback.
+                              type: boolean
+                            resetThenReuseValues:
+                              default: false
+                              description: ResetThenReuseValues will reset the values
+                                to the chart's built-ins then merge with user's last
+                                supplied values.
+                              type: boolean
+                            resetValues:
+                              default: false
+                              description: ResetValues will reset the values to the
+                                chart's built-ins rather than merging with existing.
+                              type: boolean
+                            reuseValues:
+                              default: false
+                              description: |-
+                                ReuseValues copies values from the current release to a new release if the
+                                new release does not have any values. If the request already has values,
+                                or if there are no values in the current release, this does nothing.
+                                This is skipped if the ResetValues flag is set, in which case the
+                                request values are not altered.
+                              type: boolean
+                            subNotes:
+                              default: false
+                              description: SubNotes determines whether sub-notes are
+                                rendered in the chart.
+                              type: boolean
+                          type: object
                         wait:
                           default: false
                           description: |-
@@ -2440,14 +2888,45 @@ spec:
                       type: string
                     values:
                       description: |-
-                        Values holds the values for this Helm release.
-                        Go templating with the values from the referenced CAPI Cluster.
-                        Currently following can be referenced:
-                        - Cluster => CAPI Cluster for instance
-                        - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-                        - InfrastructureProvider => the CAPI cluster infrastructure provider
-                        - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+                        Values field allows to define configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
                       type: string
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to store configuration for the Helm release.
+                        These values can be static or leverage Go templates for dynamic customization.
+                        When expressed as templates, the values are filled in using information from
+                        resources within the management cluster before deployment.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - chartName
                   - chartVersion
@@ -2508,6 +2987,69 @@ spec:
                       maxLength: 63
                       minLength: 1
                       type: string
+                    values:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Values is a map[string]string type that allows to define a set of key-value pairs.
+                        These key-value pairs can optionally leverage Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      type: object
+                    valuesFrom:
+                      description: |-
+                        ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                        it is possible to define key-value pairs. These key-value pairs can optionally leverage
+                        Go templates for further processing.
+                        With Sveltos, you can define key-value pairs where the values can be Go templates.
+                        These templates have access to management cluster information during deployment. This allows
+                        to do more than just replace placeholders. Variables can be used to dynamically
+                        construct values based on other resources or variables within the Kustomize output.
+                        For example, imagine you have a Region key with a template value like:
+                        '{{ index .Cluster.metadata.labels "region" }}'.
+                        This template retrieves the region label from the cluster instance metadata.
+                        Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                        The output itself can also contain templates, like:
+                        region: '{{ default "west" .Region }}'.
+                        This way, the final output from Kustomize will have the region set dynamically based on
+                        the actual region retrieved earlier.
+                      items:
+                        properties:
+                          kind:
+                            description: |-
+                              Kind of the resource. Supported kinds are:
+                              - ConfigMap/Secret
+                            enum:
+                            - ConfigMap
+                            - Secret
+                            type: string
+                          name:
+                            description: Name of the referenced resource.
+                            minLength: 1
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referenced resource.
+                              For ClusterProfile namespace can be left empty. In such a case, namespace will
+                              be implicit set to cluster's namespace.
+                              For Profile namespace must be left empty. The Profile namespace will be used.
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - kind
                   - name

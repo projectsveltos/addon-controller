@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -70,9 +71,11 @@ var (
 )
 
 const (
-	writeFilePermission = 0644
-	lockTimeout         = 30
-	notInstalledMessage = "Not installed yet and action is uninstall"
+	writeFilePermission        = 0644
+	lockTimeout                = 30
+	notInstalledMessage        = "Not installed yet and action is uninstall"
+	defaultMaxHistory          = 2
+	defaultDeletionPropagation = "background"
 )
 
 type releaseInfo struct {
@@ -85,6 +88,7 @@ type releaseInfo struct {
 	ChartVersion     string            `json:"chart_version"`
 	AppVersion       string            `json:"app_version"`
 	ReleaseLabels    map[string]string `json:"release_labels"`
+	Icon             string            `json:"icon"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -303,10 +307,17 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 					logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
 				} else {
-					err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
-					if err != nil {
-						if !errors.Is(err, driver.ErrReleaseNotFound) {
-							return nil, err
+					currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
+						currentChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(currentChart.Options))
+					if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+						return nil, err
+					}
+					if currentRelease != nil && currentRelease.Status != string(release.StatusUninstalled) {
+						err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
+						if err != nil {
+							if !errors.Is(err, driver.ErrReleaseNotFound) {
+								return nil, err
+							}
 						}
 					}
 				}
@@ -349,6 +360,16 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
 		config += render.AsCode(*currentChart)
+
+		valueFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
+			currentChart, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to get hash from referenced ConfigMap/Secret in ValuesFrom %v", err))
+			return nil, err
+		}
+
+		config += valueFromHash
 	}
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
@@ -366,6 +387,12 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+func getHelmReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	helmChart *configv1alpha1.HelmChart, logger logr.Logger) (string, error) {
+
+	return getValuesFromResourceHash(ctx, c, clusterSummary, helmChart.ValuesFrom, logger)
 }
 
 func getHelmRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
@@ -478,7 +505,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		if err != nil {
 			return nil, nil, err
 		}
-		err = updateValueHashOnHelmChartSummary(ctx, currentChart, clusterSummary)
+		err = updateValueHashOnHelmChartSummary(ctx, currentChart, clusterSummary, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -497,6 +524,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 					ChartVersion:    currentRelease.ChartVersion,
 					AppVersion:      currentRelease.AppVersion,
 					LastAppliedTime: &currentRelease.Updated,
+					Icon:            currentRelease.Icon,
 				})
 			}
 		}
@@ -601,7 +629,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1alpha1.ClusterSumm
 		if err != nil {
 			return nil, nil, err
 		}
-	} else if shouldUpgrade(currentRelease, currentChart, clusterSummary) {
+	} else if shouldUpgrade(ctx, currentRelease, currentChart, clusterSummary, logger) {
 		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig, logger)
 		if err != nil {
 			return nil, nil, err
@@ -802,11 +830,10 @@ func uninstallRelease(clusterSummary *configv1alpha1.ClusterSummary,
 		return err
 	}
 
-	uninstallClient := action.NewUninstall(actionConfig)
-	uninstallClient.DryRun = false
-	uninstallClient.Wait = false
-	uninstallClient.DisableHooks = false
-	uninstallClient.KeepHistory = false
+	uninstallClient, err := getHelmUninstallClient(helmChart, actionConfig)
+	if err != nil {
+		return err
+	}
 
 	_, err = uninstallClient.Run(releaseName)
 	if err != nil {
@@ -963,6 +990,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, enableClie
 		ChartVersion:     results.Chart.Metadata.Version,
 		AppVersion:       results.Chart.AppVersion(),
 		ReleaseLabels:    results.Labels,
+		Icon:             results.Chart.Metadata.Icon,
 	}
 
 	var t metav1.Time
@@ -999,14 +1027,24 @@ func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1alpha1.H
 
 // shouldUpgrade returns true if action is not uninstall and current installed chart is different
 // than what currently requested by customer
-func shouldUpgrade(currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart,
-	clusterSummary *configv1alpha1.ClusterSummary) bool {
+func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) bool {
+
+	if requestedChart.HelmChartAction == configv1alpha1.HelmChartActionUninstall {
+		return false
+	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeContinuousWithDriftDetection {
 		oldValueHash := getValueHashFromHelmChartSummary(requestedChart, clusterSummary)
 
 		// If Values configuration has changed, trigger an upgrade
-		if string(oldValueHash) != requestedChart.Values {
+		c := getManagementClusterClient()
+		currentValueHash, err := getHelmChartValuesHash(ctx, c, requestedChart, clusterSummary, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
+			currentValueHash = []byte("") // force upgrade
+		}
+		if !reflect.DeepEqual(oldValueHash, currentValueHash) {
 			return true
 		}
 
@@ -1031,12 +1069,16 @@ func shouldUpgrade(currentRelease *releaseInfo, requestedChart *configv1alpha1.H
 		}
 	}
 
-	return requestedChart.HelmChartAction != configv1alpha1.HelmChartActionUninstall
+	return true
 }
 
 // shouldUninstall returns true if action is uninstall there is a release installed currently
 func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1alpha1.HelmChart) bool {
 	if currentRelease == nil {
+		return false
+	}
+
+	if currentRelease.Status == string(release.StatusUninstalled) {
 		return false
 	}
 
@@ -1446,7 +1488,32 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1alpha1.C
 		return nil, err
 	}
 
+	c := getManagementClusterClient()
+	valuesFrom, err := getHelmChartValuesFrom(ctx, c, clusterSummary, requestedChart, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	for k := range valuesFrom {
+		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			requestedChart.ChartName, valuesFrom[k], mgmtResources, logger)
+		if err != nil {
+			return nil, err
+		}
+		instantiatedValues += fmt.Sprintf("\n\n%s", instantiatedValuesFrom)
+	}
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Deploying helm charts with Values %q", instantiatedValues))
+
 	return chartutil.ReadValues([]byte(instantiatedValues))
+}
+
+// getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret
+func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	helmChart *configv1alpha1.HelmChart, logger logr.Logger) (map[string]string, error) {
+
+	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, false, logger)
 }
 
 // collectResourcesFromManagedHelmCharts collects resources considering all
@@ -1577,7 +1644,7 @@ func getWaitForJobsHelmValue(options *configv1alpha1.HelmOptions) bool {
 
 func getCreateNamespaceHelmValue(options *configv1alpha1.HelmOptions) bool {
 	if options != nil {
-		return options.CreateNamespace
+		return options.InstallOptions.CreateNamespace
 	}
 
 	return true // for backward compatibility
@@ -1638,6 +1705,97 @@ func getLabelsValue(options *configv1alpha1.HelmOptions) map[string]string {
 	return map[string]string{}
 }
 
+func getReplaceValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.InstallOptions.Replace
+	}
+	return true
+}
+
+func getForceValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.Force
+	}
+	return false
+}
+
+func getReuseValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ReuseValues
+	}
+	return false
+}
+
+func getResetValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ResetValues
+	}
+	return false
+}
+
+func getResetThenReuseValues(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.ResetThenReuseValues
+	}
+	return false
+}
+
+func getDescriptionValue(options *configv1alpha1.HelmOptions) string {
+	if options != nil {
+		return options.Description
+	}
+
+	return ""
+}
+
+func getKeepHistoryValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UninstallOptions.KeepHistory
+	}
+
+	return false
+}
+
+func getDeletionPropagation(options *configv1alpha1.HelmOptions) string {
+	if options != nil {
+		return options.UninstallOptions.DeletionPropagation
+	}
+
+	return defaultDeletionPropagation
+}
+
+func getMaxHistoryValue(options *configv1alpha1.HelmOptions) int {
+	if options != nil {
+		return options.UpgradeOptions.MaxHistory
+	}
+
+	return defaultMaxHistory
+}
+
+func getCleanupOnFailValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.CleanupOnFail
+	}
+
+	return false
+}
+
+func getSubNotesValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.SubNotes
+	}
+
+	return false
+}
+
+func getRecreateValue(options *configv1alpha1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.Recreate
+	}
+
+	return false
+}
+
 func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig string) (*action.Install, error) {
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
@@ -1661,7 +1819,9 @@ func getHelmInstallClient(requestedChart *configv1alpha1.HelmChart, kubeconfig s
 			return nil, err
 		}
 	}
+	installClient.Replace = getReplaceValue(requestedChart.Options)
 	installClient.Labels = getLabelsValue(requestedChart.Options)
+	installClient.Description = getDescriptionValue(requestedChart.Options)
 
 	return installClient, nil
 }
@@ -1684,10 +1844,39 @@ func getHelmUpgradeClient(requestedChart *configv1alpha1.HelmChart, actionConfig
 			return nil, err
 		}
 	}
+	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
+	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
+	upgradeClient.ResetThenReuseValues = getResetThenReuseValues(requestedChart.Options)
+	upgradeClient.Force = getForceValue(requestedChart.Options)
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
-	upgradeClient.ResetValues = true
+	upgradeClient.Description = getDescriptionValue(requestedChart.Options)
+	upgradeClient.MaxHistory = getMaxHistoryValue(requestedChart.Options)
+	upgradeClient.CleanupOnFail = getCleanupOnFailValue(requestedChart.Options)
+	upgradeClient.SubNotes = getSubNotesValue(requestedChart.Options)
+	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
 
 	return upgradeClient, nil
+}
+
+func getHelmUninstallClient(requestedChart *configv1alpha1.HelmChart, actionConfig *action.Configuration) (*action.Uninstall, error) {
+	uninstallClient := action.NewUninstall(actionConfig)
+	uninstallClient.DryRun = false
+	if requestedChart != nil {
+		if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
+			var err error
+			uninstallClient.Timeout, err = time.ParseDuration(timeout.String())
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
+		uninstallClient.Wait = getWaitHelmValue(requestedChart.Options)
+		uninstallClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
+		uninstallClient.KeepHistory = getKeepHistoryValue(requestedChart.Options)
+		uninstallClient.DeletionPropagation = getDeletionPropagation(requestedChart.Options)
+	}
+	return uninstallClient, nil
 }
 
 func addExtraMetadata(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
@@ -1772,16 +1961,34 @@ func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string,
 	return namespace, nil
 }
 
+func getHelmChartValuesHash(ctx context.Context, c client.Client, requestedChart *configv1alpha1.HelmChart,
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) ([]byte, error) {
+
+	valuesFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummary, requestedChart, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	h := sha256.New()
+	config := render.AsCode(requestedChart.Values)
+	config += valuesFromHash
+	h.Write([]byte(config))
+	return h.Sum(nil), nil
+}
+
 func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1alpha1.HelmChart,
-	clusterSummary *configv1alpha1.ClusterSummary) error {
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 
-	valuesHash := []byte(requestedChart.Values)
+	helmChartValuesHash, err := getHelmChartValuesHash(ctx, c, requestedChart, clusterSummary, logger)
+	if err != nil {
+		return err
+	}
 
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1alpha1.ClusterSummary{}
-		err := c.Get(ctx,
+		err = c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 		if err != nil {
 			return err
@@ -1792,7 +1999,7 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 			if rs.ReleaseName == requestedChart.ReleaseName &&
 				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
-				rs.ValuesHash = valuesHash
+				rs.ValuesHash = helmChartValuesHash
 			}
 		}
 

@@ -36,6 +36,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -309,6 +311,311 @@ var _ = Describe("Hash methods", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
+	})
+
+	It(`getKustomizeReferenceResourceHash returns the hash considering all referenced 
+	ConfigMap/Secret in the ValueFrom section`, func() {
+		namespace := randomString()
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string]string{
+				randomString(): randomString(),
+				randomString(): randomString(),
+			},
+		}
+
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      randomString(),
+		},
+			Data: map[string][]byte{
+				randomString(): []byte(randomString()),
+				randomString(): []byte(randomString()),
+			},
+			Type: libsveltosv1alpha1.ClusterProfileSecretType,
+		}
+
+		var expectedHash string
+		expectedHash += controllers.GetStringDataSectionHash(configMap.Data)
+		expectedHash += controllers.GetByteDataSectionHash(secret.Data)
+
+		kustomizationRef := configv1alpha1.KustomizationRef{
+			ValuesFrom: []configv1alpha1.ValueFrom{
+				{
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Namespace: namespace,
+					Name:      configMap.Name,
+				},
+				{
+					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Namespace: namespace,
+					Name:      secret.Name,
+				},
+			},
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: namespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.Spec{
+					KustomizationRefs: []configv1alpha1.KustomizationRef{
+						kustomizationRef,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			configMap,
+			secret,
+			clusterSummary,
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		hash, err := controllers.GetKustomizeReferenceResourceHash(context.TODO(), c, clusterSummary,
+			&kustomizationRef, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(expectedHash).To(Equal(hash))
+	})
+
+	It("instantiateKustomizeSubstituteValues instantiates substitute values", func() {
+		namespace := randomString()
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: namespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+			},
+		}
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		region := "us-west1"
+		k8sVersion := "v1.29.0"
+		cidrBlock := "192.168.10.0/24"
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      clusterSummary.Spec.ClusterName,
+				Labels: map[string]string{
+					"region": region,
+				},
+			},
+			Spec: clusterv1.ClusterSpec{
+				Topology: &clusterv1.Topology{
+					Version: k8sVersion,
+				},
+				ClusterNetwork: &clusterv1.ClusterNetwork{
+					Pods: &clusterv1.NetworkRanges{
+						CIDRBlocks: []string{cidrBlock},
+					},
+				},
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cluster)
+		Expect(err).To(BeNil())
+
+		var uCluster unstructured.Unstructured
+		uCluster.SetUnstructuredContent(content)
+
+		mgmtResources := map[string]*unstructured.Unstructured{
+			"Cluster": &uCluster,
+		}
+
+		values := map[string]string{
+			`region`:  `{{ index .Cluster.metadata.labels "region" }}`,
+			`version`: `{{ .Cluster.spec.topology.version }}`,
+			`cidrs`: `{{ range $cidr := .Cluster.spec.clusterNetwork.pods.cidrBlocks }}
+            - cidr: {{ $cidr }}
+              encapsulation: VXLAN
+          {{ end }}`,
+		}
+
+		result, err := controllers.InstantiateKustomizeSubstituteValues(context.TODO(), clusterSummary,
+			mgmtResources, values, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		v, ok := result["region"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(region))
+
+		v, ok = result["version"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(k8sVersion))
+
+		v, ok = result["cidrs"]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(ContainSubstring(cidrBlock))
+	})
+
+	It("getKustomizeSubstituteValuesFrom collects substitute values from referenced ConfigMap/Secrets", func() {
+		namespace := randomString()
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string]string{
+				randomString(): randomString(),
+				randomString(): randomString(),
+			},
+		}
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				randomString(): []byte(randomString()),
+				randomString(): []byte(randomString()),
+			},
+			Type: libsveltosv1alpha1.ClusterProfileSecretType,
+		}
+
+		kustomizationRef := &configv1alpha1.KustomizationRef{
+			ValuesFrom: []configv1alpha1.ValueFrom{
+				{
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				},
+				{
+					Namespace: secret.Namespace,
+					Name:      secret.Name,
+					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+				},
+			},
+			Values: map[string]string{
+				randomString(): randomString(),
+			},
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: namespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.Spec{
+					KustomizationRefs: []configv1alpha1.KustomizationRef{
+						*kustomizationRef,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			configMap,
+			secret,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		// This will get alll substitute values considering only ValuesFrom
+		values, err := controllers.GetKustomizeSubstituteValuesFrom(context.TODO(), c, clusterSummary, kustomizationRef,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		for k := range configMap.Data {
+			v, ok := values[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(configMap.Data[k]))
+		}
+
+		for k := range secret.Data {
+			v, ok := values[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(string(secret.Data[k])))
+		}
+
+		// This will get alll substitute values considering both Values and ValuesFrom
+		values, err = controllers.GetKustomizeSubstituteValues(context.TODO(), c, clusterSummary, kustomizationRef,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		for k := range configMap.Data {
+			v, ok := values[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(configMap.Data[k]))
+		}
+
+		for k := range secret.Data {
+			v, ok := values[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(string(secret.Data[k])))
+		}
+
+		for k := range kustomizationRef.Values {
+			v, ok := values[k]
+			Expect(ok).To(BeTrue())
+			Expect(v).To(Equal(kustomizationRef.Values[k]))
+		}
+	})
+
+	It("instantiateResourceWithSubstituteValues instantiates a Kubernetes resorces with substitte values", func() {
+		deployment := `apiVersion: apps/v1
+		kind: Deployment
+		metadata:
+		  name: nginx-deployment
+		  namespace: {{ .ClusterNamespace }}
+		  labels:
+		    region: {{ default "west" .Region }}
+		spec:
+		  replicas: 2
+		  selector:
+			matchLabels:
+			  app: nginx-{{ .Version }}
+		  template:
+			metadata:
+			  labels:
+			  app: nginx-{{ .Version }}
+			spec:
+			  containers:
+			  - name: nginx
+				image: nginx:{{ .Version }}
+				ports:
+				- containerPort: 80`
+
+		clusterNamespace := randomString()
+		version := "v1.2.0"
+		substituteValues := map[string]string{
+			"ClusterNamespace": clusterNamespace,
+			"Version":          version,
+			"Region":           "",
+		}
+		data, err := controllers.InstantiateResourceWithSubstituteValues(randomString(), []byte(deployment), substituteValues,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		Expect(string(data)).To(ContainSubstring(fmt.Sprintf("namespace: %s", clusterNamespace)))
+		Expect(string(data)).To(ContainSubstring(fmt.Sprintf("app: nginx-%s", version)))
+		Expect(string(data)).To(ContainSubstring("region: west"))
 	})
 })
 

@@ -106,7 +106,8 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
 	logger logr.Logger) (*currentClusterObjects, error) {
 
-	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch %s/%s", clusterNamespace, clusterName))
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch cluster %s: %s/%s",
+		clusterType, clusterNamespace, clusterName))
 
 	genericCluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {

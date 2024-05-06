@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +28,7 @@ import (
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -1277,4 +1277,99 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 	}
 
 	return remoteRestConfig, logger, nil
+}
+
+func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	valuesFrom []configv1alpha1.ValueFrom, logger logr.Logger) (string, error) {
+
+	var config string
+	for i := range valuesFrom {
+		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+		if valuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+			configMap, err := getConfigMap(ctx, c,
+				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
+				return "", err
+			}
+			if configMap == nil {
+				continue
+			}
+			config += getDataSectionHash(configMap.Data)
+			config += getDataSectionHash(configMap.BinaryData)
+		} else if valuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+			secret, err := getSecret(ctx, c,
+				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
+				return "", err
+			}
+			if secret == nil {
+				continue
+			}
+			config += getDataSectionHash(secret.Data)
+			config += getDataSectionHash(secret.StringData)
+		}
+	}
+
+	return config, nil
+}
+
+// getValuesFrom function retrieves key-value pairs from referenced ConfigMaps or Secrets.
+//
+// - `valuesFrom`: A slice of `ValueFrom` objects specifying the ConfigMaps or Secrets to use.
+// - `overrideKeys`: Controls how existing keys are handled:
+//   - `true`: Existing keys in the output map will be overwritten with new values from references.
+//   - `false`: Values from references will be appended to existing keys in the output map using the `addToMap` function.
+//
+// It returns a map containing the collected key-value pairs and any encountered error.
+func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	valuesFrom []configv1alpha1.ValueFrom, overrideKeys bool, logger logr.Logger) (map[string]string, error) {
+
+	values := make(map[string]string)
+	for i := range valuesFrom {
+		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+		if valuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			if err != nil {
+				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, valuesFrom[i].Name)
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
+				return nil, errors.Wrapf(err, msg)
+			}
+			for key, value := range configMap.Data {
+				if overrideKeys {
+					values[key] = value
+				} else {
+					addToMap(values, key, value)
+				}
+			}
+		} else if valuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			if err != nil {
+				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, valuesFrom[i].Name)
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
+				return nil, errors.Wrapf(err, msg)
+			}
+			for key, value := range secret.Data {
+				if overrideKeys {
+					values[key] = string(value)
+				} else {
+					addToMap(values, key, string(value))
+				}
+			}
+		}
+	}
+
+	return values, nil
+}
+
+func addToMap(m map[string]string, key, value string) {
+	// Check if the key exists in the map
+	if existingValue, ok := m[key]; ok {
+		// Concatenate the new value to the existing one
+		m[key] = existingValue + "\n" + value
+	} else {
+		// Key doesn't exist, add it with the value
+		m[key] = value
+	}
 }

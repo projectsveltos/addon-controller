@@ -284,27 +284,19 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 	})
 
 	It("Create reprocesses", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
+		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
-		e := event.CreateEvent{
-			Object: gitRepository,
-		}
-
-		result := sourcePredicate.Create(e)
+		result := sourcePredicate.Create(event.TypedCreateEvent[*sourcev1.GitRepository]{Object: gitRepository})
 		Expect(result).To(BeTrue())
 	})
 	It("Delete does reprocess", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
+		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
-		e := event.DeleteEvent{
-			Object: gitRepository,
-		}
-
-		result := sourcePredicate.Delete(e)
+		result := sourcePredicate.Delete(event.TypedDeleteEvent[*sourcev1.GitRepository]{Object: gitRepository})
 		Expect(result).To(BeTrue())
 	})
 	It("Update reprocesses when artifact has changed", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
+		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
 		gitRepository.Status.Artifact = &sourcev1.Artifact{
 			Revision: randomString(),
@@ -319,16 +311,12 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 
 		Expect(addTypeInformationToObject(scheme, oldGitRepository)).To(Succeed())
 
-		e := event.UpdateEvent{
-			ObjectNew: gitRepository,
-			ObjectOld: oldGitRepository,
-		}
-
-		result := sourcePredicate.Update(e)
+		result := sourcePredicate.Update(event.TypedUpdateEvent[*sourcev1.GitRepository]{
+			ObjectNew: gitRepository, ObjectOld: oldGitRepository})
 		Expect(result).To(BeTrue())
 	})
 	It("Update does not reprocess when artifact has not changed", func() {
-		sourcePredicate := controllers.FluxSourcePredicates(logger)
+		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
 		gitRepository.Status.Artifact = &sourcev1.Artifact{
 			Revision: randomString(),
@@ -344,12 +332,8 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 
 		Expect(addTypeInformationToObject(scheme, oldGitRepository)).To(Succeed())
 
-		e := event.UpdateEvent{
-			ObjectNew: gitRepository,
-			ObjectOld: oldGitRepository,
-		}
-
-		result := sourcePredicate.Update(e)
+		result := sourcePredicate.Update(event.TypedUpdateEvent[*sourcev1.GitRepository]{
+			ObjectNew: gitRepository, ObjectOld: oldGitRepository})
 		Expect(result).To(BeFalse())
 	})
 })

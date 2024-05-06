@@ -18,20 +18,23 @@ package controllers
 
 import (
 	archivetar "archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -40,6 +43,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/api/krusty"
 	"sigs.k8s.io/kustomize/api/resmap"
+	kustomizetypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
@@ -281,7 +285,8 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			if configMap == nil {
 				continue
 			}
-			config += render.AsCode(configMap.BinaryData)
+			config += getDataSectionHash(configMap.Data)
+			config += getDataSectionHash(configMap.BinaryData)
 		} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
 			if err != nil {
@@ -291,7 +296,8 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 			if secret == nil {
 				continue
 			}
-			config += render.AsCode(secret.Data)
+			config += getDataSectionHash(secret.Data)
+			config += getDataSectionHash(secret.StringData)
 		} else {
 			source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
 			if err != nil {
@@ -306,6 +312,16 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 				config += s.GetArtifact().Revision
 			}
 		}
+
+		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
+			kustomizationRef, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to get hash from referenced ConfigMap/Secret in ValuesFrom %v", err))
+			return nil, err
+		}
+
+		config += valueFromHash
 	}
 
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
@@ -322,8 +338,80 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		config += getVersion()
 	}
 
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+		if h.FeatureID == configv1alpha1.FeatureHelm {
+			config += render.AsCode(h)
+		}
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+// instantiateKustomizeSubstituteValues gets all substitute values for a KustomizationRef and
+// instantiate those using resources in the management cluster.
+func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, values map[string]string, logger logr.Logger,
+) (map[string]string, error) {
+
+	stringifiedValues, err := stringifyMap(values)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to stringify values map: %v", err))
+		return nil, err
+	}
+
+	requestorName := clusterSummary.Namespace + clusterSummary.Name + "kustomize"
+
+	instantiatedValue, err :=
+		instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			requestorName, stringifiedValues, mgmtResources, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate values %v", err))
+		return nil, err
+	}
+
+	result, err := parseMapFromString(instantiatedValue)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse string back to map %v", err))
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// getKustomizeSubstituteValues returns all key-value pair looking at both Values and ValuesFrom
+func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+
+	values := make(map[string]string)
+	for k := range kustomizationRef.Values {
+		values[k] = kustomizationRef.Values[k]
+	}
+	// Get key-value pairs from ValuesFrom
+	valuesFrom, err := getKustomizeSubstituteValuesFrom(ctx, c, clusterSummary, kustomizationRef, logger)
+	if err != nil {
+		return nil, err
+	}
+	for k := range valuesFrom {
+		values[k] = valuesFrom[k]
+	}
+
+	return values, nil
+}
+
+// getKustomizeSubstituteValuesFrom return key-value pair from referenced ConfigMap/Secret
+func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+
+	return getValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
+}
+
+func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (string, error) {
+
+	return getValuesFromResourceHash(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, logger)
 }
 
 func getKustomizationRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
@@ -356,7 +444,12 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	fs := filesys.MakeFsOnDisk()
 
-	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+	buildOptions := &krusty.Options{
+		LoadRestrictions: kustomizetypes.LoadRestrictionsNone,
+		PluginConfig:     kustomizetypes.DisabledPluginConfig(),
+	}
+
+	kustomizer := krusty.MakeKustomizer(buildOptions)
 	var resMap resmap.ResMap
 	resMap, err = kustomizer.Run(fs, dirPath)
 	if err != nil {
@@ -451,9 +544,30 @@ func prepareFileSystemWithData(binaryData map[string][]byte,
 	return tmpDir, nil
 }
 
-func getKustomizedResources(deploymentType configv1alpha1.DeploymentType, resMap resmap.ResMap,
+func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	deploymentType configv1alpha1.DeploymentType, resMap resmap.ResMap,
 	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger,
 ) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, err error) {
+
+	var mgmtResources map[string]*unstructured.Unstructured
+	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Get key-value pairs from ValuesFrom
+	values, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Get substitute values. Those are collected from Data sections of referenced ConfigMap/Secret instances.
+	// Those values can be expressed as template. This method collects them and instantiate those using resources in
+	// the managemenet cluster
+	instantiateSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, values, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	resources := resMap.Resources()
 	for i := range resources {
@@ -463,8 +577,19 @@ func getKustomizedResources(deploymentType configv1alpha1.DeploymentType, resMap
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get resource YAML %v", err))
 			return nil, nil, err
 		}
+
+		// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
+		// substitute values first, and the resource in the management cluster later.
+		templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
+		instantiatedYAML, err := instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
+		if err != nil {
+			msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
+			logger.V(logs.LogInfo).Info(msg)
+			return nil, nil, errors.Wrap(err, msg)
+		}
+
 		var u *unstructured.Unstructured
-		u, err = utils.GetUnstructured(yaml)
+		u, err = utils.GetUnstructured(instantiatedYAML)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, err
@@ -501,7 +626,8 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	objectsToDeployLocally, objectsToDeployRemotely, err :=
-		getKustomizedResources(kustomizationRef.DeploymentType, resMap, kustomizationRef, logger)
+		getKustomizedResources(ctx, c, clusterSummary, kustomizationRef.DeploymentType, resMap,
+			kustomizationRef, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -511,7 +637,6 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Namespace: kustomizationRef.Namespace,
 		Name:      kustomizationRef.Name,
 	}
-
 	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
 		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
 	if err != nil {
@@ -690,4 +815,23 @@ func extractTarGz(src, dest string) error {
 	}
 
 	return nil
+}
+
+func instantiateResourceWithSubstituteValues(templateName string, resource []byte,
+	substituteValues map[string]string, logger logr.Logger) ([]byte, error) {
+
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(string(resource))
+	if err != nil {
+		return nil, err
+	}
+
+	var buffer bytes.Buffer
+
+	if err := tmpl.Execute(&buffer, substituteValues); err != nil {
+		return nil, errors.Wrapf(err, "error executing template %q", resource)
+	}
+	instantiatedValues := buffer.String()
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("Values %q", instantiatedValues))
+	return []byte(instantiatedValues), nil
 }

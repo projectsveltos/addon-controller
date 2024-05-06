@@ -149,7 +149,8 @@ var _ = Describe("HandlersHelm", func() {
 			ChartVersion:    "v2.5.3",
 			HelmChartAction: configv1alpha1.HelmChartActionInstall,
 		}
-		Expect(controllers.ShouldUpgrade(currentRelease, requestChart, clusterSummary)).To(BeTrue())
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
 	})
 
 	It("UpdateStatusForeferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
@@ -622,5 +623,136 @@ var _ = Describe("Hash methods", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
+	})
+
+	It(`getHelmReferenceResourceHash returns the hash considering all referenced 
+	ConfigMap/Secret in the ValueFrom section`, func() {
+		namespace := randomString()
+
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string]string{
+				randomString(): randomString(),
+				randomString(): randomString(),
+				randomString(): randomString(),
+				randomString(): randomString(),
+			},
+		}
+
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      randomString(),
+		},
+			Data: map[string][]byte{
+				randomString(): []byte(randomString()),
+				randomString(): []byte(randomString()),
+			},
+			Type: libsveltosv1alpha1.ClusterProfileSecretType,
+		}
+
+		var expectedHash string
+		expectedHash += controllers.GetStringDataSectionHash(configMap.Data)
+		expectedHash += controllers.GetByteDataSectionHash(secret.Data)
+
+		helmChart := configv1alpha1.HelmChart{
+			ValuesFrom: []configv1alpha1.ValueFrom{
+				{
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Namespace: namespace,
+					Name:      configMap.Name,
+				},
+				{
+					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Namespace: namespace,
+					Name:      secret.Name,
+				},
+			},
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: namespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1alpha1.Spec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						helmChart,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			configMap,
+			secret,
+			clusterSummary,
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		hash, err := controllers.GetHelmReferenceResourceHash(context.TODO(), c, clusterSummary,
+			&helmChart, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(expectedHash).To(Equal(hash))
+	})
+
+	It("getHelmChartValuesHash returns hash considering Values and ValuesFrom", func() {
+		namespace := randomString()
+
+		key := randomString()
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string]string{
+				key: randomString(),
+			},
+		}
+
+		requestedChart := configv1alpha1.HelmChart{
+			Values: randomString(),
+			ValuesFrom: []configv1alpha1.ValueFrom{
+				{
+					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
+			},
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterProfileSpec: configv1alpha1.Spec{
+					HelmCharts: []configv1alpha1.HelmChart{
+						requestedChart,
+					},
+				},
+			},
+		}
+
+		h := sha256.New()
+		expectedHash := render.AsCode(requestedChart.Values)
+		expectedHash += render.AsCode(configMap.Data[key])
+		h.Write([]byte(expectedHash))
+
+		initObjects := []client.Object{
+			configMap,
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		hash, err := controllers.GetHelmChartValuesHash(context.TODO(), c, &requestedChart,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(hash, h.Sum(nil))).To(BeTrue())
 	})
 })

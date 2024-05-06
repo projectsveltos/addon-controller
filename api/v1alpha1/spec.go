@@ -1,5 +1,5 @@
 /*
-Copyright 2023. projectsveltos.io. All rights reserved.
+Copyright 2023-24. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -119,6 +119,23 @@ const (
 	DeploymentTypeRemote = DeploymentType("Remote")
 )
 
+type ValueFrom struct {
+	// Namespace of the referenced resource.
+	// For ClusterProfile namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	// For Profile namespace must be left empty. The Profile namespace will be used.
+	Namespace string `json:"namespace"`
+
+	// Name of the referenced resource.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Kind of the resource. Supported kinds are:
+	// - ConfigMap/Secret
+	// +kubebuilder:validation:Enum=ConfigMap;Secret
+	Kind string `json:"kind"`
+}
+
 // HelmChartAction specifies action on an helm chart
 // +kubebuilder:validation:Enum:=Install;Uninstall
 type HelmChartAction string
@@ -138,11 +155,6 @@ type HelmOptions struct {
 	// +optional
 	SkipCRDs bool `json:"skipCRDs,omitempty"`
 
-	// Create the release namespace if not present. Defaults to true
-	// +kubebuilder:default:=true
-	// +optional
-	CreateNamespace bool `json:"createNamespace,omitempty"`
-
 	// if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
 	// are in a ready state before marking the release as successful. It will wait for as long as --timeout
 	// Default to false
@@ -161,7 +173,7 @@ type HelmOptions struct {
 	// +optional
 	Timeout *metav1.Duration `json:"timeout,omitempty"`
 
-	// prevent hooks from running during install
+	// prevent hooks from running during install/upgrade/uninstall
 	// Default to false
 	// +kubebuilder:default:=false
 	// +optional
@@ -173,7 +185,7 @@ type HelmOptions struct {
 	// +optional
 	DisableOpenAPIValidation bool `json:"disableOpenAPIValidation,omitempty"`
 
-	// if set, the installation process deletes the installation on failure.
+	// if set, the installation process deletes the installation/upgrades on failure.
 	// The --wait flag will be set automatically if --atomic is used
 	// Default to false
 	// +kubebuilder:default:=false
@@ -194,6 +206,95 @@ type HelmOptions struct {
 	// +kubebuilder:default=false
 	// +optional
 	EnableClientCache bool `json:"enableClientCache,omitempty"`
+
+	// Description is the description of an helm operation
+	// +optional
+	Description string `json:"description,omitempty"`
+
+	// HelmInstallOptions are options specific to helm install
+	// +optional
+	InstallOptions HelmInstallOptions `json:"installOptions,omitempty"`
+
+	// HelmUpgradeOptions are options specific to helm upgrade
+	// +optional
+	UpgradeOptions HelmUpgradeOptions `json:"upgradeOptions,omitempty"`
+
+	// HelmUninstallOptions are options specific to helm uninstall
+	// +optional
+	UninstallOptions HelmUninstallOptions `json:"uninstallOptions,omitempty"`
+}
+
+type HelmInstallOptions struct {
+	// Create the release namespace if not present. Defaults to true
+	// +kubebuilder:default:=true
+	// +optional
+	CreateNamespace bool `json:"createNamespace,omitempty"`
+
+	// Replaces if set indicates to replace an older release with this one
+	// +kubebuilder:default:=true
+	// +optional
+	Replace bool `json:"replace,omitempty"`
+}
+
+type HelmUpgradeOptions struct {
+	// Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+	// This should be used with caution.
+	// +kubebuilder:default:=false
+	// +optional
+	Force bool `json:"force,omitempty"`
+
+	// ResetValues will reset the values to the chart's built-ins rather than merging with existing.
+	// +kubebuilder:default:=false
+	// +optional
+	ResetValues bool `json:"resetValues,omitempty"`
+
+	// ReuseValues copies values from the current release to a new release if the
+	// new release does not have any values. If the request already has values,
+	// or if there are no values in the current release, this does nothing.
+	// This is skipped if the ResetValues flag is set, in which case the
+	// request values are not altered.
+	// +kubebuilder:default:=false
+	// +optional
+	ReuseValues bool `json:"reuseValues,omitempty"`
+
+	// ResetThenReuseValues will reset the values to the chart's built-ins then merge with user's last supplied values.
+	// +kubebuilder:default:=false
+	// +optional
+	ResetThenReuseValues bool `json:"resetThenReuseValues,omitempty"`
+
+	// Recreate will (if true) recreate pods after a rollback.
+	// +kubebuilder:default:=false
+	// +optional
+	Recreate bool `json:"recreate,omitempty"`
+
+	// MaxHistory limits the maximum number of revisions saved per release
+	// Default to 2
+	// +kubebuilder:default=2
+	// +optional
+	MaxHistory int `json:"maxHistory,omitempty"`
+
+	// CleanupOnFail will, if true, cause the upgrade to delete newly-created resources on a failed update.
+	// +kubebuilder:default:=false
+	// +optional
+	CleanupOnFail bool `json:"cleanupOnFail,omitempty"`
+
+	// SubNotes determines whether sub-notes are rendered in the chart.
+	// +kubebuilder:default:=false
+	// +optional
+	SubNotes bool `json:"subNotes,omitempty"`
+}
+
+type HelmUninstallOptions struct {
+	// When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+	// but it keeps the release information. This allows to see details about the uninstalled release
+	// using the helm history command.
+	// +optional
+	KeepHistory bool `json:"keepHistory,omitempty"`
+
+	// DeletionPropagation
+	// +kubebuilder:validation:Enum:=orphan;foreground;background
+	// +optional
+	DeletionPropagation string `json:"deletionPropagation,omitempty"`
 }
 
 type HelmChart struct {
@@ -221,15 +322,20 @@ type HelmChart struct {
 	// +kubebuilder:validation:MinLength=1
 	ReleaseNamespace string `json:"releaseNamespace"`
 
-	// Values holds the values for this Helm release.
-	// Go templating with the values from the referenced CAPI Cluster.
-	// Currently following can be referenced:
-	// - Cluster => CAPI Cluster for instance
-	// - KubeadmControlPlane => the CAPI Cluster controlPlaneRef
-	// - InfrastructureProvider => the CAPI cluster infrastructure provider
-	// - SecretRef => store any confindetial information in a Secret, set SecretRef then reference it
+	// Values field allows to define configuration for the Helm release.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment.
 	// +optional
 	Values string `json:"values,omitempty"`
+
+	// ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+	// it is possible to store configuration for the Helm release.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment.
+	// +optional
+	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
 
 	// HelmChartAction is the action that will be taken on the helm chart
 	// +kubebuilder:default:=Install
@@ -277,6 +383,41 @@ type KustomizationRef struct {
 	// +kubebuilder:default:=Remote
 	// +optional
 	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+
+	// Values is a map[string]string type that allows to define a set of key-value pairs.
+	// These key-value pairs can optionally leverage Go templates for further processing.
+	// With Sveltos, you can define key-value pairs where the values can be Go templates.
+	// These templates have access to management cluster information during deployment. This allows
+	// to do more than just replace placeholders. Variables can be used to dynamically
+	// construct values based on other resources or variables within the Kustomize output.
+	// For example, imagine you have a Region key with a template value like:
+	// '{{ index .Cluster.metadata.labels "region" }}'.
+	// This template retrieves the region label from the cluster instance metadata.
+	// Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+	// The output itself can also contain templates, like:
+	// region: '{{ default "west" .Region }}'.
+	// This way, the final output from Kustomize will have the region set dynamically based on
+	// the actual region retrieved earlier.
+	// +optional
+	Values map[string]string `json:"values,omitempty"`
+
+	// ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+	// it is possible to define key-value pairs. These key-value pairs can optionally leverage
+	// Go templates for further processing.
+	// With Sveltos, you can define key-value pairs where the values can be Go templates.
+	// These templates have access to management cluster information during deployment. This allows
+	// to do more than just replace placeholders. Variables can be used to dynamically
+	// construct values based on other resources or variables within the Kustomize output.
+	// For example, imagine you have a Region key with a template value like:
+	// '{{ index .Cluster.metadata.labels "region" }}'.
+	// This template retrieves the region label from the cluster instance metadata.
+	// Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+	// The output itself can also contain templates, like:
+	// region: '{{ default "west" .Region }}'.
+	// This way, the final output from Kustomize will have the region set dynamically based on
+	// the actual region retrieved earlier.
+	// +optional
+	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching

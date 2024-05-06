@@ -79,6 +79,19 @@ spec:
             - default-worker
     - jsonPatches:
       - op: add
+        path: /spec/template/spec/template/customImage
+        valueFrom:
+          template: |
+            kindest/node:{{ .builtin.machinePool.version | replace "+" "_" }}
+      selector:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: DockerMachinePoolTemplate
+        matchResources:
+          machinePoolClass:
+            names:
+            - default-worker
+    - jsonPatches:
+      - op: add
         path: /spec/template/spec/customImage
         valueFrom:
           template: |
@@ -118,6 +131,8 @@ spec:
                     apiVersion: pod-security.admission.config.k8s.io/v1{{ if semverCompare "< v1.25" .builtin.controlPlane.version }}beta1{{ end }}
                     kind: PodSecurityConfiguration
                     defaults:
+                      enforce: "{{ .podSecurityStandard.enforce }}"
+                      enforce-version: "latest"
                       audit: "{{ .podSecurityStandard.audit }}"
                       audit-version: "latest"
                       warn: "{{ .podSecurityStandard.warn }}"
@@ -201,6 +216,19 @@ spec:
             apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
             kind: DockerMachineTemplate
             name: quick-start-default-worker-machinetemplate
+    machinePools:
+    - class: default-worker
+      template:
+        bootstrap:
+          ref:
+            apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+            kind: KubeadmConfigTemplate
+            name: quick-start-default-worker-bootstraptemplate
+        infrastructure:
+          ref:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+            kind: DockerMachinePoolTemplate
+            name: quick-start-default-worker-machinepooltemplate
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: DockerClusterTemplate
@@ -227,9 +255,6 @@ spec:
             - 127.0.0.1
             - 0.0.0.0
             - host.docker.internal
-          controllerManager:
-            extraArgs:
-              enable-hostpath-provisioner: "true"
         initConfiguration:
           nodeRegistration: {}
         joinConfiguration:
@@ -258,6 +283,16 @@ spec:
       extraMounts:
       - containerPath: /var/run/docker.sock
         hostPath: /var/run/docker.sock
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: DockerMachinePoolTemplate
+metadata:
+  name: quick-start-default-worker-machinepooltemplate
+  namespace: default
+spec:
+  template:
+    spec:
+      template: {}
 ---
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: KubeadmConfigTemplate
@@ -304,9 +339,13 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.27.0
+    version: v1.29.1
     workers:
       machineDeployments:
       - class: default-worker
         name: md-0
+        replicas: 2
+      machinePools:
+      - class: default-worker
+        name: mp-0
         replicas: 2

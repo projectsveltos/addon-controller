@@ -35,6 +35,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -202,7 +203,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.resetFeatureStatus(clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
-		return reconcile.Result{}, r.updateMaps(ctx, clusterSummaryScope, logger)
+		r.updateMaps(clusterSummaryScope, logger)
+		return reconcile.Result{}, nil
 	}
 
 	// Handle non-deleted clusterSummary
@@ -311,10 +313,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{}, nil
 	}
 
-	if err := r.updateMaps(ctx, clusterSummaryScope, logger); err != nil {
-		logger.V(logs.LogInfo).Info("Failed to update maps")
-		return reconcile.Result{}, nil
-	}
+	r.updateMaps(clusterSummaryScope, logger)
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -363,6 +362,24 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
+		Watches(&libsveltosv1alpha1.SveltosCluster{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForSveltosCluster),
+			builder.WithPredicates(
+				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+			),
+		).
+		Watches(&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
+			builder.WithPredicates(
+				ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
+			),
+		).
+		Watches(&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
+			builder.WithPredicates(
+				SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+			),
+		).
 		Build(r)
 	if err != nil {
 		return errors.Wrap(err, "error creating controller")
@@ -370,33 +387,6 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
-
-	// When Sveltos Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &libsveltosv1alpha1.SveltosCluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When ConfigMap changes, according to ConfigMapPredicates,
-	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.ConfigMap{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
-	)
-	if err != nil {
-		return err
-	}
-
-	// When Secret changes, according to SecretPredicates,
-	// one or more ClusterSummaries need to be reconciled.
-	err = c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForReference),
-		SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
-	)
 
 	if r.ReportMode == CollectFromManagementCluster {
 		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, mgr.GetLogger())
@@ -410,38 +400,57 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 }
 
 func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) error {
-	// When CAPI Cluster changes (from paused to unpaused), one or more ClusterSummaries
-	// need to be reconciled.
-	return c.Watch(source.Kind(mgr.GetCache(), &clusterv1.Cluster{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		ClusterPredicates(mgr.GetLogger().WithValues("predicate", "clusterpredicate")),
+	sourceCluster := source.Kind[*clusterv1.Cluster](
+		mgr.GetCache(),
+		&clusterv1.Cluster{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
+		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
+
+	// When cluster-api cluster changes, according to ClusterPredicates,
+	// one or more ClusterProfiles need to be reconciled.
+	if err := c.Watch(sourceCluster); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.Controller) error {
 	// When a Flux source (GitRepository/OCIRepository/Bucket) changes, one or more ClusterSummaries
 	// need to be reconciled.
 
-	err := c.Watch(source.Kind(mgr.GetCache(), &sourcev1.GitRepository{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceGitRepository := source.Kind[*sourcev1.GitRepository](
+		mgr.GetCache(),
+		&sourcev1.GitRepository{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxGitRepository),
+		FluxGitRepositoryPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
-	if err != nil {
+	if err := c.Watch(sourceGitRepository); err != nil {
 		return err
 	}
 
-	err = c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.OCIRepository{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceOCIRepository := source.Kind[*sourcev1b2.OCIRepository](
+		mgr.GetCache(),
+		&sourcev1b2.OCIRepository{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxOCIRepository),
+		FluxOCIRepositoryPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
-	if err != nil {
+	if err := c.Watch(sourceOCIRepository); err != nil {
 		return err
 	}
 
-	return c.Watch(source.Kind(mgr.GetCache(), &sourcev1b2.Bucket{}),
-		handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxSource),
-		FluxSourcePredicates(mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")),
+	sourceBucket := source.Kind[*sourcev1b2.Bucket](
+		mgr.GetCache(),
+		&sourcev1b2.Bucket{},
+		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxBucket),
+		FluxBucketPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
+	if err := c.Watch(sourceBucket); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
@@ -647,26 +656,33 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 	}
 }
 
-func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
-	logger logr.Logger) error {
-
+func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime {
 		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
-		return nil
+		return
 	}
 	logger.V(logs.LogDebug).Info("update policy map")
 	currentReferences := r.getCurrentReferences(clusterSummaryScope)
 
-	r.PolicyMux.Lock()
-	defer r.PolicyMux.Unlock()
-
 	cs := clusterSummaryScope.ClusterSummary
-	clusterObject, err := clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
-	if err != nil {
-		return err
+	var kind, apiVersion string
+	if cs.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
+		kind = libsveltosv1alpha1.SveltosClusterKind
+		apiVersion = libsveltosv1alpha1.GroupVersion.String()
+	} else {
+		kind = clusterv1.ClusterKind
+		apiVersion = clusterv1.GroupVersion.String()
 	}
 
-	clusterInfo := getKeyFromObject(r.Scheme, clusterObject)
+	clusterInfo := &corev1.ObjectReference{
+		Namespace:  cs.Spec.ClusterNamespace,
+		Name:       cs.Spec.ClusterName,
+		Kind:       kind,
+		APIVersion: apiVersion,
+	}
+
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
 
 	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
 		Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummaryScope.Namespace(),
@@ -692,8 +708,6 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 			},
 		)
 	}
-
-	return nil
 }
 
 func (r *ClusterSummaryReconciler) getClusterMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
@@ -748,6 +762,14 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 }
 
 func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := r.getPolicyRefReferences(clusterSummaryScope)
+	currentReferences.Append(r.getKustomizationRefReferences(clusterSummaryScope))
+	currentReferences.Append(r.getHelmChartsReferences(clusterSummaryScope))
+	return currentReferences
+}
+
+// getPolicyRefReferences get all references considering the PolicyRef section
+func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
@@ -762,6 +784,12 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 			Name:       referencedName,
 		})
 	}
+	return currentReferences
+}
+
+// getKustomizationRefReferences get all references considering the KustomizationRef section
+func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Namespace
 		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name
@@ -776,6 +804,8 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 			apiVersion = sourcev1b2.GroupVersion.String()
 		case sourcev1b2.BucketKind:
 			apiVersion = sourcev1b2.GroupVersion.String()
+		default:
+			apiVersion = corev1.SchemeGroupVersion.String()
 		}
 		currentReferences.Insert(&corev1.ObjectReference{
 			APIVersion: apiVersion,
@@ -783,8 +813,68 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 			Namespace:  namespace,
 			Name:       referencedName,
 		})
+
+		kr := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
+		valuesFromReferences := getKustomizationValueFrom(clusterSummaryScope, kr)
+		currentReferences.Append(valuesFromReferences)
 	}
 	return currentReferences
+}
+
+// getKustomizationValueFrom gets referenced ConfigMap/Secret in a KustomizationRef.
+// KustomizationRef can reference both ConfigMap/Secret each containing key-value pairs that will be used, if defined,
+// to replace placeholder value in the output generated by Kustomize SDK.
+func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1alpha1.KustomizationRef) *libsveltosset.Set {
+	currentValuesFromReferences := &libsveltosset.Set{}
+
+	for i := range kr.ValuesFrom {
+		referencedNamespace := kr.ValuesFrom[i].Namespace
+		referencedName := kr.ValuesFrom[i].Name
+
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		currentValuesFromReferences.Insert(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       kr.ValuesFrom[i].Kind,
+			Namespace:  namespace,
+			Name:       referencedName,
+		})
+	}
+
+	return currentValuesFromReferences
+}
+
+// getHelmChartsReferences get all references considering the HelmChart section
+func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+	currentReferences := &libsveltosset.Set{}
+	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		hc := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		valuesFromReferences := getHelmChartValueFrom(clusterSummaryScope, hc)
+		currentReferences.Append(valuesFromReferences)
+	}
+	return currentReferences
+}
+
+// getHelmChartValueFrom gets referenced ConfigMap/Secret in a HelmChart.
+// HelmChart can reference both ConfigMap/Secret each containing configuration for the helm release.
+func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1alpha1.HelmChart) *libsveltosset.Set {
+	currentValuesFromReferences := &libsveltosset.Set{}
+
+	for i := range hc.ValuesFrom {
+		referencedNamespace := hc.ValuesFrom[i].Namespace
+		referencedName := hc.ValuesFrom[i].Name
+
+		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		currentValuesFromReferences.Insert(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       hc.ValuesFrom[i].Kind,
+			Namespace:  namespace,
+			Name:       referencedName,
+		})
+	}
+
+	return currentValuesFromReferences
 }
 
 func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {

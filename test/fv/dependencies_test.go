@@ -77,10 +77,10 @@ var _ = Describe("Dependencies", func() {
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/external-dns",
-				ChartVersion:     "6.30.1",
-				ReleaseName:      "external-dns",
-				ReleaseNamespace: "external-dns",
+				ChartName:        "bitnami/flink",
+				ChartVersion:     "1.1.1",
+				ReleaseName:      "flink",
+				ReleaseNamespace: "flink",
 				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
 			},
 		}

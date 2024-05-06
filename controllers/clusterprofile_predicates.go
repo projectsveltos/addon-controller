@@ -33,10 +33,10 @@ type ClusterPredicate struct {
 	Logger logr.Logger
 }
 
-func (c ClusterPredicate) Create(obj event.TypedCreateEvent[*clusterv1.Cluster]) bool {
+func (p ClusterPredicate) Create(obj event.TypedCreateEvent[*clusterv1.Cluster]) bool {
 	cluster := obj.Object
 
-	log := c.Logger.WithValues("predicate", "createEvent",
+	log := p.Logger.WithValues("predicate", "createEvent",
 		"namespace", cluster.Namespace,
 		"cluster", cluster.Name,
 	)
@@ -54,11 +54,11 @@ func (c ClusterPredicate) Create(obj event.TypedCreateEvent[*clusterv1.Cluster])
 	return false
 }
 
-func (c ClusterPredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Cluster]) bool {
+func (p ClusterPredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Cluster]) bool {
 	newCluster := obj.ObjectNew
 	oldCluster := obj.ObjectOld
 
-	log := c.Logger.WithValues("predicate", "updateEvent",
+	log := p.Logger.WithValues("predicate", "updateEvent",
 		"namespace", newCluster.Namespace,
 		"cluster", newCluster.Name,
 	)
@@ -113,8 +113,8 @@ func (c ClusterPredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Cluster])
 	return false
 }
 
-func (c ClusterPredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Cluster]) bool {
-	log := c.Logger.WithValues("predicate", "deleteEvent",
+func (p ClusterPredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Cluster]) bool {
+	log := p.Logger.WithValues("predicate", "deleteEvent",
 		"namespace", obj.Object.GetNamespace(),
 		"cluster", obj.Object.GetName(),
 	)
@@ -231,9 +231,9 @@ type MachinePredicate struct {
 	Logger logr.Logger
 }
 
-func (c MachinePredicate) Create(obj event.TypedCreateEvent[*clusterv1.Machine]) bool {
+func (p MachinePredicate) Create(obj event.TypedCreateEvent[*clusterv1.Machine]) bool {
 	machine := obj.Object
-	log := c.Logger.WithValues("predicate", "createEvent",
+	log := p.Logger.WithValues("predicate", "createEvent",
 		"namespace", machine.Namespace,
 		"machine", machine.Name,
 	)
@@ -248,10 +248,10 @@ func (c MachinePredicate) Create(obj event.TypedCreateEvent[*clusterv1.Machine])
 	return false
 }
 
-func (c MachinePredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Machine]) bool {
+func (p MachinePredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Machine]) bool {
 	newMachine := obj.ObjectNew
 	oldMachine := obj.ObjectOld
-	log := c.Logger.WithValues("predicate", "updateEvent",
+	log := p.Logger.WithValues("predicate", "updateEvent",
 		"namespace", newMachine.Namespace,
 		"machine", newMachine.Name,
 	)
@@ -278,8 +278,8 @@ func (c MachinePredicate) Update(obj event.TypedUpdateEvent[*clusterv1.Machine])
 	return false
 }
 
-func (c MachinePredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Machine]) bool {
-	log := c.Logger.WithValues("predicate", "deleteEvent",
+func (p MachinePredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Machine]) bool {
+	log := p.Logger.WithValues("predicate", "deleteEvent",
 		"namespace", obj.Object.GetNamespace(),
 		"machine", obj.Object.GetName(),
 	)
@@ -288,8 +288,8 @@ func (c MachinePredicate) Delete(obj event.TypedDeleteEvent[*clusterv1.Machine])
 	return false
 }
 
-func (c MachinePredicate) Generic(obj event.TypedGenericEvent[*clusterv1.Machine]) bool {
-	log := c.Logger.WithValues("predicate", "genericEvent",
+func (p MachinePredicate) Generic(obj event.TypedGenericEvent[*clusterv1.Machine]) bool {
+	log := p.Logger.WithValues("predicate", "genericEvent",
 		"namespace", obj.Object.GetNamespace(),
 		"machine", obj.Object.GetName(),
 	)

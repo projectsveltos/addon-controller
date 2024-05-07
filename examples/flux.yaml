@@ -1,0 +1,14 @@
+apiVersion: config.projectsveltos.io/v1alpha1
+kind: ClusterProfile
+metadata:
+  name: flux
+spec:
+  clusterSelector: env=fv
+  helmCharts:
+  - chartName: flux2/flux2
+    chartVersion: 2.12.4
+    helmChartAction: Install
+    releaseName: flux2
+    releaseNamespace: flux2
+    repositoryName: flux2
+    repositoryURL: https://fluxcd-community.github.io/helm-charts

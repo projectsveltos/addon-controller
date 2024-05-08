@@ -434,8 +434,18 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	defer os.RemoveAll(tmpDir)
 
+	// Path can be expressed as a template and instantiate using Cluster fields.
+	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.GetName(), kustomizationRef.Path, nil, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("using path %s", instantiatedPath))
+
 	// check build path exists
-	dirPath := filepath.Join(tmpDir, kustomizationRef.Path)
+	dirPath := filepath.Join(tmpDir, instantiatedPath)
 	_, err = os.Stat(dirPath)
 	if err != nil {
 		err = fmt.Errorf("kustomization path not found: %w", err)

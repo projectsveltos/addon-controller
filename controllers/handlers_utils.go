@@ -145,8 +145,18 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 
 	defer os.RemoveAll(tmpDir)
 
+	// Path can be expressed as a template and instantiate using Cluster fields.
+	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.GetName(), path, nil, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("using path %s", instantiatedPath))
+
 	// check build path exists
-	dirPath := filepath.Join(tmpDir, path)
+	dirPath := filepath.Join(tmpDir, instantiatedPath)
 	_, err = os.Stat(dirPath)
 	if err != nil {
 		logger.Error(err, "source path not found")

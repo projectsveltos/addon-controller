@@ -259,8 +259,7 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.Config,
 	driftDetectionManagerYAML string, lbls map[string]string, logger logr.Logger) error {
 
-	const separator = "---"
-	elements := strings.Split(driftDetectionManagerYAML, separator)
+	elements := customSplit(driftDetectionManagerYAML)
 	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
@@ -502,8 +501,7 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 
 	restConfig := getManagementClusterConfig()
 
-	const separator = "---"
-	elements := strings.Split(driftDetectionManagerYAML, separator)
+	elements := customSplit(driftDetectionManagerYAML)
 	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {

@@ -832,58 +832,60 @@ subjects:
 	})
 
 	It("collectContent collect contents with no error even when there are section with multiple resources", func() {
-		content := `    apiVersion: v1
-    kind: Service
+		service := `apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app
+  namespace: staging
+  labels:
+    environment: staging
+spec:
+  selector:
+    app: sample-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080`
+
+		deployment := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: staging
+  labels:
+    environment: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      environment: staging
+  template:
     metadata:
-      name: sample-app
-      namespace: staging
       labels:
         environment: staging
     spec:
-      selector:
-        app: sample-app
-      ports:
-      - protocol: TCP
-        port: 80
-        targetPort: 8080
-    ---
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: sample-app
-      namespace: staging
-      labels:
-        environment: staging
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          environment: staging
-      template:
-        metadata:
-          labels:
-            environment: staging
-        spec:
-          containers:
-          - name: sample-app
-            image: nginx:latest
-            imagePullPolicy: IfNotPresent
-            ports:
-            - containerPort: 8080
-    ---
-    apiVersion: v1
-    kind: Secret
-    metadata:
-      name: application-settings
-      namespace: staging
-    stringData:
-      app_mode: staging
-      certificates: /etc/ssl/staging
-      db_user: staging-user
-      db_password: staging-password
-`
-		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
+      containers:
+      - name: sample-app
+        image: nginx:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080`
+
+		//nolint: gosec // this is a kubernetes secret in a test
+		secret := `apiVersion: v1
+kind: Secret
+metadata:
+  name: application-settings
+  namespace: staging
+stringData:
+  app_mode: staging
+  certificates: /etc/ssl/staging
+  db_user: staging-user
+  db_password: staging-password`
+
+		policies := []string{service, deployment, secret}
+		configMap := createConfigMapWithPolicy(randomString(), randomString(), policies...)
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, configMap.Data, false,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))

@@ -464,6 +464,19 @@ func removeCommentsAndEmptyLines(text string) string {
 	return result
 }
 
+func customSplit(text string) []string {
+	var result []string
+	start := 0
+	for i := range text {
+		if i > 0 && text[i-1] != ' ' && strings.HasPrefix(text[i:], separator) { // Check for "---" not preceded by space
+			result = append(result, text[start:i])
+			start = i + 3
+		}
+	}
+	result = append(result, text[start:])
+	return result
+}
+
 // collectContent collect policies contained in a ConfigMap/Secret.
 // ConfigMap/Secret Data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
@@ -476,7 +489,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	policies := make([]*unstructured.Unstructured, 0)
 
 	for k := range data {
-		elements := strings.Split(data[k], separator)
+		elements := customSplit(data[k])
 		for i := range elements {
 			section := removeCommentsAndEmptyLines(elements[i])
 			if section == "" {
@@ -516,7 +529,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 
 func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	policies := make([]*unstructured.Unstructured, 0)
-	elements := strings.Split(string(section), separator)
+	elements := customSplit(string(section))
 
 	for i := range elements {
 		section := removeCommentsAndEmptyLines(elements[i])

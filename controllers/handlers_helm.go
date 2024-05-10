@@ -1571,7 +1571,7 @@ func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	resources := make([]*unstructured.Unstructured, 0)
 
-	elements := strings.Split(manifest, separator)
+	elements := customSplit(manifest)
 	for i := range elements {
 		section := removeCommentsAndEmptyLines(elements[i])
 		if section == "" {

@@ -105,6 +105,14 @@ spec:
               clusterSelector:
                 description: ClusterSelector identifies clusters to associate to.
                 type: string
+              continueOnConflict:
+                default: false
+                description: |-
+                  By default (when ContinueOnConflict is unset or set to false), Sveltos stops deployment after
+                  encountering the first conflict (e.g., another ClusterProfile already deployed the resource).
+                  If set to true, Sveltos will attempt to deploy remaining resources in the ClusterProfile even
+                  if conflicts are detected for previous resources.
+                type: boolean
               dependsOn:
                 description: |-
                   DependsOn specifies a list of other ClusterProfiles that this instance depends on.
@@ -663,6 +671,21 @@ spec:
                   - resource
                   type: object
                 type: array
+              tier:
+                default: 100
+                description: |-
+                  Tier controls the order of deployment for ClusterProfile or Profile resources targeting
+                  the same cluster resources.
+                  Imagine two configurations (ClusterProfiles or Profiles) trying to deploy the same resource (a Kubernetes
+                  resource or an helm chart). By default, the first one to reach the cluster "wins" and deploys it.
+                  Tier allows you to override this. When conflicts arise, the ClusterProfile or Profile with the **lowest**
+                  Tier value takes priority and deploys the resource.
+                  Higher Tier values represent lower priority. The default Tier value is 100.
+                  Using Tiers provides finer control over resource deployment within your cluster, particularly useful
+                  when multiple configurations manage the same resources.
+                format: int32
+                minimum: 1
+                type: integer
               validateHealths:
                 description: |-
                   ValidateHealths is a slice of Lua functions to run against

@@ -287,11 +287,15 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
 ) (reports []configv1alpha1.ResourceReport, err error) {
 
-	profile, err := configv1alpha1.GetProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
+	profile, profileTier, err := configv1alpha1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+		profile.SetName(profileNameToOwnerReferenceName(profile))
+	}
 
+	conflictErrorMsg := ""
 	reports = make([]configv1alpha1.ResourceReport, 0)
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
@@ -304,7 +308,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
-		resource, policyHash := getResource(policy, referencedObject, featureID, logger)
+		resource, policyHash := getResource(policy, referencedObject, profileTier, featureID, logger)
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())
@@ -320,18 +324,24 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, err
 		}
 
-		var exist bool
-		var currentHash string
-		exist, currentHash, err = deployer.ValidateObjectForUpdate(ctx, dr, policy,
-			referencedObject.Kind, referencedObject.Namespace, referencedObject.Name)
+		var resourceInfo *deployer.ResourceInfo
+		var requeue bool
+		resourceInfo, requeue, err = canDeployResource(ctx, dr, policy, referencedObject, profile, profileTier, logger)
 		if err != nil {
 			var conflictErr *deployer.ConflictError
 			ok := errors.As(err, &conflictErr)
-			// In DryRun mode do not stop here, but report the conflict.
-			if ok && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+			if ok {
 				conflictResourceReport := generateConflictResourceReport(ctx, dr, resource)
-				reports = append(reports, *conflictResourceReport)
-				continue
+				if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+					reports = append(reports, *conflictResourceReport)
+					continue
+				} else {
+					conflictErrorMsg += conflictResourceReport.Message
+					if clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict {
+						continue
+					}
+					return reports, deployer.NewConflictError(conflictErrorMsg)
+				}
 			}
 			return reports, err
 		}
@@ -342,7 +352,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		addExtraAnnotations(policy, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
 		if deployingToMgmtCluster {
-			// When deploying resources in the management cluster, just setting ClusterProfile as OwnerReference is
+			// When deploying resources in the management cluster, just setting (Cluster)Profile as OwnerReference is
 			// not enough. We also need to track which ClusterSummary is creating the resource. Otherwise while
 			// trying to clean stale resources those objects will be incorrectly removed.
 			// An extra annotation is added here to indicate the clustersummary, so the managed cluster, this
@@ -351,27 +361,132 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			addAnnotation(policy, clusterSummaryAnnotation, value)
 		}
 
+		if requeue {
+			err = requeueAllOldOwners(ctx, resourceInfo.OwnerReferences, featureID, clusterSummary, logger)
+			if err != nil {
+				return reports, err
+			}
+		}
+
 		err = updateResource(ctx, dr, clusterSummary, policy, logger)
 		if err != nil {
 			return reports, err
 		}
 
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
+		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, resource))
+	}
 
-		if !exist {
-			reports = append(reports,
-				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.CreateResourceAction)})
-		} else if policyHash != currentHash {
-			reports = append(reports,
-				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.UpdateResourceAction)})
-		} else {
-			reports = append(reports,
-				configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.NoResourceAction),
-					Message: "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."})
-		}
+	if conflictErrorMsg != "" {
+		return reports, deployer.NewConflictError(conflictErrorMsg)
 	}
 
 	return reports, nil
+}
+
+// requeueAllOldOwners gets the list of all ClusterProfile/Profile instances currently owning the resource in the
+// managed cluster (profiles). For each one, it finds the corresponding ClusterSummary and via requeueOldOwner reset
+// the Status so a new reconciliation happens.
+func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectReference,
+	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+
+	c := getManagementClusterClient()
+	// Since release v0.30.0 only one profile instance can deploy a resource in a managed
+	// cluster. Before that though multiple instances could have deployed same resource
+	// provided all those instances were referencing same ConfigMap/Secret.
+	// Here we walk over ownerReferences just for backward compatibility
+	for i := range profileOwners {
+		var err error
+		var profileKind string
+		var profileName types.NamespacedName
+		switch profileOwners[i].Kind {
+		case configv1alpha1.ClusterProfileKind:
+			profileKind = configv1alpha1.ClusterProfileKind
+			profileName = types.NamespacedName{Name: profileOwners[i].Name}
+		case configv1alpha1.ProfileKind:
+			profileKind = configv1alpha1.ProfileKind
+			profileName = *getProfileNameFromOwnerReferenceName(profileOwners[i].Name)
+		default:
+			continue
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// Get ClusterSummary that deployed the resource.
+		var ownerClusterSummary *configv1alpha1.ClusterSummary
+		ownerClusterSummary, err = getClusterSummary(ctx, c, profileKind, profileName.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return err
+		}
+
+		err = requeueOldOwner(ctx, featureID, ownerClusterSummary, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// canDeployResource verifies whether resource can be deployed. Following checks are performed:
+//
+// - if resource is currently already deployed in the managed cluster, if owned by this (Cluster)Profile/referenced
+// resource => it can be updated
+// - if resource is currently already deployed in the managed cluster and owned by same (Cluster)Profile but different
+// referenced resource => it cannot be updated
+// - if resource is currently already deployed in the managed cluster but owned by different (Cluster)Profile
+// => it can be updated only if current (Cluster)Profile tier is lower than profile currently deploying the resource
+//
+// If resource cannot be deployed, return a ConflictError.
+// If any other error occurs while doing those verification, the error is returned
+func canDeployResource(ctx context.Context, dr dynamic.ResourceInterface, policy *unstructured.Unstructured,
+	referencedObject *corev1.ObjectReference, profile client.Object, profileTier int32, logger logr.Logger,
+) (resourceInfo *deployer.ResourceInfo, requeueOldOwner bool, err error) {
+
+	l := logger.WithValues("resource",
+		fmt.Sprintf("%s:%s/%s", referencedObject.Kind, referencedObject.Namespace, referencedObject.Name))
+	resourceInfo, err = deployer.ValidateObjectForUpdate(ctx, dr, policy,
+		referencedObject.Kind, referencedObject.Namespace, referencedObject.Name, profile)
+	if err != nil {
+		var conflictErr *deployer.ConflictError
+		ok := errors.As(err, &conflictErr)
+		if ok {
+			// There is a conflict.
+			if hasHigherOwnershipPriority(getTier(resourceInfo.OwnerTier), profileTier) {
+				l.V(logs.LogDebug).Info("conflict detected but resource ownership can change")
+				// Because of tier, ownership must change. Which also means current ClusterProfile/Profile
+				// owning the resource must be requeued for reconciliation
+				return resourceInfo, true, nil
+			}
+			l.V(logs.LogDebug).Info("conflict detected")
+			// Conflict cannot be resolved in favor of the clustersummary being reconciled. So report the conflict
+			// error
+			return resourceInfo, false, conflictErr
+		}
+		return nil, false, err
+	}
+
+	// There was no conflict. Resource can be deployed.
+	return resourceInfo, false, nil
+}
+
+func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo, resource *configv1alpha1.Resource,
+) *configv1alpha1.ResourceReport {
+
+	if !resourceInfo.Exist {
+		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.CreateResourceAction)}
+	} else if policyHash != resourceInfo.Hash {
+		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.UpdateResourceAction)}
+	} else {
+		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.NoResourceAction),
+			Message: "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."}
+	}
 }
 
 // addExtraLabels adds ExtraLabels to policy.
@@ -421,7 +536,7 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 }
 
 // getResource returns sveltos Resource and the resource hash hash
-func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference, tier int32,
 	featureID configv1alpha1.FeatureID, logger logr.Logger) (resource *configv1alpha1.Resource, policyHash string) {
 
 	resource = &configv1alpha1.Resource{
@@ -450,6 +565,7 @@ func getResource(policy *unstructured.Unstructured, referencedObject *corev1.Obj
 	addLabel(policy, deployer.ReferenceNamespaceLabel, referencedObject.Namespace)
 	addLabel(policy, reasonLabel, string(featureID))
 	addAnnotation(policy, deployer.PolicyHash, policyHash)
+	addAnnotation(policy, deployer.OwnerTier, fmt.Sprintf("%d", tier))
 
 	return resource, policyHash
 }
@@ -788,9 +904,12 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
-	profile, err := configv1alpha1.GetProfileOwner(ctx, getManagementClusterClient(), clusterSummary)
+	profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
+	}
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	undeployed := make([]configv1alpha1.ResourceReport, 0)

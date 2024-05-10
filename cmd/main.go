@@ -79,6 +79,7 @@ var (
 	restConfigBurst      int
 	webhookPort          int
 	syncPeriod           time.Duration
+	conflictRetryTime    time.Duration
 	version              string
 	healthAddr           string
 	profilerAddress      string
@@ -227,6 +228,11 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&syncPeriod, "sync-period", defaultSyncPeriod*time.Minute,
 		fmt.Sprintf("The minimum interval at which watched resources are reconciled (e.g. 15m). Default: %d minutes",
 			defaultSyncPeriod))
+
+	const defaultConflictRetryTime = 30
+	fs.DurationVar(&conflictRetryTime, "conflict-retry-time", defaultConflictRetryTime*time.Second,
+		fmt.Sprintf("The minimum interval at which watched ClusterProfile with conflicts are retried. Defaul: %d seconds",
+			defaultConflictRetryTime))
 }
 
 func setupIndexes(ctx context.Context, mgr ctrl.Manager) {
@@ -420,6 +426,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
+		ConflictRetryTime:    conflictRetryTime,
 		Logger:               ctrl.Log.WithName("clustersummaryreconciler"),
 	}
 }

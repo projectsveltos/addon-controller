@@ -71,7 +71,7 @@ var _ = Describe("Profile", func() {
 
 		ns := randomString()
 		jobName := randomString()
-		Byf("Create a configMap with a job")
+		Byf("Create a configMap with a job %s/%s", ns, jobName)
 		configMap := createConfigMapWithPolicy(defaultNamespace, randomString(),
 			fmt.Sprintf(jobTemplate, ns, jobName))
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
@@ -106,7 +106,7 @@ var _ = Describe("Profile", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying proper Job is present in the workload cluster")
+		Byf("Verifying proper Job %s/%s is present in the workload cluster", ns, jobName)
 		Eventually(func() bool {
 			currentJob := &batchv1.Job{}
 			err = workloadClient.Get(context.TODO(),

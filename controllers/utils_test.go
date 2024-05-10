@@ -204,7 +204,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, err := configv1alpha1.GetProfileOwner(context.TODO(), c, clusterSummary)
+		owner, _, err := configv1alpha1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).ToNot(BeNil())
 		Expect(owner.GetName()).To(Equal(clusterProfile.Name))
@@ -264,7 +264,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, err := configv1alpha1.GetProfileOwner(context.TODO(), c, clusterSummary)
+		owner, _, err := configv1alpha1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).To(BeNil())
 	})

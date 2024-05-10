@@ -514,6 +514,28 @@ type Spec struct {
 	// +optional
 	SyncMode SyncMode `json:"syncMode,omitempty"`
 
+	// Tier controls the order of deployment for ClusterProfile or Profile resources targeting
+	// the same cluster resources.
+	// Imagine two configurations (ClusterProfiles or Profiles) trying to deploy the same resource (a Kubernetes
+	// resource or an helm chart). By default, the first one to reach the cluster "wins" and deploys it.
+	// Tier allows you to override this. When conflicts arise, the ClusterProfile or Profile with the **lowest**
+	// Tier value takes priority and deploys the resource.
+	// Higher Tier values represent lower priority. The default Tier value is 100.
+	// Using Tiers provides finer control over resource deployment within your cluster, particularly useful
+	// when multiple configurations manage the same resources.
+	// +kubebuilder:default:=100
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Tier int32 `json:"tier,omitempty"`
+
+	// By default (when ContinueOnConflict is unset or set to false), Sveltos stops deployment after
+	// encountering the first conflict (e.g., another ClusterProfile already deployed the resource).
+	// If set to true, Sveltos will attempt to deploy remaining resources in the ClusterProfile even
+	// if conflicts are detected for previous resources.
+	// +kubebuilder:default:=false
+	// +optional
+	ContinueOnConflict bool `json:"continueOnConflict,omitempty"`
+
 	// The maximum number of clusters that can be updated concurrently.
 	// Value can be an absolute number (ex: 5) or a percentage of desired cluster (ex: 10%).
 	// Defaults to 100%.

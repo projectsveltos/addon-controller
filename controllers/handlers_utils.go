@@ -333,7 +333,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 				reports = append(reports, *conflictResourceReport)
 				continue
 			}
-			return nil, err
+			return reports, err
 		}
 
 		deployer.AddOwnerReference(policy, profile)
@@ -353,7 +353,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 
 		err = updateResource(ctx, dr, clusterSummary, policy, logger)
 		if err != nil {
-			return nil, err
+			return reports, err
 		}
 
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
@@ -769,10 +769,13 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 					clusterSummary, mgmtResources, logger)
 		}
 
-		if err != nil {
-			return nil, err
+		if tmpResourceReports != nil {
+			reports = append(reports, tmpResourceReports...)
 		}
-		reports = append(reports, tmpResourceReports...)
+
+		if err != nil {
+			return reports, err
+		}
 	}
 
 	return reports, nil

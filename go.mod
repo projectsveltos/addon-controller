@@ -12,11 +12,11 @@ require (
 	github.com/fluxcd/source-controller/api v1.3.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.1
-	github.com/onsi/ginkgo/v2 v2.17.2
+	github.com/onsi/ginkgo/v2 v2.17.3
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.29.1-0.20240506121921-5f0f0328e94b
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.15.0

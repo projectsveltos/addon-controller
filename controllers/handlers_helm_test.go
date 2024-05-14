@@ -167,7 +167,7 @@ var _ = Describe("HandlersHelm", func() {
 		kyvernoSummary := configv1alpha1.HelmChartSummary{
 			ReleaseName:      "kyverno",
 			ReleaseNamespace: "kyverno",
-			Status:           configv1alpha1.HelChartStatusManaging,
+			Status:           configv1alpha1.HelmChartStatusManaging,
 		}
 
 		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
@@ -192,7 +192,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
+		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
 
@@ -202,7 +203,7 @@ var _ = Describe("HandlersHelm", func() {
 			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(2))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelmChartStatusManaging))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(calicoChart.ReleaseName))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(calicoChart.ReleaseNamespace))
 
@@ -225,7 +226,7 @@ var _ = Describe("HandlersHelm", func() {
 		// List an helm chart non referenced anymore as managed
 		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
 			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
-				{ReleaseName: randomString(), ReleaseNamespace: randomString(), Status: configv1alpha1.HelChartStatusManaging},
+				{ReleaseName: randomString(), ReleaseNamespace: randomString(), Status: configv1alpha1.HelmChartStatusManaging},
 			},
 		}
 
@@ -235,7 +236,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary)
+		conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
 
@@ -267,7 +269,7 @@ var _ = Describe("HandlersHelm", func() {
 		kyvernoSummary := configv1alpha1.HelmChartSummary{
 			ReleaseName:      "kyverno",
 			ReleaseNamespace: "kyverno",
-			Status:           configv1alpha1.HelChartStatusManaging,
+			Status:           configv1alpha1.HelmChartStatusManaging,
 		}
 
 		clusterSummary.Spec.ClusterProfileSpec = configv1alpha1.Spec{
@@ -280,7 +282,7 @@ var _ = Describe("HandlersHelm", func() {
 				{
 					ReleaseName:      contourChart.ReleaseName,
 					ReleaseNamespace: contourChart.ReleaseNamespace,
-					Status:           configv1alpha1.HelChartStatusManaging,
+					Status:           configv1alpha1.HelmChartStatusManaging,
 				},
 			},
 		}
@@ -305,7 +307,7 @@ var _ = Describe("HandlersHelm", func() {
 			currentClusterSummary)).To(Succeed())
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
 		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(1))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelChartStatusManaging))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1alpha1.HelmChartStatusManaging))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(contourChart.ReleaseName))
 		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(contourChart.ReleaseNamespace))
 	})
@@ -593,6 +595,7 @@ var _ = Describe("Hash methods", func() {
 						kyvernoChart,
 						nginxChart,
 					},
+					Tier: 100,
 				},
 			},
 		}
@@ -613,6 +616,8 @@ var _ = Describe("Hash methods", func() {
 
 		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
+		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
 		config += render.AsCode(kyvernoChart)
 		config += render.AsCode(nginxChart)
 		h := sha256.New()

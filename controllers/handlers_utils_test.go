@@ -304,6 +304,7 @@ var _ = Describe("HandlersUtils", func() {
 			controllers.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
 			controllers.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
 			controllers.AddAnnotation(policy, deployer.PolicyHash, policyHash)
+			controllers.AddAnnotation(policy, deployer.OwnerTier, "100")
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
@@ -342,7 +343,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Because objects are now existing in the workload cluster but don't match the content
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
-		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
+		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
 			secret, map[string]string{"service": newContent}, clusterSummary, nil,
@@ -362,8 +363,8 @@ var _ = Describe("HandlersUtils", func() {
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
 		for i := range resourceReports {
 			rr := &resourceReports[i]
-			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object currently deployed because of %s %s/%s.", secret.Kind,
-				secret.Namespace, secret.Name)))
+			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object Service:%s/service%d currently deployed because of %s %s/%s.",
+				namespace, i, secret.Kind, secret.Namespace, secret.Name)))
 		}
 	})
 

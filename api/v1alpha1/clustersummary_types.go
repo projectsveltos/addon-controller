@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -114,6 +115,17 @@ type FeatureSummary struct {
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
 }
 
+// ConflictSummary contains a summary of conflicts with other profiles
+// per cluster feature.
+type ConflictSummary struct {
+	// FeatureID is an indentifier of the feature whose status is reported
+	FeatureID FeatureID `json:"featureID"`
+
+	// ConflictingProfiles is the list of Sveltos profiles currently
+	// conflicting with this clusterSummary instance
+	ConflictingProfiles []corev1.ObjectReference `json:"conflictingProfiles"`
+}
+
 // HelChartStatus specifies whether ClusterSummary is successfully managing
 // an helm chart or not
 // +kubebuilder:validation:Enum:=Managing;Conflict
@@ -121,11 +133,11 @@ type HelmChartStatus string
 
 const (
 	// HelChartStatusManaging indicates helm chart is successfully being managed
-	HelChartStatusManaging = HelmChartStatus("Managing")
+	HelmChartStatusManaging = HelmChartStatus("Managing")
 
 	// HelChartStatusConflict indicates there is a conflict with another
 	// ClusterSummary to manage the helm chart
-	HelChartStatusConflict = HelmChartStatus("Conflict")
+	HelmChartStatusConflict = HelmChartStatus("Conflict")
 )
 
 type HelmChartSummary struct {
@@ -245,15 +257,15 @@ func GetProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerRefe
 	return nil, fmt.Errorf("(Cluster)Profile owner not found")
 }
 
-// GetProfileOwner returns the (Cluster)Profile owning this clusterSummary.
+// GetProfileOwnerAndTier returns the (Cluster)Profile owning this clusterSummary and its tier.
 // Returns nil if (Cluster)Profile does not exist anymore.
-func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
-) (client.Object, error) {
+func GetProfileOwnerAndTier(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
+) (client.Object, int32, error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, 0, errors.WithStack(err)
 		}
 		if gv.Group != GroupVersion.Group {
 			continue
@@ -264,11 +276,11 @@ func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *Clust
 			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					return nil, nil
+					return nil, 0, nil
 				}
-				return nil, err
+				return nil, 0, err
 			}
-			return clusterProfile, nil
+			return clusterProfile, clusterProfile.Spec.Tier, nil
 		} else if ref.Kind == ProfileKind {
 			profile := &Profile{}
 			err := c.Get(ctx,
@@ -276,12 +288,12 @@ func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *Clust
 				profile)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					return nil, nil
+					return nil, 0, nil
 				}
-				return nil, err
+				return nil, 0, err
 			}
-			return profile, nil
+			return profile, profile.Spec.Tier, nil
 		}
 	}
-	return nil, nil
+	return nil, 0, nil
 }

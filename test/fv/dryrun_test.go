@@ -267,11 +267,9 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// Another ClusterProfile is managing this, by referencing same ConfigMap this ClusterProfile is, so no conflict.
-			// Content of ConfigMap has not changed. Action is actuall NoAction as changing SyncMode will cause reconciliation
-			// but no update will happen since ConfigMap has not changed since deployment time.
+			// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1alpha1.NoResourceAction))
+				"ServiceAccount", "", string(configv1alpha1.ConflictResourceAction))
 			if err != nil {
 				return err
 			}

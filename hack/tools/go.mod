@@ -4,16 +4,16 @@ go 1.22.0
 
 require (
 	github.com/a8m/envsubst v1.4.2
-	github.com/onsi/ginkgo/v2 v2.17.2
-	golang.org/x/oauth2 v0.19.0
+	github.com/onsi/ginkgo/v2 v2.17.3
+	golang.org/x/oauth2 v0.20.0
 	k8s.io/client-go v0.30.0
 	sigs.k8s.io/controller-tools v0.15.0
-	sigs.k8s.io/kind v0.22.0
+	sigs.k8s.io/kind v0.23.0
 )
 
 require (
 	cloud.google.com/go/compute v1.20.1 // indirect
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
+	cloud.google.com/go/compute/metadata v0.3.0 // indirect
 	github.com/BurntSushi/toml v1.0.0 // indirect
 	github.com/alessio/shellescape v1.4.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

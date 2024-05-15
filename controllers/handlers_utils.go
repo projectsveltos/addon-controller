@@ -346,10 +346,8 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return reports, err
 		}
 
-		deployer.AddOwnerReference(policy, profile)
-
-		addExtraLabels(policy, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
-		addExtraAnnotations(policy, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+		addMetadata(policy, resourceInfo.ResourceVersion, profile,
+			clusterSummary.Spec.ClusterProfileSpec.ExtraLabels, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
 		if deployingToMgmtCluster {
 			// When deploying resources in the management cluster, just setting (Cluster)Profile as OwnerReference is
@@ -382,6 +380,28 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	return reports, nil
+}
+
+func addMetadata(policy *unstructured.Unstructured, resourceVersion string, profile client.Object,
+	extraLabels, extraAnnotations map[string]string) {
+
+	// The canDeployResource function validates if objects can be deployed. It achieves this by
+	// fetching the object from the managed cluster and using its metadata to detect and potentially
+	// resolve conflicts. If a conflict is detected, and the decision favors current clusterSummary instance,
+	// the policy is updated.
+	// However, it's crucial to ensure that between the time canDeployResource runs and the policy update,
+	// no other modifications occur to the object. This includes updates from other ClusterSummary instances.
+	// To guarantee consistency, we leverage the object's resourceVersion obtained by canDeployResource when
+	// fetching the object. Setting the resource version during policy update acts as an optimistic locking mechanism.
+	// If the object has been modified since the canDeployResource call, setting the resource version will fail,
+	// invalidating previous conflict call and preventing unintended overwrites.
+	// This approach ensures that conflict resolution decisions made by canDeployResource remain valid during the policy update.
+	policy.SetResourceVersion(resourceVersion)
+
+	deployer.AddOwnerReference(policy, profile)
+
+	addExtraLabels(policy, extraLabels)
+	addExtraAnnotations(policy, extraAnnotations)
 }
 
 // requeueAllOldOwners gets the list of all ClusterProfile/Profile instances currently owning the resource in the
@@ -479,7 +499,7 @@ func canDeployResource(ctx context.Context, dr dynamic.ResourceInterface, policy
 func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo, resource *configv1alpha1.Resource,
 ) *configv1alpha1.ResourceReport {
 
-	if !resourceInfo.Exist {
+	if resourceInfo.ResourceVersion == "" {
 		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.CreateResourceAction)}
 	} else if policyHash != resourceInfo.Hash {
 		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.UpdateResourceAction)}

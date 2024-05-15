@@ -25,7 +25,7 @@ ARCH ?= amd64
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= dev
 
 .PHONY: all
 all: build
@@ -362,6 +362,7 @@ docker-push: ## Push docker image with the manager.
 .PHONY: docker-buildx
 docker-buildx: ## docker build for multiple arch and push to docker hub
 	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(CONTROLLER_IMG):$(TAG) .
+	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(CONTROLLER_IMG)-git:$(TAG) -f Dockerfile_WithGit .
 
 .PHONY: load-image
 load-image: docker-build $(KIND)

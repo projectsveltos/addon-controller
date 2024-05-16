@@ -480,7 +480,7 @@ func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.C
 
 	var objectsToDeployLocally []client.Object
 	var objectsToDeployRemotely []client.Object
-	// collect all referenced ConfigMaps/Secrets whose content need to be deployed
+	// collect all referenced resources whose content need to be deployed
 	// in the management cluster (local) or manaded cluster (remote)
 	objectsToDeployLocally, objectsToDeployRemotely, err =
 		collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)

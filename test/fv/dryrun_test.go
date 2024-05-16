@@ -279,6 +279,17 @@ var _ = Describe("DryRun", func() {
 		Byf("Delete ClusterProfile %s", clusterProfile.Name)
 		deleteClusterProfile(clusterProfile)
 
+		Byf("Verifying ServiceAccount kong/kong-serviceaccount is removed from managed cluster")
+		workloadClient, err := getKindWorkloadClusterKubeconfig()
+		Expect(err).To(BeNil())
+		Expect(workloadClient).ToNot(BeNil())
+
+		currentServiceAccount := &corev1.ServiceAccount{}
+		err = workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+		Expect(err).ToNot(BeNil())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
 		Byf("Changing syncMode to Continuous and HelmCharts (all install) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
@@ -322,6 +333,11 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
+
+		Byf("Verifying ServiceAccount kong/kong-serviceaccount is deployed managed cluster")
+		err = workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+		Expect(err).To(BeNil())
 
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -370,7 +386,7 @@ var _ = Describe("DryRun", func() {
 		By("Verifying ClusterReport")
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
 				return err
@@ -399,7 +415,7 @@ var _ = Describe("DryRun", func() {
 		By("Verifying ClusterReport for policy reports")
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
 				return err
@@ -432,7 +448,7 @@ var _ = Describe("DryRun", func() {
 		// First wait for clusterSummary to be marked for deletion
 		Eventually(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Namespace, Name: dryRunClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
 				return false
@@ -443,7 +459,7 @@ var _ = Describe("DryRun", func() {
 		// Then verify ClusterSummary is not removed.
 		Consistently(func() bool {
 			currentClusterSummary := &configv1alpha1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Namespace, Name: dryRunClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
 				return false
@@ -454,7 +470,7 @@ var _ = Describe("DryRun", func() {
 		By("Verifying ClusterReport")
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
 				return err
@@ -483,7 +499,7 @@ var _ = Describe("DryRun", func() {
 		By("Verifying ClusterReport for policy reports")
 		Eventually(func() error {
 			currentClusterReport := &configv1alpha1.ClusterReport{}
-			err := k8sClient.Get(context.TODO(),
+			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
 				return err
@@ -517,11 +533,6 @@ var _ = Describe("DryRun", func() {
 		deleteClusterProfile(dryRunClusterProfile)
 
 		Byf("Verifying ServiceAccount kong/kong-serviceaccount is removed from managed cluster")
-		workloadClient, err := getKindWorkloadClusterKubeconfig()
-		Expect(err).To(BeNil())
-		Expect(workloadClient).ToNot(BeNil())
-
-		currentServiceAccount := &corev1.ServiceAccount{}
 		err = workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
 		Expect(err).ToNot(BeNil())

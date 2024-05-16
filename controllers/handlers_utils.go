@@ -952,6 +952,8 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 	}
 
 	for i := range deployedGVKs {
+		// TODO: move this to separate method
+		logger.V(logs.LogDebug).Info("removing stale resources for GVK %s", deployedGVKs[i].String())
 		mapping, err := mapper.RESTMapping(deployedGVKs[i].GroupKind(), deployedGVKs[i].Version)
 		if err != nil {
 			// if CRDs does not exist anymore, ignore error. No instances of
@@ -1145,6 +1147,7 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 				gvk, _ := schema.ParseKindArg(clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind[j])
 				gvks = append(gvks, *gvk)
 			}
+			break
 		}
 	}
 
@@ -1365,20 +1368,20 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 		}
 
 		// update status with list of GroupVersionKinds deployed in a Managed and Management Cluster
-		setDeployedGroupVersionKind(currentClusterSummary, gvks, featureID)
+		appendDeployedGroupVersionKinds(currentClusterSummary, gvks, featureID)
 
 		return getManagementClusterClient().Status().Update(ctx, currentClusterSummary)
 	})
 	return err
 }
 
-// setDeployedGroupVersionKind sets the list of deployed GroupVersionKinds
-func setDeployedGroupVersionKind(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
+// appendDeployedGroupVersionKinds appends the list of deployed GroupVersionKinds to current list
+func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
 	featureID configv1alpha1.FeatureID) {
 
 	for i := range clusterSummary.Status.FeatureSummaries {
 		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
+			updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
 			return
 		}
 	}
@@ -1394,15 +1397,11 @@ func setDeployedGroupVersionKind(clusterSummary *configv1alpha1.ClusterSummary, 
 		},
 	)
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			setDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
-			return
-		}
-	}
+	length := len(clusterSummary.Status.FeatureSummaries)
+	updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[length-1], gvks)
 }
 
-func setDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
+func updateDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
 	tmp := make([]string, 0)
 
 	// Preserve the order

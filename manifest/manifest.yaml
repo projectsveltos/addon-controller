@@ -4054,10 +4054,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=dev
+        - --version=v0.30.0
         command:
         - /manager
-        image: projectsveltos/addon-controller:dev
+        image: projectsveltos/addon-controller:v0.30.0
         livenessProbe:
           failureThreshold: 3
           httpGet:

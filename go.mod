@@ -21,7 +21,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
-	helm.sh/helm/v3 v3.14.4
+	helm.sh/helm/v3 v3.15.0
 	k8s.io/api v0.30.0
 	k8s.io/apiextensions-apiserver v0.30.0
 	k8s.io/apimachinery v0.30.0

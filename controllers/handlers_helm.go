@@ -1138,6 +1138,15 @@ func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1alpha1.H
 		return false
 	}
 
+	// If the release was uninstalled with KeepHistory flag, this is the
+	// status seen at this point. Release should be installed in this state.
+	// Upgrade would fail
+	if currentRelease != nil &&
+		currentRelease.Status == release.StatusUninstalled.String() {
+
+		return true
+	}
+
 	if currentRelease != nil &&
 		currentRelease.ChartVersion != requestedChart.ChartVersion {
 

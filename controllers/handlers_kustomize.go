@@ -87,15 +87,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	localResourceReports, remoteResourceReports, err := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
+	localResourceReports, remoteResourceReports, deployError := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
 		clusterSummary, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
 	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
 		localResourceReports, remoteResourceReports, logger)
-	if err != nil {
-		return err
-	}
 	if gvkErr != nil {
 		return gvkErr
 	}
@@ -150,6 +147,11 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
+
+	if deployError != nil {
+		return deployError
+	}
+
 	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureKustomize, logger)
 }
 

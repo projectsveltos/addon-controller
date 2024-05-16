@@ -8,5 +8,5 @@ spec:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: projectsveltos/addon-controller:dev
+      - image: projectsveltos/addon-controller:v0.30.0
         name: controller

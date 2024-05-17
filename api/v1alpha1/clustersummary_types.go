@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -113,17 +112,6 @@ type FeatureSummary struct {
 	// LastAppliedTime is the time feature was last reconciled
 	// +optional
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
-}
-
-// ConflictSummary contains a summary of conflicts with other profiles
-// per cluster feature.
-type ConflictSummary struct {
-	// FeatureID is an indentifier of the feature whose status is reported
-	FeatureID FeatureID `json:"featureID"`
-
-	// ConflictingProfiles is the list of Sveltos profiles currently
-	// conflicting with this clusterSummary instance
-	ConflictingProfiles []corev1.ObjectReference `json:"conflictingProfiles"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing

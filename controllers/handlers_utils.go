@@ -1344,8 +1344,8 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 
 	c := getManagementClusterClient()
 
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		err := c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)
@@ -1372,6 +1372,10 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 
 		return getManagementClusterClient().Status().Update(ctx, currentClusterSummary)
 	})
+
+	// make in-memory version in sync with in-store wrt FeatureSummaries
+	clusterSummary.Status.FeatureSummaries = currentClusterSummary.Status.FeatureSummaries
+
 	return err
 }
 
@@ -1381,7 +1385,12 @@ func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSumma
 
 	for i := range clusterSummary.Status.FeatureSummaries {
 		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
+			clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind = append(
+				clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind,
+				tranformGroupVersionKindToString(gvks)...)
+			// Remove duplicates
+			clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind =
+				unique(clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind)
 			return
 		}
 	}
@@ -1393,33 +1402,25 @@ func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSumma
 	clusterSummary.Status.FeatureSummaries = append(
 		clusterSummary.Status.FeatureSummaries,
 		configv1alpha1.FeatureSummary{
-			FeatureID: featureID,
+			FeatureID:                featureID,
+			DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
 		},
 	)
-
-	length := len(clusterSummary.Status.FeatureSummaries)
-	updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[length-1], gvks)
 }
 
-func updateDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
-	tmp := make([]string, 0)
-
-	// Preserve the order
-	current := make(map[string]bool)
-	for _, k := range fs.DeployedGroupVersionKind {
-		current[k] = true
-		tmp = append(tmp, k)
-	}
+func tranformGroupVersionKindToString(gvks []schema.GroupVersionKind) []string {
+	result := make([]string, 0)
+	tmpMap := make(map[string]bool)
 
 	for i := range gvks {
 		key := fmt.Sprintf("%s.%s.%s", gvks[i].Kind, gvks[i].Version, gvks[i].Group)
-		if _, ok := current[key]; !ok {
-			current[key] = true
-			tmp = append(tmp, key)
+		if _, ok := tmpMap[key]; !ok {
+			tmpMap[key] = true
+			result = append(result, key)
 		}
 	}
 
-	fs.DeployedGroupVersionKind = tmp
+	return result
 }
 
 // getRestConfig returns restConfig to access remote cluster

@@ -176,6 +176,8 @@ type ClusterSummaryStatus struct {
 
 	// FeatureSummaries reports the status of each workload cluster feature
 	// directly managed by ClusterProfile.
+	// +listType=map
+	// +listMapKey=featureID
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
 

@@ -138,6 +138,8 @@ var _ = Describe("DryRun", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
 
+		verifyDeployedGroupVersionKind(clusterProfile.Name)
+
 		charts := []configv1alpha1.Chart{
 			{ReleaseName: "mysql", ChartVersion: "9.10.4", Namespace: "mysql"},
 		}
@@ -157,7 +159,7 @@ var _ = Describe("DryRun", func() {
 		kongRoleConfigMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), kongRole)
 		Expect(k8sClient.Create(context.TODO(), kongRoleConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a new ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		dryRunClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		dryRunClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
 		Expect(k8sClient.Create(context.TODO(), dryRunClusterProfile)).To(Succeed())
@@ -277,27 +279,7 @@ var _ = Describe("DryRun", func() {
 			return nil
 		}, timeout, pollingInterval).Should(BeNil())
 
-		// Test has been flaky. Rarely it happens that Kong service is not removed
-		// when clusterProfile is.
-		// Adding this extra code to make test fails if at this points, ClusterSummary
-		// has lost list of deployed GVKs (which will cause the cleanup to not happen)
-		listOptions := []client.ListOption{
-			client.MatchingLabels{
-				controllers.ClusterProfileLabelName: clusterProfile.Name,
-			},
-		}
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
-		Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
-		Expect(len(clusterSummaryList.Items)).To(Equal(1))
-		found := false
-		for i := range clusterSummaryList.Items[0].Status.FeatureSummaries {
-			fs := clusterSummaryList.Items[0].Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1alpha1.FeatureResources {
-				Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
-				found = true
-			}
-		}
-		Expect(found).To(BeTrue())
+		verifyDeployedGroupVersionKind(clusterProfile.Name)
 
 		Byf("Delete ClusterProfile %s", clusterProfile.Name)
 		deleteClusterProfile(clusterProfile)
@@ -601,4 +583,29 @@ func verifyResourceReport(clusterReport *configv1alpha1.ClusterReport,
 
 	return fmt.Errorf("did not find entry for resource %s (gropup %s) %s/%s",
 		resourceKind, resourceGroup, resourceNamespace, resourceName)
+}
+
+func verifyDeployedGroupVersionKind(clusterProfileName string) {
+	Byf("Verifying DeployedGroupVersionKind are set for ClusterProfile %s", clusterProfileName)
+	// Test has been flaky. Rarely it happens that Kong service is not removed
+	// when clusterProfile is.
+	// Adding this extra code to make test fails if at this points, ClusterSummary
+	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			controllers.ClusterProfileLabelName: clusterProfileName,
+		},
+	}
+	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
+	Expect(len(clusterSummaryList.Items)).To(Equal(1))
+	found := false
+	for i := range clusterSummaryList.Items[0].Status.FeatureSummaries {
+		fs := clusterSummaryList.Items[0].Status.FeatureSummaries[i]
+		if fs.FeatureID == configv1alpha1.FeatureResources {
+			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
+			found = true
+		}
+	}
+	Expect(found).To(BeTrue())
 }

@@ -2559,7 +2559,6 @@ spec:
                   - featureID
                   type: object
                 type: array
-                x-kubernetes-list-type: atomic
               helmReleaseSummaries:
                 description: |-
                   HelmReleaseSummaries reports the status of each helm chart

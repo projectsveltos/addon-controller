@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -275,6 +276,28 @@ var _ = Describe("DryRun", func() {
 			}
 			return nil
 		}, timeout, pollingInterval).Should(BeNil())
+
+		// Test has been flaky. Rarely it happens that Kong service is not removed
+		// when clusterProfile is.
+		// Adding this extra code to make test fails if at this points, ClusterSummary
+		// has lost list of deployed GVKs (which will cause the cleanup to not happen)
+		listOptions := []client.ListOption{
+			client.MatchingLabels{
+				controllers.ClusterProfileLabelName: clusterProfile.Name,
+			},
+		}
+		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
+		Expect(len(clusterSummaryList.Items)).To(Equal(1))
+		found := false
+		for i := range clusterSummaryList.Items[0].Status.FeatureSummaries {
+			fs := clusterSummaryList.Items[0].Status.FeatureSummaries[i]
+			if fs.FeatureID == configv1alpha1.FeatureResources {
+				Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
 
 		Byf("Delete ClusterProfile %s", clusterProfile.Name)
 		deleteClusterProfile(clusterProfile)

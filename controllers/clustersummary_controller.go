@@ -222,7 +222,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// If Sveltos/Cluster is not found, there is nothing to clean up.

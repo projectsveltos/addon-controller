@@ -154,7 +154,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(found).To(Equal(true))
 	})
 
-	It("SetFeatureSummary updates ClusterSummary Status FeatureSummary when nil", func() {
+	It("SetFailureMessage updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Profile:        clusterProfile,
@@ -230,7 +230,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
 	})
 
-	It("SetFeatureSummary updates ClusterSummary Status FeatureSummary when nil", func() {
+	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary when nil", func() {
 		params := &scope.ClusterSummaryScopeParams{
 			Client:         c,
 			Profile:        clusterProfile,

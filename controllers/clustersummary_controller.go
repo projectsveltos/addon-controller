@@ -92,7 +92,8 @@ type ClusterSummaryReconciler struct {
 	ReferenceMap         map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
 	ClusterMap           map[corev1.ObjectReference]*libsveltosset.Set // key: Sveltos/Cluster; value: set of all ClusterSummaries for that Cluster
 
-	ctrl controller.Controller
+	ConflictRetryTime time.Duration
+	ctrl              controller.Controller
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
@@ -132,7 +133,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Fetch the (Cluster)Profile.
-	profile, err := configv1alpha1.GetProfileOwner(ctx, r.Client, clusterSummary)
+	profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
 		return reconcile.Result{}, errors.Wrapf(
@@ -221,7 +222,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// If Sveltos/Cluster is not found, there is nothing to clean up.
@@ -346,7 +347,14 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
-	if err := r.deploy(ctx, clusterSummaryScope, logger); err != nil {
+	err = r.deploy(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		var conflictErr *deployer.ConflictError
+		ok := errors.As(err, &conflictErr)
+		if ok {
+			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
+			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
+		}
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
@@ -472,14 +480,14 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace, "clustername", clusterSummary.Spec.ClusterName)
 
-	coreResourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
+	resourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
 	helmErr := r.deployHelm(ctx, clusterSummaryScope, logger)
 
 	kustomizeError := r.deployKustomizeRefs(ctx, clusterSummaryScope, logger)
 
-	if coreResourceErr != nil {
-		return coreResourceErr
+	if resourceErr != nil {
+		return resourceErr
 	}
 
 	if helmErr != nil {
@@ -964,7 +972,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
 		// ClusterProfile is moved away from DryRun mode.
-		profile, err := configv1alpha1.GetProfileOwner(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummaryScope.ClusterSummary)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile %v", err))
 			return false

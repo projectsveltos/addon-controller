@@ -272,8 +272,10 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		// Verify chart registrations have not changed
-		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
-		Expect(manager.CanManageChart(clusterSummary, &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeFalse())
+		Expect(manager.IsChartManaged(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType,
+			&currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
+		Expect(manager.IsChartManaged(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType,
+			&currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeFalse())
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {

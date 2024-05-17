@@ -304,6 +304,7 @@ var _ = Describe("HandlersUtils", func() {
 			controllers.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
 			controllers.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
 			controllers.AddAnnotation(policy, deployer.PolicyHash, policyHash)
+			controllers.AddAnnotation(policy, deployer.OwnerTier, "100")
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
@@ -342,7 +343,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Because objects are now existing in the workload cluster but don't match the content
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
-		// ( if the ClusterProfile were to be changed from DryRun, both service would be updated).
+		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client,
 			secret, map[string]string{"service": newContent}, clusterSummary, nil,
@@ -362,8 +363,8 @@ var _ = Describe("HandlersUtils", func() {
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
 		for i := range resourceReports {
 			rr := &resourceReports[i]
-			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object currently deployed because of %s %s/%s.", secret.Kind,
-				secret.Namespace, secret.Name)))
+			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object Service:%s/service%d currently deployed because of %s %s/%s.",
+				namespace, i, secret.Kind, secret.Namespace, secret.Name)))
 		}
 	})
 
@@ -832,58 +833,60 @@ subjects:
 	})
 
 	It("collectContent collect contents with no error even when there are section with multiple resources", func() {
-		content := `    apiVersion: v1
-    kind: Service
+		service := `apiVersion: v1
+kind: Service
+metadata:
+  name: sample-app
+  namespace: staging
+  labels:
+    environment: staging
+spec:
+  selector:
+    app: sample-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080`
+
+		deployment := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-app
+  namespace: staging
+  labels:
+    environment: staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      environment: staging
+  template:
     metadata:
-      name: sample-app
-      namespace: staging
       labels:
         environment: staging
     spec:
-      selector:
-        app: sample-app
-      ports:
-      - protocol: TCP
-        port: 80
-        targetPort: 8080
-    ---
-    apiVersion: apps/v1
-    kind: Deployment
-    metadata:
-      name: sample-app
-      namespace: staging
-      labels:
-        environment: staging
-    spec:
-      replicas: 1
-      selector:
-        matchLabels:
-          environment: staging
-      template:
-        metadata:
-          labels:
-            environment: staging
-        spec:
-          containers:
-          - name: sample-app
-            image: nginx:latest
-            imagePullPolicy: IfNotPresent
-            ports:
-            - containerPort: 8080
-    ---
-    apiVersion: v1
-    kind: Secret
-    metadata:
-      name: application-settings
-      namespace: staging
-    stringData:
-      app_mode: staging
-      certificates: /etc/ssl/staging
-      db_user: staging-user
-      db_password: staging-password
-`
-		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
+      containers:
+      - name: sample-app
+        image: nginx:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080`
+
+		//nolint: gosec // this is a kubernetes secret in a test
+		secret := `apiVersion: v1
+kind: Secret
+metadata:
+  name: application-settings
+  namespace: staging
+stringData:
+  app_mode: staging
+  certificates: /etc/ssl/staging
+  db_user: staging-user
+  db_password: staging-password`
+
+		policies := []string{service, deployment, secret}
+		configMap := createConfigMapWithPolicy(randomString(), randomString(), policies...)
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, configMap.Data, false,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))

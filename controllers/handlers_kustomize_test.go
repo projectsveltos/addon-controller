@@ -268,6 +268,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1alpha1.Spec{
 					KustomizationRefs: make([]configv1alpha1.KustomizationRef, repoNum),
+					Tier:              100,
 				},
 			},
 		}
@@ -299,6 +300,8 @@ var _ = Describe("Hash methods", func() {
 
 		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
+		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
 		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 		for i := 0; i < repoNum; i++ {
 			config += gitRepositories[i].Status.Artifact.Revision

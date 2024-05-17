@@ -87,15 +87,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	localResourceReports, remoteResourceReports, err := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
+	localResourceReports, remoteResourceReports, deployError := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
 		clusterSummary, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
 	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
 		localResourceReports, remoteResourceReports, logger)
-	if err != nil {
-		return err
-	}
 	if gvkErr != nil {
 		return gvkErr
 	}
@@ -150,6 +147,11 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
+
+	if deployError != nil {
+		return deployError
+	}
+
 	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureKustomize, logger)
 }
 
@@ -269,6 +271,11 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
+
+	// If Tier changes, conflicts might be resolved differently
+	// So consider it in the hash
+	config += fmt.Sprintf("%d", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
+	config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
 
 	config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 

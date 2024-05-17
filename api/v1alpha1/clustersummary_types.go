@@ -121,11 +121,11 @@ type HelmChartStatus string
 
 const (
 	// HelChartStatusManaging indicates helm chart is successfully being managed
-	HelChartStatusManaging = HelmChartStatus("Managing")
+	HelmChartStatusManaging = HelmChartStatus("Managing")
 
 	// HelChartStatusConflict indicates there is a conflict with another
 	// ClusterSummary to manage the helm chart
-	HelChartStatusConflict = HelmChartStatus("Conflict")
+	HelmChartStatusConflict = HelmChartStatus("Conflict")
 )
 
 type HelmChartSummary struct {
@@ -176,7 +176,6 @@ type ClusterSummaryStatus struct {
 
 	// FeatureSummaries reports the status of each workload cluster feature
 	// directly managed by ClusterProfile.
-	// +listType=atomic
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
 
@@ -245,15 +244,15 @@ func GetProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerRefe
 	return nil, fmt.Errorf("(Cluster)Profile owner not found")
 }
 
-// GetProfileOwner returns the (Cluster)Profile owning this clusterSummary.
+// GetProfileOwnerAndTier returns the (Cluster)Profile owning this clusterSummary and its tier.
 // Returns nil if (Cluster)Profile does not exist anymore.
-func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
-) (client.Object, error) {
+func GetProfileOwnerAndTier(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
+) (client.Object, int32, error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, 0, errors.WithStack(err)
 		}
 		if gv.Group != GroupVersion.Group {
 			continue
@@ -264,11 +263,11 @@ func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *Clust
 			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					return nil, nil
+					return nil, 0, nil
 				}
-				return nil, err
+				return nil, 0, err
 			}
-			return clusterProfile, nil
+			return clusterProfile, clusterProfile.Spec.Tier, nil
 		} else if ref.Kind == ProfileKind {
 			profile := &Profile{}
 			err := c.Get(ctx,
@@ -276,12 +275,12 @@ func GetProfileOwner(ctx context.Context, c client.Client, clusterSummary *Clust
 				profile)
 			if err != nil {
 				if apierrors.IsNotFound(err) {
-					return nil, nil
+					return nil, 0, nil
 				}
-				return nil, err
+				return nil, 0, err
 			}
-			return profile, nil
+			return profile, profile.Spec.Tier, nil
 		}
 	}
-	return nil, nil
+	return nil, 0, nil
 }

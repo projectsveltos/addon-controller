@@ -64,17 +64,12 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var localResourceReports []configv1alpha1.ResourceReport
-	var remoteResourceReports []configv1alpha1.ResourceReport
-	localResourceReports, remoteResourceReports, err = deployPolicyRefs(ctx, c, remoteRestConfig,
+	localResourceReports, remoteResourceReports, deployError := deployPolicyRefs(ctx, c, remoteRestConfig,
 		clusterSummary, featureHandler, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
 	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
 		localResourceReports, remoteResourceReports, logger)
-	if err != nil {
-		return err
-	}
 	if gvkErr != nil {
 		return gvkErr
 	}
@@ -91,7 +86,6 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// If we are here there are no conflicts (and error would have been returned by deployPolicyRefs)
 	remoteDeployed := make([]configv1alpha1.Resource, 0)
 	for i := range remoteResourceReports {
 		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
@@ -130,6 +124,11 @@ func deployResources(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
 		return &configv1alpha1.DryRunReconciliationError{}
 	}
+
+	if deployError != nil {
+		return deployError
+	}
+
 	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureResources, logger)
 }
 
@@ -340,6 +339,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 
+	// If Tier changes, conflicts might be resolved differently
+	// So consider it in the hash
+	config += fmt.Sprintf("%d", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
+	config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
+
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
@@ -476,7 +480,7 @@ func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.C
 
 	var objectsToDeployLocally []client.Object
 	var objectsToDeployRemotely []client.Object
-	// collect all referenced ConfigMaps/Secrets whose content need to be deployed
+	// collect all referenced resources whose content need to be deployed
 	// in the management cluster (local) or manaded cluster (remote)
 	objectsToDeployLocally, objectsToDeployRemotely, err =
 		collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)

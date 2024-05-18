@@ -470,3 +470,18 @@ func getProfileNameFromOwnerReferenceName(profileName string) *types.NamespacedN
 	}
 	return &types.NamespacedName{Namespace: result[0], Name: result[1]}
 }
+
+// Function to remove duplicates from a slice
+func unique[T comparable](input []T) []T {
+	seen := make(map[T]bool)
+	unique := []T{}
+
+	for _, element := range input {
+		if !seen[element] {
+			unique = append(unique, element)
+			seen[element] = true
+		}
+	}
+
+	return unique
+}

@@ -859,6 +859,9 @@ spec:
                   - featureID
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - featureID
+                x-kubernetes-list-type: map
               helmReleaseSummaries:
                 description: |-
                   HelmReleaseSummaries reports the status of each helm chart

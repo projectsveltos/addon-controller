@@ -953,7 +953,7 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	for i := range deployedGVKs {
 		// TODO: move this to separate method
-		logger.V(logs.LogDebug).Info("removing stale resources for GVK %s", deployedGVKs[i].String())
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("removing stale resources for GVK %s", deployedGVKs[i].String()))
 		mapping, err := mapper.RESTMapping(deployedGVKs[i].GroupKind(), deployedGVKs[i].Version)
 		if err != nil {
 			// if CRDs does not exist anymore, ignore error. No instances of
@@ -1336,7 +1336,7 @@ func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInte
 
 func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) error {
+	logger logr.Logger) (*configv1alpha1.ClusterSummary, error) {
 
 	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
 	reports := localResourceReports
@@ -1373,10 +1373,7 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 		return getManagementClusterClient().Status().Update(ctx, currentClusterSummary)
 	})
 
-	// make in-memory version in sync with in-store wrt FeatureSummaries
-	clusterSummary.Status.FeatureSummaries = currentClusterSummary.Status.FeatureSummaries
-
-	return err
+	return currentClusterSummary, err
 }
 
 // appendDeployedGroupVersionKinds appends the list of deployed GroupVersionKinds to current list

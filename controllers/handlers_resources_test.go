@@ -270,8 +270,9 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		Expect(controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
-			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		_, err := controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
+			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
 
 		// wait for cache to sync
 		Eventually(func() bool {

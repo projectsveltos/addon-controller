@@ -68,7 +68,8 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterSummary, featureHandler, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
-	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
+	var gvkErr error
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr
@@ -140,17 +141,17 @@ func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, rem
 	localUndeployed, err = cleanPolicyRefResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary, localResourceReports, logger)
 	if err != nil {
-		return
+		return localUndeployed, nil, err
 	}
 
 	// Clean stale resources in the remote cluster
 	remoteUndeployed, err = cleanPolicyRefResources(ctx, false, remoteRestConfig, remoteClient, clusterSummary,
 		remoteResourceReports, logger)
 	if err != nil {
-		return
+		return localUndeployed, remoteUndeployed, err
 	}
 
-	return
+	return localUndeployed, remoteUndeployed, nil
 }
 
 // handleDriftDetectionManagerDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,

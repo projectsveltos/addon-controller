@@ -91,7 +91,8 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		clusterSummary, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
-	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
+	var gvkErr error
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr

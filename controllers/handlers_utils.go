@@ -838,7 +838,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	}
 
 	var mgmtResources map[string]*unstructured.Unstructured
-	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
+	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -958,7 +958,9 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 		if err != nil {
 			// if CRDs does not exist anymore, ignore error. No instances of
 			// such CRD can be left anyway.
-			if meta.IsNoMatchError(err) {
+			if errors.Is(err, &meta.NoKindMatchError{}) {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("removing stale resources for GVK %s failed with NoKindMatchError",
+					deployedGVKs[i].String()))
 				continue
 			}
 			return nil, err
@@ -1031,7 +1033,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 				Action: string(configv1alpha1.DeleteResourceAction),
 			}
 		}
-	} else {
+	} else if canDelete(&r, currentPolicies) {
 		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
 
 		deployer.RemoveOwnerReference(&r, profile)
@@ -1041,11 +1043,9 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 			return nil, nil
 		}
 
-		if canDelete(&r, currentPolicies) {
-			err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
-			if err != nil {
-				return nil, err
-			}
+		err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -1141,13 +1141,11 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) []schema.GroupVersionKind {
 
 	gvks := make([]schema.GroupVersionKind, 0)
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			for j := range clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind {
-				gvk, _ := schema.ParseKindArg(clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind[j])
-				gvks = append(gvks, *gvk)
-			}
-			break
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil {
+		for j := range fs.DeployedGroupVersionKind {
+			gvk, _ := schema.ParseKindArg(fs.DeployedGroupVersionKind[j])
+			gvks = append(gvks, *gvk)
 		}
 	}
 
@@ -1342,6 +1340,10 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 	reports := localResourceReports
 	reports = append(reports, remoteResourceReports...)
 
+	if len(reports) == 0 {
+		return clusterSummary, nil
+	}
+
 	c := getManagementClusterClient()
 
 	currentClusterSummary := &configv1alpha1.ClusterSummary{}
@@ -1380,19 +1382,17 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
 	featureID configv1alpha1.FeatureID) {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind = append(
-				clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind,
-				tranformGroupVersionKindToString(gvks)...)
-			// Remove duplicates
-			clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind =
-				unique(clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind)
-			return
-		}
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil {
+		fs.DeployedGroupVersionKind = append(
+			fs.DeployedGroupVersionKind,
+			tranformGroupVersionKindToString(gvks)...)
+		// Remove duplicates
+		fs.DeployedGroupVersionKind = unique(fs.DeployedGroupVersionKind)
+		return
 	}
 
-	if clusterSummary.Status.FeatureSummaries == nil {
+	if fs == nil {
 		clusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
 	}
 

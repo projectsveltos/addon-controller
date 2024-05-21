@@ -394,6 +394,14 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += getVersion()
 	}
 
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mgmtResources {
+		config += render.AsCode(mgmtResources[i])
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -478,7 +486,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	kubeconfig string, logger logr.Logger) ([]configv1alpha1.ReleaseReport, []configv1alpha1.Chart, error) {
 
-	mgmtResources, err := collectMgmtResources(ctx, clusterSummary)
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}

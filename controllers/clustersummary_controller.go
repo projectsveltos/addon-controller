@@ -31,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -289,6 +290,9 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	r.cleanMaps(clusterSummaryScope)
 
+	manager := getManager()
+	manager.stopStaleWatchForTemplateResourceRef(clusterSummaryScope.ClusterSummary, true)
+
 	logger.V(logs.LogInfo).Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
@@ -323,6 +327,12 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	if paused {
 		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
 		return reconcile.Result{}, nil
+	}
+
+	err = r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to start watcher on resources referenced in TemplateResourceRefs.")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	allDeployed, msg, err := r.areDependenciesDeployed(ctx, clusterSummaryScope, logger)
@@ -503,7 +513,7 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 
 func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs == nil {
-		logger.V(logs.LogDebug).Info("no policy configuration")
+		logger.V(logs.LogDebug).Info("no kustomize policy configuration")
 		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
@@ -1185,4 +1195,31 @@ func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope
 
 func (r *ClusterSummaryReconciler) GetController() controller.Controller {
 	return r.ctrl
+}
+
+func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx context.Context,
+	clusterSummary *configv1alpha1.ClusterSummary) error {
+
+	manager := getManager()
+	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
+		ref := clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
+
+		// If namespace is not defined, default to cluster namespace
+		ref.Resource.Namespace = getTemplateResourceNamespace(clusterSummary, &ref)
+
+		var err error
+		ref.Resource.Name, err = getTemplateResourceName(clusterSummary, &ref)
+		if err != nil {
+			return err
+		}
+
+		gvk := schema.FromAPIVersionAndKind(ref.Resource.APIVersion, ref.Resource.Kind)
+
+		if err := manager.startWatcherForTemplateResourceRef(ctx, gvk, &ref.Resource, clusterSummary); err != nil {
+			return err
+		}
+	}
+
+	manager.stopStaleWatchForTemplateResourceRef(clusterSummary, false)
+	return nil
 }

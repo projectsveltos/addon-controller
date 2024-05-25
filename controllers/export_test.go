@@ -188,7 +188,8 @@ var (
 )
 
 var (
-	GetMgmtResourceName = getMgmtResourceName
+	GetTemplateResourceName      = getTemplateResourceName
+	GetTemplateResourceNamespace = getTemplateResourceNamespace
 )
 
 var (

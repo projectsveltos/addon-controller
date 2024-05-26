@@ -424,3 +424,16 @@ func getFeatureSummaryForFeatureID(clusterSummay *configv1alpha1.ClusterSummary,
 
 	return nil
 }
+
+// Return FeatureDeploymentInfo for featureID
+func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1alpha1.ClusterSummary,
+	fID configv1alpha1.FeatureID) *configv1alpha1.FeatureDeploymentInfo {
+
+	for i := range clusterSummay.Status.DeployedGVKs {
+		if clusterSummay.Status.DeployedGVKs[i].FeatureID == fID {
+			return &clusterSummay.Status.DeployedGVKs[i]
+		}
+	}
+
+	return nil
+}

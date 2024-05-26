@@ -1202,20 +1202,11 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 
 	manager := getManager()
 	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
-		ref := clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
-
-		// If namespace is not defined, default to cluster namespace
-		ref.Resource.Namespace = getTemplateResourceNamespace(clusterSummary, &ref)
-
-		var err error
-		ref.Resource.Name, err = getTemplateResourceName(clusterSummary, &ref)
-		if err != nil {
-			return err
-		}
+		ref := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
 
 		gvk := schema.FromAPIVersionAndKind(ref.Resource.APIVersion, ref.Resource.Kind)
 
-		if err := manager.startWatcherForTemplateResourceRef(ctx, gvk, &ref.Resource, clusterSummary); err != nil {
+		if err := manager.startWatcherForTemplateResourceRef(ctx, gvk, ref, clusterSummary); err != nil {
 			return err
 		}
 	}

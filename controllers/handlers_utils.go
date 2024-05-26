@@ -1141,10 +1141,20 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) []schema.GroupVersionKind {
 
 	gvks := make([]schema.GroupVersionKind, 0)
+	// For backward compatible we still look at this field.
+	// New code set only FeatureDeploymentInfo
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
 	if fs != nil {
 		for j := range fs.DeployedGroupVersionKind {
 			gvk, _ := schema.ParseKindArg(fs.DeployedGroupVersionKind[j])
+			gvks = append(gvks, *gvk)
+		}
+	}
+
+	fdi := getFeatureDeploymentInfoForFeatureID(clusterSummary, featureID)
+	if fdi != nil {
+		for j := range fdi.DeployedGroupVersionKind {
+			gvk, _ := schema.ParseKindArg(fdi.DeployedGroupVersionKind[j])
 			gvks = append(gvks, *gvk)
 		}
 	}
@@ -1382,23 +1392,23 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
 	featureID configv1alpha1.FeatureID) {
 
-	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil {
-		fs.DeployedGroupVersionKind = append(
-			fs.DeployedGroupVersionKind,
+	fdi := getFeatureDeploymentInfoForFeatureID(clusterSummary, featureID)
+	if fdi != nil {
+		fdi.DeployedGroupVersionKind = append(
+			fdi.DeployedGroupVersionKind,
 			tranformGroupVersionKindToString(gvks)...)
 		// Remove duplicates
-		fs.DeployedGroupVersionKind = unique(fs.DeployedGroupVersionKind)
+		fdi.DeployedGroupVersionKind = unique(fdi.DeployedGroupVersionKind)
 		return
 	}
 
-	if fs == nil {
-		clusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
+	if fdi == nil {
+		clusterSummary.Status.DeployedGVKs = make([]configv1alpha1.FeatureDeploymentInfo, 0)
 	}
 
-	clusterSummary.Status.FeatureSummaries = append(
-		clusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
+	clusterSummary.Status.DeployedGVKs = append(
+		clusterSummary.Status.DeployedGVKs,
+		configv1alpha1.FeatureDeploymentInfo{
 			FeatureID:                featureID,
 			DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
 		},

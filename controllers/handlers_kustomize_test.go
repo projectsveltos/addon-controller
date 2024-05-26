@@ -154,6 +154,11 @@ var _ = Describe("KustomizeRefs", func() {
 			{
 				FeatureID: configv1alpha1.FeatureKustomize,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+			{
+				FeatureID: configv1alpha1.FeatureKustomize,
 				DeployedGroupVersionKind: []string{
 					"ServiceAccount.v1.",
 					"ConfigMaps.v1.",

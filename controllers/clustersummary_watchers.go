@@ -141,13 +141,24 @@ func (m *manager) startWatcherForMgmtResource(ctx context.Context, gvk schema.Gr
 // ClusterSummary is listed as one of the consumer for this watcher.
 // ClusterSummary will only receive updates when the specific resource itself changes, not when other resources of the same type change.
 func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk schema.GroupVersionKind,
-	resource *corev1.ObjectReference, clusterSummary *configv1alpha1.ClusterSummary) error {
+	ref *configv1alpha1.TemplateResourceRef, clusterSummary *configv1alpha1.ClusterSummary) error {
 
 	consumer := &corev1.ObjectReference{
 		APIVersion: configv1alpha1.GroupVersion.Group,
 		Kind:       configv1alpha1.ClusterSummaryKind,
 		Namespace:  clusterSummary.Namespace,
 		Name:       clusterSummary.Name,
+	}
+
+	resource := ref.Resource
+
+	// If namespace is not defined, default to cluster namespace
+	resource.Namespace = getTemplateResourceNamespace(clusterSummary, ref)
+
+	var err error
+	resource.Name, err = getTemplateResourceName(clusterSummary, ref)
+	if err != nil {
+		return err
 	}
 
 	m.watchMu.Lock()
@@ -158,7 +169,7 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 		resource.Namespace, resource.Name,
 		clusterSummary.Namespace, clusterSummary.Name))
 
-	err := m.startWatcher(ctx, &gvk)
+	err = m.startWatcher(ctx, &gvk)
 	if err != nil {
 		return err
 	}
@@ -169,12 +180,12 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 
 	m.requestorForTemplateResourceRefs[gvk].Insert(consumer)
 
-	if _, ok := m.templateResourceRefsWatched[*resource]; !ok {
+	if _, ok := m.templateResourceRefsWatched[resource]; !ok {
 		s := &libsveltosset.Set{}
-		m.templateResourceRefsWatched[*resource] = s
+		m.templateResourceRefsWatched[resource] = s
 	}
 
-	m.templateResourceRefsWatched[*resource].Insert(consumer)
+	m.templateResourceRefsWatched[resource].Insert(consumer)
 
 	return nil
 }

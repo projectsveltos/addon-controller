@@ -444,6 +444,11 @@ var _ = Describe("HandlersUtils", func() {
 				{
 					FeatureID: configv1alpha1.FeatureResources,
 					Status:    configv1alpha1.FeatureStatusProvisioned,
+				},
+			}
+			currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+				{
+					FeatureID: configv1alpha1.FeatureResources,
 					DeployedGroupVersionKind: []string{
 						"ClusterRole.v1.rbac.authorization.k8s.io",
 					},
@@ -558,6 +563,11 @@ var _ = Describe("HandlersUtils", func() {
 			{
 				FeatureID: configv1alpha1.FeatureResources,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+			{
+				FeatureID: configv1alpha1.FeatureResources,
 				DeployedGroupVersionKind: []string{
 					"ClusterRole.v1.rbac.authorization.k8s.io",
 				},

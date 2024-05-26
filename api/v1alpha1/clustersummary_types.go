@@ -106,12 +106,24 @@ type FeatureSummary struct {
 	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
 	// the workload cluster or the management cluster because of this feature.
 	// Each element has format kind.version.group
+	// Deprecated: Replaced by FeatureDeploymentInfo field instead
 	// +optional
 	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
 
 	// LastAppliedTime is the time feature was last reconciled
 	// +optional
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
+}
+
+type FeatureDeploymentInfo struct {
+	// FeatureID is an indentifier of the feature whose status is reported
+	FeatureID FeatureID `json:"featureID"`
+
+	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
+	// the workload cluster or the management cluster because of this feature.
+	// Each element has format kind.version.group
+	// +optional
+	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing
@@ -180,6 +192,13 @@ type ClusterSummaryStatus struct {
 	// +listMapKey=featureID
 	// +optional
 	FeatureSummaries []FeatureSummary `json:"featureSummaries,omitempty"`
+
+	// DeployedGVKs reports the list of GVKs deployed by ClusterSummary
+	// in a managed cluster
+	// +listType=map
+	// +listMapKey=featureID
+	// +optional
+	DeployedGVKs []FeatureDeploymentInfo `json:"deployedGVKs,omitempty"`
 
 	// HelmReleaseSummaries reports the status of each helm chart
 	// directly managed by ClusterProfile.

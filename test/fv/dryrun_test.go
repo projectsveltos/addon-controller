@@ -600,8 +600,8 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
 	Expect(len(clusterSummaryList.Items)).To(Equal(1))
 	found := false
-	for i := range clusterSummaryList.Items[0].Status.FeatureSummaries {
-		fs := clusterSummaryList.Items[0].Status.FeatureSummaries[i]
+	for i := range clusterSummaryList.Items[0].Status.DeployedGVKs {
+		fs := clusterSummaryList.Items[0].Status.DeployedGVKs[i]
 		if fs.FeatureID == configv1alpha1.FeatureResources {
 			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
 			found = true

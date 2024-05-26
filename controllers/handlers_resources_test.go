@@ -197,6 +197,11 @@ var _ = Describe("HandlersResource", func() {
 			{
 				FeatureID: configv1alpha1.FeatureResources,
 				Status:    configv1alpha1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+			{
+				FeatureID: configv1alpha1.FeatureResources,
 				DeployedGroupVersionKind: []string{
 					"ClusterRole.v1.rbac.authorization.k8s.io",
 					"Role.v1.rbac.authorization.k8s.io",
@@ -279,18 +284,18 @@ var _ = Describe("HandlersResource", func() {
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 				clusterSummary)
-			return err == nil && clusterSummary.Status.FeatureSummaries != nil
+			return err == nil && clusterSummary.Status.DeployedGVKs != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			clusterSummary)).To(Succeed())
-		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
-		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
-		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement(
+		Expect(clusterSummary.Status.DeployedGVKs).ToNot(BeNil())
+		Expect(len(clusterSummary.Status.DeployedGVKs)).To(Equal(1))
+		Expect(clusterSummary.Status.DeployedGVKs[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
+		Expect(clusterSummary.Status.DeployedGVKs[0].DeployedGroupVersionKind).To(ContainElement(
 			fmt.Sprintf("%s.%s.%s", localReports[0].Resource.Kind, localReports[0].Resource.Version, localReports[0].Resource.Group)))
-		Expect(clusterSummary.Status.FeatureSummaries[0].DeployedGroupVersionKind).To(ContainElement(
+		Expect(clusterSummary.Status.DeployedGVKs[0].DeployedGroupVersionKind).To(ContainElement(
 			fmt.Sprintf("%s.%s.%s", remoteReports[0].Resource.Kind, remoteReports[0].Resource.Version, remoteReports[0].Resource.Group)))
 	})
 })

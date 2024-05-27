@@ -17,18 +17,20 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -600,17 +602,39 @@ func removeCommentsAndEmptyLines(text string) string {
 	return result
 }
 
-func customSplit(text string) []string {
-	var result []string
-	start := 0
-	for i := range text {
-		if i > 0 && text[i-1] != ' ' && strings.HasPrefix(text[i:], separator) { // Check for "---" not preceded by space
-			result = append(result, text[start:i])
-			start = i + 3
-		}
+func customSplit(text string) ([]string, error) {
+	section := removeCommentsAndEmptyLines(text)
+	if section == "" {
+		return nil, nil
 	}
-	result = append(result, text[start:])
-	return result
+
+	result := []string{}
+
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(text)))
+
+	for {
+		var value interface{}
+		err := dec.Decode(&value)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if value == nil {
+			continue
+		}
+		valueBytes, err := yaml.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		if valueBytes == nil {
+			continue
+		}
+		result = append(result, string(valueBytes))
+	}
+
+	return result, nil
 }
 
 // collectContent collect policies contained in a ConfigMap/Secret.
@@ -625,26 +649,28 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	policies := make([]*unstructured.Unstructured, 0)
 
 	for k := range data {
-		elements := customSplit(data[k])
+		section := data[k]
+
+		if instantiateTemplate {
+			instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				clusterSummary.GetName(), section, mgmtResources, logger)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
+				return nil, err
+			}
+
+			section = instance
+		}
+
+		elements, err := customSplit(section)
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("failed to split Data %.100s", section))
+			return nil, err
+		}
+
 		for i := range elements {
-			section := removeCommentsAndEmptyLines(elements[i])
-			if section == "" {
-				continue
-			}
-
-			section = elements[i]
-
-			if instantiateTemplate {
-				instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-					clusterSummary.GetName(), section, mgmtResources, logger)
-				if err != nil {
-					return nil, err
-				}
-
-				section = instance
-			}
-
+			section := elements[i]
 			// Section can contain multiple resources separated by ---
 			policy, err := getUnstructured([]byte(section), logger)
 			if err != nil {
@@ -665,25 +691,21 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 
 func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	policies := make([]*unstructured.Unstructured, 0)
-	elements := customSplit(string(section))
+	elements, err := customSplit(string(section))
+	if err != nil {
+		return nil, err
+	}
 
 	for i := range elements {
-		section := removeCommentsAndEmptyLines(elements[i])
-		if section == "" {
-			continue
-		}
-
-		section = elements[i]
-
-		policy, err := utils.GetUnstructured([]byte(section))
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 			return nil, err
 		}
 
 		if policy == nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
-			return nil, fmt.Errorf("failed to get policy from Data %.100s", section)
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+			return nil, fmt.Errorf("failed to get policy from Data %.100s", elements[i])
 		}
 
 		policies = append(policies, policy)

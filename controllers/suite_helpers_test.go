@@ -112,11 +112,11 @@ func createConfigMapWithPolicy(namespace, configMapName string, policyStrs ...st
 }
 
 // createSecretWithPolicy creates a Secret with Data containing base64 encoded policies
-func createSecretWithPolicy(namespace, configMapName string, policyStrs ...string) *corev1.Secret {
+func createSecretWithPolicy(namespace, secretName string, policyStrs ...string) *corev1.Secret {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
-			Name:      configMapName,
+			Name:      secretName,
 		},
 		Type: libsveltosv1alpha1.ClusterProfileSecretType,
 		Data: map[string][]byte{},

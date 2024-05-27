@@ -1727,13 +1727,12 @@ func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	resources := make([]*unstructured.Unstructured, 0)
 
-	elements := customSplit(manifest)
-	for i := range elements {
-		section := removeCommentsAndEmptyLines(elements[i])
-		if section == "" {
-			continue
-		}
+	elements, err := customSplit(manifest)
+	if err != nil {
+		return nil, err
+	}
 
+	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))

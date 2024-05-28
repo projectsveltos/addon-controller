@@ -618,18 +618,21 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 			return nil, nil, err
 		}
 
-		// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
-		// substitute values first, and the resource in the management cluster later.
-		templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
-		instantiatedYAML, err := instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
-		if err != nil {
-			msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
-			logger.V(logs.LogInfo).Info(msg)
-			return nil, nil, errors.Wrap(err, msg)
+		// Assume it is a template only if there are values to substitute
+		if len(instantiateSubstituteValues) > 0 {
+			// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
+			// substitute values first, and the resource in the management cluster later.
+			templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
+			yaml, err = instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
+			if err != nil {
+				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
+				logger.V(logs.LogInfo).Info(msg)
+				return nil, nil, errors.Wrap(err, msg)
+			}
 		}
 
 		var u *unstructured.Unstructured
-		u, err = utils.GetUnstructured(instantiatedYAML)
+		u, err = utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, err

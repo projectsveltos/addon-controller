@@ -17,18 +17,20 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -600,17 +602,39 @@ func removeCommentsAndEmptyLines(text string) string {
 	return result
 }
 
-func customSplit(text string) []string {
-	var result []string
-	start := 0
-	for i := range text {
-		if i > 0 && text[i-1] != ' ' && strings.HasPrefix(text[i:], separator) { // Check for "---" not preceded by space
-			result = append(result, text[start:i])
-			start = i + 3
-		}
+func customSplit(text string) ([]string, error) {
+	section := removeCommentsAndEmptyLines(text)
+	if section == "" {
+		return nil, nil
 	}
-	result = append(result, text[start:])
-	return result
+
+	result := []string{}
+
+	dec := yaml.NewDecoder(bytes.NewReader([]byte(text)))
+
+	for {
+		var value interface{}
+		err := dec.Decode(&value)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if value == nil {
+			continue
+		}
+		valueBytes, err := yaml.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		if valueBytes == nil {
+			continue
+		}
+		result = append(result, string(valueBytes))
+	}
+
+	return result, nil
 }
 
 // collectContent collect policies contained in a ConfigMap/Secret.
@@ -625,26 +649,28 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 	policies := make([]*unstructured.Unstructured, 0)
 
 	for k := range data {
-		elements := customSplit(data[k])
+		section := data[k]
+
+		if instantiateTemplate {
+			instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				clusterSummary.GetName(), section, mgmtResources, logger)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
+				return nil, err
+			}
+
+			section = instance
+		}
+
+		elements, err := customSplit(section)
+		if err != nil {
+			logger.Error(err, fmt.Sprintf("failed to split Data %.100s", section))
+			return nil, err
+		}
+
 		for i := range elements {
-			section := removeCommentsAndEmptyLines(elements[i])
-			if section == "" {
-				continue
-			}
-
-			section = elements[i]
-
-			if instantiateTemplate {
-				instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-					clusterSummary.GetName(), section, mgmtResources, logger)
-				if err != nil {
-					return nil, err
-				}
-
-				section = instance
-			}
-
+			section := elements[i]
 			// Section can contain multiple resources separated by ---
 			policy, err := getUnstructured([]byte(section), logger)
 			if err != nil {
@@ -665,25 +691,21 @@ func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 
 func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	policies := make([]*unstructured.Unstructured, 0)
-	elements := customSplit(string(section))
+	elements, err := customSplit(string(section))
+	if err != nil {
+		return nil, err
+	}
 
 	for i := range elements {
-		section := removeCommentsAndEmptyLines(elements[i])
-		if section == "" {
-			continue
-		}
-
-		section = elements[i]
-
-		policy, err := utils.GetUnstructured([]byte(section))
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 			return nil, err
 		}
 
 		if policy == nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
-			return nil, fmt.Errorf("failed to get policy from Data %.100s", section)
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+			return nil, fmt.Errorf("failed to get policy from Data %.100s", elements[i])
 		}
 
 		policies = append(policies, policy)
@@ -838,7 +860,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	}
 
 	var mgmtResources map[string]*unstructured.Unstructured
-	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
+	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -953,12 +975,14 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	for i := range deployedGVKs {
 		// TODO: move this to separate method
-		logger.V(logs.LogDebug).Info("removing stale resources for GVK %s", deployedGVKs[i].String())
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("removing stale resources for GVK %s", deployedGVKs[i].String()))
 		mapping, err := mapper.RESTMapping(deployedGVKs[i].GroupKind(), deployedGVKs[i].Version)
 		if err != nil {
 			// if CRDs does not exist anymore, ignore error. No instances of
 			// such CRD can be left anyway.
-			if meta.IsNoMatchError(err) {
+			if errors.Is(err, &meta.NoKindMatchError{}) {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("removing stale resources for GVK %s failed with NoKindMatchError",
+					deployedGVKs[i].String()))
 				continue
 			}
 			return nil, err
@@ -1031,7 +1055,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 				Action: string(configv1alpha1.DeleteResourceAction),
 			}
 		}
-	} else {
+	} else if canDelete(&r, currentPolicies) {
 		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
 
 		deployer.RemoveOwnerReference(&r, profile)
@@ -1041,11 +1065,9 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 			return nil, nil
 		}
 
-		if canDelete(&r, currentPolicies) {
-			err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
-			if err != nil {
-				return nil, err
-			}
+		err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -1141,13 +1163,21 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) []schema.GroupVersionKind {
 
 	gvks := make([]schema.GroupVersionKind, 0)
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			for j := range clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind {
-				gvk, _ := schema.ParseKindArg(clusterSummary.Status.FeatureSummaries[i].DeployedGroupVersionKind[j])
-				gvks = append(gvks, *gvk)
-			}
-			break
+	// For backward compatible we still look at this field.
+	// New code set only FeatureDeploymentInfo
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil {
+		for j := range fs.DeployedGroupVersionKind {
+			gvk, _ := schema.ParseKindArg(fs.DeployedGroupVersionKind[j])
+			gvks = append(gvks, *gvk)
+		}
+	}
+
+	fdi := getFeatureDeploymentInfoForFeatureID(clusterSummary, featureID)
+	if fdi != nil {
+		for j := range fdi.DeployedGroupVersionKind {
+			gvk, _ := schema.ParseKindArg(fdi.DeployedGroupVersionKind[j])
+			gvks = append(gvks, *gvk)
 		}
 	}
 
@@ -1336,16 +1366,20 @@ func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInte
 
 func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) error {
+	logger logr.Logger) (*configv1alpha1.ClusterSummary, error) {
 
 	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
 	reports := localResourceReports
 	reports = append(reports, remoteResourceReports...)
 
+	if len(reports) == 0 {
+		return clusterSummary, nil
+	}
+
 	c := getManagementClusterClient()
 
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		err := c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)
@@ -1372,54 +1406,50 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 
 		return getManagementClusterClient().Status().Update(ctx, currentClusterSummary)
 	})
-	return err
+
+	return currentClusterSummary, err
 }
 
 // appendDeployedGroupVersionKinds appends the list of deployed GroupVersionKinds to current list
 func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
 	featureID configv1alpha1.FeatureID) {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		if clusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-			updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[i], gvks)
-			return
-		}
+	fdi := getFeatureDeploymentInfoForFeatureID(clusterSummary, featureID)
+	if fdi != nil {
+		fdi.DeployedGroupVersionKind = append(
+			fdi.DeployedGroupVersionKind,
+			tranformGroupVersionKindToString(gvks)...)
+		// Remove duplicates
+		fdi.DeployedGroupVersionKind = unique(fdi.DeployedGroupVersionKind)
+		return
 	}
 
-	if clusterSummary.Status.FeatureSummaries == nil {
-		clusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
+	if fdi == nil {
+		clusterSummary.Status.DeployedGVKs = make([]configv1alpha1.FeatureDeploymentInfo, 0)
 	}
 
-	clusterSummary.Status.FeatureSummaries = append(
-		clusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
-			FeatureID: featureID,
+	clusterSummary.Status.DeployedGVKs = append(
+		clusterSummary.Status.DeployedGVKs,
+		configv1alpha1.FeatureDeploymentInfo{
+			FeatureID:                featureID,
+			DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
 		},
 	)
-
-	length := len(clusterSummary.Status.FeatureSummaries)
-	updateDeployedGroupVersionKindField(&clusterSummary.Status.FeatureSummaries[length-1], gvks)
 }
 
-func updateDeployedGroupVersionKindField(fs *configv1alpha1.FeatureSummary, gvks []schema.GroupVersionKind) {
-	tmp := make([]string, 0)
-
-	// Preserve the order
-	current := make(map[string]bool)
-	for _, k := range fs.DeployedGroupVersionKind {
-		current[k] = true
-		tmp = append(tmp, k)
-	}
+func tranformGroupVersionKindToString(gvks []schema.GroupVersionKind) []string {
+	result := make([]string, 0)
+	tmpMap := make(map[string]bool)
 
 	for i := range gvks {
 		key := fmt.Sprintf("%s.%s.%s", gvks[i].Kind, gvks[i].Version, gvks[i].Group)
-		if _, ok := current[key]; !ok {
-			current[key] = true
-			tmp = append(tmp, key)
+		if _, ok := tmpMap[key]; !ok {
+			tmpMap[key] = true
+			result = append(result, key)
 		}
 	}
 
-	fs.DeployedGroupVersionKind = tmp
+	return result
 }
 
 // getRestConfig returns restConfig to access remote cluster

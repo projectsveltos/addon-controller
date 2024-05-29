@@ -394,6 +394,14 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += getVersion()
 	}
 
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mgmtResources {
+		config += render.AsCode(mgmtResources[i])
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -417,7 +425,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
 	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
 	// only after helm release is successfully undeployed.
-	conflict, err := updateStatusForeferencedHelmReleases(ctx, c, clusterSummary, logger)
+	clusterSummary, conflict, err := updateStatusForeferencedHelmReleases(ctx, c, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -427,7 +435,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 
 	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
 	// anymore, such helm release has been successfully remove at this point. So
-	err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
+	clusterSummary, err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -478,7 +486,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1alpha1.ClusterSum
 func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
 	kubeconfig string, logger logr.Logger) ([]configv1alpha1.ReleaseReport, []configv1alpha1.Chart, error) {
 
-	mgmtResources, err := collectMgmtResources(ctx, clusterSummary)
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1400,22 +1408,22 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 // allowed to manage.
 // No action in DryRun mode.
 func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (bool, error) {
+	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (*configv1alpha1.ClusterSummary, bool, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return false, nil
+		return clusterSummary, false, nil
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 &&
 		len(clusterSummary.Status.HelmReleaseSummaries) == 0 {
 		// Nothing to do
-		return false, nil
+		return clusterSummary, false, nil
 	}
 
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
-		return false, nil
+		return clusterSummary, false, nil
 	}
 
 	helmInfo := func(releaseNamespace, releaseName string) string {
@@ -1426,8 +1434,8 @@ func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
 
 	conflict := false
 
+	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
 		err = c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 		if err != nil {
@@ -1485,25 +1493,25 @@ func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
 
 		return c.Status().Update(ctx, currentClusterSummary)
 	})
-	return conflict, err
+	return currentClusterSummary, conflict, err
 }
 
 // updateStatusForNonReferencedHelmReleases walks ClusterSummary.Status entries.
 // Removes any entry pointing to a helm release currently not referenced by ClusterSummary.
 // No action in DryRun mode.
 func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary) error {
+	clusterSummary *configv1alpha1.ClusterSummary) (*configv1alpha1.ClusterSummary, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return nil
+		return clusterSummary, nil
 	}
 
 	currentClusterSummary := &configv1alpha1.ClusterSummary{}
 	err := c.Get(ctx,
 		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 	if err != nil {
-		return err
+		return clusterSummary, err
 	}
 
 	helmInfo := func(releaseNamespace, releaseName string) string {
@@ -1527,12 +1535,17 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 
 	if len(helmReleaseSummaries) == len(clusterSummary.Status.HelmReleaseSummaries) {
 		// Nothing has changed
-		return nil
+		return clusterSummary, nil
 	}
 
 	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
 
-	return c.Status().Update(ctx, currentClusterSummary)
+	err = c.Status().Update(ctx, currentClusterSummary)
+	if err != nil {
+		return clusterSummary, err
+	}
+
+	return currentClusterSummary, nil
 }
 
 // getHelmChartConflictManager returns a message listing ClusterProfile managing an helm chart.
@@ -1714,13 +1727,12 @@ func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	resources := make([]*unstructured.Unstructured, 0)
 
-	elements := customSplit(manifest)
-	for i := range elements {
-		section := removeCommentsAndEmptyLines(elements[i])
-		if section == "" {
-			continue
-		}
+	elements, err := customSplit(manifest)
+	if err != nil {
+		return nil, err
+	}
 
+	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))

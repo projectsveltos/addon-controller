@@ -68,7 +68,8 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterSummary, featureHandler, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
-	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
+	var gvkErr error
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr
@@ -105,7 +106,7 @@ func deployResources(ctx context.Context, c client.Client,
 	}
 	remoteResourceReports = append(remoteResourceReports, undeployed...)
 
-	err = handleWatchers(ctx, clusterSummary, localResourceReports)
+	err = handleWatchers(ctx, clusterSummary, localResourceReports, featureHandler)
 	if err != nil {
 		return err
 	}
@@ -140,17 +141,17 @@ func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, rem
 	localUndeployed, err = cleanPolicyRefResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary, localResourceReports, logger)
 	if err != nil {
-		return
+		return localUndeployed, nil, err
 	}
 
 	// Clean stale resources in the remote cluster
 	remoteUndeployed, err = cleanPolicyRefResources(ctx, false, remoteRestConfig, remoteClient, clusterSummary,
 		remoteResourceReports, logger)
 	if err != nil {
-		return
+		return localUndeployed, remoteUndeployed, err
 	}
 
-	return
+	return localUndeployed, remoteUndeployed, nil
 }
 
 // handleDriftDetectionManagerDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
@@ -200,25 +201,39 @@ func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *config
 }
 
 func handleWatchers(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	localResourceReports []configv1alpha1.ResourceReport) error {
+	localResourceReports []configv1alpha1.ResourceReport, featureHandler feature) error {
 
-	currentGVKs := make(map[schema.GroupVersionKind]bool)
 	manager := getManager()
-	for i := range localResourceReports {
-		gvk := schema.GroupVersionKind{
-			Group:   localResourceReports[i].Resource.Group,
-			Kind:    localResourceReports[i].Resource.Kind,
-			Version: localResourceReports[i].Resource.Version,
-		}
+	currentResources := make(map[corev1.ObjectReference]bool)
 
-		if err := manager.watchGVK(ctx, gvk, clusterSummary); err != nil {
-			return err
-		}
+	// Only if mode is SyncModeContinuousWithDriftDetection starts those watcher.
+	// A watcher for TemplateResourceRefs is started as part of ClusterSummary reconciler
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+		for i := range localResourceReports {
+			gvk := schema.GroupVersionKind{
+				Group:   localResourceReports[i].Resource.Group,
+				Kind:    localResourceReports[i].Resource.Kind,
+				Version: localResourceReports[i].Resource.Version,
+			}
 
-		currentGVKs[gvk] = true
+			apiVersion, kind := gvk.ToAPIVersionAndKind()
+
+			ref := &corev1.ObjectReference{
+				Kind:       kind,
+				APIVersion: apiVersion,
+				Namespace:  localResourceReports[i].Resource.Namespace,
+				Name:       localResourceReports[i].Resource.Name,
+			}
+
+			if err := manager.startWatcherForMgmtResource(ctx, gvk, ref, clusterSummary, featureHandler.id); err != nil {
+				return err
+			}
+
+			currentResources[*ref] = true
+		}
 	}
 
-	manager.stopStaleWatch(currentGVKs, clusterSummary)
+	manager.stopStaleWatchForMgmtResource(currentResources, clusterSummary, featureHandler.id)
 	return nil
 }
 
@@ -319,7 +334,7 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	manager := getManager()
-	manager.stopStaleWatch(nil, clusterSummary)
+	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1alpha1.FeatureResources)
 
 	return nil
 }
@@ -401,6 +416,14 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		// Use the version. This will cause drift-detection, Sveltos CRDs
 		// to be redeployed on upgrade
 		config += getVersion()
+	}
+
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mgmtResources {
+		config += render.AsCode(mgmtResources[i])
 	}
 
 	h.Write([]byte(config))

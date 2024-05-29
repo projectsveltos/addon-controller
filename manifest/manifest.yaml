@@ -2501,6 +2501,35 @@ spec:
                   Dependencies is a summary reporting the status of the dependencies
                   for the associated ClusterProfile
                 type: string
+              deployedGVKs:
+                description: |-
+                  DeployedGVKs reports the list of GVKs deployed by ClusterSummary
+                  in a managed cluster
+                items:
+                  properties:
+                    deployedGroupVersionKind:
+                      description: |-
+                        DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
+                        the workload cluster or the management cluster because of this feature.
+                        Each element has format kind.version.group
+                      items:
+                        type: string
+                      type: array
+                    featureID:
+                      description: FeatureID is an indentifier of the feature whose
+                        status is reported
+                      enum:
+                      - Resources
+                      - Helm
+                      - Kustomize
+                      type: string
+                  required:
+                  - featureID
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - featureID
+                x-kubernetes-list-type: map
               featureSummaries:
                 description: |-
                   FeatureSummaries reports the status of each workload cluster feature
@@ -2515,6 +2544,7 @@ spec:
                         DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
                         the workload cluster or the management cluster because of this feature.
                         Each element has format kind.version.group
+                        Deprecated: Replaced by FeatureDeploymentInfo field instead
                       items:
                         type: string
                       type: array
@@ -2559,6 +2589,9 @@ spec:
                   - featureID
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - featureID
+                x-kubernetes-list-type: map
               helmReleaseSummaries:
                 description: |-
                   HelmReleaseSummaries reports the status of each helm chart

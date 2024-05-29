@@ -87,6 +87,7 @@ var (
 	ComputePolicyHash             = computePolicyHash
 	GetPolicyInfo                 = getPolicyInfo
 	CollectContent                = collectContent
+	CustomSplit                   = customSplit
 	UndeployStaleResources        = undeployStaleResources
 	GetDeployedGroupVersionKinds  = getDeployedGroupVersionKinds
 	CanDelete                     = canDelete
@@ -188,7 +189,8 @@ var (
 )
 
 var (
-	GetMgmtResourceName = getMgmtResourceName
+	GetTemplateResourceName      = getTemplateResourceName
+	GetTemplateResourceNamespace = getTemplateResourceNamespace
 )
 
 var (

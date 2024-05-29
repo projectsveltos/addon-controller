@@ -296,12 +296,10 @@ func genericUndeploy(ctx context.Context, c client.Client,
 func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		fs := clusterSummary.Status.FeatureSummaries[i]
-		if fs.FeatureID == featureID {
-			return true
-		}
+	if fs := getFeatureSummaryForFeatureID(clusterSummary, featureID); fs != nil {
+		return true
 	}
+
 	return false
 }
 
@@ -310,14 +308,11 @@ func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *config
 func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		fs := clusterSummary.Status.FeatureSummaries[i]
-		if fs.FeatureID == featureID {
-			if fs.Status == configv1alpha1.FeatureStatusProvisioned {
-				return true
-			}
-		}
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil && fs.Status == configv1alpha1.FeatureStatusProvisioned {
+		return true
 	}
+
 	return false
 }
 
@@ -325,14 +320,11 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alp
 func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		fs := clusterSummary.Status.FeatureSummaries[i]
-		if fs.FeatureID == featureID {
-			if fs.Status == configv1alpha1.FeatureStatusFailedNonRetriable {
-				return true
-			}
-		}
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil && fs.Status == configv1alpha1.FeatureStatusFailedNonRetriable {
+		return true
 	}
+
 	return false
 }
 
@@ -341,14 +333,11 @@ func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterS
 func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1alpha1.ClusterSummary,
 	featureID configv1alpha1.FeatureID) bool {
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		fs := clusterSummary.Status.FeatureSummaries[i]
-		if fs.FeatureID == featureID {
-			if fs.Status == configv1alpha1.FeatureStatusRemoved {
-				return true
-			}
-		}
+	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if fs != nil && fs.Status == configv1alpha1.FeatureStatusRemoved {
+		return true
 	}
+
 	return false
 }
 
@@ -359,12 +348,10 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
-	for i := range clusterSummary.Status.FeatureSummaries {
-		fs := clusterSummary.Status.FeatureSummaries[i]
-		if fs.FeatureID == featureID {
-			return fs.Hash
-		}
+	if fs := getFeatureSummaryForFeatureID(clusterSummary, featureID); fs != nil {
+		return fs.Hash
 	}
+
 	return nil
 }
 

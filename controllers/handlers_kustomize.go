@@ -91,7 +91,8 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		clusterSummary, logger)
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
-	gvkErr := updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
+	var gvkErr error
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr
@@ -128,7 +129,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 	remoteResourceReports = append(remoteResourceReports, undeployed...)
 
-	err = handleWatchers(ctx, clusterSummary, localResourceReports)
+	err = handleWatchers(ctx, clusterSummary, localResourceReports, featureHandler)
 	if err != nil {
 		return err
 	}
@@ -252,7 +253,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	manager := getManager()
-	manager.stopStaleWatch(nil, clusterSummary)
+	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1alpha1.FeatureKustomize)
 
 	return nil
 }
@@ -282,43 +283,12 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.ClusterSummary.Namespace, kustomizationRef.Namespace)
-		if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
-				return nil, err
-			}
-			if configMap == nil {
-				continue
-			}
-			config += getDataSectionHash(configMap.Data)
-			config += getDataSectionHash(configMap.BinaryData)
-		} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
-				return nil, err
-			}
-			if secret == nil {
-				continue
-			}
-			config += getDataSectionHash(secret.Data)
-			config += getDataSectionHash(secret.StringData)
-		} else {
-			source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
-				return nil, err
-			}
-			if source == nil {
-				continue
-			}
-			s := source.(sourcev1.Source)
-			if s.GetArtifact() != nil {
-				config += s.GetArtifact().Revision
-			}
+		result, err := getHashFromKustomizationRef(ctx, c, clusterSummaryScope.ClusterSummary,
+			kustomizationRef, logger)
+		if err != nil {
+			return nil, err
 		}
+		config += string(result)
 
 		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
 			kustomizationRef, logger)
@@ -352,8 +322,61 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		}
 	}
 
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mgmtResources {
+		config += render.AsCode(mgmtResources[i])
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) ([]byte, error) {
+
+	var result string
+	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
+			return nil, err
+		}
+		if configMap == nil {
+			return nil, nil
+		}
+		result += getDataSectionHash(configMap.Data)
+		result += getDataSectionHash(configMap.BinaryData)
+	} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
+			return nil, err
+		}
+		if secret == nil {
+			return nil, nil
+		}
+		result += getDataSectionHash(secret.Data)
+		result += getDataSectionHash(secret.StringData)
+	} else {
+		source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
+			return nil, err
+		}
+		if source == nil {
+			return nil, nil
+		}
+		s := source.(sourcev1.Source)
+		if s.GetArtifact() != nil {
+			result += s.GetArtifact().Revision
+		}
+	}
+
+	return []byte(result), nil
 }
 
 // instantiateKustomizeSubstituteValues gets all substitute values for a KustomizationRef and
@@ -567,7 +590,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 ) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, err error) {
 
 	var mgmtResources map[string]*unstructured.Unstructured
-	mgmtResources, err = collectMgmtResources(ctx, clusterSummary)
+	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -595,18 +618,21 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 			return nil, nil, err
 		}
 
-		// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
-		// substitute values first, and the resource in the management cluster later.
-		templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
-		instantiatedYAML, err := instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
-		if err != nil {
-			msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
-			logger.V(logs.LogInfo).Info(msg)
-			return nil, nil, errors.Wrap(err, msg)
+		// Assume it is a template only if there are values to substitute
+		if len(instantiateSubstituteValues) > 0 {
+			// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
+			// substitute values first, and the resource in the management cluster later.
+			templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
+			yaml, err = instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
+			if err != nil {
+				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
+				logger.V(logs.LogInfo).Info(msg)
+				return nil, nil, errors.Wrap(err, msg)
+			}
 		}
 
 		var u *unstructured.Unstructured
-		u, err = utils.GetUnstructured(instantiatedYAML)
+		u, err = utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, err

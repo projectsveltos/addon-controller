@@ -17,24 +17,19 @@ limitations under the License.
 package controllers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sort"
 	"strings"
-	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/gdexlab/go-render/render"
-	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -50,7 +45,6 @@ import (
 	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
 	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 //+kubebuilder:rbac:groups=extension.projectsveltos.io,resources=yttsources,verbs=get;list;watch
@@ -236,74 +230,6 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 	}
 }
 
-// collectMgmtResources collects clusterSummary.Spec.ClusterProfileSpec.MgmtClusterResources
-// from management cluster
-func collectMgmtResources(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-) (map[string]*unstructured.Unstructured, error) {
-
-	if clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs == nil {
-		return nil, nil
-	}
-
-	restConfig := getManagementClusterConfig()
-
-	result := make(map[string]*unstructured.Unstructured)
-	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
-		ref := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
-		// If namespace is not defined, default to cluster namespace
-		namespace := ref.Resource.Namespace
-		if namespace == "" {
-			namespace = clusterSummary.Namespace
-		}
-		dr, err := utils.GetDynamicResourceInterface(restConfig, ref.Resource.GroupVersionKind(), namespace)
-		if err != nil {
-			return nil, err
-		}
-
-		instantiatedName, err := getMgmtResourceName(clusterSummary, ref)
-		if err != nil {
-			return nil, err
-		}
-
-		var u *unstructured.Unstructured
-		u, err = dr.Get(ctx, instantiatedName, metav1.GetOptions{})
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				continue
-			}
-			return nil, err
-		}
-
-		result[ref.Identifier] = u
-	}
-
-	return result, nil
-}
-
-// Resources referenced in the management cluster can have their name expressed in function
-// of cluster information (clusterNamespace, clusterName, clusterType)
-func getMgmtResourceName(clusterSummary *configv1alpha1.ClusterSummary,
-	ref *configv1alpha1.TemplateResourceRef) (string, error) {
-
-	// Accept name that are templates
-	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(ref.Resource.Name)
-	if err != nil {
-		return "", err
-	}
-
-	var buffer bytes.Buffer
-
-	if err := tmpl.Execute(&buffer,
-		struct{ ClusterNamespace, ClusterName string }{
-			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
-			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
-		return "", errors.Wrapf(err, "error executing template")
-	}
-	return buffer.String(), nil
-}
-
 // isCluterSummaryProvisioned returns true if ClusterSummary is currently fully deployed.
 func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bool {
 	hasHelmCharts := false
@@ -469,4 +395,45 @@ func getProfileNameFromOwnerReferenceName(profileName string) *types.NamespacedN
 		return &types.NamespacedName{Name: profileName}
 	}
 	return &types.NamespacedName{Namespace: result[0], Name: result[1]}
+}
+
+// Function to remove duplicates from a slice
+func unique[T comparable](input []T) []T {
+	seen := make(map[T]bool)
+	unique := []T{}
+
+	for _, element := range input {
+		if !seen[element] {
+			unique = append(unique, element)
+			seen[element] = true
+		}
+	}
+
+	return unique
+}
+
+// Return FeatureSummaries for featureID
+func getFeatureSummaryForFeatureID(clusterSummay *configv1alpha1.ClusterSummary, fID configv1alpha1.FeatureID,
+) *configv1alpha1.FeatureSummary {
+
+	for i := range clusterSummay.Status.FeatureSummaries {
+		if clusterSummay.Status.FeatureSummaries[i].FeatureID == fID {
+			return &clusterSummay.Status.FeatureSummaries[i]
+		}
+	}
+
+	return nil
+}
+
+// Return FeatureDeploymentInfo for featureID
+func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1alpha1.ClusterSummary,
+	fID configv1alpha1.FeatureID) *configv1alpha1.FeatureDeploymentInfo {
+
+	for i := range clusterSummay.Status.DeployedGVKs {
+		if clusterSummay.Status.DeployedGVKs[i].FeatureID == fID {
+			return &clusterSummay.Status.DeployedGVKs[i]
+		}
+	}
+
+	return nil
 }

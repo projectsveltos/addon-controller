@@ -1054,6 +1054,9 @@ spec:
                   - resource
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - identifier
+                x-kubernetes-list-type: map
               tier:
                 default: 100
                 description: |-
@@ -2389,6 +2392,9 @@ spec:
                       - resource
                       type: object
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - identifier
+                    x-kubernetes-list-type: map
                   tier:
                     default: 100
                     description: |-
@@ -3311,6 +3317,9 @@ spec:
                   - resource
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - identifier
+                x-kubernetes-list-type: map
               tier:
                 default: 100
                 description: |-

@@ -1020,6 +1020,40 @@ var _ = Describe("HandlersUtils", func() {
 		sections, err = controllers.CustomSplit(piraeus)
 		Expect(err).To(BeNil())
 		Expect(len(sections)).To(Equal(3))
+
+		multipleResources := `  
+  apiVersion: v1  
+  kind: Service  
+  metadata:    
+    labels:      
+      app: nats      
+      tailscale.com/proxy-class: default    
+    annotations:      
+      tailscale.com/tailnet-fqdn: nats-cluster-1    
+    name: nats-cluster-1  
+  spec:    
+    externalName: placeholder    
+    type: ExternalName
+---
+  
+  apiVersion: v1  
+  kind: Service  
+  metadata:    
+    labels:      
+      app: nats      
+      tailscale.com/proxy-class: default    
+    annotations:      
+      tailscale.com/tailnet-fqdn: nats-cluster-2    
+    name: nats-cluster-2  
+  spec:    
+    externalName: placeholder    
+    type: ExternalName
+---
+
+`
+		sections, err = controllers.CustomSplit(multipleResources)
+		Expect(err).To(BeNil())
+		Expect(len(sections)).To(Equal(2))
 	})
 
 	It("canDelete returns false when ClusterProfile is not referencing the policies anymore", func() {

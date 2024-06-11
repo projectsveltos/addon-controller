@@ -569,8 +569,10 @@ type Spec struct {
 	// PolicyRefs and Helm charts
 	// +patchMergeKey=identifier
 	// +patchStrategy=merge,retainKeys
+	// +listType=map
+	// +listMapKey=identifier
 	// +optional
-	TemplateResourceRefs []TemplateResourceRef `json:"templateResourceRefs,omitempty"`
+	TemplateResourceRefs []TemplateResourceRef `json:"templateResourceRefs,omitempty" patchStrategy:"merge" patchMergeKey:"identifier"`
 
 	// DependsOn specifies a list of other ClusterProfiles that this instance depends on.
 	// In any managed cluster that matches this ClusterProfile, the add-ons and applications

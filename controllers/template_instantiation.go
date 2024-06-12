@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -172,7 +171,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	}
 
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(values)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(values)
 	if err != nil {
 		return "", err
 	}

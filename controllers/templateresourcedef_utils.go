@@ -21,7 +21,6 @@ import (
 	"context"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,7 +51,7 @@ func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
 	// Accept name that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(ref.Resource.Name)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(ref.Resource.Name)
 	if err != nil {
 		return "", err
 	}

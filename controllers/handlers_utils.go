@@ -264,16 +264,22 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		configv1alpha1.FeatureResources, clusterSummary, logger)
 }
 
-// setNamespaceIfUnset sets namespace to default for namespaced resource with unset namespace
-func setNamespaceIfUnset(policy *unstructured.Unstructured, destConfig *rest.Config) error {
-	if policy.GetNamespace() == "" {
-		isResourceNamespaced, err := isNamespaced(policy, destConfig)
-		if err != nil {
-			return err
-		}
+// adjustNamespace fixes namespace.
+// - sets namespace to "default" for namespaced resource with unset namespace
+// - unsets namespace for cluster-wide resources with namespace set
+func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config) error {
+	isResourceNamespaced, err := isNamespaced(policy, destConfig)
+	if err != nil {
+		return err
+	}
 
-		if isResourceNamespaced {
+	if isResourceNamespaced {
+		if policy.GetNamespace() == "" {
 			policy.SetNamespace("default")
+		}
+	} else {
+		if policy.GetNamespace() != "" {
+			policy.SetNamespace("")
 		}
 	}
 
@@ -302,7 +308,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
 
-		err := setNamespaceIfUnset(policy, destConfig)
+		err := adjustNamespace(policy, destConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -558,8 +564,9 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 }
 
 // getResource returns sveltos Resource and the resource hash hash
-func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference, tier int32,
-	featureID configv1alpha1.FeatureID, logger logr.Logger) (resource *configv1alpha1.Resource, policyHash string) {
+func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference,
+	tier int32, featureID configv1alpha1.FeatureID, logger logr.Logger,
+) (resource *configv1alpha1.Resource, policyHash string) {
 
 	resource = &configv1alpha1.Resource{
 		Name:      policy.GetName(),

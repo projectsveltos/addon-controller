@@ -1132,6 +1132,33 @@ var _ = Describe("HandlersUtils", func() {
 		}
 	})
 
+	It("adjustNamespace adjusts namespace for both namespaced and cluster wide resources", func() {
+		deployment := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test`
+
+		u, err := utils.GetUnstructured([]byte(deployment))
+		Expect(err).To(BeNil())
+
+		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())
+		// For namespaced resources if namespace is not set, namespace gets set to default
+		Expect(u.GetNamespace()).To(Equal("default"))
+
+		clusterIssuer := `apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: view
+  namespace: cert-manager`
+
+		u, err = utils.GetUnstructured([]byte(clusterIssuer))
+		Expect(err).To(BeNil())
+
+		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())
+		// For cluster wide resources if namespace is set, namespace gets reset
+		Expect(u.GetNamespace()).To(Equal(""))
+	})
+
 	It("readFiles loads content of all files in a directory", func() {
 		dir, err := os.MkdirTemp("", "my-temp-dir")
 		Expect(err).To(BeNil())

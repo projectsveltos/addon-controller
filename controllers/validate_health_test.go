@@ -30,9 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2/textlogger"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosutils "github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -97,12 +97,12 @@ var _ = Describe("Lua Health Policies", func() {
 		Expect(testEnv.Create(context.TODO(), pod2)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, pod2)).To(Succeed())
 
-		check := &configv1alpha1.ValidateHealth{
+		check := &configv1beta1.ValidateHealth{
 			Group:   "",
 			Version: "v1",
 			Kind:    "Pod",
-			LabelFilters: []libsveltosv1alpha1.LabelFilter{
-				{Key: key, Value: value, Operation: libsveltosv1alpha1.OperationEqual},
+			LabelFilters: []libsveltosv1beta1.LabelFilter{
+				{Key: key, Value: value, Operation: libsveltosv1beta1.OperationEqual},
 			},
 		}
 

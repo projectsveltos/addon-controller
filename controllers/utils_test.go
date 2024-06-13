@@ -35,9 +35,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -108,7 +108,7 @@ var (
 
 func setupScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
-	if err := configv1alpha1.AddToScheme(s); err != nil {
+	if err := configv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := clusterv1.AddToScheme(s); err != nil {
@@ -120,7 +120,7 @@ func setupScheme() (*runtime.Scheme, error) {
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+	if err := libsveltosv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := sourcev1.AddToScheme(s); err != nil {
@@ -131,8 +131,8 @@ func setupScheme() (*runtime.Scheme, error) {
 }
 
 var _ = Describe("getClusterProfileOwner ", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
+	var clusterSummary *configv1beta1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
 	var scheme *runtime.Scheme
@@ -154,29 +154,35 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 		}
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 	})
 
 	It("getClusterProfileOwner returns ClusterProfile owner", func() {
@@ -191,7 +197,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 		}
 
-		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
+		clusterSummary.Spec = configv1beta1.ClusterSummarySpec{
 			ClusterNamespace:   namespace,
 			ClusterName:        clusterName,
 			ClusterProfileSpec: clusterProfile.Spec,
@@ -204,7 +210,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, _, err := configv1alpha1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
+		owner, _, err := configv1beta1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).ToNot(BeNil())
 		Expect(owner.GetName()).To(Equal(clusterProfile.Name))
@@ -252,7 +258,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			},
 		}
 
-		clusterSummary.Spec = configv1alpha1.ClusterSummarySpec{
+		clusterSummary.Spec = configv1beta1.ClusterSummarySpec{
 			ClusterNamespace:   namespace,
 			ClusterName:        clusterName,
 			ClusterProfileSpec: clusterProfile.Spec,
@@ -264,20 +270,20 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		owner, _, err := configv1alpha1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
+		owner, _, err := configv1beta1.GetProfileOwnerAndTier(context.TODO(), c, clusterSummary)
 		Expect(err).To(BeNil())
 		Expect(owner).To(BeNil())
 	})
 
 	It("GetClusterSummary returns the ClusterSummary instance created by a ClusterProfile for a CAPI Cluster", func() {
-		clusterSummary0 := &configv1alpha1.ClusterSummary{
+		clusterSummary0 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -289,8 +295,8 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, configv1alpha1.ClusterProfileKind,
-			clusterProfile.Name, cluster.Namespace, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		currentClusterSummary, err := controllers.GetClusterSummary(context.TODO(), c, configv1beta1.ClusterProfileKind,
+			clusterProfile.Name, cluster.Namespace, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary).ToNot(BeNil())
 		Expect(currentClusterSummary.Name).To(Equal(clusterSummary.Name))
@@ -311,15 +317,15 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	})
 
 	It("isClusterProvisioned returns true when all Features are marked Provisioned", func() {
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   clusterProfileNamePrefix + randomString(),
 				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					HelmCharts: []configv1alpha1.HelmChart{
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
 						{
 							RepositoryURL:    randomString(),
 							RepositoryName:   randomString(),
@@ -329,18 +335,18 @@ var _ = Describe("getClusterProfileOwner ", func() {
 							ReleaseNamespace: randomString(),
 						},
 					},
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: randomString(),
 							Name:      randomString(),
-							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 						},
 					},
-					KustomizationRefs: []configv1alpha1.KustomizationRef{
+					KustomizationRefs: []configv1beta1.KustomizationRef{
 						{
 							Namespace: randomString(),
 							Name:      randomString(),
-							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 						},
 					},
 				},
@@ -350,44 +356,44 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		// Not all Features are marked as provisioned
 		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
 
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureHelm,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureHelm,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioning,
-			},
-		}
-		// Not all Features are marked as provisioned
-		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
-
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{
-				FeatureID: configv1alpha1.FeatureHelm,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
-			},
-			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioning,
 			},
 		}
 		// Not all Features are marked as provisioned
 		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
 
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureHelm,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureHelm,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		// Not all Features are marked as provisioned
+		Expect(controllers.IsCluterSummaryProvisioned(clusterSummary)).To(BeFalse())
+
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: configv1beta1.FeatureHelm,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 			{
-				FeatureID: configv1alpha1.FeatureKustomize,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioned,
+			},
+			{
+				FeatureID: configv1beta1.FeatureKustomize,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 		}
 		// all Features are marked as provisioned

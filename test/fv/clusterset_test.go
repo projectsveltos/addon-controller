@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("ClusterSet", func() {
@@ -42,7 +42,7 @@ var _ = Describe("ClusterSet", func() {
 		verifyClusterSetMatches(clusterSet)
 
 		By("Verify ClusterSet has selected the matching cluster")
-		currentClusterSet := &libsveltosv1alpha1.ClusterSet{}
+		currentClusterSet := &libsveltosv1beta1.ClusterSet{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)).To(Succeed())
 		Expect(currentClusterSet.Status.SelectedClusterRefs).ToNot(BeNil())

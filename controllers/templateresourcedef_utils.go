@@ -26,13 +26,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 // The TemplateResource namespace can be specified or it will inherit the cluster namespace
-func getTemplateResourceNamespace(clusterSummary *configv1alpha1.ClusterSummary,
-	ref *configv1alpha1.TemplateResourceRef) string {
+func getTemplateResourceNamespace(clusterSummary *configv1beta1.ClusterSummary,
+	ref *configv1beta1.TemplateResourceRef) string {
 
 	namespace := ref.Resource.Namespace
 	if namespace == "" {
@@ -45,8 +45,8 @@ func getTemplateResourceNamespace(clusterSummary *configv1alpha1.ClusterSummary,
 
 // Resources referenced in the management cluster can have their name expressed in function
 // of cluster information (clusterNamespace, clusterName, clusterType)
-func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
-	ref *configv1alpha1.TemplateResourceRef) (string, error) {
+func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
+	ref *configv1beta1.TemplateResourceRef) (string, error) {
 
 	// Accept name that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -80,7 +80,7 @@ func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
 
 // collectTemplateResourceRefs collects clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs
 // from management cluster
-func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 ) (map[string]*unstructured.Unstructured, error) {
 
 	if clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs == nil {

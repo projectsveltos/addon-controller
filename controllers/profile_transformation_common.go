@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -28,13 +29,13 @@ import (
 
 	"github.com/go-logr/logr"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 func requeueForCluster(cluster client.Object,
-	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
+	profileSelectors map[corev1.ObjectReference]libsveltosv1beta1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
 	kindType string, logger logr.Logger) []reconcile.Request {
@@ -69,13 +70,14 @@ func requeueForCluster(cluster client.Object,
 	// now matching the Cluster
 	for k := range profileSelectors {
 		profileSelector := profileSelectors[k]
-		parsedSelector, err := labels.Parse(string(profileSelector))
+
+		clusterSelector, err := metav1.LabelSelectorAsSelector(&profileSelector.LabelSelector)
 		if err != nil {
-			// When clusterSelector is fixed, this ClusterProfile/Profile
-			// instance will be reconciled
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to convert selector %v", err))
 			continue
 		}
-		if parsedSelector.Matches(labels.Set(cluster.GetLabels())) {
+
+		if clusterSelector.Matches(labels.Set(cluster.GetLabels())) {
 			l := logger.WithValues(kindType, k.Name)
 			l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kindType))
 			requests = append(requests, ctrl.Request{
@@ -91,7 +93,7 @@ func requeueForCluster(cluster client.Object,
 }
 
 func requeueForMachine(machine client.Object,
-	profileSelectors map[corev1.ObjectReference]libsveltosv1alpha1.Selector,
+	profileSelectors map[corev1.ObjectReference]libsveltosv1beta1.Selector,
 	clusterLabels map[corev1.ObjectReference]map[string]string,
 	clusterMap map[corev1.ObjectReference]*libsveltosset.Set,
 	kind string, logger logr.Logger) []reconcile.Request {
@@ -136,13 +138,14 @@ func requeueForMachine(machine client.Object,
 		// matching the Cluster
 		for k := range profileSelectors {
 			profileSelector := profileSelectors[k]
-			parsedSelector, err := labels.Parse(string(profileSelector))
+
+			clusterSelector, err := metav1.LabelSelectorAsSelector(&profileSelector.LabelSelector)
 			if err != nil {
-				// When clusterSelector is fixed, this ClusterProfile/Profile
-				// instance will be reconciled
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to convert selector %v", err))
 				continue
 			}
-			if parsedSelector.Matches(labels.Set(clusterLabels)) {
+
+			if clusterSelector.Matches(labels.Set(clusterLabels)) {
 				l := logger.WithValues(kind, k.Name)
 				l.V(logs.LogDebug).Info(fmt.Sprintf("queuing %s", kind))
 				requests = append(requests, ctrl.Request{

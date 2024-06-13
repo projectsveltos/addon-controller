@@ -59,4 +59,44 @@ resources:
   group: lib
   kind: ClusterSet
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterProfile
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterReport
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterSummary
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterConfiguration
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: projectsveltos.io
+  group: config
+  kind: Profile
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
 version: "3"

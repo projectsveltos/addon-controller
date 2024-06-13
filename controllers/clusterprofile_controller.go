@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -61,7 +61,7 @@ type ClusterProfileReconciler struct {
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
 
 	// key: ClusterProfile; value ClusterProfile Selector
-	ClusterProfiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
+	ClusterProfiles map[corev1.ObjectReference]libsveltosv1beta1.Selector
 
 	// For each cluster contains current labels
 	// This is needed in following scenario:
@@ -91,7 +91,7 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogInfo).Info("Reconciling")
 	// Fecth the ClusterProfile instance
-	clusterProfile := &configv1alpha1.ClusterProfile{}
+	clusterProfile := &configv1beta1.ClusterProfile{}
 	if err := r.Get(ctx, req.NamespacedName, clusterProfile); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -137,7 +137,7 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile delete")
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
-		configv1alpha1.ClusterProfileFinalizer, logger); err != nil {
+		configv1beta1.ClusterProfileFinalizer, logger); err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
@@ -154,8 +154,8 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	logger := profileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile")
 
-	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1alpha1.ClusterProfileFinalizer) {
-		if err := addFinalizer(ctx, profileScope, configv1alpha1.ClusterProfileFinalizer); err != nil {
+	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1beta1.ClusterProfileFinalizer) {
+		if err := addFinalizer(ctx, profileScope, configv1beta1.ClusterProfileFinalizer); err != nil {
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}
 	}
@@ -189,17 +189,17 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1alpha1.ClusterProfile{}).
+		For(&configv1beta1.ClusterProfile{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
-		Watches(&libsveltosv1alpha1.ClusterSet{},
+		Watches(&libsveltosv1beta1.ClusterSet{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForClusterSet),
 			builder.WithPredicates(
 				SetPredicates(mgr.GetLogger().WithValues("predicate", "clustersetpredicate")),
 			),
 		).
-		Watches(&libsveltosv1alpha1.SveltosCluster{},
+		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForSveltosCluster),
 			builder.WithPredicates(
 				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
@@ -303,7 +303,7 @@ func (r *ClusterProfileReconciler) updateMaps(profileScope *scope.ProfileScope) 
 	for i := range profileScope.GetSpec().SetRefs {
 		clusterSet := profileScope.GetSpec().SetRefs[i]
 		clusterSetInfo := &corev1.ObjectReference{Name: clusterSet,
-			Kind: libsveltosv1alpha1.ClusterSetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
+			Kind: libsveltosv1beta1.ClusterSetKind, APIVersion: libsveltosv1beta1.GroupVersion.String()}
 		getConsumersForEntry(r.ClusterSetMap, clusterSetInfo).Insert(clusterProfileInfo)
 	}
 
@@ -319,7 +319,7 @@ func (r *ClusterProfileReconciler) getClustersFromClusterSets(ctx context.Contex
 
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range clusterSetRefs {
-		clusterSet := &libsveltosv1alpha1.ClusterSet{}
+		clusterSet := &libsveltosv1beta1.ClusterSet{}
 		if err := r.Client.Get(ctx,
 			types.NamespacedName{Name: clusterSetRefs[i]},
 			clusterSet); err != nil {

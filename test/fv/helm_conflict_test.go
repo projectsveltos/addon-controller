@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
@@ -50,7 +50,7 @@ var _ = Describe("Helm with conflicts", func() {
 	It("Two ClusterProfiles managing same helm chart on same cluster", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 		Byf("Created ClusterProfile %s", clusterProfile.Name)
 
@@ -63,7 +63,7 @@ var _ = Describe("Helm with conflicts", func() {
 		sparkVersion := "7.0.1"
 		addSparkHelmChart(clusterProfile.Name, sparkVersion)
 
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
@@ -81,16 +81,16 @@ var _ = Describe("Helm with conflicts", func() {
 				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		charts := []configv1alpha1.Chart{
+		charts := []configv1beta1.Chart{
 			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		By("Creating a second ClusterProfile which conflicts with first ClusterProfile")
 		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile2.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile2.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile2)).To(Succeed())
 		Byf("Created ClusterProfile %s", clusterProfile2.Name)
 
@@ -113,11 +113,11 @@ var _ = Describe("Helm with conflicts", func() {
 				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout/2, pollingInterval).Should(BeNil())
 
-		charts = []configv1alpha1.Chart{
+		charts = []configv1beta1.Chart{
 			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile2.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
@@ -137,9 +137,9 @@ func addSparkHelmChart(clusterProfileName, version string) {
 	Byf("Update ClusterProfile %s to deploy spark helm charts", clusterProfileName)
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileName}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -147,7 +147,7 @@ func addSparkHelmChart(clusterProfileName, version string) {
 				ChartVersion:     version,
 				ReleaseName:      "spark",
 				ReleaseNamespace: "spark",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 

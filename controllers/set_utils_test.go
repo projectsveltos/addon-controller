@@ -17,8 +17,6 @@ limitations under the License.
 package controllers_test
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -28,7 +26,7 @@ import (
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Set utils", func() {
@@ -47,15 +45,21 @@ var _ = Describe("Set utils", func() {
 				Name:       randomString(),
 			},
 		}
-		clusterSet := libsveltosv1alpha1.ClusterSet{
+		clusterSet := libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.Spec{
-				MaxReplicas:     2,
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: libsveltosv1beta1.Spec{
+				MaxReplicas: 2,
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
-			Status: libsveltosv1alpha1.Status{
+			Status: libsveltosv1beta1.Status{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					{
 						Kind:       clusterKind,
@@ -83,15 +87,21 @@ var _ = Describe("Set utils", func() {
 	})
 
 	It("selectMoreClusters adds new clusters till it matches MaxReplicas", func() {
-		clusterSet := libsveltosv1alpha1.ClusterSet{
+		clusterSet := libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.Spec{
-				MaxReplicas:     2,
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: libsveltosv1beta1.Spec{
+				MaxReplicas: 2,
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
-			Status: libsveltosv1alpha1.Status{
+			Status: libsveltosv1beta1.Status{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					{
 						Kind:       clusterKind,
@@ -127,15 +137,21 @@ var _ = Describe("Set utils", func() {
 	It("selectMoreClusters adds as many clusters as available up to MaxReplicas", func() {
 		// MaxReplicas is 4 but there are only 3 matching clusters.
 		// All 3 will be selected
-		clusterSet := libsveltosv1alpha1.ClusterSet{
+		clusterSet := libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.Spec{
-				MaxReplicas:     4,
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: libsveltosv1beta1.Spec{
+				MaxReplicas: 4,
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
-			Status: libsveltosv1alpha1.Status{
+			Status: libsveltosv1beta1.Status{
 				MatchingClusterRefs: []corev1.ObjectReference{
 					{
 						Kind:       clusterKind,
@@ -169,15 +185,21 @@ var _ = Describe("Set utils", func() {
 	})
 
 	It("selectClusters selects MaxReplicas clusters from matching clusters", func() {
-		clusterSet := libsveltosv1alpha1.ClusterSet{
+		clusterSet := libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: libsveltosv1alpha1.Spec{
-				MaxReplicas:     4,
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: libsveltosv1beta1.Spec{
+				MaxReplicas: 4,
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
-			Status: libsveltosv1alpha1.Status{},
+			Status: libsveltosv1beta1.Status{},
 		}
 
 		clusterSet.Status.MatchingClusterRefs = make([]corev1.ObjectReference, 0)

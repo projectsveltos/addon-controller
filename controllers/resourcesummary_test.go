@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("ResourceSummary Deployer", func() {
@@ -66,7 +66,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 	It("deployResourceSummaryInstance updates ResourceSummary instance", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		resources := []libsveltosv1alpha1.Resource{
+		resources := []libsveltosv1beta1.Resource{
 			{
 				Name:      randomString(),
 				Namespace: randomString(),
@@ -80,7 +80,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
 			clusterNamespace, clusterSummaryName, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
-		currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
+		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{
 				Name:      controllers.GetResourceSummaryName(clusterNamespace, clusterSummaryName),
@@ -88,11 +88,11 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			},
 			currentResourceSummary)).To(Succeed())
 		Expect(currentResourceSummary.Labels).ToNot(BeNil())
-		v, ok := currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNameLabel]
+		v, ok := currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterSummaryName))
 
-		v, ok = currentResourceSummary.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel]
+		v, ok = currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterNamespace))
 
@@ -119,7 +119,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployResourceSummaryInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			clusterSummaryName, libsveltosv1alpha1.ClusterTypeCapi, nil, nil, nil,
+			clusterSummaryName, libsveltosv1beta1.ClusterTypeCapi, nil, nil, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
@@ -133,7 +133,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 	It("deploy/remove DriftDetectionManager resources to/from management cluster", func() {
 		clusterNamespace := randomString()
 		clusterName := randomString()
-		clusterType := libsveltosv1alpha1.ClusterTypeSveltos
+		clusterType := libsveltosv1beta1.ClusterTypeSveltos
 
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
 			clusterNamespace, clusterName, "", clusterType,

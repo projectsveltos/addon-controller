@@ -28,7 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
@@ -45,7 +45,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 	It("Deploy Kustomize resources with Flux", Label("EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -60,9 +60,9 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		gitRepositoryName := gitRepositoryNamespace
 
 		Byf("Update ClusterProfile %s to reference GitRepository flux-system/flux-system", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+		currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{
 			{
 				Kind:            sourcev1.GitRepositoryKind,
 				Namespace:       gitRepositoryNamespace,
@@ -121,7 +121,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for kustomize", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureKustomize)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureKustomize)
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
@@ -140,13 +140,13 @@ var _ = Describe("Kustomize with GitRepository", func() {
 			{kind: "ConfigMap", name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
 			{kind: "Deployment", name: currentDeployment.Name, namespace: targetNamespace, group: "apps"},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureKustomize,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureKustomize,
 			policies, nil)
 
 		Byf("Changing clusterprofile to not reference GitRepository anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.KustomizationRefs = []configv1alpha1.KustomizationRef{}
+		currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,

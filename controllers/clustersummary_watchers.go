@@ -35,7 +35,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -107,11 +107,11 @@ func getManager() *manager {
 // ClusterSummary is listed as one of the consumer for this watcher.
 // ClusterSummary will only receive updates when the specific resource itself changes, not when other resources of the same type change.
 func (m *manager) startWatcherForMgmtResource(ctx context.Context, gvk schema.GroupVersionKind,
-	resource *corev1.ObjectReference, clusterSummary *configv1alpha1.ClusterSummary, fID configv1alpha1.FeatureID) error {
+	resource *corev1.ObjectReference, clusterSummary *configv1beta1.ClusterSummary, fID configv1beta1.FeatureID) error {
 
 	consumer := &corev1.ObjectReference{
-		APIVersion: configv1alpha1.GroupVersion.Group,
-		Kind:       configv1alpha1.ClusterSummaryKind,
+		APIVersion: configv1beta1.GroupVersion.Group,
+		Kind:       configv1beta1.ClusterSummaryKind,
 		Namespace:  clusterSummary.Namespace,
 		Name:       clusterSummary.Name,
 	}
@@ -141,11 +141,11 @@ func (m *manager) startWatcherForMgmtResource(ctx context.Context, gvk schema.Gr
 // ClusterSummary is listed as one of the consumer for this watcher.
 // ClusterSummary will only receive updates when the specific resource itself changes, not when other resources of the same type change.
 func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk schema.GroupVersionKind,
-	ref *configv1alpha1.TemplateResourceRef, clusterSummary *configv1alpha1.ClusterSummary) error {
+	ref *configv1beta1.TemplateResourceRef, clusterSummary *configv1beta1.ClusterSummary) error {
 
 	consumer := &corev1.ObjectReference{
-		APIVersion: configv1alpha1.GroupVersion.Group,
-		Kind:       configv1alpha1.ClusterSummaryKind,
+		APIVersion: configv1beta1.GroupVersion.Group,
+		Kind:       configv1beta1.ClusterSummaryKind,
 		Namespace:  clusterSummary.Namespace,
 		Name:       clusterSummary.Name,
 	}
@@ -195,11 +195,11 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 // resources to ClusterSummary.
 // Resources that are still included in the currentResources map will continue to be watched.
 func (m *manager) stopStaleWatchForMgmtResource(currentResources map[corev1.ObjectReference]bool,
-	clusterSummary *configv1alpha1.ClusterSummary, fId configv1alpha1.FeatureID) {
+	clusterSummary *configv1beta1.ClusterSummary, fId configv1beta1.FeatureID) {
 
 	consumer := &corev1.ObjectReference{
-		APIVersion: configv1alpha1.GroupVersion.Group,
-		Kind:       configv1alpha1.ClusterSummaryKind,
+		APIVersion: configv1beta1.GroupVersion.Group,
+		Kind:       configv1beta1.ClusterSummaryKind,
 		Namespace:  clusterSummary.Namespace,
 		Name:       clusterSummary.Name,
 	}
@@ -253,12 +253,12 @@ func (m *manager) stopStaleWatchForMgmtResource(currentResources map[corev1.Obje
 // It then stops any watchers that were previously set up to deliver notifications about those specific
 // resources to ClusterSummary.
 // Resources that are still included in the currentResources map will continue to be watched.
-func (m *manager) stopStaleWatchForTemplateResourceRef(clusterSummary *configv1alpha1.ClusterSummary,
+func (m *manager) stopStaleWatchForTemplateResourceRef(clusterSummary *configv1beta1.ClusterSummary,
 	removeAll bool) {
 
 	consumer := &corev1.ObjectReference{
-		APIVersion: configv1alpha1.GroupVersion.Group,
-		Kind:       configv1alpha1.ClusterSummaryKind,
+		APIVersion: configv1beta1.GroupVersion.Group,
+		Kind:       configv1beta1.ClusterSummaryKind,
 		Namespace:  clusterSummary.Namespace,
 		Name:       clusterSummary.Name,
 	}
@@ -439,7 +439,7 @@ func (m *manager) notify(consumers *libsveltosset.Set, logger logr.Logger) {
 
 func (m *manager) notifyConsumer(consumer *corev1.ObjectReference) {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentRequestor := &configv1alpha1.ClusterSummary{}
+		currentRequestor := &configv1beta1.ClusterSummary{}
 		err := m.Get(context.TODO(),
 			types.NamespacedName{Namespace: consumer.Namespace, Name: consumer.Name},
 			currentRequestor)
@@ -488,35 +488,35 @@ func (m *manager) canStopWatcher(gvk schema.GroupVersionKind) bool {
 	return true
 }
 
-func (m *manager) getGVKMapForFeatureID(fID configv1alpha1.FeatureID) map[schema.GroupVersionKind]*libsveltosset.Set {
+func (m *manager) getGVKMapForFeatureID(fID configv1beta1.FeatureID) map[schema.GroupVersionKind]*libsveltosset.Set {
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		return m.requestorForMgmtResourcesKustomizeRef
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		return m.requestorForMgmtResourcesPolicyRef
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		panic(1)
 	}
 
 	return nil
 }
 
-func (m *manager) getGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID configv1alpha1.FeatureID) *libsveltosset.Set {
+func (m *manager) getGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID configv1beta1.FeatureID) *libsveltosset.Set {
 	var s *libsveltosset.Set
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		s = m.requestorForMgmtResourcesKustomizeRef[gvk]
 		if s == nil {
 			s := &libsveltosset.Set{}
 			m.requestorForMgmtResourcesKustomizeRef[gvk] = s
 		}
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		s := m.requestorForMgmtResourcesPolicyRef[gvk]
 		if s == nil {
 			s := &libsveltosset.Set{}
 			m.requestorForMgmtResourcesPolicyRef[gvk] = s
 		}
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		// No resources can be deployed in the management cluster because of helm
 		panic(1)
 	}
@@ -524,35 +524,35 @@ func (m *manager) getGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID co
 	return s
 }
 
-func (m *manager) setGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID configv1alpha1.FeatureID,
+func (m *manager) setGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID configv1beta1.FeatureID,
 	currentSet *libsveltosset.Set) {
 
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		if currentSet.Len() != 0 {
 			m.requestorForMgmtResourcesKustomizeRef[gvk] = currentSet
 		} else {
 			delete(m.requestorForMgmtResourcesKustomizeRef, gvk)
 		}
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		if currentSet.Len() != 0 {
 			m.requestorForMgmtResourcesPolicyRef[gvk] = currentSet
 		} else {
 			delete(m.requestorForMgmtResourcesKustomizeRef, gvk)
 		}
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		// No resources can be deployed in the management cluster because of helm
 		panic(1)
 	}
 }
 
-func (m *manager) getResourceMapForFeatureID(fID configv1alpha1.FeatureID) map[corev1.ObjectReference]*libsveltosset.Set {
+func (m *manager) getResourceMapForFeatureID(fID configv1beta1.FeatureID) map[corev1.ObjectReference]*libsveltosset.Set {
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		return m.mgmtResourcesWatchedKustomizeRef
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		return m.mgmtResourcesWatchedPolicyRef
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		// No resources can be deployed in the management cluster because of helm
 		panic(1)
 	}
@@ -560,22 +560,22 @@ func (m *manager) getResourceMapForFeatureID(fID configv1alpha1.FeatureID) map[c
 	return nil
 }
 
-func (m *manager) getResourceMapEntryForFeatureID(resource *corev1.ObjectReference, fID configv1alpha1.FeatureID) *libsveltosset.Set {
+func (m *manager) getResourceMapEntryForFeatureID(resource *corev1.ObjectReference, fID configv1beta1.FeatureID) *libsveltosset.Set {
 	var s *libsveltosset.Set
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		s = m.mgmtResourcesWatchedKustomizeRef[*resource]
 		if s == nil {
 			s := &libsveltosset.Set{}
 			m.mgmtResourcesWatchedKustomizeRef[*resource] = s
 		}
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		s := m.mgmtResourcesWatchedPolicyRef[*resource]
 		if s == nil {
 			s := &libsveltosset.Set{}
 			m.mgmtResourcesWatchedPolicyRef[*resource] = s
 		}
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		// No resources can be deployed in the management cluster because of helm
 		panic(1)
 	}
@@ -583,23 +583,23 @@ func (m *manager) getResourceMapEntryForFeatureID(resource *corev1.ObjectReferen
 	return s
 }
 
-func (m *manager) setResourceMapEntryForFeatureID(resource *corev1.ObjectReference, fID configv1alpha1.FeatureID,
+func (m *manager) setResourceMapEntryForFeatureID(resource *corev1.ObjectReference, fID configv1beta1.FeatureID,
 	currentSet *libsveltosset.Set) {
 
 	switch fID {
-	case configv1alpha1.FeatureKustomize:
+	case configv1beta1.FeatureKustomize:
 		if currentSet.Len() != 0 {
 			m.mgmtResourcesWatchedKustomizeRef[*resource] = currentSet
 		} else {
 			delete(m.mgmtResourcesWatchedKustomizeRef, *resource)
 		}
-	case configv1alpha1.FeatureResources:
+	case configv1beta1.FeatureResources:
 		if currentSet.Len() != 0 {
 			m.mgmtResourcesWatchedPolicyRef[*resource] = currentSet
 		} else {
 			delete(m.mgmtResourcesWatchedPolicyRef, *resource)
 		}
-	case configv1alpha1.FeatureHelm:
+	case configv1beta1.FeatureHelm:
 		// No resources can be deployed in the management cluster because of helm
 		panic(1)
 	}

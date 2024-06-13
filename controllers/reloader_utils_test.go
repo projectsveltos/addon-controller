@@ -31,9 +31,9 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
@@ -73,17 +73,17 @@ var _ = Describe("Reloader utils", func() {
 	It("createReloaderInstance creates reloader instance", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		reloaderInfo := []libsveltosv1alpha1.ReloaderInfo{
+		reloaderInfo := []libsveltosv1beta1.ReloaderInfo{
 			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
 			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
 		}
 
 		clusterProfileName := randomString()
-		feature := configv1alpha1.FeatureHelm
+		feature := configv1beta1.FeatureHelm
 		Expect(controllers.CreateReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, reloaderInfo)).To(Succeed())
 
-		reloaders := &libsveltosv1alpha1.ReloaderList{}
+		reloaders := &libsveltosv1beta1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 		Expect(len(reloaders.Items[0].Labels)).ToNot(BeNil())
@@ -101,11 +101,11 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		clusterProfileName := randomString()
-		feature := configv1alpha1.FeatureHelm
+		feature := configv1beta1.FeatureHelm
 		Expect(controllers.DeployReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
-		reloaders := &libsveltosv1alpha1.ReloaderList{}
+		reloaders := &libsveltosv1beta1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 		Expect(len(reloaders.Items[0].Labels)).ToNot(BeNil())
@@ -114,7 +114,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(len(reloaders.Items[0].Spec.ReloaderInfo)).To(Equal(len(resources)))
 		for i := range resources {
 			Expect(reloaders.Items[0].Spec.ReloaderInfo).To(ContainElement(
-				libsveltosv1alpha1.ReloaderInfo{
+				libsveltosv1beta1.ReloaderInfo{
 					Kind:      resources[i].Kind,
 					Namespace: resources[i].Namespace,
 					Name:      resources[i].Name,
@@ -140,7 +140,7 @@ var _ = Describe("Reloader utils", func() {
 		Expect(len(reloaders.Items[0].Spec.ReloaderInfo)).To(Equal(len(resources)))
 		for i := range resources {
 			Expect(reloaders.Items[0].Spec.ReloaderInfo).To(ContainElement(
-				libsveltosv1alpha1.ReloaderInfo{
+				libsveltosv1beta1.ReloaderInfo{
 					Kind:      resources[i].Kind,
 					Namespace: resources[i].Namespace,
 					Name:      resources[i].Name,
@@ -152,12 +152,12 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		Expect(controllers.RemoveReloaderInstance(context.TODO(), c, randomString(),
-			configv1alpha1.FeatureKustomize, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
+			configv1beta1.FeatureKustomize, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 
 	It("removeReloaderInstance removes Reloader instance", func() {
 		clusterProfileName := randomString()
-		feature := configv1alpha1.FeatureKustomize
+		feature := configv1beta1.FeatureKustomize
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -168,7 +168,7 @@ var _ = Describe("Reloader utils", func() {
 
 		Expect(controllers.CreateReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, nil)).To(Succeed())
-		reloaders := &libsveltosv1alpha1.ReloaderList{}
+		reloaders := &libsveltosv1beta1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 
@@ -199,31 +199,31 @@ var _ = Describe("Reloader utils", func() {
 		cluster := prepareCluster()
 
 		clusterProfileOwner := &metav1.OwnerReference{
-			Kind:       configv1alpha1.ClusterProfileKind,
-			APIVersion: configv1alpha1.GroupVersion.String(),
+			Kind:       configv1beta1.ClusterProfileKind,
+			APIVersion: configv1beta1.GroupVersion.String(),
 			Name:       randomString(),
 			UID:        types.UID(randomString()),
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
 					Reloader: true,
 				},
 			},
 		}
 
 		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1alpha1.FeatureResources, resources, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+			configv1beta1.FeatureResources, resources, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
-		reloaders := &libsveltosv1alpha1.ReloaderList{}
+		reloaders := &libsveltosv1beta1.ReloaderList{}
 
 		Eventually(func() bool {
 			err := testEnv.Client.List(context.TODO(), reloaders)
@@ -234,7 +234,7 @@ var _ = Describe("Reloader utils", func() {
 
 		for i := range resources {
 			Expect(reloaders.Items[0].Spec.ReloaderInfo).To(ContainElement(
-				libsveltosv1alpha1.ReloaderInfo{
+				libsveltosv1beta1.ReloaderInfo{
 					Kind:      resources[i].Kind,
 					Namespace: resources[i].Namespace,
 					Name:      resources[i].Name,
@@ -245,7 +245,7 @@ var _ = Describe("Reloader utils", func() {
 		clusterSummary.Spec.ClusterProfileSpec.Reloader = false
 
 		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1alpha1.FeatureResources, nil, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+			configv1beta1.FeatureResources, nil, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		Eventually(func() bool {
 			err := testEnv.Client.List(context.TODO(), reloaders)
@@ -254,23 +254,23 @@ var _ = Describe("Reloader utils", func() {
 	})
 
 	It("convertResourceReportsToObjectReference converts ResourceReports to ObjectReference", func() {
-		resourceReports := []configv1alpha1.ResourceReport{
+		resourceReports := []configv1beta1.ResourceReport{
 			{
-				Resource: configv1alpha1.Resource{
+				Resource: configv1beta1.Resource{
 					Kind:      "StatefulSet",
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
-				Resource: configv1alpha1.Resource{
+				Resource: configv1beta1.Resource{
 					Kind:      "DaemonSet",
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
-				Resource: configv1alpha1.Resource{
+				Resource: configv1beta1.Resource{
 					Kind:      "Deployment",
 					Name:      randomString(),
 					Namespace: randomString(),
@@ -291,9 +291,9 @@ var _ = Describe("Reloader utils", func() {
 	})
 
 	It("convertHelmResourcesToObjectReference converts HelmResources to ObjectReference", func() {
-		resourceReports := []libsveltosv1alpha1.HelmResources{
+		resourceReports := []libsveltosv1beta1.HelmResources{
 			{
-				Resources: []libsveltosv1alpha1.Resource{
+				Resources: []libsveltosv1beta1.Resource{
 					{
 						Kind:      "StatefulSet",
 						Name:      randomString(),
@@ -307,7 +307,7 @@ var _ = Describe("Reloader utils", func() {
 				},
 			},
 			{
-				Resources: []libsveltosv1alpha1.Resource{
+				Resources: []libsveltosv1beta1.Resource{
 					{
 						Kind:      "Deployment",
 						Name:      randomString(),

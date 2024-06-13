@@ -23,7 +23,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -75,7 +75,7 @@ func getTier(tierData string) int32 {
 }
 
 // Resource Ownership change. Queue old owner for reconciliation
-func requeueOldOwner(ctx context.Context, featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary,
+func requeueOldOwner(ctx context.Context, featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) error {
 
 	c := getManagementClusterClient()
@@ -125,7 +125,7 @@ func requeueOldOwner(ctx context.Context, featureID configv1alpha1.FeatureID, cl
 	// Reset the hash a deployment happens again
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("reset status of ClusterSummary %s/%s",
 		clusterSummary.Namespace, clusterSummary.Name))
-	clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioning, nil)
+	clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, nil)
 
 	return c.Status().Update(ctx, clusterSummaryScope.ClusterSummary)
 }

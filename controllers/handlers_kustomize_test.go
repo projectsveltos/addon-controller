@@ -44,16 +44,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 
 var _ = Describe("KustomizeRefs", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
+	var clusterSummary *configv1beta1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
 
@@ -70,26 +70,32 @@ var _ = Describe("KustomizeRefs", func() {
 			},
 		}
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -110,10 +116,10 @@ var _ = Describe("KustomizeRefs", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureKustomize),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureKustomize),
 				},
 			},
 		}
@@ -129,10 +135,10 @@ var _ = Describe("KustomizeRefs", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureKustomize),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureKustomize),
 				},
 			},
 		}
@@ -146,19 +152,19 @@ var _ = Describe("KustomizeRefs", func() {
 		addOwnerReference(ctx, testEnv.Client, serviceAccount, clusterProfile)
 		addOwnerReference(ctx, testEnv.Client, clusterRole, clusterProfile)
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureKustomize,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureKustomize,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 		}
-		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+		currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
 			{
-				FeatureID: configv1alpha1.FeatureKustomize,
+				FeatureID: configv1beta1.FeatureKustomize,
 				DeployedGroupVersionKind: []string{
 					"ServiceAccount.v1.",
 					"ConfigMaps.v1.",
@@ -178,7 +184,7 @@ var _ = Describe("KustomizeRefs", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureKustomize), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+			string(configv1beta1.FeatureKustomize), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// undeployKustomizeRefs finds all policies deployed because of a clusterSummary and deletes those.
@@ -263,16 +269,16 @@ var _ = Describe("Hash methods", func() {
 		}
 
 		namespace := randomString()
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					KustomizationRefs: make([]configv1alpha1.KustomizationRef, repoNum),
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					KustomizationRefs: make([]configv1beta1.KustomizationRef, repoNum),
 					Tier:              100,
 				},
 			},
@@ -280,7 +286,7 @@ var _ = Describe("Hash methods", func() {
 
 		for i := 0; i < repoNum; i++ {
 			clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i] =
-				configv1alpha1.KustomizationRef{
+				configv1beta1.KustomizationRef{
 					Namespace: gitRepositories[i].Namespace, Name: gitRepositories[i].Name,
 					Kind: sourcev1.GitRepositoryKind,
 				}
@@ -343,38 +349,38 @@ var _ = Describe("Hash methods", func() {
 				randomString(): []byte(randomString()),
 				randomString(): []byte(randomString()),
 			},
-			Type: libsveltosv1alpha1.ClusterProfileSecretType,
+			Type: libsveltosv1beta1.ClusterProfileSecretType,
 		}
 
 		var expectedHash string
 		expectedHash += controllers.GetStringDataSectionHash(configMap.Data)
 		expectedHash += controllers.GetByteDataSectionHash(secret.Data)
 
-		kustomizationRef := configv1alpha1.KustomizationRef{
-			ValuesFrom: []configv1alpha1.ValueFrom{
+		kustomizationRef := configv1beta1.KustomizationRef{
+			ValuesFrom: []configv1beta1.ValueFrom{
 				{
-					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					Namespace: namespace,
 					Name:      configMap.Name,
 				},
 				{
-					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 					Namespace: namespace,
 					Name:      secret.Name,
 				},
 			},
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					KustomizationRefs: []configv1alpha1.KustomizationRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					KustomizationRefs: []configv1beta1.KustomizationRef{
 						kustomizationRef,
 					},
 				},
@@ -396,15 +402,15 @@ var _ = Describe("Hash methods", func() {
 
 	It("instantiateKustomizeSubstituteValues instantiates substitute values", func() {
 		namespace := randomString()
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -500,20 +506,20 @@ var _ = Describe("Hash methods", func() {
 				randomString(): []byte(randomString()),
 				randomString(): []byte(randomString()),
 			},
-			Type: libsveltosv1alpha1.ClusterProfileSecretType,
+			Type: libsveltosv1beta1.ClusterProfileSecretType,
 		}
 
-		kustomizationRef := &configv1alpha1.KustomizationRef{
-			ValuesFrom: []configv1alpha1.ValueFrom{
+		kustomizationRef := &configv1beta1.KustomizationRef{
+			ValuesFrom: []configv1beta1.ValueFrom{
 				{
 					Namespace: configMap.Namespace,
 					Name:      configMap.Name,
-					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				},
 				{
 					Namespace: secret.Namespace,
 					Name:      secret.Name,
-					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 				},
 			},
 			Values: map[string]string{
@@ -521,17 +527,17 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					KustomizationRefs: []configv1alpha1.KustomizationRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					KustomizationRefs: []configv1beta1.KustomizationRef{
 						*kustomizationRef,
 					},
 				},

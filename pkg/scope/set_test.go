@@ -30,24 +30,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const clusterSetNamePrefix = "scope-cp-"
 const setNamePrefix = "scope-p-"
 
 var _ = Describe("SetScope/ClusterSetScope", func() {
-	var clusterSet *libsveltosv1alpha1.ClusterSet
-	var set *libsveltosv1alpha1.Set
+	var clusterSet *libsveltosv1beta1.ClusterSet
+	var set *libsveltosv1beta1.Set
 	var c client.Client
 
 	BeforeEach(func() {
-		clusterSet = &libsveltosv1alpha1.ClusterSet{
+		clusterSet = &libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSetNamePrefix + randomString(),
 			},
 		}
-		set = &libsveltosv1alpha1.Set{
+		set = &libsveltosv1beta1.Set{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      setNamePrefix + randomString(),
 				Namespace: randomString(),
@@ -113,7 +113,13 @@ var _ = Describe("SetScope/ClusterSetScope", func() {
 	})
 
 	It("GetSelector returns ClusterSet ClusterSelector", func() {
-		clusterSet.Spec.ClusterSelector = libsveltosv1alpha1.Selector("zone=east")
+		clusterSet.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"zone": "east",
+				},
+			},
+		}
 		set.Spec.ClusterSelector = clusterSet.Spec.ClusterSelector
 
 		objects := []client.Object{clusterSet, set}
@@ -128,7 +134,7 @@ var _ = Describe("SetScope/ClusterSetScope", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(scope).ToNot(BeNil())
 
-			Expect(scope.GetSelector()).To(Equal(string(clusterSet.Spec.ClusterSelector)))
+			Expect(reflect.DeepEqual(*scope.GetSelector(), clusterSet.Spec.ClusterSelector.LabelSelector)).To(BeTrue())
 		}
 	})
 
@@ -201,7 +207,7 @@ var _ = Describe("SetScope/ClusterSetScope", func() {
 			objects[i].SetLabels(map[string]string{key: value})
 			Expect(scope.Close(context.TODO())).To(Succeed())
 		}
-		currentClusterSet := &libsveltosv1alpha1.ClusterSet{}
+		currentClusterSet := &libsveltosv1beta1.ClusterSet{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)).To(Succeed())
 		Expect(currentClusterSet.Labels).ToNot(BeNil())
 		Expect(len(currentClusterSet.Labels)).To(Equal(1))
@@ -209,7 +215,7 @@ var _ = Describe("SetScope/ClusterSetScope", func() {
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(value))
 
-		currentSet := &libsveltosv1alpha1.Set{}
+		currentSet := &libsveltosv1beta1.Set{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Name: set.Name, Namespace: set.Namespace}, currentSet)).To(Succeed())
 		Expect(currentSet.Labels).ToNot(BeNil())

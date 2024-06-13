@@ -28,9 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -41,33 +41,33 @@ var _ = Describe("ResourceSummary Collection", func() {
 	It("collectResourceSummariesFromCluster collects and processes ResourceSummaries from clusters", func() {
 		cluster := prepareCluster()
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: "default",
 				Name:      clusterProfileNamePrefix + randomString(),
 				Labels:    map[string]string{controllers.ClusterProfileLabelName: randomString()},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
 		// Updates clusterSummary Status to indicate Helm is deployed
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureHelm,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureHelm,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 				Hash:      []byte(randomString()),
 			},
 			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 				Hash:      []byte(randomString()),
 			},
 		}
@@ -91,13 +91,13 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		resourceSummary := getResourceSummary(nil, nil)
 		resourceSummary.Labels = map[string]string{
-			libsveltosv1alpha1.ClusterSummaryNameLabel:      clusterSummary.Name,
-			libsveltosv1alpha1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
+			libsveltosv1beta1.ClusterSummaryNameLabel:      clusterSummary.Name,
+			libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
 		}
 		Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())
 
-		currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
+		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummary.Name},
 			currentResourceSummary)).To(Succeed())
@@ -134,7 +134,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 				return false
 			}
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
 					return currentClusterSummary.Status.FeatureSummaries[i].Hash == nil
 				}
 			}
@@ -151,8 +151,8 @@ var _ = Describe("ResourceSummary Collection", func() {
 	})
 })
 
-func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsveltosv1alpha1.ResourceSummary {
-	rs := &libsveltosv1alpha1.ResourceSummary{
+func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsveltosv1beta1.ResourceSummary {
+	rs := &libsveltosv1beta1.ResourceSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      randomString(),
 			Namespace: resourceSummaryNamespace,
@@ -160,7 +160,7 @@ func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsvel
 	}
 
 	if resource != nil {
-		rs.Spec.Resources = []libsveltosv1alpha1.Resource{
+		rs.Spec.Resources = []libsveltosv1beta1.Resource{
 			{
 				Name:      resource.Name,
 				Namespace: resource.Namespace,
@@ -172,12 +172,12 @@ func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsvel
 	}
 
 	if helmResource != nil {
-		rs.Spec.ChartResources = []libsveltosv1alpha1.HelmResources{
+		rs.Spec.ChartResources = []libsveltosv1beta1.HelmResources{
 			{
 				ChartName:        randomString(),
 				ReleaseName:      randomString(),
 				ReleaseNamespace: randomString(),
-				Resources: []libsveltosv1alpha1.Resource{
+				Resources: []libsveltosv1beta1.Resource{
 					{
 						Name:      helmResource.Name,
 						Namespace: helmResource.Namespace,

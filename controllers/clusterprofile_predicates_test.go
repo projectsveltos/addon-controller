@@ -27,7 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/sharding"
 )
 
@@ -37,11 +37,11 @@ const (
 
 var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 	var logger logr.Logger
-	var cluster *libsveltosv1alpha1.SveltosCluster
+	var cluster *libsveltosv1beta1.SveltosCluster
 
 	BeforeEach(func() {
 		logger = textlogger.NewLogger(textlogger.NewConfig())
-		cluster = &libsveltosv1alpha1.SveltosCluster{
+		cluster = &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: predicates + randomString(),
@@ -89,7 +89,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 
 		cluster.Spec.Paused = false
 
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
@@ -111,7 +111,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 
 		cluster.Spec.Paused = true
 		cluster.Annotations = map[string]string{clusterv1.PausedAnnotation: "true"}
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
@@ -132,7 +132,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 		clusterPredicate := controllers.SveltosClusterPredicates(logger)
 
 		cluster.Spec.Paused = false
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
@@ -153,7 +153,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 
 		cluster.Labels = map[string]string{"department": "eng"}
 
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
@@ -174,7 +174,7 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 
 		cluster.Annotations = map[string]string{sharding.ShardAnnotation: "shard1"}
 
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
@@ -195,13 +195,13 @@ var _ = Describe("ClusterProfile Predicates: SvelotsClusterPredicates", func() {
 
 		cluster.Status.Ready = true
 
-		oldCluster := &libsveltosv1alpha1.SveltosCluster{
+		oldCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
 				Labels:    map[string]string{},
 			},
-			Status: libsveltosv1alpha1.SveltosClusterStatus{
+			Status: libsveltosv1beta1.SveltosClusterStatus{
 				Ready: false,
 			},
 		}

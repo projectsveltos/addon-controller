@@ -4,7 +4,7 @@
 # Following ClusterProfile it will also deploy the content of the referenced
 # ConfigMap default/disallow-latest-tagy. Such ConfigMap contains a Kyverno
 # ClusterPolicy that create an audit for every Pod whose image tag set to latest
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-kyverno

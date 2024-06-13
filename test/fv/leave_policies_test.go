@@ -29,9 +29,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -68,8 +68,8 @@ var _ = Describe("LeavePolicies", func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s. StopMatchingBehavior set to LeavePolicies",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterProfile.Spec.StopMatchingBehavior = configv1alpha1.LeavePolicies
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterProfile.Spec.StopMatchingBehavior = configv1beta1.LeavePolicies
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -98,11 +98,11 @@ var _ = Describe("LeavePolicies", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMap.Namespace, configMap.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},
@@ -125,18 +125,24 @@ var _ = Describe("LeavePolicies", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
 
 		policies := []policy{
 			{kind: "Deployment", name: deploymentName, namespace: deploymentNamespace, group: "apps"},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)
 
 		Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", key, value+randomString()))
+		currentClusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					key: value + randomString(),
+				},
+			},
+		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		Byf("Verifying ClusterSummary is gone")

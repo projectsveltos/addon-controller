@@ -27,9 +27,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -47,7 +47,7 @@ var _ = Describe("Missing Reference", func() {
 	It("Deploy and updates resources referenced in ResourceRefs correctly. Handles missing references by reporting an error.", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -60,11 +60,11 @@ var _ = Describe("Missing Reference", func() {
 		configMapName := randomString()
 
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMapNamespace, configMapName)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNamespace,
 				Name:      configMapName,
 			},
@@ -76,7 +76,7 @@ var _ = Describe("Missing Reference", func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 				currentClusterSummary)
@@ -85,9 +85,9 @@ var _ = Describe("Missing Reference", func() {
 			}
 
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
 					return currentClusterSummary.Status.FeatureSummaries[i].Status ==
-						configv1alpha1.FeatureStatusFailedNonRetriable
+						configv1beta1.FeatureStatusFailedNonRetriable
 				}
 			}
 			return false
@@ -122,13 +122,13 @@ var _ = Describe("Missing Reference", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
 
 		policies := []policy{
 			{kind: "Namespace", name: namespaceName, namespace: "", group: ""},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)
 
 		deleteClusterProfile(clusterProfile)

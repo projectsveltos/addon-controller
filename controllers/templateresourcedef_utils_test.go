@@ -51,10 +51,34 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 		}
 	})
 
-	It("GetTemplateResourceName returns the correct name", func() {
+	It("GetTemplateResourceName returns the correct name (uses ClusterNamespace and ClusterName)", func() {
 		ref := &configv1alpha1.TemplateResourceRef{
 			Resource: corev1.ObjectReference{
 				Name: "{{ .ClusterNamespace }}-{{ .ClusterName }}",
+			},
+			Identifier: randomString(),
+		}
+
+		clusterSummary := &configv1alpha1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1alpha1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+			},
+		}
+
+		value, err := controllers.GetTemplateResourceName(clusterSummary, ref)
+		Expect(err).To(BeNil())
+		Expect(value).To(Equal(cluster.Namespace + "-" + cluster.Name))
+	})
+
+	It("GetTemplateResourceNamespace returns the correct namespace (uses Cluster)", func() {
+		ref := &configv1alpha1.TemplateResourceRef{
+			Resource: corev1.ObjectReference{
+				Name: "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
 			},
 			Identifier: randomString(),
 		}

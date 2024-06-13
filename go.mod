@@ -3,7 +3,7 @@ module github.com/projectsveltos/addon-controller
 go 1.22.0
 
 require (
-	github.com/BurntSushi/toml v1.3.2
+	github.com/BurntSushi/toml v1.4.0
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/TwiN/go-color v1.4.1
@@ -16,7 +16,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.32.1-0.20240611141238-c8675b616482
+	github.com/projectsveltos/libsveltos v0.32.1-0.20240613110918-d87beaba720e
 	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
@@ -37,6 +37,8 @@ require (
 	sigs.k8s.io/kustomize/api v0.17.2
 	sigs.k8s.io/kustomize/kyaml v0.17.1
 )
+
+replace github.com/projectsveltos/libsveltos => github.com/gianlucam76/libsveltos v0.0.0-20240616132433-35338c38b472
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect

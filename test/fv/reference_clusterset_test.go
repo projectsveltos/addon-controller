@@ -23,12 +23,13 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("ClusterSet", func() {
@@ -44,7 +45,7 @@ var _ = Describe("ClusterSet", func() {
 		verifyClusterSetMatches(clusterSet)
 
 		By("Verify ClusterSet has selected the matching cluster")
-		currentClusterSet := &libsveltosv1alpha1.ClusterSet{}
+		currentClusterSet := &libsveltosv1beta1.ClusterSet{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)).To(Succeed())
 		Expect(currentClusterSet.Status.SelectedClusterRefs).ToNot(BeNil())
@@ -59,9 +60,11 @@ var _ = Describe("ClusterSet", func() {
 
 		Byf("Creating ClusterProfile referencing ClusterSet")
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.ClusterSelector = ""
+		clusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{},
+		}
 		clusterProfile.Spec.SetRefs = []string{clusterSet.Name}
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -87,7 +90,7 @@ var _ = Describe("ClusterSet", func() {
 
 		Byf("Verify ClusterProfile does not match any cluster anymore")
 		Eventually(func() bool {
-			currentClusterProfile := &configv1alpha1.ClusterProfile{}
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 			if err != nil {
@@ -122,7 +125,7 @@ var _ = Describe("ClusterSet", func() {
 
 		Byf("Verify ClusterProfile does not match any cluster anymore")
 		Eventually(func() bool {
-			currentClusterProfile := &configv1alpha1.ClusterProfile{}
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 			if err != nil {

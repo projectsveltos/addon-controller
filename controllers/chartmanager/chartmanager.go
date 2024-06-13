@@ -24,8 +24,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -108,7 +108,7 @@ func GetChartManagerInstance(ctx context.Context, c client.Client) (*instance, e
 // managed Cluster.
 // Only first ClusterSummary registering for a given Helm release in a given managed Cluster is given
 // the manager role.
-func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha1.ClusterSummary) {
+func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1beta1.ClusterSummary) {
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 {
 		// Nothing to do
 		return
@@ -131,7 +131,7 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1alpha
 }
 
 // SetManagerForChart set clusterSummary as current manager for this chart
-func (m *instance) SetManagerForChart(clusterSummary *configv1alpha1.ClusterSummary, chart *configv1alpha1.HelmChart) {
+func (m *instance) SetManagerForChart(clusterSummary *configv1beta1.ClusterSummary, chart *configv1beta1.HelmChart) {
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
@@ -158,8 +158,8 @@ func (m *instance) SetManagerForChart(clusterSummary *configv1alpha1.ClusterSumm
 }
 
 // UnregisterClusterSummaryForChart unregisters ClusterSummary as possible manager for specified chart
-func (m *instance) UnregisterClusterSummaryForChart(clusterSummary *configv1alpha1.ClusterSummary,
-	chart *configv1alpha1.HelmChart) {
+func (m *instance) UnregisterClusterSummaryForChart(clusterSummary *configv1beta1.ClusterSummary,
+	chart *configv1beta1.HelmChart) {
 
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
@@ -185,9 +185,9 @@ func (m *instance) UnregisterClusterSummaryForChart(clusterSummary *configv1alph
 // It considers all the helm releases the provided clusterSummary is currently registered.
 // Any helm release, not referenced anymore by clusterSummary, for which clusterSummary is currently
 // registered is considered stale and removed.
-func (m *instance) RemoveStaleRegistrations(clusterSummary *configv1alpha1.ClusterSummary) {
+func (m *instance) RemoveStaleRegistrations(clusterSummary *configv1beta1.ClusterSummary) {
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return
 	}
 
@@ -195,14 +195,14 @@ func (m *instance) RemoveStaleRegistrations(clusterSummary *configv1alpha1.Clust
 }
 
 // RemoveAllRegistrations removes all registrations for a clusterSummary.
-func (m *instance) RemoveAllRegistrations(clusterSummary *configv1alpha1.ClusterSummary) {
+func (m *instance) RemoveAllRegistrations(clusterSummary *configv1beta1.ClusterSummary) {
 	m.cleanRegistrations(clusterSummary, true)
 }
 
 // cleanRegistrations removes ClusterSummary's registrations.
 // If removeAll is set to true, all registrations are removed. Otherwise only registration for
 // helm releases not referenced anymore are.
-func (m *instance) cleanRegistrations(clusterSummary *configv1alpha1.ClusterSummary, removeAll bool) {
+func (m *instance) cleanRegistrations(clusterSummary *configv1beta1.ClusterSummary, removeAll bool) {
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
@@ -247,7 +247,7 @@ func (m *instance) removeClusterSummaryFromChartRegistration(clusterKey, release
 }
 
 // GetManagedHelmReleases returns info on all the helm releases currently managed by clusterSummary
-func (m *instance) GetManagedHelmReleases(clusterSummary *configv1alpha1.ClusterSummary) []HelmReleaseInfo {
+func (m *instance) GetManagedHelmReleases(clusterSummary *configv1beta1.ClusterSummary) []HelmReleaseInfo {
 	info := make([]HelmReleaseInfo, 0)
 
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -274,7 +274,7 @@ func (m *instance) GetManagedHelmReleases(clusterSummary *configv1alpha1.Cluster
 // GetNumberOfRegisteredClusterSummaries returns number of ClusterSummaries currently registered
 // for managing a chart in a given cluster
 func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) int {
+	clusterType libsveltosv1beta1.ClusterType, chart *configv1beta1.HelmChart) int {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
@@ -287,8 +287,8 @@ func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clust
 
 // CanManageChart returns true if a ClusterSummary can manage the helm chart.
 // Only the first ClusterSummary registered for a given helm release in a given cluster can manage it.
-func (m *instance) CanManageChart(clusterSummary *configv1alpha1.ClusterSummary,
-	chart *configv1alpha1.HelmChart) bool {
+func (m *instance) CanManageChart(clusterSummary *configv1beta1.ClusterSummary,
+	chart *configv1beta1.HelmChart) bool {
 
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
@@ -310,7 +310,7 @@ func (m *instance) CanManageChart(clusterSummary *configv1alpha1.ClusterSummary,
 // helm chart
 // Returns an error if no CLusterSummary is currently managing the chart
 func (m *instance) GetManagerForChart(clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) (string, error) {
+	clusterType libsveltosv1beta1.ClusterType, chart *configv1beta1.HelmChart) (string, error) {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
@@ -335,7 +335,7 @@ func (m *instance) GetManagerForChart(clusterNamespace, clusterName string,
 
 // IsChartManaged returns true if a ClusterSummary is managing the chart
 func (m *instance) IsChartManaged(clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType, chart *configv1alpha1.HelmChart) bool {
+	clusterType libsveltosv1beta1.ClusterType, chart *configv1beta1.HelmChart) bool {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
@@ -358,7 +358,7 @@ func (m *instance) IsChartManaged(clusterNamespace, clusterName string,
 // GetRegisteredClusterSummaries returns all ClusterSummary currently registered for at
 // at least one helm chart in the provided managed cluster
 func (m *instance) GetRegisteredClusterSummaries(clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType) []string {
+	clusterType libsveltosv1beta1.ClusterType) []string {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 
@@ -408,9 +408,9 @@ func (m *instance) isCurrentlyManager(clusterKey, releaseKey, clusterSummaryKey 
 }
 
 // getClusterKey returns the Key representing a managed Cluster
-func (m *instance) getClusterKey(clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+func (m *instance) getClusterKey(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
 	prefix := "capi"
-	if clusterType == libsveltosv1alpha1.ClusterTypeSveltos {
+	if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
 		prefix = "sveltos"
 	}
 
@@ -492,7 +492,7 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
-	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	err := c.List(ctx, clusterSummaryList)
 	if err != nil {
 		return err
@@ -512,14 +512,14 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 }
 
 // addManagers walks clusterSummary's status and registers it for each helm chart currently managed
-func (m *instance) addManagers(clusterSummary *configv1alpha1.ClusterSummary) {
+func (m *instance) addManagers(clusterSummary *configv1beta1.ClusterSummary) {
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
 
 	for i := range clusterSummary.Status.HelmReleaseSummaries {
 		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if summary.Status == configv1alpha1.HelmChartStatusManaging {
+		if summary.Status == configv1beta1.HelmChartStatusManaging {
 			releaseKey := m.GetReleaseKey(summary.ReleaseNamespace, summary.ReleaseName)
 			m.addClusterEntry(clusterKey)
 			m.addReleaseEntry(clusterKey, releaseKey)
@@ -530,14 +530,14 @@ func (m *instance) addManagers(clusterSummary *configv1alpha1.ClusterSummary) {
 
 // addNonManagers walks clusterSummary's status and registers it for each helm chart currently not managed
 // (not managed because other ClusterSummary is)
-func (m *instance) addNonManagers(clusterSummary *configv1alpha1.ClusterSummary) {
+func (m *instance) addNonManagers(clusterSummary *configv1beta1.ClusterSummary) {
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
 
 	for i := range clusterSummary.Status.HelmReleaseSummaries {
 		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if summary.Status != configv1alpha1.HelmChartStatusManaging {
+		if summary.Status != configv1beta1.HelmChartStatusManaging {
 			releaseKey := m.GetReleaseKey(summary.ReleaseNamespace, summary.ReleaseName)
 			m.addClusterEntry(clusterKey)
 			m.addReleaseEntry(clusterKey, releaseKey)

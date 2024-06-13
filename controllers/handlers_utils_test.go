@@ -40,9 +40,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
@@ -446,8 +446,8 @@ data:
 )
 
 var _ = Describe("HandlersUtils", func() {
-	var clusterSummary *configv1alpha1.ClusterSummary
-	var clusterProfile *configv1alpha1.ClusterProfile
+	var clusterSummary *configv1beta1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
 	var namespace string
 
 	BeforeEach(func() {
@@ -463,26 +463,32 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -501,8 +507,8 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(controllers.GetClusterSummaryAdmin(clusterSummary)).To(BeEmpty())
 		adminName := randomString()
 		adminNamespace := randomString()
-		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNameLabel] = adminName
-		clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNamespaceLabel] = adminNamespace
+		clusterSummary.Labels[libsveltosv1beta1.ServiceAccountNameLabel] = adminName
+		clusterSummary.Labels[libsveltosv1beta1.ServiceAccountNamespaceLabel] = adminNamespace
 		saNamespace, saName := controllers.GetClusterSummaryAdmin(clusterSummary)
 		Expect(saNamespace).To(Equal(adminNamespace))
 		Expect(saName).To(Equal(adminName))
@@ -553,7 +559,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
 		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
@@ -595,7 +601,7 @@ var _ = Describe("HandlersUtils", func() {
 		secretName := types.NamespacedName{Namespace: wrongSecretType.Namespace, Name: wrongSecretType.Name}
 		_, err := controllers.GetSecret(context.TODO(), testEnv.Client, secretName)
 		Expect(err).ToNot(BeNil())
-		Expect(err.Error()).To(Equal(libsveltosv1alpha1.ErrSecretTypeNotSupported.Error()))
+		Expect(err.Error()).To(Equal(libsveltosv1beta1.ErrSecretTypeNotSupported.Error()))
 
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)
@@ -614,7 +620,7 @@ var _ = Describe("HandlersUtils", func() {
 		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
 		depl := fmt.Sprintf(deplTemplate, namespace)
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
 
 		// Create a secret containing two services.
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
@@ -720,10 +726,10 @@ var _ = Describe("HandlersUtils", func() {
 	})
 
 	It("getReferenceResourceNamespace returns the referenced resource namespace when set. cluster namespace otherwise.", func() {
-		referecedResource := libsveltosv1alpha1.PolicyRef{
+		referecedResource := libsveltosv1beta1.PolicyRef{
 			Namespace: "",
 			Name:      randomString(),
-			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 		}
 
 		clusterNamespace := randomString()
@@ -775,11 +781,11 @@ var _ = Describe("HandlersUtils", func() {
 
 	It("undeployStaleResources does not remove resources in dryRun mode", func() {
 		// Set ClusterSummary to be DryRun
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Add list of GroupVersionKind this ClusterSummary has deployed in the CAPI Cluster
@@ -791,15 +797,15 @@ var _ = Describe("HandlersUtils", func() {
 			if err != nil {
 				return err
 			}
-			currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+			currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1alpha1.FeatureResources,
-					Status:    configv1alpha1.FeatureStatusProvisioned,
+					FeatureID: configv1beta1.FeatureResources,
+					Status:    configv1beta1.FeatureStatusProvisioned,
 				},
 			}
-			currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+			currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
 				{
-					FeatureID: configv1alpha1.FeatureResources,
+					FeatureID: configv1beta1.FeatureResources,
 					DeployedGroupVersionKind: []string{
 						"ClusterRole.v1.rbac.authorization.k8s.io",
 					},
@@ -819,26 +825,26 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
-			deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			deployer.ReferenceNameLabel:      configMap.Name,
 			deployer.ReferenceNamespaceLabel: configMap.Namespace,
-			controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
+			controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
-			{Kind: configv1alpha1.ClusterProfileKind, Name: clusterProfile.Name,
+			{Kind: configv1beta1.ClusterProfileKind, Name: clusterProfile.Name,
 				UID: clusterProfile.UID, APIVersion: "config.projectsveltos.io/v1beta1"},
 		})
 		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
 
-		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1alpha1.FeatureResources)
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1beta1.FeatureResources)
 		Expect(deployedGKVs).ToNot(BeEmpty())
 
 		// Because ClusterSummary is not referencing any ConfigMap/Resource and because test created a ClusterRole
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
 		undeploy, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
 
@@ -854,18 +860,18 @@ var _ = Describe("HandlersUtils", func() {
 		editClusterRoleName := randomString()
 		configMap2 := createConfigMapWithPolicy(configMapNs, randomString(), fmt.Sprintf(editClusterRole, editClusterRoleName))
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
 				Namespace: configMapNs, Name: configMap1.Name,
-				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			},
 			{
 				Namespace: configMapNs, Name: configMap2.Name,
-				Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			},
 		}
 		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -889,7 +895,7 @@ var _ = Describe("HandlersUtils", func() {
 					deployer.ReferenceKindLabel:      configMap1.Kind,
 					deployer.ReferenceNamespaceLabel: configMap1.Namespace,
 					deployer.ReferenceNameLabel:      configMap1.Name,
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
 				},
 			},
 		}
@@ -903,22 +909,22 @@ var _ = Describe("HandlersUtils", func() {
 					deployer.ReferenceKindLabel:      configMap2.Kind,
 					deployer.ReferenceNamespaceLabel: configMap2.Namespace,
 					deployer.ReferenceNameLabel:      configMap2.Name,
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
 				},
 			},
 		}
 
 		// Add list of GroupVersionKind this ClusterSummary has deployed in the CAPI Cluster
 		// because of the PolicyRefs feature. This is used by UndeployStaleResources.
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 		}
-		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+		currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
 			{
-				FeatureID: configv1alpha1.FeatureResources,
+				FeatureID: configv1beta1.FeatureResources,
 				DeployedGroupVersionKind: []string{
 					"ClusterRole.v1.rbac.authorization.k8s.io",
 				},
@@ -930,7 +936,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterRole2)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole2)).To(Succeed())
 
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
@@ -941,26 +947,26 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole1)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole2)).To(Succeed())
 
-		currentClusterRoles := map[string]configv1alpha1.Resource{}
-		clusterRoleResource1 := &configv1alpha1.Resource{
+		currentClusterRoles := map[string]configv1beta1.Resource{}
+		clusterRoleResource1 := &configv1beta1.Resource{
 			Name:  clusterRole1.Name,
 			Kind:  clusterRole1.GroupVersionKind().Kind,
 			Group: clusterRole1.GetObjectKind().GroupVersionKind().Group,
 		}
 		currentClusterRoles[controllers.GetPolicyInfo(clusterRoleResource1)] = *clusterRoleResource1
-		clusterRoleResource2 := &configv1alpha1.Resource{
+		clusterRoleResource2 := &configv1beta1.Resource{
 			Name:  clusterRole2.Name,
 			Kind:  clusterRole2.GroupVersionKind().Kind,
 			Group: clusterRole2.GetObjectKind().GroupVersionKind().Group,
 		}
 		currentClusterRoles[controllers.GetPolicyInfo(clusterRoleResource2)] = *clusterRoleResource2
 
-		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1alpha1.FeatureResources)
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1beta1.FeatureResources)
 		Expect(deployedGKVs).ToNot(BeEmpty())
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
 		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -985,7 +991,7 @@ var _ = Describe("HandlersUtils", func() {
 		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
 
 		_, err = controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1alpha1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -1065,15 +1071,15 @@ var _ = Describe("HandlersUtils", func() {
 		}
 		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
 
-		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{})).To(BeTrue())
+		Expect(controllers.CanDelete(depl, map[string]configv1beta1.Resource{})).To(BeTrue())
 
-		name := controllers.GetPolicyInfo(&configv1alpha1.Resource{
+		name := controllers.GetPolicyInfo(&configv1beta1.Resource{
 			Kind:      depl.GetObjectKind().GroupVersionKind().Kind,
 			Group:     depl.GetObjectKind().GroupVersionKind().Group,
 			Name:      depl.GetName(),
 			Namespace: depl.GetNamespace(),
 		})
-		Expect(controllers.CanDelete(depl, map[string]configv1alpha1.Resource{name: {}})).To(BeFalse())
+		Expect(controllers.CanDelete(depl, map[string]configv1beta1.Resource{name: {}})).To(BeFalse())
 	})
 
 	It("addExtraLabels adds extra labels on unstructured", func() {
@@ -1206,12 +1212,12 @@ metadata:
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior = configv1alpha1.LeavePolicies
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
+		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior = configv1beta1.LeavePolicies
 		initObjects := []client.Object{depl, clusterSummary}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
 
@@ -1331,19 +1337,19 @@ stringData:
 
 // validateResourceReports validates that number of resourceResources with certain actions
 // match the expected number per action
-func validateResourceReports(resourceReports []configv1alpha1.ResourceReport,
+func validateResourceReports(resourceReports []configv1beta1.ResourceReport,
 	created, updated, noAction, conflict int) {
 
 	var foundCreated, foundUpdated, foundNoAction, foundConflict int
 	for i := range resourceReports {
 		rr := &resourceReports[i]
-		if rr.Action == string(configv1alpha1.CreateResourceAction) {
+		if rr.Action == string(configv1beta1.CreateResourceAction) {
 			foundCreated++
-		} else if rr.Action == string(configv1alpha1.UpdateResourceAction) {
+		} else if rr.Action == string(configv1beta1.UpdateResourceAction) {
 			foundUpdated++
-		} else if rr.Action == string(configv1alpha1.NoResourceAction) {
+		} else if rr.Action == string(configv1beta1.NoResourceAction) {
 			foundNoAction++
-		} else if rr.Action == string(configv1alpha1.ConflictResourceAction) {
+		} else if rr.Action == string(configv1beta1.ConflictResourceAction) {
 			foundConflict++
 		}
 	}

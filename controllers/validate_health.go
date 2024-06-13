@@ -32,8 +32,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -43,8 +43,8 @@ type healthStatus struct {
 }
 
 // validateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
-func validateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID, logger logr.Logger) error {
+func validateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID, logger logr.Logger) error {
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		check := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
@@ -62,7 +62,7 @@ func validateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, clus
 	return nil
 }
 
-func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *configv1alpha1.ValidateHealth,
+func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *configv1beta1.ValidateHealth,
 	logger logr.Logger) error {
 
 	l := logger.WithValues("validation", check.Name)
@@ -96,7 +96,7 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 }
 
 // fetchResources fetches resources from the managed cluster
-func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *configv1alpha1.ValidateHealth,
+func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *configv1beta1.ValidateHealth,
 ) (*unstructured.UnstructuredList, error) {
 
 	gvk := schema.GroupVersionKind{
@@ -137,7 +137,7 @@ func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *confi
 				labelFilter += ","
 			}
 			f := check.LabelFilters[i]
-			if f.Operation == libsveltosv1alpha1.OperationEqual {
+			if f.Operation == libsveltosv1beta1.OperationEqual {
 				labelFilter += fmt.Sprintf("%s=%s", f.Key, f.Value)
 			} else {
 				labelFilter += fmt.Sprintf("%s!=%s", f.Key, f.Value)

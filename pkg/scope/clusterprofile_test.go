@@ -29,26 +29,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const clusterProfileNamePrefix = "scope-cp-"
 const profileNamePrefix = "scope-p-"
 
 var _ = Describe("ProfileScope/ClusterProfileScope", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var profile *configv1alpha1.Profile
+	var clusterProfile *configv1beta1.ClusterProfile
+	var profile *configv1beta1.Profile
 	var c client.Client
 
 	BeforeEach(func() {
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
 		}
-		profile = &configv1alpha1.Profile{
+		profile = &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      profileNamePrefix + randomString(),
 				Namespace: randomString(),
@@ -97,8 +97,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsContinuousSync returns false when SyncMode is OneTime", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
+		profile.Spec.SyncMode = configv1beta1.SyncModeOneTime
 
 		objects := []client.Object{clusterProfile, profile}
 		for i := range objects {
@@ -117,8 +117,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsContinuousSync returns true when SyncMode is Continuous", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
 		objects := []client.Object{clusterProfile, profile}
 		for i := range objects {
@@ -137,8 +137,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsContinuousSync returns true when SyncMode is ContinuousWithDriftDetection", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
-		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		profile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 
 		objects := []client.Object{clusterProfile, profile}
 		for i := range objects {
@@ -174,7 +174,14 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("GetSelector returns ClusterProfile ClusterSelector", func() {
-		clusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector("zone=east")
+		clusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"zone": "east",
+				},
+			},
+		}
+
 		profile.Spec.ClusterSelector = clusterProfile.Spec.ClusterSelector
 
 		objects := []client.Object{clusterProfile, profile}
@@ -189,7 +196,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(scope).ToNot(BeNil())
 
-			Expect(scope.GetSelector()).To(Equal(string(clusterProfile.Spec.ClusterSelector)))
+			Expect(reflect.DeepEqual(*scope.GetSelector(), clusterProfile.Spec.ClusterSelector.LabelSelector)).To(BeTrue())
 		}
 	})
 
@@ -234,7 +241,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			objects[i].SetLabels(map[string]string{"clusters": "hr"})
 			Expect(scope.Close(context.TODO())).To(Succeed())
 		}
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		Expect(currentClusterProfile.Labels).ToNot(BeNil())
 		Expect(len(currentClusterProfile.Labels)).To(Equal(1))
@@ -242,7 +249,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal("hr"))
 
-		currentProfile := &configv1alpha1.Profile{}
+		currentProfile := &configv1beta1.Profile{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Name: profile.Name, Namespace: profile.Namespace}, currentProfile)).To(Succeed())
 		Expect(currentProfile.Labels).ToNot(BeNil())
@@ -253,7 +260,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsContinuousSync returns true when mode is Continuous", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
 
 		objects := []client.Object{clusterProfile, profile}
@@ -271,8 +278,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			Expect(scope.IsContinuousSync()).To(BeTrue())
 		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+		profile.Spec.SyncMode = configv1beta1.SyncModeOneTime
 		objects = []client.Object{clusterProfile, profile}
 		for i := range objects {
 			params := scope.ProfileScopeParams{
@@ -290,8 +297,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsOneTimeSync returns true when mode is OneTime", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+		profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		objects := []client.Object{clusterProfile, profile}
 		for i := range objects {
 			params := scope.ProfileScopeParams{
@@ -307,7 +314,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			Expect(scope.IsOneTimeSync()).To(BeFalse())
 		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
 		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
 		objects = []client.Object{clusterProfile, profile}
 		for i := range objects {
@@ -326,7 +333,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 	})
 
 	It("IsDryRunSync returns true when mode is DryRun", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
 		profile.Spec.SyncMode = clusterProfile.Spec.SyncMode
 
 		objects := []client.Object{clusterProfile, profile}
@@ -344,8 +351,8 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 			Expect(scope.IsDryRunSync()).To(BeTrue())
 		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		profile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		profile.Spec.SyncMode = configv1beta1.SyncModeOneTime
 
 		objects = []client.Object{clusterProfile, profile}
 		for i := range objects {

@@ -32,9 +32,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -42,10 +42,10 @@ import (
 
 func deployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	clusterType libsveltosv1alpha1.ClusterType,
+	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
-	featureHandler := getHandlersForFeature(configv1alpha1.FeatureResources)
+	featureHandler := getHandlersForFeature(configv1beta1.FeatureResources)
 
 	// Get ClusterSummary that requested this
 	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
@@ -69,25 +69,25 @@ func deployResources(ctx context.Context, c client.Client,
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
 	var gvkErr error
-	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureResources,
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1beta1.FeatureResources,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr
 	}
 
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
 	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureResources,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureResources,
 		remoteResources, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteDeployed := make([]configv1alpha1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, 0)
 	for i := range remoteResourceReports {
 		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
 	}
@@ -98,7 +98,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var undeployed []configv1alpha1.ResourceReport
+	var undeployed []configv1beta1.ResourceReport
 	_, undeployed, err = cleanStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		localResourceReports, remoteResourceReports, logger)
 	if err != nil {
@@ -122,20 +122,20 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return &configv1alpha1.DryRunReconciliationError{}
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	if deployError != nil {
 		return deployError
 	}
 
-	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureResources, logger)
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1beta1.FeatureResources, logger)
 }
 
 func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
+	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []configv1beta1.ResourceReport,
+	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1beta1.ResourceReport, err error) {
 
 	// Clean stale resources in the management cluster
 	localUndeployed, err = cleanPolicyRefResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
@@ -156,11 +156,11 @@ func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, rem
 
 // handleDriftDetectionManagerDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
 // drift-detection-manager in the managed clyuster
-func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, startInMgmtCluster bool,
+func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, startInMgmtCluster bool,
 	logger logr.Logger) error {
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err := deployDriftDetectionManagerInCluster(ctx, getManagementClusterClient(), clusterNamespace,
 			clusterName, clusterSummary.Name, clusterType, startInMgmtCluster, logger)
@@ -172,7 +172,7 @@ func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *
 		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
 		// a configuration drift is happening)
 		err = handleResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-			clusterType, []configv1alpha1.Resource{}, logger)
+			clusterType, []configv1beta1.Resource{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 			return err
@@ -184,11 +184,11 @@ func handleDriftDetectionManagerDeployment(ctx context.Context, clusterSummary *
 
 // handleResourceSummaryDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
 // ResourceSummary in the managed cluster
-func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
-	remoteDeployed []configv1alpha1.Resource, logger logr.Logger) error {
+func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	remoteDeployed []configv1beta1.Resource, logger logr.Logger) error {
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// deploy ResourceSummary
 		err := deployResourceSummary(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
 			clusterSummary.Name, clusterType, remoteDeployed, logger)
@@ -200,15 +200,15 @@ func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *config
 	return nil
 }
 
-func handleWatchers(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	localResourceReports []configv1alpha1.ResourceReport, featureHandler feature) error {
+func handleWatchers(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	localResourceReports []configv1beta1.ResourceReport, featureHandler feature) error {
 
 	manager := getManager()
 	currentResources := make(map[corev1.ObjectReference]bool)
 
 	// Only if mode is SyncModeContinuousWithDriftDetection starts those watcher.
 	// A watcher for TemplateResourceRefs is started as part of ClusterSummary reconciler
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		for i := range localResourceReports {
 			gvk := schema.GroupVersionKind{
 				Group:   localResourceReports[i].Resource.Group,
@@ -238,18 +238,18 @@ func handleWatchers(ctx context.Context, clusterSummary *configv1alpha1.ClusterS
 }
 
 func cleanPolicyRefResources(ctx context.Context, isMgmtCluster bool, destRestConfig *rest.Config,
-	destClient client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	resourceReports []configv1alpha1.ResourceReport, logger logr.Logger,
-) ([]configv1alpha1.ResourceReport, error) {
+	destClient client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	resourceReports []configv1beta1.ResourceReport, logger logr.Logger,
+) ([]configv1beta1.ResourceReport, error) {
 
-	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	currentPolicies := make(map[string]configv1beta1.Resource, 0)
 	for i := range resourceReports {
 		key := getPolicyInfo(&resourceReports[i].Resource)
 		currentPolicies[key] = resourceReports[i].Resource
 	}
 
-	undeployed, err := undeployStaleResources(ctx, isMgmtCluster, destRestConfig, destClient, configv1alpha1.FeatureResources,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
+	undeployed, err := undeployStaleResources(ctx, isMgmtCluster, destRestConfig, destClient, configv1beta1.FeatureResources,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureResources),
 		currentPolicies, logger)
 	if err != nil {
 		return nil, err
@@ -259,11 +259,11 @@ func cleanPolicyRefResources(ctx context.Context, isMgmtCluster bool, destRestCo
 
 func undeployResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	clusterType libsveltosv1alpha1.ClusterType,
+	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Get ClusterSummary that requested this
-	clusterSummary, err := configv1alpha1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
+	clusterSummary, err := configv1beta1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -289,52 +289,52 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var resourceReports []configv1alpha1.ResourceReport
+	var resourceReports []configv1beta1.ResourceReport
 
 	// Undeploy from management cluster
-	if _, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureResources,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
-		map[string]configv1alpha1.Resource{}, logger); err != nil {
+	if _, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1beta1.FeatureResources,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureResources),
+		map[string]configv1beta1.Resource{}, logger); err != nil {
 		return err
 	}
 
 	// Undeploy from managed cluster
 	resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient,
-		configv1alpha1.FeatureResources, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureResources),
-		map[string]configv1alpha1.Resource{}, logger)
+		configv1beta1.FeatureResources, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureResources),
+		map[string]configv1beta1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
 
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureResources,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureResources,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
 	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
-		configv1alpha1.FeatureResources, []configv1alpha1.Resource{}, nil)
+		configv1beta1.FeatureResources, []configv1beta1.Resource{}, nil)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports, configv1alpha1.FeatureResources)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports, configv1beta1.FeatureResources)
 	if err != nil {
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return &configv1alpha1.DryRunReconciliationError{}
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	manager := getManager()
-	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1alpha1.FeatureResources)
+	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1beta1.FeatureResources)
 
 	return nil
 }
@@ -364,14 +364,14 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), reference.Namespace)
 		var err error
-		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, configmap)
 			if err == nil {
 				config += getDataSectionHash(configmap.Data)
 				config += getDataSectionHash(configmap.BinaryData)
 			}
-		} else if reference.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, secret)
 			if err == nil {
@@ -402,7 +402,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
-		if h.FeatureID == configv1alpha1.FeatureResources {
+		if h.FeatureID == configv1beta1.FeatureResources {
 			config += render.AsCode(h)
 		}
 	}
@@ -412,7 +412,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		config += render.AsCode(tr)
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Use the version. This will cause drift-detection, Sveltos CRDs
 		// to be redeployed on upgrade
 		config += getVersion()
@@ -430,22 +430,22 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	return h.Sum(nil), nil
 }
 
-func getResourceRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
+func getResourceRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef {
 	return clusterSummary.Spec.ClusterProfileSpec.PolicyRefs
 }
 
 // updateClusterReportWithResourceReports updates ClusterReport Status with ResourceReports.
 // This is no-op unless mode is DryRun.
 func updateClusterReportWithResourceReports(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, resourceReports []configv1alpha1.ResourceReport,
-	featureID configv1alpha1.FeatureID) error {
+	clusterSummary *configv1beta1.ClusterSummary, resourceReports []configv1beta1.ResourceReport,
+	featureID configv1beta1.FeatureID) error {
 
 	// This is no-op unless in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
 		return nil
 	}
 
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -454,16 +454,16 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		clusterReport := &configv1alpha1.ClusterReport{}
+		clusterReport := &configv1beta1.ClusterReport{}
 		err = c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, clusterReport)
 		if err != nil {
 			return err
 		}
 
-		if featureID == configv1alpha1.FeatureResources {
+		if featureID == configv1beta1.FeatureResources {
 			clusterReport.Status.ResourceReports = resourceReports
-		} else if featureID == configv1alpha1.FeatureKustomize {
+		} else if featureID == configv1beta1.FeatureKustomize {
 			clusterReport.Status.KustomizeResourceReports = resourceReports
 		}
 
@@ -474,13 +474,13 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 
 func deployResourceSummary(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant string,
-	clusterType libsveltosv1alpha1.ClusterType,
-	deployed []configv1alpha1.Resource, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType,
+	deployed []configv1beta1.Resource, logger logr.Logger) error {
 
-	resources := make([]libsveltosv1alpha1.Resource, len(deployed))
+	resources := make([]libsveltosv1beta1.Resource, len(deployed))
 
 	for i := range deployed {
-		resources[i] = libsveltosv1alpha1.Resource{
+		resources[i] = libsveltosv1beta1.Resource{
 			Namespace: deployed[i].Namespace,
 			Name:      deployed[i].Name,
 			Group:     deployed[i].Group,
@@ -496,8 +496,8 @@ func deployResourceSummary(ctx context.Context, c client.Client,
 // deployPolicyRefs deploys in a managed Cluster the policies contained in the Data section of each
 // referenced ConfigMap/Secret
 func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	clusterSummary *configv1alpha1.ClusterSummary, featureHandler feature,
-	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
+	clusterSummary *configv1beta1.ClusterSummary, featureHandler feature,
+	logger logr.Logger) (localReports, remoteReports []configv1beta1.ResourceReport, err error) {
 
 	refs := featureHandler.getRefs(clusterSummary)
 

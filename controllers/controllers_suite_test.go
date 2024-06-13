@@ -35,10 +35,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
+	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -174,7 +174,7 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 		Client:          c,
 		Scheme:          scheme,
 		ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
 		Mux:             sync.Mutex{},
 	}
@@ -185,7 +185,7 @@ func getProfileReconciler(c client.Client) *controllers.ProfileReconciler {
 		Client:        c,
 		Scheme:        scheme,
 		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-		Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 		Mux:           sync.Mutex{},
 	}

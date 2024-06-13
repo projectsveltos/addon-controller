@@ -36,7 +36,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -56,7 +56,7 @@ type SetReconciler struct {
 	SetMap map[corev1.ObjectReference]*libsveltosset.Set
 
 	// key: Sets; value Set Selector
-	Sets map[corev1.ObjectReference]libsveltosv1alpha1.Selector
+	Sets map[corev1.ObjectReference]libsveltosv1beta1.Selector
 
 	// For each cluster contains current labels
 	// This is needed in following scenario:
@@ -82,7 +82,7 @@ func (r *SetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl
 	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the Set instance
-	set := &libsveltosv1alpha1.Set{}
+	set := &libsveltosv1beta1.Set{}
 	if err := r.Get(ctx, req.NamespacedName, set); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -163,11 +163,11 @@ func (r *SetReconciler) reconcileNormal(
 // SetupWithManager sets up the controller with the Manager.
 func (r *SetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&libsveltosv1alpha1.Set{}).
+		For(&libsveltosv1beta1.Set{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
-		Watches(&libsveltosv1alpha1.SveltosCluster{},
+		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueSetForSveltosCluster),
 			builder.WithPredicates(
 				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
@@ -250,7 +250,7 @@ func (r *SetReconciler) updateMaps(setScope *scope.SetScope) {
 	r.Sets[*profileInfo] = setScope.GetSpec().ClusterSelector
 }
 
-func (r *SetReconciler) limitReferencesToNamespace(set *libsveltosv1alpha1.Set) {
+func (r *SetReconciler) limitReferencesToNamespace(set *libsveltosv1beta1.Set) {
 	for i := range set.Spec.ClusterRefs {
 		set.Spec.ClusterRefs[i].Namespace = set.Namespace
 	}

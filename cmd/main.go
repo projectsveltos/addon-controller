@@ -53,14 +53,13 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	"github.com/projectsveltos/addon-controller/api/v1alpha1/index"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
-	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	logsettings "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
@@ -142,8 +141,8 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 
-	logs.RegisterForLogSettings(ctx,
-		libsveltosv1alpha1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
+	logsettings.RegisterForLogSettings(ctx,
+		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
 	debug.SetMemoryLimit(gibibytes_per_bytes)
@@ -388,7 +387,7 @@ func getProfileReconciler(mgr manager.Manager) *controllers.ProfileReconciler {
 		Scheme:               mgr.GetScheme(),
 		SetMap:               make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		Profiles:             make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		Profiles:             make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
@@ -402,7 +401,7 @@ func getClusterProfileReconciler(mgr manager.Manager) *controllers.ClusterProfil
 		Scheme:               mgr.GetScheme(),
 		ClusterSetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterProfiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Mux:                  sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
@@ -439,7 +438,7 @@ func getSetReconciler(mgr manager.Manager) *controllers.SetReconciler {
 		Mux:                  sync.Mutex{},
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		SetMap:               make(map[corev1.ObjectReference]*libsveltosset.Set),
-		Sets:                 make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		Sets:                 make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Logger:               ctrl.Log.WithName("setreconciler"),
 	}
@@ -453,7 +452,7 @@ func getClusterSetReconciler(mgr manager.Manager) *controllers.ClusterSetReconci
 		Mux:                  sync.Mutex{},
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ClusterSetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ClusterSets:          make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+		ClusterSets:          make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 		ClusterLabels:        make(map[corev1.ObjectReference]map[string]string),
 		Logger:               ctrl.Log.WithName("clustersetreconciler"),
 	}
@@ -517,7 +516,7 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 		clusterProfileReconciler = getClusterProfileReconciler(mgr)
 		err = clusterProfileReconciler.SetupWithManager(mgr)
 		if err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterProfileKind)
+			setupLog.Error(err, "unable to create controller", "controller", configv1beta1.ClusterProfileKind)
 			os.Exit(1)
 		}
 		watchersForCAPI = append(watchersForCAPI, clusterProfileReconciler)
@@ -525,7 +524,7 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 		profileReconciler = getProfileReconciler(mgr)
 		err = profileReconciler.SetupWithManager(mgr)
 		if err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ProfileKind)
+			setupLog.Error(err, "unable to create controller", "controller", configv1beta1.ProfileKind)
 			os.Exit(1)
 		}
 		watchersForCAPI = append(watchersForCAPI, profileReconciler)
@@ -533,7 +532,7 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 		clusterSetReconciler = getClusterSetReconciler(mgr)
 		err = clusterSetReconciler.SetupWithManager(mgr)
 		if err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", libsveltosv1alpha1.ClusterSetKind)
+			setupLog.Error(err, "unable to create controller", "controller", libsveltosv1beta1.ClusterSetKind)
 			os.Exit(1)
 		}
 		watchersForCAPI = append(watchersForCAPI, clusterSetReconciler)
@@ -541,7 +540,7 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 		setReconciler = getSetReconciler(mgr)
 		err = setReconciler.SetupWithManager(mgr)
 		if err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", libsveltosv1alpha1.SetKind)
+			setupLog.Error(err, "unable to create controller", "controller", libsveltosv1beta1.SetKind)
 			os.Exit(1)
 		}
 		watchersForCAPI = append(watchersForCAPI, setReconciler)
@@ -550,7 +549,7 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 	clusterSummaryReconciler := getClusterSummaryReconciler(ctx, mgr)
 	err = clusterSummaryReconciler.SetupWithManager(ctx, mgr)
 	if err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", configv1alpha1.ClusterSummaryKind)
+		setupLog.Error(err, "unable to create controller", "controller", configv1beta1.ClusterSummaryKind)
 		os.Exit(1)
 	}
 	watchersForCAPI = append(watchersForCAPI, clusterSummaryReconciler)
@@ -570,7 +569,7 @@ func printMemUsage(logger logr.Logger) {
 			WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
 			WithValues("Sys (MiB)", bToMb(m.Sys)).
 			WithValues("NumGC", m.NumGC)
-		l.V(logs.LogInfo).Info("memory stats")
+		l.V(logsettings.LogInfo).Info("memory stats")
 		runtime.GC()
 	}
 }

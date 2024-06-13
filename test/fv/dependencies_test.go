@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
@@ -35,7 +35,7 @@ var _ = Describe("Dependencies", func() {
 	It("ClusterProfile with dependencies is deployed after dependencies are provisioned", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfileDependency := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfileDependency.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfileDependency.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfileDependency)).To(Succeed())
 		verifyClusterProfileMatches(clusterProfileDependency)
 		verifyClusterSummary(controllers.ClusterProfileLabelName, clusterProfileDependency.Name,
@@ -43,7 +43,7 @@ var _ = Describe("Dependencies", func() {
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Byf("Set ClusterProfile %s as dependency for ClusterProfile %s", clusterProfileDependency.Name, clusterProfile.Name)
 		clusterProfile.Spec.DependsOn = []string{clusterProfileDependency.Name}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -52,9 +52,9 @@ var _ = Describe("Dependencies", func() {
 			&clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfileDependency.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "airflow",
@@ -62,7 +62,7 @@ var _ = Describe("Dependencies", func() {
 				ChartVersion:     "16.2.1",
 				ReleaseName:      "airflow",
 				ReleaseNamespace: "airflow",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -73,7 +73,7 @@ var _ = Describe("Dependencies", func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -81,7 +81,7 @@ var _ = Describe("Dependencies", func() {
 				ChartVersion:     "1.1.1",
 				ReleaseName:      "flink",
 				ReleaseNamespace: "flink",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 
@@ -92,14 +92,14 @@ var _ = Describe("Dependencies", func() {
 
 		By("Verifying clusterSummary is not deployed till the dependencies are provisioned")
 		Eventually(func() bool {
-			currentClusterSummaryDependecy := &configv1alpha1.ClusterSummary{}
+			currentClusterSummaryDependecy := &configv1beta1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummaryDependency.Namespace, Name: clusterSummaryDependency.Name},
 				currentClusterSummaryDependecy)
 			if err != nil {
 				return false
 			}
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 				currentClusterSummary)
@@ -115,7 +115,7 @@ var _ = Describe("Dependencies", func() {
 			}
 
 			for i := range currentClusterSummaryDependecy.Status.FeatureSummaries {
-				if currentClusterSummaryDependecy.Status.FeatureSummaries[i].Status != configv1alpha1.FeatureStatusProvisioned {
+				if currentClusterSummaryDependecy.Status.FeatureSummaries[i].Status != configv1beta1.FeatureStatusProvisioned {
 					return currentClusterSummary.Status.FeatureSummaries == nil
 				}
 			}
@@ -123,10 +123,10 @@ var _ = Describe("Dependencies", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummaryDependency.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummaryDependency.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummaryDependency.Name, configv1beta1.FeatureHelm)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		deleteClusterProfile(clusterProfileDependency)
 

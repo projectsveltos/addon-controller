@@ -30,9 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -53,40 +53,40 @@ var _ = Describe("ClusterSummaryTransformations map functions", func() {
 
 		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
-		clusterSummary0 := &configv1alpha1.ClusterSummary{
+		clusterSummary0 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
-							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
 				},
 			},
 		}
 
-		clusterSummary1 := &configv1alpha1.ClusterSummary{
+		clusterSummary1 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      randomString(),
-							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
 				},
@@ -111,18 +111,18 @@ var _ = Describe("ClusterSummaryTransformations map functions", func() {
 
 		set := libsveltosset.Set{}
 		key := corev1.ObjectReference{APIVersion: configMap.APIVersion,
-			Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
+			Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind), Namespace: configMap.Namespace, Name: configMap.Name}
 
-		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
-			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
+		set.Insert(&corev1.ObjectReference{APIVersion: configv1beta1.GroupVersion.String(),
+			Kind: configv1beta1.ClusterSummaryKind, Namespace: clusterSummary0.Namespace, Name: clusterSummary0.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests := controllers.RequeueClusterSummaryForReference(reconciler, context.TODO(), configMap)
 		Expect(requests).To(HaveLen(1))
 		Expect(requests[0].Name).To(Equal(clusterSummary0.Name))
 
-		set.Insert(&corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
-			Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
+		set.Insert(&corev1.ObjectReference{APIVersion: configv1beta1.GroupVersion.String(),
+			Kind: configv1beta1.ClusterSummaryKind, Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name})
 		reconciler.ReferenceMap[key] = &set
 
 		requests = controllers.RequeueClusterSummaryForReference(reconciler, context.TODO(), configMap)

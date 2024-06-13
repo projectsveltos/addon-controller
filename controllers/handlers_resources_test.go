@@ -36,16 +36,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 
 var _ = Describe("HandlersResource", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
+	var clusterSummary *configv1beta1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
 
@@ -62,26 +62,32 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -100,24 +106,24 @@ var _ = Describe("HandlersResource", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		// We are using testEnv for both management and managed cluster. So ask Sveltos to deploy same ClusterRole in both
 		// managed and management cluster. If for instance we had deployed ClusterRole just to the managed cluster,
 		// then as part of cleaning stale resources in the management cluster, Sveltos would have removed it.
-		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
 				Namespace:      configMap.Namespace,
 				Name:           configMap.Name,
-				Kind:           string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				DeploymentType: configv1alpha1.DeploymentTypeLocal,
+				Kind:           string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				DeploymentType: configv1beta1.DeploymentTypeLocal,
 			},
 			{
 				Namespace:      configMap.Namespace,
 				Name:           configMap.Name,
-				Kind:           string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
-				DeploymentType: configv1alpha1.DeploymentTypeRemote,
+				Kind:           string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				DeploymentType: configv1beta1.DeploymentTypeRemote,
 			},
 		}
 		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
@@ -130,7 +136,7 @@ var _ = Describe("HandlersResource", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			return controllers.GenericDeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-				string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+				string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
 				textlogger.NewLogger(textlogger.NewConfig()))
 		}, timeout, pollingInterval).Should(BeNil())
 
@@ -153,10 +159,10 @@ var _ = Describe("HandlersResource", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
 				},
 			},
 		}
@@ -172,10 +178,10 @@ var _ = Describe("HandlersResource", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1alpha1.FeatureResources),
+					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
 				},
 			},
 		}
@@ -189,19 +195,19 @@ var _ = Describe("HandlersResource", func() {
 		addOwnerReference(ctx, testEnv.Client, role0, clusterProfile)
 		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterProfile)
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1alpha1.FeatureResources,
-				Status:    configv1alpha1.FeatureStatusProvisioned,
+				FeatureID: configv1beta1.FeatureResources,
+				Status:    configv1beta1.FeatureStatusProvisioned,
 			},
 		}
-		currentClusterSummary.Status.DeployedGVKs = []configv1alpha1.FeatureDeploymentInfo{
+		currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
 			{
-				FeatureID: configv1alpha1.FeatureResources,
+				FeatureID: configv1beta1.FeatureResources,
 				DeployedGroupVersionKind: []string{
 					"ClusterRole.v1.rbac.authorization.k8s.io",
 					"Role.v1.rbac.authorization.k8s.io",
@@ -220,7 +226,7 @@ var _ = Describe("HandlersResource", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1alpha1.FeatureResources), libsveltosv1alpha1.ClusterTypeCapi, deployer.Options{},
+			string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// UnDeployResources finds all policies deployed because of a clusterSummary and deletes those.
@@ -251,9 +257,9 @@ var _ = Describe("HandlersResource", func() {
 	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-		localReports := []configv1alpha1.ResourceReport{
+		localReports := []configv1beta1.ResourceReport{
 			{
-				Resource: configv1alpha1.Resource{
+				Resource: configv1beta1.Resource{
 					Name:      randomString(),
 					Namespace: randomString(),
 					Group:     randomString(),
@@ -263,9 +269,9 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		remoteReports := []configv1alpha1.ResourceReport{
+		remoteReports := []configv1beta1.ResourceReport{
 			{
-				Resource: configv1alpha1.Resource{
+				Resource: configv1beta1.Resource{
 					Name:      randomString(),
 					Namespace: randomString(),
 					Group:     randomString(),
@@ -275,7 +281,7 @@ var _ = Describe("HandlersResource", func() {
 			},
 		}
 
-		_, err := controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1alpha1.FeatureResources,
+		_, err := controllers.UpdateDeployedGroupVersionKind(context.TODO(), clusterSummary, configv1beta1.FeatureResources,
 			localReports, remoteReports, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -292,7 +298,7 @@ var _ = Describe("HandlersResource", func() {
 			clusterSummary)).To(Succeed())
 		Expect(clusterSummary.Status.DeployedGVKs).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.DeployedGVKs)).To(Equal(1))
-		Expect(clusterSummary.Status.DeployedGVKs[0].FeatureID).To(Equal(configv1alpha1.FeatureResources))
+		Expect(clusterSummary.Status.DeployedGVKs[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
 		Expect(clusterSummary.Status.DeployedGVKs[0].DeployedGroupVersionKind).To(ContainElement(
 			fmt.Sprintf("%s.%s.%s", localReports[0].Resource.Kind, localReports[0].Resource.Version, localReports[0].Resource.Group)))
 		Expect(clusterSummary.Status.DeployedGVKs[0].DeployedGroupVersionKind).To(ContainElement(
@@ -326,27 +332,27 @@ var _ = Describe("Hash methods", func() {
 		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), render.AsCode(clusterRole2))
 
 		namespace := randomString()
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: namespace,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: configMap1.Namespace, Name: configMap1.Name,
-							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 						{
 							Namespace: configMap2.Namespace, Name: configMap2.Name,
-							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 						{
 							Namespace: randomString(), Name: randomString(),
-							Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
 					Tier: 100,

@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
@@ -37,7 +37,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForClusterSet(
 
 	addTypeInformationToObject(r.Scheme, clusterSet)
 
-	return requeueForSet(clusterSet, r.ClusterSetMap, configv1alpha1.ClusterProfileKind, r.Logger)
+	return requeueForSet(clusterSet, r.ClusterSetMap, configv1beta1.ClusterProfileKind, r.Logger)
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForSveltosCluster(
@@ -49,7 +49,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForSveltosCluster(
 
 	addTypeInformationToObject(r.Scheme, o)
 
-	return requeueForCluster(o, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
+	return requeueForCluster(o, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ClusterProfileKind, r.Logger)
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
@@ -61,7 +61,7 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
+	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ClusterProfileKind, r.Logger)
 }
 
 func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
@@ -73,5 +73,5 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ClusterProfileKind, r.Logger)
+	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ClusterProfileKind, r.Logger)
 }

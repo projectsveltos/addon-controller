@@ -30,7 +30,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Template instantiation", func() {
@@ -84,7 +84,7 @@ var _ = Describe("Template instantiation", func() {
       name: "{{ .Cluster.metadata.name }}-test"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
 			nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
@@ -98,7 +98,7 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
 			nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
@@ -146,7 +146,7 @@ valuesTemplate: |
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
 			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
@@ -195,7 +195,7 @@ valuesTemplate: |
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
 			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))

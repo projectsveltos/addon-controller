@@ -31,9 +31,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -131,7 +131,7 @@ var _ = Describe("Feature", func() {
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -150,19 +150,19 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to reference ConfigMap and add Tenant admin labels", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Labels = map[string]string{
-			libsveltosv1alpha1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
-			libsveltosv1alpha1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
+			libsveltosv1beta1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
+			libsveltosv1beta1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
 		}
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs,
 				Name:      configMapName,
 				// Deploy content of this configMap into management cluster
-				DeploymentType: configv1alpha1.DeploymentTypeLocal,
+				DeploymentType: configv1beta1.DeploymentTypeLocal,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())

@@ -7,7 +7,7 @@
 # that needs to be deployed and creates those resources in any cluster matching the
 # selector env=fv in the namespace `eng`
 
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: flux-system

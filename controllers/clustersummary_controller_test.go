@@ -38,18 +38,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 var _ = Describe("ClustersummaryController", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
+	var clusterSummary *configv1beta1.ClusterSummary
 	var cluster *clusterv1.Cluster
 	var namespace string
 	var clusterName string
@@ -71,26 +71,32 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, clusterName, false)
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -182,7 +188,7 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns true when mode is Continuous", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -214,8 +220,8 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("updateChartMap updates chartMap always but in DryRun mode", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
@@ -253,17 +259,17 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(manager.CanManageChart(clusterSummary, &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])).To(BeTrue())
 
 		// set mode to dryRun
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
-		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
 		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Add an extra helm chart
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
-			configv1alpha1.HelmChart{
+			configv1beta1.HelmChart{
 				RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 				ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
 			})
@@ -279,14 +285,14 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all policies are deployed", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			},
 		}
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioning},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioning},
 		}
 
 		initObjects := []client.Object{
@@ -318,7 +324,7 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("setFailureMessage set failure message for every features in ClusterSummary", func() {
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    randomString(),
 				RepositoryName:   randomString(),
@@ -329,17 +335,17 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1beta1.KustomizationRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 				Path:      randomString(),
@@ -372,17 +378,17 @@ var _ = Describe("ClustersummaryController", func() {
 		featureResourcesVerified := false
 		featureKustomizeVerified := false
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureHelmVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureResourcesVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureKustomizeVerified = true
@@ -395,7 +401,7 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("resetFeatureStatus set failure message for every features in ClusterSummary", func() {
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    randomString(),
 				RepositoryName:   randomString(),
@@ -406,27 +412,27 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1beta1.KustomizationRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 				Path:      randomString(),
 			},
 		}
 
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
-			{FeatureID: configv1alpha1.FeatureKustomize, Status: configv1alpha1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: configv1beta1.FeatureKustomize, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -448,24 +454,24 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:    sync.Mutex{},
 		}
 
-		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
+		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1beta1.FeatureStatusFailed)
 
 		featureHelmVerified := false
 		featureResourcesVerified := false
 		featureKustomizeVerified := false
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureHelmVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureResourcesVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1alpha1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureKustomizeVerified = true
 			}
@@ -477,12 +483,12 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioning},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioning},
 		}
 
 		initObjects := []client.Object{
@@ -515,16 +521,16 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("shouldReconcile returns false when mode is OneTime and policies and helm charts are deployed", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
 		}
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
 		}
 
 		initObjects := []client.Object{
@@ -585,22 +591,22 @@ var _ = Describe("ClustersummaryController", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(
 			controllerutil.ContainsFinalizer(
 				currentClusterSummary,
-				configv1alpha1.ClusterSummaryFinalizer,
+				configv1beta1.ClusterSummaryFinalizer,
 			),
 		).Should(BeTrue())
 	})
 
 	It("shouldRedeploy returns true in DryRun mode", func() {
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
 		}
 		initObjects := []client.Object{
 			clusterProfile,
@@ -629,7 +635,7 @@ var _ = Describe("ClustersummaryController", func() {
 		})
 		Expect(err).To(BeNil())
 
-		f := controllers.GetHandlersForFeature(configv1alpha1.FeatureResources)
+		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
 
 		// In SyncMode DryRun even if config is same (input for ShouldRedeploy) result is redeploy
 		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
@@ -641,10 +647,10 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		// Update SyncMode to Continuous
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err = c.Get(context.TODO(), clusterSummaryName, currentClusterSummary)
 		Expect(err).ToNot(HaveOccurred())
-		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
+		currentClusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		clusterSummaryScope.ClusterSummary = currentClusterSummary
@@ -654,11 +660,11 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
-		controllerutil.AddFinalizer(clusterProfile, configv1alpha1.ClusterProfileFinalizer)
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
+		controllerutil.AddFinalizer(clusterProfile, configv1beta1.ClusterProfileFinalizer)
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeDryRun
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
 		initObjects := []client.Object{
 			clusterSummary,
 			clusterProfile,
@@ -699,7 +705,7 @@ var _ = Describe("ClustersummaryController", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
 
 		// Mark ClusterProfile for deletion
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		Expect(c.Delete(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -711,15 +717,15 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("canRemoveFinalizer in not DryRun returns true when ClusterSummary is deleted and features removed", func() {
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoving},
 		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
 		initObjects := []client.Object{
 			clusterSummary,
@@ -762,9 +768,9 @@ var _ = Describe("ClustersummaryController", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
 
 		// Mark all features as removed
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoved},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoved},
 		}
 
 		clusterSummaryScope.ClusterSummary = clusterSummary
@@ -774,15 +780,15 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("canRemoveFinalizer returns true when Cluster is gone", func() {
-		controllerutil.AddFinalizer(clusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusRemoved},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusRemoving},
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoving},
 		}
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
 		initObjects := []client.Object{
 			clusterSummary,
@@ -826,36 +832,36 @@ var _ = Describe("ClustersummaryController", func() {
 	It("getCurrentReferences collects all ClusterSummary referenced objects", func() {
 		referencedResourceNamespace := randomString()
 
-		kustomizeValueFrom := configv1alpha1.ValueFrom{
+		kustomizeValueFrom := configv1beta1.ValueFrom{
 			Namespace: referencedResourceNamespace,
 			Name:      randomString(),
-			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 		}
 
-		helmValueFrom := configv1alpha1.ValueFrom{
+		helmValueFrom := configv1beta1.ValueFrom{
 			Namespace: referencedResourceNamespace,
 			Name:      randomString(),
-			Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
 				Namespace: referencedResourceNamespace,
 				Name:      randomString(),
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1alpha1.KustomizationRef{
+		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1beta1.KustomizationRef{
 			{
 				Namespace:  referencedResourceNamespace,
 				Name:       randomString(),
-				Kind:       string(libsveltosv1alpha1.SecretReferencedResourceKind),
-				ValuesFrom: []configv1alpha1.ValueFrom{kustomizeValueFrom},
+				Kind:       string(libsveltosv1beta1.SecretReferencedResourceKind),
+				ValuesFrom: []configv1beta1.ValueFrom{kustomizeValueFrom},
 			},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				ValuesFrom: []configv1alpha1.ValueFrom{helmValueFrom},
+				ValuesFrom: []configv1beta1.ValueFrom{helmValueFrom},
 			},
 		}
 
@@ -869,8 +875,8 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects using cluster namespace when not set", func() {
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
-			{Namespace: "", Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Namespace: "", Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -885,15 +891,15 @@ var _ = Describe("ClustersummaryController", func() {
 	})
 
 	It("reconcileDelete successfully returns when cluster is not found", func() {
-		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1alpha1.HelmChart{
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
-		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
-			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind)},
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
 		}
-		clusterSummary.Status.FeatureSummaries = []configv1alpha1.FeatureSummary{
-			{FeatureID: configv1alpha1.FeatureHelm, Status: configv1alpha1.FeatureStatusProvisioned},
-			{FeatureID: configv1alpha1.FeatureResources, Status: configv1alpha1.FeatureStatusProvisioned},
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
 		}
 
 		// No cluster.
@@ -924,25 +930,25 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {
 		clusterProfileAName := randomString()
-		clusterSummaryAName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryAName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfileAName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileAName, clusterSummaryAName))
-		clusterSummaryA := &configv1alpha1.ClusterSummary{
+		clusterSummaryA := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryAName,
 				Namespace: namespace,
 				Labels: map[string]string{
 					controllers.ClusterProfileLabelName: clusterProfileAName,
-					configv1alpha1.ClusterNameLabel:     clusterName,
-					configv1alpha1.ClusterTypeLabel:     string(libsveltosv1alpha1.ClusterTypeCapi),
+					configv1beta1.ClusterNameLabel:      clusterName,
+					configv1beta1.ClusterTypeLabel:      string(libsveltosv1beta1.ClusterTypeCapi),
 				},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					HelmCharts: []configv1alpha1.HelmChart{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
 						{
 							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 							ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
@@ -953,33 +959,33 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		clusterProfileBName := randomString()
-		clusterSummaryBName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryBName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfileBName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileBName, clusterSummaryBName))
-		clusterSummaryB := &configv1alpha1.ClusterSummary{
+		clusterSummaryB := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryBName,
 				Namespace: namespace,
 				Labels: map[string]string{
 					controllers.ClusterProfileLabelName: clusterProfileBName,
-					configv1alpha1.ClusterNameLabel:     clusterName,
-					configv1alpha1.ClusterTypeLabel:     string(libsveltosv1alpha1.ClusterTypeCapi),
+					configv1beta1.ClusterNameLabel:      clusterName,
+					configv1beta1.ClusterTypeLabel:      string(libsveltosv1beta1.ClusterTypeCapi),
 				},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					HelmCharts: []configv1alpha1.HelmChart{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
 						{
 							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
 							ReleaseName: randomString(), ReleaseNamespace: randomString(), RepositoryName: randomString(),
 						},
 					},
-					PolicyRefs: []configv1alpha1.PolicyRef{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
-							Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
 				},
@@ -1026,11 +1032,11 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(deployed).To(BeFalse())
 
 		// Mark first deopendency as provisioned
-		clusterSummaryA.Status = configv1alpha1.ClusterSummaryStatus{
-			FeatureSummaries: []configv1alpha1.FeatureSummary{
+		clusterSummaryA.Status = configv1beta1.ClusterSummaryStatus{
+			FeatureSummaries: []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1alpha1.FeatureHelm,
-					Status:    configv1alpha1.FeatureStatusProvisioned,
+					FeatureID: configv1beta1.FeatureHelm,
+					Status:    configv1beta1.FeatureStatusProvisioned,
 				},
 			},
 		}
@@ -1044,15 +1050,15 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(deployed).To(BeFalse())
 
 		// Mark first deopendency as provisioned
-		clusterSummaryB.Status = configv1alpha1.ClusterSummaryStatus{
-			FeatureSummaries: []configv1alpha1.FeatureSummary{
+		clusterSummaryB.Status = configv1beta1.ClusterSummaryStatus{
+			FeatureSummaries: []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1alpha1.FeatureHelm,
-					Status:    configv1alpha1.FeatureStatusProvisioned,
+					FeatureID: configv1beta1.FeatureHelm,
+					Status:    configv1beta1.FeatureStatusProvisioned,
 				},
 				{
-					FeatureID: configv1alpha1.FeatureResources,
-					Status:    configv1alpha1.FeatureStatusProvisioned,
+					FeatureID: configv1beta1.FeatureResources,
+					Status:    configv1beta1.FeatureStatusProvisioned,
 				},
 			},
 		}
@@ -1067,9 +1073,9 @@ var _ = Describe("ClustersummaryController", func() {
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
-	var clusterProfile *configv1alpha1.ClusterProfile
-	var referencingClusterSummary *configv1alpha1.ClusterSummary
-	var nonReferencingClusterSummary *configv1alpha1.ClusterSummary
+	var clusterProfile *configv1beta1.ClusterProfile
+	var referencingClusterSummary *configv1beta1.ClusterSummary
+	var nonReferencingClusterSummary *configv1beta1.ClusterSummary
 	var configMap *corev1.ConfigMap
 	var cluster *clusterv1.Cluster
 	var namespace string
@@ -1088,7 +1094,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		namespace = randomString()
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
@@ -1101,46 +1107,46 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		referencingClusterSummary = &configv1alpha1.ClusterSummary{
+		referencingClusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name,
-							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
-					SyncMode: configv1alpha1.SyncModeContinuous,
+					SyncMode: configv1beta1.SyncModeContinuous,
 				},
 			},
 		}
 
-		nonReferencingClusterSummary = &configv1alpha1.ClusterSummary{
+		nonReferencingClusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
 							Namespace: configMap.Namespace,
 							Name:      configMap.Name + randomString(),
-							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
-					SyncMode: configv1alpha1.SyncModeContinuous,
+					SyncMode: configv1beta1.SyncModeContinuous,
 				},
 			},
 		}
@@ -1185,11 +1191,11 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
 			referencingClusterSummary.Name, configMap.Kind, configMap.Namespace, configMap.Name))
-		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1alpha1.PolicyRef{
+		referencingClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
 				Namespace: namespace,
 				Name:      configMap.Name,
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			},
 		}
 
@@ -1206,7 +1212,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
+		Expect(dep.RegisterFeatureID(string(configv1beta1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		// Reconcile so it is tracked that referencingClusterSummary is referencing configMap
@@ -1270,7 +1276,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1alpha1.FeatureResources))).To(Succeed())
+		Expect(dep.RegisterFeatureID(string(configv1beta1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{

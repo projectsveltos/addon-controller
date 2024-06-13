@@ -339,7 +339,7 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.29.1
+    version: v1.30.0
     workers:
       machineDeployments:
       - class: default-worker

@@ -170,8 +170,13 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		}
 	}
 
+	funcMap := ExtraFuncMap()
+	funcMap["getResource"] = func(id string) map[string]interface{} {
+		return objects.MgmtResources[id]
+	}
+
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(values)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcMap).Parse(values)
 	if err != nil {
 		return "", err
 	}

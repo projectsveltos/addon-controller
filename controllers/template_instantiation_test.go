@@ -105,6 +105,8 @@ var _ = Describe("Template instantiation", func() {
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
 	})
 
+	//nolint: dupl // Not refactored intentionally. See next test for the
+	// explanation.
 	It("instantiateTemplateValues returns correct values (spec section)", func() {
 		namespace := randomString()
 		ns := &corev1.Namespace{
@@ -130,6 +132,55 @@ var _ = Describe("Template instantiation", func() {
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 
 		values := `{{ $pwd := printf "%s" (index .MgmtResources "Secret").data.password }}
+valuesTemplate: |
+		password: "{{b64dec $pwd}}"`
+
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
+		Expect(err).To(BeNil())
+
+		var u unstructured.Unstructured
+		u.SetUnstructuredContent(content)
+
+		mgmtResources := map[string]*unstructured.Unstructured{
+			"Secret": &u,
+		}
+
+		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
+			libsveltosv1alpha1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
+			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result).To(ContainSubstring(pwd))
+	})
+
+	//nolint: dupl // This is a copy of the previous test with getResource
+	// instead of index. We want the old behavior to be tested as well. We could
+	// refactor this to a common function. But, that would make the tests hard
+	// to follow and be evolved independently.
+	It("instantiateTemplateValues returns correct values using getResource (spec section)", func() {
+		namespace := randomString()
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
+
+		pwd := randomString()
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"password": []byte(pwd),
+			},
+		}
+		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
+
+		values := `{{ $pwd := printf "%s" (getResource "Secret").data.password }}
 valuesTemplate: |
 		password: "{{b64dec $pwd}}"`
 

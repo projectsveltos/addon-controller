@@ -58,8 +58,19 @@ func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
 
 	var buffer bytes.Buffer
 
+	// Cluster namespace and name can be used to instantiate the name of the resource that
+	// needs to be fetched from the management cluster. Defined an unstructured with namespace and name set
+	u := &unstructured.Unstructured{}
+	u.SetNamespace(clusterSummary.Spec.ClusterNamespace)
+	u.SetName(clusterSummary.Spec.ClusterName)
+
 	if err := tmpl.Execute(&buffer,
-		struct{ ClusterNamespace, ClusterName string }{
+		struct {
+			Cluster map[string]interface{}
+			// deprecated. This used to be original format which was different than rest of templating
+			ClusterNamespace, ClusterName string
+		}{
+			Cluster:          u.UnstructuredContent(),
 			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
 			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
 		return "", errors.Wrapf(err, "error executing template")

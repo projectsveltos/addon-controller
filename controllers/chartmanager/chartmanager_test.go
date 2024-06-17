@@ -30,9 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -40,24 +40,24 @@ const (
 )
 
 var _ = Describe("Chart manager", func() {
-	var clusterSummary *configv1alpha1.ClusterSummary
+	var clusterSummary *configv1beta1.ClusterSummary
 	var c client.Client
 	var scheme *runtime.Scheme
 
 	BeforeEach(func() {
 		scheme = setupScheme()
 
-		clusterSummary = &configv1alpha1.ClusterSummary{
+		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: randomString(),
 				ClusterName:      upstreamClusterNamePrefix + randomString(),
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					HelmCharts: []configv1alpha1.HelmChart{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
 						{
 							RepositoryURL:    "https://kyverno.github.io/kyverno/",
 							RepositoryName:   "kyverno",
@@ -65,7 +65,7 @@ var _ = Describe("Chart manager", func() {
 							ChartVersion:     "v3.0.1",
 							ReleaseName:      "kyverno-latest",
 							ReleaseNamespace: "kyverno",
-							HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+							HelmChartAction:  configv1beta1.HelmChartActionInstall,
 						},
 						{
 							RepositoryURL:    "https://helm.nginx.com/stable/",
@@ -74,7 +74,7 @@ var _ = Describe("Chart manager", func() {
 							ChartVersion:     "0.17.1",
 							ReleaseName:      "nginx-latest",
 							ReleaseNamespace: "nginx",
-							HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+							HelmChartAction:  configv1beta1.HelmChartActionInstall,
 						},
 					},
 				},
@@ -129,7 +129,7 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		tmpClusterSummary := &configv1alpha1.ClusterSummary{
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummary.Name + randomString(),
 			},
@@ -153,7 +153,7 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		tmpClusterSummary := &configv1alpha1.ClusterSummary{
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummary.Name + randomString(),
 			},
@@ -211,21 +211,21 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		tmpClusterSummary := &configv1alpha1.ClusterSummary{
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummary.Name + randomString(),
 			},
 			Spec: clusterSummary.Spec,
 		}
 
-		prometheusChart := configv1alpha1.HelmChart{
+		prometheusChart := configv1beta1.HelmChart{
 			RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
 			RepositoryName:   "prometheus-community",
 			ChartName:        "prometheus-community/kube-prometheus-stack",
 			ChartVersion:     "40.0.0",
 			ReleaseName:      "prometheus-latest",
 			ReleaseNamespace: "prometheus",
-			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
 		tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
@@ -263,21 +263,21 @@ var _ = Describe("Chart manager", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		tmpClusterSummary := &configv1alpha1.ClusterSummary{
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterSummary.Name + randomString(),
 			},
 			Spec: clusterSummary.Spec,
 		}
 
-		prometheusChart := configv1alpha1.HelmChart{
+		prometheusChart := configv1beta1.HelmChart{
 			RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
 			RepositoryName:   "prometheus-community",
 			ChartName:        "prometheus-community/kube-prometheus-stack",
 			ChartVersion:     "40.0.0",
 			ReleaseName:      "prometheus-latest",
 			ReleaseNamespace: "prometheus",
-			HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
 		tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts = append(tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts,
@@ -298,7 +298,7 @@ var _ = Describe("Chart manager", func() {
 
 			manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-			tmpClusterSummary1 := &configv1alpha1.ClusterSummary{
+			tmpClusterSummary1 := &configv1beta1.ClusterSummary{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterSummary.Name + randomString(),
 				},
@@ -307,7 +307,7 @@ var _ = Describe("Chart manager", func() {
 			manager.RegisterClusterSummaryForCharts(tmpClusterSummary1)
 			defer removeSubscriptions(c, tmpClusterSummary1)
 
-			tmpClusterSummary2 := &configv1alpha1.ClusterSummary{
+			tmpClusterSummary2 := &configv1beta1.ClusterSummary{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterSummary.Name + randomString(),
 				},
@@ -328,40 +328,40 @@ var _ = Describe("Chart manager", func() {
 		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)).Should(BeNumerically(">=", 2))
 
 		// Mark clusterSummary as manager for one release
-		clusterSummary.Status = configv1alpha1.ClusterSummaryStatus{
-			HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
 				{
 					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseName,
 					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseNamespace,
-					Status:           configv1alpha1.HelmChartStatusManaging,
+					Status:           configv1beta1.HelmChartStatusManaging,
 				},
 				{
 					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseName,
 					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseNamespace,
-					Status:           configv1alpha1.HelmChartStatusConflict,
+					Status:           configv1beta1.HelmChartStatusConflict,
 				},
 			},
 		}
 		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
 		// Mark tmpClusterSummary as manager for other release
-		tmpClusterSummary := &configv1alpha1.ClusterSummary{
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummary.Name + randomString(),
 				Namespace: randomString(),
 			},
 			Spec: clusterSummary.Spec,
-			Status: configv1alpha1.ClusterSummaryStatus{
-				HelmReleaseSummaries: []configv1alpha1.HelmChartSummary{
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
 					{
 						ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseName,
 						ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseNamespace,
-						Status:           configv1alpha1.HelmChartStatusConflict,
+						Status:           configv1beta1.HelmChartStatusConflict,
 					},
 					{
 						ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseName,
 						ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseNamespace,
-						Status:           configv1alpha1.HelmChartStatusManaging,
+						Status:           configv1beta1.HelmChartStatusManaging,
 					},
 				},
 			},
@@ -388,7 +388,7 @@ var _ = Describe("Chart manager", func() {
 	})
 })
 
-func removeSubscriptions(c client.Client, clusterSummary *configv1alpha1.ClusterSummary) {
+func removeSubscriptions(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {
 	manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
 	Expect(err).To(BeNil())
 
@@ -398,7 +398,7 @@ func removeSubscriptions(c client.Client, clusterSummary *configv1alpha1.Cluster
 
 func setupScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
-	Expect(configv1alpha1.AddToScheme(s)).To(Succeed())
+	Expect(configv1beta1.AddToScheme(s)).To(Succeed())
 	Expect(clusterv1.AddToScheme(s)).To(Succeed())
 	Expect(clientgoscheme.AddToScheme(s)).To(Succeed())
 	return s

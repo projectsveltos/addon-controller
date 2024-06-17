@@ -30,8 +30,8 @@ import (
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -102,7 +102,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 	}
 
 	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")
-	rsList := libsveltosv1alpha1.ResourceSummaryList{}
+	rsList := libsveltosv1beta1.ResourceSummaryList{}
 	err = remoteClient.List(ctx, &rsList)
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, err
 }
 
 func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
-	rs *libsveltosv1alpha1.ResourceSummary, logger logr.Logger) error {
+	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
 	if rs.Labels == nil {
 		logger.V(logs.LogInfo).Info("labels not set. Cannot process it")
@@ -152,21 +152,21 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 	}
 
 	// Get ClusterSummary
-	clusterSummaryName, ok := rs.Labels[libsveltosv1alpha1.ClusterSummaryNameLabel]
+	clusterSummaryName, ok := rs.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummary name label not set. Cannot process it")
 		return nil
 	}
 
 	var clusterSummaryNamespace string
-	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1alpha1.ClusterSummaryNamespaceLabel]
+	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummary namespace label not set. Cannot process it")
 		return nil
 	}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		clusterSummary := &configv1alpha1.ClusterSummary{}
+		clusterSummary := &configv1beta1.ClusterSummary{}
 		err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
 			clusterSummary)
 		if err != nil {
@@ -184,23 +184,23 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 
 		l := logger.WithValues("clusterSummary", clusterSummary.Name)
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureHelm {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
 				if rs.Status.HelmResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy helm")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureResources {
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
 				if rs.Status.ResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1alpha1.FeatureKustomize {
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
 				if rs.Status.KustomizeResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1alpha1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
 				}
 			}
 		}
@@ -221,9 +221,9 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 }
 
 func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
-	rs *libsveltosv1alpha1.ResourceSummary, logger logr.Logger) error {
+	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
-	resourceSummary := &libsveltosv1alpha1.ResourceSummary{}
+	resourceSummary := &libsveltosv1beta1.ResourceSummary{}
 
 	err := remoteClient.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}, resourceSummary)
 	if err != nil {

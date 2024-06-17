@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
@@ -38,7 +38,7 @@ var _ = Describe("Helm", func() {
 	It("Deploy and updates oci helm charts correctly", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -47,9 +47,9 @@ var _ = Describe("Helm", func() {
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy oci helm charts", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
 				RepositoryName:   "oci-vault",
@@ -57,7 +57,7 @@ var _ = Describe("Helm", func() {
 				ChartVersion:     "0.7.2",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 
@@ -80,19 +80,19 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
-		charts := []configv1alpha1.Chart{
+		charts := []configv1beta1.Chart{
 			{ReleaseName: "vault", ChartVersion: "0.7.2", Namespace: "vault"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for vault")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
 				RepositoryName:   "oci-vault",
@@ -100,7 +100,7 @@ var _ = Describe("Helm", func() {
 				ChartVersion:     "0.6.0",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -117,14 +117,14 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
-		charts = []configv1alpha1.Chart{
+		charts = []configv1beta1.Chart{
 			{ReleaseName: "vault", ChartVersion: "0.6.0", Namespace: "vault"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		deleteClusterProfile(clusterProfile)

@@ -48,8 +48,8 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -63,7 +63,7 @@ const (
 	pathAnnotation           = "path"
 )
 
-func getClusterSummaryAnnotationValue(clusterSummary *configv1alpha1.ClusterSummary) string {
+func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
 	prefix := getPrefix(clusterSummary.Spec.ClusterType)
 	return fmt.Sprintf("%s-%s-%s", prefix, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName)
@@ -72,10 +72,10 @@ func getClusterSummaryAnnotationValue(clusterSummary *configv1alpha1.ClusterSumm
 // createNamespace creates a namespace if it does not exist already
 // No action in DryRun mode.
 func createNamespace(ctx context.Context, clusterClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, namespaceName string) error {
+	clusterSummary *configv1beta1.ClusterSummary, namespaceName string) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
 
@@ -103,9 +103,9 @@ func createNamespace(ctx context.Context, clusterClient client.Client,
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, configMap *corev1.ConfigMap, clusterSummary *configv1alpha1.ClusterSummary,
+	destClient client.Client, configMap *corev1.ConfigMap, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) ([]configv1alpha1.ResourceReport, error) {
+) ([]configv1beta1.ResourceReport, error) {
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
 		clusterSummary, mgmtResources, logger)
@@ -116,9 +116,9 @@ func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, 
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, secret *corev1.Secret, clusterSummary *configv1alpha1.ClusterSummary,
+	destClient client.Client, secret *corev1.Secret, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) ([]configv1alpha1.ResourceReport, error) {
+) ([]configv1beta1.ResourceReport, error) {
 
 	data := make(map[string]string)
 	for key, value := range secret.Data {
@@ -130,9 +130,9 @@ func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, des
 }
 
 func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, source client.Object, path string, clusterSummary *configv1alpha1.ClusterSummary,
+	destClient client.Client, source client.Object, path string, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) ([]configv1alpha1.ResourceReport, error) {
+) ([]configv1beta1.ResourceReport, error) {
 
 	s := source.(sourcev1.Source)
 
@@ -198,11 +198,11 @@ func readFiles(dir string) (map[string]string, error) {
 // updateResource creates or updates a resource in a CAPI Cluster.
 // No action in DryRun mode.
 func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
-	clusterSummary *configv1alpha1.ClusterSummary, object *unstructured.Unstructured,
+	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured,
 	logger logr.Logger) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
 
@@ -227,7 +227,7 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 func instantiateTemplate(referencedObject client.Object, logger logr.Logger) bool {
 	annotations := referencedObject.GetAnnotations()
 	if annotations != nil {
-		if _, ok := annotations[libsveltosv1alpha1.PolicyTemplateAnnotation]; ok {
+		if _, ok := annotations[libsveltosv1beta1.PolicyTemplateAnnotation]; ok {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("referencedObject %s %s/%s is a template",
 				referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName()))
 			return true
@@ -244,9 +244,9 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config, destClient client.Client,
-	referencedObject client.Object, data map[string]string, clusterSummary *configv1alpha1.ClusterSummary,
+	referencedObject client.Object, data map[string]string, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (reports []configv1alpha1.ResourceReport, err error) {
+) (reports []configv1beta1.ResourceReport, err error) {
 
 	instantiateTemplate := instantiateTemplate(referencedObject, logger)
 	resources, err := collectContent(ctx, clusterSummary, mgmtResources, data, instantiateTemplate, logger)
@@ -261,7 +261,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
-		configv1alpha1.FeatureResources, clusterSummary, logger)
+		configv1beta1.FeatureResources, clusterSummary, logger)
 }
 
 // adjustNamespace fixes namespace.
@@ -292,19 +292,19 @@ func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config)
 // and kind.group::name for cluster wide policies.
 func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
-) (reports []configv1alpha1.ResourceReport, err error) {
+	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
+) (reports []configv1beta1.ResourceReport, err error) {
 
-	profile, profileTier, err := configv1alpha1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
+	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
 		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	conflictErrorMsg := ""
-	reports = make([]configv1alpha1.ResourceReport, 0)
+	reports = make([]configv1beta1.ResourceReport, 0)
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
 
@@ -340,7 +340,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			ok := errors.As(err, &conflictErr)
 			if ok {
 				conflictResourceReport := generateConflictResourceReport(ctx, dr, resource)
-				if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+				if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 					reports = append(reports, *conflictResourceReport)
 					continue
 				} else {
@@ -416,7 +416,7 @@ func addMetadata(policy *unstructured.Unstructured, resourceVersion string, prof
 // managed cluster (profiles). For each one, it finds the corresponding ClusterSummary and via requeueOldOwner reset
 // the Status so a new reconciliation happens.
 func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectReference,
-	featureID configv1alpha1.FeatureID, clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 	// Since release v0.30.0 only one profile instance can deploy a resource in a managed
@@ -428,11 +428,11 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 		var profileKind string
 		var profileName types.NamespacedName
 		switch profileOwners[i].Kind {
-		case configv1alpha1.ClusterProfileKind:
-			profileKind = configv1alpha1.ClusterProfileKind
+		case configv1beta1.ClusterProfileKind:
+			profileKind = configv1beta1.ClusterProfileKind
 			profileName = types.NamespacedName{Name: profileOwners[i].Name}
-		case configv1alpha1.ProfileKind:
-			profileKind = configv1alpha1.ProfileKind
+		case configv1beta1.ProfileKind:
+			profileKind = configv1beta1.ProfileKind
 			profileName = *getProfileNameFromOwnerReferenceName(profileOwners[i].Name)
 		default:
 			continue
@@ -443,7 +443,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 		}
 
 		// Get ClusterSummary that deployed the resource.
-		var ownerClusterSummary *configv1alpha1.ClusterSummary
+		var ownerClusterSummary *configv1beta1.ClusterSummary
 		ownerClusterSummary, err = getClusterSummary(ctx, c, profileKind, profileName.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 		if err != nil {
@@ -504,15 +504,15 @@ func canDeployResource(ctx context.Context, dr dynamic.ResourceInterface, policy
 	return resourceInfo, false, nil
 }
 
-func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo, resource *configv1alpha1.Resource,
-) *configv1alpha1.ResourceReport {
+func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo, resource *configv1beta1.Resource,
+) *configv1beta1.ResourceReport {
 
 	if resourceInfo.ResourceVersion == "" {
-		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.CreateResourceAction)}
+		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.CreateResourceAction)}
 	} else if policyHash != resourceInfo.Hash {
-		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.UpdateResourceAction)}
+		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.UpdateResourceAction)}
 	} else {
-		return &configv1alpha1.ResourceReport{Resource: *resource, Action: string(configv1alpha1.NoResourceAction),
+		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.NoResourceAction),
 			Message: "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."}
 	}
 }
@@ -565,10 +565,10 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 
 // getResource returns sveltos Resource and the resource hash hash
 func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	tier int32, featureID configv1alpha1.FeatureID, logger logr.Logger,
-) (resource *configv1alpha1.Resource, policyHash string) {
+	tier int32, featureID configv1beta1.FeatureID, logger logr.Logger,
+) (resource *configv1beta1.Resource, policyHash string) {
 
-	resource = &configv1alpha1.Resource{
+	resource = &configv1beta1.Resource{
 		Name:      policy.GetName(),
 		Namespace: policy.GetNamespace(),
 		Kind:      policy.GetKind(),
@@ -648,7 +648,7 @@ func customSplit(text string) ([]string, error) {
 // ConfigMap/Secret Data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
-func collectContent(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, data map[string]string,
 	instantiateTemplate bool, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
@@ -721,7 +721,7 @@ func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstru
 	return policies, nil
 }
 
-func getPolicyInfo(policy *configv1alpha1.Resource) string {
+func getPolicyInfo(policy *configv1beta1.Resource) string {
 	return fmt.Sprintf("%s.%s:%s:%s",
 		policy.Kind,
 		policy.Group,
@@ -731,13 +731,13 @@ func getPolicyInfo(policy *configv1alpha1.Resource) string {
 
 // getClusterSummaryAdmin returns the name of the admin that created the ClusterProfile
 // instance owing this ClusterProfile instance
-func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) (namespace, name string) {
+func getClusterSummaryAdmin(clusterSummary *configv1beta1.ClusterSummary) (namespace, name string) {
 	if clusterSummary.Labels == nil {
 		return "", ""
 	}
 
-	namespace = clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNamespaceLabel]
-	name = clusterSummary.Labels[libsveltosv1alpha1.ServiceAccountNameLabel]
+	namespace = clusterSummary.Labels[libsveltosv1beta1.ServiceAccountNamespaceLabel]
+	name = clusterSummary.Labels[libsveltosv1beta1.ServiceAccountNameLabel]
 	return
 }
 
@@ -746,10 +746,10 @@ func getClusterSummaryAdmin(clusterSummary *configv1alpha1.ClusterSummary) (name
 // Returns an err if ClusterSummary or associated CAPI Cluster are marked for deletion, or if an
 // error occurs while getting resources.
 func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, clusterSummaryName string,
-	c client.Client, logger logr.Logger) (*configv1alpha1.ClusterSummary, client.Client, error) {
+	c client.Client, logger logr.Logger) (*configv1beta1.ClusterSummary, client.Client, error) {
 
 	// Get ClusterSummary that requested this
-	clusterSummary := &configv1alpha1.ClusterSummary{}
+	clusterSummary := &configv1beta1.ClusterSummary{}
 	if err := c.Get(ctx,
 		types.NamespacedName{Namespace: clusterNamespace, Name: clusterSummaryName}, clusterSummary); err != nil {
 		return nil, nil, err
@@ -795,7 +795,7 @@ func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace
 	return clusterNamespace
 }
 
-func appendPathAnnotations(object client.Object, reference *configv1alpha1.PolicyRef) {
+func appendPathAnnotations(object client.Object, reference *configv1beta1.PolicyRef) {
 	if object == nil {
 		return
 	}
@@ -812,7 +812,7 @@ func appendPathAnnotations(object client.Object, reference *configv1alpha1.Polic
 // local contains all configMaps/Secrets whose content need to be deployed locally (in the management cluster)
 // remote contains all configMap/Secrets whose content need to be deployed remotely (in the managed cluster)
 func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client, clusterNamespace string,
-	references []configv1alpha1.PolicyRef, logger logr.Logger) (local, remote []client.Object, err error) {
+	references []configv1beta1.PolicyRef, logger logr.Logger) (local, remote []client.Object, err error) {
 
 	local = make([]client.Object, 0)
 	remote = make([]client.Object, 0)
@@ -822,10 +822,10 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 
 		namespace := getReferenceResourceNamespace(clusterNamespace, references[i].Namespace)
 
-		if reference.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: namespace, Name: reference.Name})
-		} else if reference.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			object, err = getSecret(ctx, controlClusterClient,
 				types.NamespacedName{Namespace: namespace, Name: reference.Name})
 		} else {
@@ -842,7 +842,7 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 			return nil, nil, err
 		}
 
-		if reference.DeploymentType == configv1alpha1.DeploymentTypeLocal {
+		if reference.DeploymentType == configv1beta1.DeploymentTypeLocal {
 			local = append(local, object)
 		} else {
 			remote = append(remote, object)
@@ -858,8 +858,8 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 // - objectsToDeployRemotely is a list of ConfigMaps/Secrets whose content need to be deployed
 // in the managed cluster
 func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig *rest.Config,
-	clusterSummary *configv1alpha1.ClusterSummary, objectsToDeployLocally, objectsToDeployRemotely []client.Object,
-	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
+	clusterSummary *configv1beta1.ClusterSummary, objectsToDeployLocally, objectsToDeployRemotely []client.Object,
+	logger logr.Logger) (localReports, remoteReports []configv1beta1.ResourceReport, err error) {
 
 	remoteClient, err := client.New(remoteConfig, client.Options{})
 	if err != nil {
@@ -872,7 +872,7 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		return nil, nil, err
 	}
 
-	var tmpResourceReports []configv1alpha1.ResourceReport
+	var tmpResourceReports []configv1beta1.ResourceReport
 
 	// Assume that if objects are deployed in the management clusters, those are needed before any
 	// resource is deployed in the managed cluster. So try to deploy those first if any.
@@ -904,20 +904,20 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 
 // deployObjects deploys content of referencedObjects
 func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient client.Client, destConfig *rest.Config,
-	referencedObjects []client.Object, clusterSummary *configv1alpha1.ClusterSummary,
+	referencedObjects []client.Object, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (reports []configv1alpha1.ResourceReport, err error) {
+) (reports []configv1beta1.ResourceReport, err error) {
 
 	for i := range referencedObjects {
-		var tmpResourceReports []configv1alpha1.ResourceReport
-		if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		var tmpResourceReports []configv1beta1.ResourceReport
+		if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap := referencedObjects[i].(*corev1.ConfigMap)
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
 				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap,
 					clusterSummary, mgmtResources, l)
-		} else if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		} else if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := referencedObjects[i].(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
@@ -947,21 +947,21 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 }
 
 func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
-	remoteConfig *rest.Config, remoteClient client.Client, featureID configv1alpha1.FeatureID,
-	clusterSummary *configv1alpha1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
-	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
+	remoteConfig *rest.Config, remoteClient client.Client, featureID configv1beta1.FeatureID,
+	clusterSummary *configv1beta1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
+	currentPolicies map[string]configv1beta1.Resource, logger logr.Logger) ([]configv1beta1.ResourceReport, error) {
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
-	profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
+	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
 	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
 		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
-	undeployed := make([]configv1alpha1.ResourceReport, 0)
+	undeployed := make([]configv1beta1.ResourceReport, 0)
 
 	dc := discovery.NewDiscoveryClientForConfigOrDie(remoteConfig)
 	groupResources, err := restmapper.GetAPIGroupResources(dc)
@@ -1024,8 +1024,8 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 }
 
 func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient client.Client,
-	profile client.Object, clusterSummary *configv1alpha1.ClusterSummary, r unstructured.Unstructured,
-	currentPolicies map[string]configv1alpha1.Resource, logger logr.Logger) (*configv1alpha1.ResourceReport, error) {
+	profile client.Object, clusterSummary *configv1beta1.ClusterSummary, r unstructured.Unstructured,
+	currentPolicies map[string]configv1beta1.Resource, logger logr.Logger) (*configv1beta1.ResourceReport, error) {
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("considering %s/%s", r.GetNamespace(), r.GetName()))
 	// Verify if this policy was deployed because of a projectsveltos (ReferenceLabelName
@@ -1046,20 +1046,20 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 		}
 	}
 
-	var resourceReport *configv1alpha1.ResourceReport = nil
+	var resourceReport *configv1beta1.ResourceReport = nil
 	// If in DryRun do not withdrawn any policy.
 	// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 	// policy would be withdrawn
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, profile) &&
 			!isLeavePolicies(clusterSummary, logger) {
 
-			resourceReport = &configv1alpha1.ResourceReport{
-				Resource: configv1alpha1.Resource{
+			resourceReport = &configv1beta1.ResourceReport{
+				Resource: configv1beta1.Resource{
 					Kind: r.GetObjectKind().GroupVersionKind().Kind, Namespace: r.GetNamespace(), Name: r.GetName(),
 					Group: r.GroupVersionKind().Group, Version: r.GroupVersionKind().Version,
 				},
-				Action: string(configv1alpha1.DeleteResourceAction),
+				Action: string(configv1beta1.DeleteResourceAction),
 			}
 		}
 	} else if canDelete(&r, currentPolicies) {
@@ -1082,7 +1082,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 }
 
 func handleResourceDelete(ctx context.Context, remoteClient client.Client, policy client.Object,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	// If mode is set to LeavePolicies, leave policies in the workload cluster.
 	// Remove all labels added by Sveltos.
@@ -1102,8 +1102,8 @@ func handleResourceDelete(ctx context.Context, remoteClient client.Client, polic
 
 // canDelete returns true if a policy can be deleted. For a policy to be deleted:
 // - policy is not part of currentReferencedPolicies
-func canDelete(policy client.Object, currentReferencedPolicies map[string]configv1alpha1.Resource) bool {
-	name := getPolicyInfo(&configv1alpha1.Resource{
+func canDelete(policy client.Object, currentReferencedPolicies map[string]configv1beta1.Resource) bool {
+	name := getPolicyInfo(&configv1beta1.Resource{
 		Kind:      policy.GetObjectKind().GroupVersionKind().Kind,
 		Group:     policy.GetObjectKind().GroupVersionKind().Group,
 		Version:   policy.GetObjectKind().GroupVersionKind().Version,
@@ -1120,9 +1120,9 @@ func canDelete(policy client.Object, currentReferencedPolicies map[string]config
 // isLeavePolicies returns true if:
 // - ClusterSummary is marked for deletion
 // - StopMatchingBehavior is set to LeavePolicies
-func isLeavePolicies(clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) bool {
+func isLeavePolicies(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) bool {
 	if !clusterSummary.DeletionTimestamp.IsZero() &&
-		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1alpha1.LeavePolicies {
+		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1beta1.LeavePolicies {
 
 		logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
 		return true
@@ -1166,8 +1166,8 @@ func hasAnnotation(u *unstructured.Unstructured, key, value string) bool {
 	return v == value
 }
 
-func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID) []schema.GroupVersionKind {
+func getDeployedGroupVersionKinds(clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID) []schema.GroupVersionKind {
 
 	gvks := make([]schema.GroupVersionKind, 0)
 	// For backward compatible we still look at this field.
@@ -1193,20 +1193,20 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary,
 
 // No action in DryRun mode.
 func updateClusterConfiguration(ctx context.Context, c client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary,
+	clusterSummary *configv1beta1.ClusterSummary,
 	profileOwnerRef *metav1.OwnerReference,
-	featureID configv1alpha1.FeatureID,
-	policyDeployed []configv1alpha1.Resource,
-	chartDeployed []configv1alpha1.Chart) error {
+	featureID configv1beta1.FeatureID,
+	policyDeployed []configv1beta1.Resource,
+	chartDeployed []configv1beta1.Chart) error {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Get ClusterConfiguration for CAPI Cluster
-		clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{}
 		err := c.Get(ctx,
 			types.NamespacedName{
 				Namespace: clusterSummary.Spec.ClusterNamespace,
@@ -1221,13 +1221,13 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 		}
 
 		var index int
-		index, err = configv1alpha1.GetClusterConfigurationSectionIndex(clusterConfiguration, profileOwnerRef.Kind,
+		index, err = configv1beta1.GetClusterConfigurationSectionIndex(clusterConfiguration, profileOwnerRef.Kind,
 			profileOwnerRef.Name)
 		if err != nil {
 			return err
 		}
 
-		if profileOwnerRef.Kind == configv1alpha1.ClusterProfileKind {
+		if profileOwnerRef.Kind == configv1beta1.ClusterProfileKind {
 			return updateClusterProfileResources(ctx, c, profileOwnerRef, clusterConfiguration,
 				index, featureID, policyDeployed, chartDeployed)
 		} else {
@@ -1240,9 +1240,9 @@ func updateClusterConfiguration(ctx context.Context, c client.Client,
 }
 
 func updateClusterProfileResources(ctx context.Context, c client.Client, profileOwnerRef *metav1.OwnerReference,
-	clusterConfiguration *configv1alpha1.ClusterConfiguration, index int,
-	featureID configv1alpha1.FeatureID, policyDeployed []configv1alpha1.Resource,
-	chartDeployed []configv1alpha1.Chart) error {
+	clusterConfiguration *configv1beta1.ClusterConfiguration, index int,
+	featureID configv1beta1.FeatureID, policyDeployed []configv1beta1.Resource,
+	chartDeployed []configv1beta1.Chart) error {
 
 	isPresent := false
 
@@ -1262,11 +1262,11 @@ func updateClusterProfileResources(ctx context.Context, c client.Client, profile
 
 	if !isPresent {
 		if profileResources.Features == nil {
-			profileResources.Features = make([]configv1alpha1.Feature, 0)
+			profileResources.Features = make([]configv1beta1.Feature, 0)
 		}
 		profileResources.Features = append(
 			profileResources.Features,
-			configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
+			configv1beta1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
 		)
 	}
 
@@ -1276,9 +1276,9 @@ func updateClusterProfileResources(ctx context.Context, c client.Client, profile
 }
 
 func updateProfileResources(ctx context.Context, c client.Client, profileOwnerRef *metav1.OwnerReference,
-	clusterConfiguration *configv1alpha1.ClusterConfiguration, index int,
-	featureID configv1alpha1.FeatureID, policyDeployed []configv1alpha1.Resource,
-	chartDeployed []configv1alpha1.Chart) error {
+	clusterConfiguration *configv1beta1.ClusterConfiguration, index int,
+	featureID configv1beta1.FeatureID, policyDeployed []configv1beta1.Resource,
+	chartDeployed []configv1beta1.Chart) error {
 
 	isPresent := false
 
@@ -1298,11 +1298,11 @@ func updateProfileResources(ctx context.Context, c client.Client, profileOwnerRe
 
 	if !isPresent {
 		if profileResources.Features == nil {
-			profileResources.Features = make([]configv1alpha1.Feature, 0)
+			profileResources.Features = make([]configv1beta1.Feature, 0)
 		}
 		profileResources.Features = append(
 			profileResources.Features,
-			configv1alpha1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
+			configv1beta1.Feature{FeatureID: featureID, Resources: policyDeployed, Charts: chartDeployed},
 		)
 	}
 
@@ -1350,19 +1350,19 @@ func getSecret(ctx context.Context, c client.Client, secretName types.Namespaced
 		return nil, err
 	}
 
-	if secret.Type != libsveltosv1alpha1.ClusterProfileSecretType {
-		return nil, libsveltosv1alpha1.ErrSecretTypeNotSupported
+	if secret.Type != libsveltosv1beta1.ClusterProfileSecretType {
+		return nil, libsveltosv1beta1.ErrSecretTypeNotSupported
 	}
 
 	return secret, nil
 }
 
 func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInterface,
-	resource *configv1alpha1.Resource) *configv1alpha1.ResourceReport {
+	resource *configv1beta1.Resource) *configv1beta1.ResourceReport {
 
-	conflictReport := &configv1alpha1.ResourceReport{
+	conflictReport := &configv1beta1.ResourceReport{
 		Resource: *resource,
-		Action:   string(configv1alpha1.ConflictResourceAction),
+		Action:   string(configv1beta1.ConflictResourceAction),
 	}
 	message, err := deployer.GetOwnerMessage(ctx, dr, resource.Name)
 	if err == nil {
@@ -1371,9 +1371,9 @@ func generateConflictResourceReport(ctx context.Context, dr dynamic.ResourceInte
 	return conflictReport
 }
 
-func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) (*configv1alpha1.ClusterSummary, error) {
+func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID, localResourceReports, remoteResourceReports []configv1beta1.ResourceReport,
+	logger logr.Logger) (*configv1beta1.ClusterSummary, error) {
 
 	logger.V(logs.LogDebug).Info("update status with deployed GroupVersionKinds")
 	reports := localResourceReports
@@ -1385,7 +1385,7 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 
 	c := getManagementClusterClient()
 
-	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err := c.Get(ctx,
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
@@ -1418,8 +1418,8 @@ func updateDeployedGroupVersionKind(ctx context.Context, clusterSummary *configv
 }
 
 // appendDeployedGroupVersionKinds appends the list of deployed GroupVersionKinds to current list
-func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSummary, gvks []schema.GroupVersionKind,
-	featureID configv1alpha1.FeatureID) {
+func appendDeployedGroupVersionKinds(clusterSummary *configv1beta1.ClusterSummary, gvks []schema.GroupVersionKind,
+	featureID configv1beta1.FeatureID) {
 
 	fdi := getFeatureDeploymentInfoForFeatureID(clusterSummary, featureID)
 	if fdi != nil {
@@ -1432,12 +1432,12 @@ func appendDeployedGroupVersionKinds(clusterSummary *configv1alpha1.ClusterSumma
 	}
 
 	if fdi == nil {
-		clusterSummary.Status.DeployedGVKs = make([]configv1alpha1.FeatureDeploymentInfo, 0)
+		clusterSummary.Status.DeployedGVKs = make([]configv1beta1.FeatureDeploymentInfo, 0)
 	}
 
 	clusterSummary.Status.DeployedGVKs = append(
 		clusterSummary.Status.DeployedGVKs,
-		configv1alpha1.FeatureDeploymentInfo{
+		configv1beta1.FeatureDeploymentInfo{
 			FeatureID:                featureID,
 			DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
 		},
@@ -1460,7 +1460,7 @@ func tranformGroupVersionKindToString(gvks []schema.GroupVersionKind) []string {
 }
 
 // getRestConfig returns restConfig to access remote cluster
-func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
+func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (*rest.Config, logr.Logger, error) {
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace
@@ -1480,13 +1480,13 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 	return remoteRestConfig, logger, nil
 }
 
-func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	valuesFrom []configv1alpha1.ValueFrom, logger logr.Logger) (string, error) {
+func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	valuesFrom []configv1beta1.ValueFrom, logger logr.Logger) (string, error) {
 
 	var config string
 	for i := range valuesFrom {
 		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
-		if valuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap, err := getConfigMap(ctx, c,
 				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
 			if err != nil {
@@ -1498,7 +1498,7 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 			}
 			config += getDataSectionHash(configMap.Data)
 			config += getDataSectionHash(configMap.BinaryData)
-		} else if valuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c,
 				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
 			if err != nil {
@@ -1524,13 +1524,13 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 //   - `false`: Values from references will be appended to existing keys in the output map using the `addToMap` function.
 //
 // It returns a map containing the collected key-value pairs and any encountered error.
-func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	valuesFrom []configv1alpha1.ValueFrom, overrideKeys bool, logger logr.Logger) (map[string]string, error) {
+func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	valuesFrom []configv1beta1.ValueFrom, overrideKeys bool, logger logr.Logger) (map[string]string, error) {
 
 	values := make(map[string]string)
 	for i := range valuesFrom {
 		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
-		if valuesFrom[i].Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
 			if err != nil {
 				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, valuesFrom[i].Name)
@@ -1544,7 +1544,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 					addToMap(values, key, value)
 				}
 			}
-		} else if valuesFrom[i].Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
 			if err != nil {
 				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, valuesFrom[i].Name)

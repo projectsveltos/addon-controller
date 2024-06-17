@@ -36,9 +36,9 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -118,7 +118,7 @@ func createSecretWithPolicy(namespace, secretName string, policyStrs ...string) 
 			Namespace: namespace,
 			Name:      secretName,
 		},
-		Type: libsveltosv1alpha1.ClusterProfileSecretType,
+		Type: libsveltosv1beta1.ClusterProfileSecretType,
 		Data: map[string][]byte{},
 	}
 	for i := range policyStrs {
@@ -150,16 +150,16 @@ func randomString() string {
 	return "a-" + util.RandomString(length)
 }
 
-func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, clusterProfileName, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType) {
+func addLabelsToClusterSummary(clusterSummary *configv1beta1.ClusterSummary, clusterProfileName, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) {
 
 	labels := clusterSummary.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 	labels[controllers.ClusterProfileLabelName] = clusterProfileName
-	labels[configv1alpha1.ClusterTypeLabel] = string(clusterType)
-	labels[configv1alpha1.ClusterNameLabel] = clusterName
+	labels[configv1beta1.ClusterTypeLabel] = string(clusterType)
+	labels[configv1beta1.ClusterNameLabel] = clusterName
 
 	clusterSummary.Labels = labels
 }
@@ -170,8 +170,8 @@ func addLabelsToClusterSummary(clusterSummary *configv1alpha1.ClusterSummary, cl
 // - all clusterConfigurations in namespace
 // - namespace
 func deleteResources(namespace string,
-	clusterProfile *configv1alpha1.ClusterProfile,
-	clusterSummary *configv1alpha1.ClusterSummary) {
+	clusterProfile *configv1beta1.ClusterProfile,
+	clusterSummary *configv1beta1.ClusterSummary) {
 
 	ns := &corev1.Namespace{}
 	err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
@@ -187,7 +187,7 @@ func deleteResources(namespace string,
 	listOptions := []client.ListOption{
 		client.InNamespace(namespace),
 	}
-	clusterConfigurationList := &configv1alpha1.ClusterConfigurationList{}
+	clusterConfigurationList := &configv1beta1.ClusterConfigurationList{}
 	Expect(testEnv.Client.List(context.TODO(), clusterConfigurationList, listOptions...)).To(Succeed())
 	for i := range clusterConfigurationList.Items {
 		Expect(testEnv.Client.Delete(context.TODO(), &clusterConfigurationList.Items[i])).To(Succeed())
@@ -228,12 +228,12 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error
 // - secret containing kubeconfig to access CAPI Cluster
 // - clusterProfile/clusterSummary/clusterConfiguration
 // - adds ClusterProfile as OwnerReference for both ClusterSummary and ClusterConfiguration
-func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
-	clusterSummary *configv1alpha1.ClusterSummary,
+func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
+	clusterSummary *configv1beta1.ClusterSummary,
 	cluster *clusterv1.Cluster) {
 
 	By("Add proper labels to ClusterSummary")
-	addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+	addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 
 	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
 	Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
@@ -256,10 +256,10 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 		},
 	}
 
-	clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+	clusterConfiguration := &configv1beta1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1alpha1.ClusterTypeCapi),
+			Name:      controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1beta1.ClusterTypeCapi),
 		},
 	}
 
@@ -271,11 +271,11 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-	currentClusterProfile := &configv1alpha1.ClusterProfile{}
+	currentClusterProfile := &configv1beta1.ClusterProfile{}
 	Expect(testEnv.Client.Get(context.TODO(),
 		types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-	currentClusterSummary := &configv1alpha1.ClusterSummary{}
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
 	Expect(testEnv.Client.Get(context.TODO(),
 		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
@@ -294,8 +294,8 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 	// This method is invoked by different tests in parallel, all touching same clusterConfiguration.
 	// So add this logic in a Retry
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
-		clusterConfigurationName := controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
+		clusterConfigurationName := controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 		err := testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: clusterConfigurationName}, currentClusterConfiguration)
 		if err != nil {
@@ -309,10 +309,10 @@ func prepareForDeployment(clusterProfile *configv1alpha1.ClusterProfile,
 		if err != nil {
 			return err
 		}
-		currentClusterConfiguration.Status.ClusterProfileResources = []configv1alpha1.ClusterProfileResource{
+		currentClusterConfiguration.Status.ClusterProfileResources = []configv1beta1.ClusterProfileResource{
 			{
 				ClusterProfileName: clusterProfile.Name,
-				Features:           make([]configv1alpha1.Feature, 0),
+				Features:           make([]configv1beta1.Feature, 0),
 			},
 		}
 		return testEnv.Status().Update(ctx, currentClusterConfiguration)

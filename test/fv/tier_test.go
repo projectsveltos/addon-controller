@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 )
 
@@ -38,7 +38,7 @@ var _ = Describe("Helm", Serial, func() {
 	It("Use tier to solve conflicts", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -47,9 +47,9 @@ var _ = Describe("Helm", Serial, func() {
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -57,7 +57,7 @@ var _ = Describe("Helm", Serial, func() {
 				ChartVersion:     "v3.1.1",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
@@ -66,7 +66,7 @@ var _ = Describe("Helm", Serial, func() {
 				ChartVersion:     "23.4.0",
 				ReleaseName:      "prometheus",
 				ReleaseNamespace: "prometheus",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://grafana.github.io/helm-charts",
@@ -75,7 +75,7 @@ var _ = Describe("Helm", Serial, func() {
 				ChartVersion:     "6.58.9",
 				ReleaseName:      "grafana",
 				ReleaseNamespace: "grafana",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		currentClusterProfile.Spec.Tier = 90
@@ -100,28 +100,28 @@ var _ = Describe("Helm", Serial, func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
-		charts := []configv1alpha1.Chart{
+		charts := []configv1beta1.Chart{
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.1", Namespace: "kyverno"},
 			{ReleaseName: "grafana", ChartVersion: "6.58.9", Namespace: "grafana"},
 			{ReleaseName: "prometheus", ChartVersion: "23.4.0", Namespace: "prometheus"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		Byf("Creating another ClusterProfile matching the cluster")
 		newClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		newClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		newClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), newClusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(newClusterProfile)
 
 		Byf("configuring the new clusterProfile to deploy Kyverno")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -129,7 +129,7 @@ var _ = Describe("Helm", Serial, func() {
 				ChartVersion:     "v3.1.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -140,7 +140,7 @@ var _ = Describe("Helm", Serial, func() {
 
 		Byf("Verifying new ClusterSummary reports a conflict")
 		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: newClusterSummary.Namespace, Name: newClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
@@ -149,11 +149,11 @@ var _ = Describe("Helm", Serial, func() {
 			if len(currentClusterSummary.Status.HelmReleaseSummaries) != 1 {
 				return false
 			}
-			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1alpha1.HelmChartStatusConflict
+			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusConflict
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		Byf("Changing ClusterProfile %s tier", newClusterProfile.Name)
@@ -167,7 +167,7 @@ var _ = Describe("Helm", Serial, func() {
 
 		Byf("Verifying new ClusterSummary does not report a conflict")
 		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: newClusterSummary.Namespace, Name: newClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
@@ -176,24 +176,24 @@ var _ = Describe("Helm", Serial, func() {
 			if len(currentClusterSummary.Status.HelmReleaseSummaries) != 1 {
 				return false
 			}
-			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1alpha1.HelmChartStatusManaging
+			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusManaging
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		charts = []configv1alpha1.Chart{
+		charts = []configv1beta1.Chart{
 			{ReleaseName: "grafana", ChartVersion: "6.58.9", Namespace: "grafana"},
 			{ReleaseName: "prometheus", ChartVersion: "23.4.0", Namespace: "prometheus"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
-		charts = []configv1alpha1.Chart{
+		charts = []configv1beta1.Chart{
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.4", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, newClusterProfile.Name,
-			newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
+			newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		deleteClusterProfile(clusterProfile)

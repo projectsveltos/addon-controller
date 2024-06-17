@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -55,21 +55,33 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			},
 		}
 
-		matchingClusterProfile := &configv1alpha1.ClusterProfile{
+		matchingClusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"env": "production",
+						},
+					},
+				},
 			},
 		}
 
-		nonMatchingClusterProfile := &configv1alpha1.ClusterProfile{
+		nonMatchingClusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector("env=qa"),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"env": "qa",
+						},
+					},
+				},
 			},
 		}
 
@@ -85,15 +97,15 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			Client:          c,
 			Scheme:          scheme,
 			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
-			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
 			Mux:             sync.Mutex{},
 		}
 
 		By("Setting ClusterProfileReconciler internal structures")
-		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ClusterProfileKind, Name: matchingClusterProfile.Name}
+		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1beta1.ClusterProfileKind, Name: matchingClusterProfile.Name}
 		reconciler.ClusterProfiles[matchingInfo] = matchingClusterProfile.Spec.ClusterSelector
-		nonMatchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
+		nonMatchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1beta1.ClusterProfileKind, Name: nonMatchingClusterProfile.Name}
 		reconciler.ClusterProfiles[nonMatchingInfo] = nonMatchingClusterProfile.Spec.ClusterSelector
 
 		// ClusterMap contains, per ClusterName, list of ClusterProfiles matching it.
@@ -123,7 +135,13 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		Expect(requests).To(ContainElement(expected))
 
 		By("Changing clusterProfile ClusterSelector again to have no ClusterProfile match")
-		matchingClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector("env=qa")
+		matchingClusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"env": "qa",
+				},
+			},
+		}
 		Expect(c.Update(context.TODO(), matchingClusterProfile)).To(Succeed())
 		nonMatchingClusterProfile.Spec.ClusterSelector = matchingClusterProfile.Spec.ClusterSelector
 		Expect(c.Update(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
@@ -160,12 +178,18 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 			},
 		}
 
-		clusterProfile := &configv1alpha1.ClusterProfile{
+		clusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector("env=production"),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"env": "production",
+						},
+					},
+				},
 			},
 		}
 

@@ -28,9 +28,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -84,7 +84,7 @@ var _ = Describe("Reloader", func() {
 		Byf("Create a ClusterProfile with Reloader knob set matching Cluster %s/%s",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterProfile.Spec.Reloader = true
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
@@ -110,12 +110,12 @@ var _ = Describe("Reloader", func() {
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s",
 			clusterProfile.Name, configMap.Namespace, configMap.Name)
 
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},
@@ -128,7 +128,7 @@ var _ = Describe("Reloader", func() {
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name,
-			configv1alpha1.FeatureResources)
+			configv1beta1.FeatureResources)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -136,14 +136,14 @@ var _ = Describe("Reloader", func() {
 		Expect(workloadClient).ToNot(BeNil())
 
 		Byf("Verifying Reloader is present in the managed cluster")
-		currentReloader := &libsveltosv1alpha1.Reloader{}
+		currentReloader := &libsveltosv1beta1.Reloader{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1alpha1.FeatureResources)},
+			types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1beta1.FeatureResources)},
 			currentReloader)).To(Succeed())
 		Byf("Verifying Reloader list Deployment")
 		Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
 		Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
-			libsveltosv1alpha1.ReloaderInfo{
+			libsveltosv1beta1.ReloaderInfo{
 				Kind:      "Deployment",
 				Namespace: ns,
 				Name:      deploymentName,
@@ -154,9 +154,9 @@ var _ = Describe("Reloader", func() {
 
 		Byf("Verifying Reloader is removed from the workload cluster")
 		Eventually(func() bool {
-			currentReloader := &libsveltosv1alpha1.Reloader{}
+			currentReloader := &libsveltosv1beta1.Reloader{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1alpha1.FeatureResources)},
+				types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1beta1.FeatureResources)},
 				currentReloader)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -165,7 +165,7 @@ var _ = Describe("Reloader", func() {
 
 // getReloaderName returns the Reloader's name
 func getReloaderName(clusterProfileName string,
-	feature configv1alpha1.FeatureID) string {
+	feature configv1beta1.FeatureID) string {
 
 	h := sha256.New()
 	fmt.Fprintf(h, "%s--%s", clusterProfileName, feature)

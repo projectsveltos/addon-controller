@@ -22,10 +22,11 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 // SetScopeParams defines the input parameters used to create a new Set Scope.
@@ -51,8 +52,8 @@ func NewSetScope(params SetScopeParams) (*SetScope, error) {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
 
-	if params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1alpha1.ClusterSetKind &&
-		params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1alpha1.SetKind {
+	if params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1beta1.ClusterSetKind &&
+		params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1beta1.SetKind {
 
 		return nil, errors.Wrap(err, "only ClusterSet or Set can be used")
 	}
@@ -100,9 +101,9 @@ func (s *SetScope) ControllerName() string {
 }
 
 // GetSelector returns the ClusterSelector
-func (s *SetScope) GetSelector() string {
+func (s *SetScope) GetSelector() *metav1.LabelSelector {
 	spec := s.GetSpec()
-	return string(spec.ClusterSelector)
+	return &spec.ClusterSelector.LabelSelector
 }
 
 // SetMatchingClusterRefs sets the feature status.
@@ -117,13 +118,13 @@ func (s *SetScope) SetSelectedClusterRefs(selectedClusters []corev1.ObjectRefere
 	status.SelectedClusterRefs = selectedClusters
 }
 
-func (s *SetScope) GetSpec() *libsveltosv1alpha1.Spec {
+func (s *SetScope) GetSpec() *libsveltosv1beta1.Spec {
 	switch s.Set.GetObjectKind().GroupVersionKind().Kind {
-	case libsveltosv1alpha1.ClusterSetKind:
-		clusterSet := s.Set.(*libsveltosv1alpha1.ClusterSet)
+	case libsveltosv1beta1.ClusterSetKind:
+		clusterSet := s.Set.(*libsveltosv1beta1.ClusterSet)
 		return &clusterSet.Spec
-	case libsveltosv1alpha1.SetKind:
-		set := s.Set.(*libsveltosv1alpha1.Set)
+	case libsveltosv1beta1.SetKind:
+		set := s.Set.(*libsveltosv1beta1.Set)
 		return &set.Spec
 	}
 
@@ -131,13 +132,13 @@ func (s *SetScope) GetSpec() *libsveltosv1alpha1.Spec {
 	return nil
 }
 
-func (s *SetScope) GetStatus() *libsveltosv1alpha1.Status {
+func (s *SetScope) GetStatus() *libsveltosv1beta1.Status {
 	switch s.Set.GetObjectKind().GroupVersionKind().Kind {
-	case libsveltosv1alpha1.ClusterSetKind:
-		clusterSet := s.Set.(*libsveltosv1alpha1.ClusterSet)
+	case libsveltosv1beta1.ClusterSetKind:
+		clusterSet := s.Set.(*libsveltosv1beta1.ClusterSet)
 		return &clusterSet.Status
-	case libsveltosv1alpha1.SetKind:
-		profile := s.Set.(*libsveltosv1alpha1.Set)
+	case libsveltosv1beta1.SetKind:
+		profile := s.Set.(*libsveltosv1beta1.Set)
 		return &profile.Status
 	}
 
@@ -145,20 +146,20 @@ func (s *SetScope) GetStatus() *libsveltosv1alpha1.Status {
 	return nil
 }
 
-func (s *SetScope) GetClusterSet() *libsveltosv1alpha1.ClusterSet {
-	return s.Set.(*libsveltosv1alpha1.ClusterSet)
+func (s *SetScope) GetClusterSet() *libsveltosv1beta1.ClusterSet {
+	return s.Set.(*libsveltosv1beta1.ClusterSet)
 }
 
-func (s *SetScope) GetSet() *libsveltosv1alpha1.Set {
-	return s.Set.(*libsveltosv1alpha1.Set)
+func (s *SetScope) GetSet() *libsveltosv1beta1.Set {
+	return s.Set.(*libsveltosv1beta1.Set)
 }
 
 func (s *SetScope) GetKind() string {
 	switch s.Set.GetObjectKind().GroupVersionKind().Kind {
-	case libsveltosv1alpha1.ClusterSetKind:
-		return libsveltosv1alpha1.ClusterSetKind
-	case libsveltosv1alpha1.SetKind:
-		return libsveltosv1alpha1.SetKind
+	case libsveltosv1beta1.ClusterSetKind:
+		return libsveltosv1beta1.ClusterSetKind
+	case libsveltosv1beta1.SetKind:
+		return libsveltosv1beta1.SetKind
 	}
 
 	return ""

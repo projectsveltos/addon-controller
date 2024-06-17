@@ -38,9 +38,9 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -62,7 +62,7 @@ type ProfileReconciler struct {
 	ClusterMap map[corev1.ObjectReference]*libsveltosset.Set
 
 	// key: Profile; value Profile Selector
-	Profiles map[corev1.ObjectReference]libsveltosv1alpha1.Selector
+	Profiles map[corev1.ObjectReference]libsveltosv1beta1.Selector
 
 	// For each cluster contains current labels
 	// This is needed in following scenario:
@@ -118,7 +118,7 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the Profile instance
-	profile := &configv1alpha1.Profile{}
+	profile := &configv1beta1.Profile{}
 	if err := r.Get(ctx, req.NamespacedName, profile); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -168,7 +168,7 @@ func (r *ProfileReconciler) reconcileDelete(
 	logger.V(logs.LogInfo).Info("Reconciling Profile delete")
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
-		configv1alpha1.ProfileFinalizer, logger); err != nil {
+		configv1beta1.ProfileFinalizer, logger); err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
 	}
 
@@ -185,8 +185,8 @@ func (r *ProfileReconciler) reconcileNormal(
 	logger := profileScope.Logger
 	logger.V(logs.LogInfo).Info("Reconciling Profile")
 
-	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1alpha1.ProfileFinalizer) {
-		if err := addFinalizer(ctx, profileScope, configv1alpha1.ProfileFinalizer); err != nil {
+	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1beta1.ProfileFinalizer) {
+		if err := addFinalizer(ctx, profileScope, configv1beta1.ProfileFinalizer); err != nil {
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}
 	}
@@ -220,17 +220,17 @@ func (r *ProfileReconciler) reconcileNormal(
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1alpha1.Profile{}).
+		For(&configv1beta1.Profile{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
-		Watches(&libsveltosv1alpha1.Set{},
+		Watches(&libsveltosv1beta1.Set{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSet),
 			builder.WithPredicates(
 				SetPredicates(mgr.GetLogger().WithValues("predicate", "setpredicate")),
 			),
 		).
-		Watches(&libsveltosv1alpha1.SveltosCluster{},
+		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueProfileForSveltosCluster),
 			builder.WithPredicates(
 				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
@@ -279,7 +279,7 @@ func (r *ProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controll
 	return nil
 }
 
-func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.Profile) {
+func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Profile) {
 	for i := range profile.Spec.ClusterRefs {
 		profile.Spec.ClusterRefs[i].Namespace = profile.Namespace
 	}
@@ -296,8 +296,8 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1alpha1.P
 
 // limitKustomizationRefsToNamespace reset Namespace of all ConfigMap/Secret
 // instances referenced by kustomizationRef.
-func (r *ProfileReconciler) limitKustomizationRefsToNamespace(profile *configv1alpha1.Profile,
-	kustomizationRef *configv1alpha1.KustomizationRef) {
+func (r *ProfileReconciler) limitKustomizationRefsToNamespace(profile *configv1beta1.Profile,
+	kustomizationRef *configv1beta1.KustomizationRef) {
 
 	for i := range kustomizationRef.ValuesFrom {
 		kustomizationRef.ValuesFrom[i].Namespace = profile.Namespace
@@ -359,7 +359,7 @@ func (r *ProfileReconciler) updateMaps(profileScope *scope.ProfileScope) {
 	for i := range profileScope.GetSpec().SetRefs {
 		set := profileScope.GetSpec().SetRefs[i]
 		setInfo := &corev1.ObjectReference{Namespace: profileScope.Namespace(), Name: set,
-			Kind: libsveltosv1alpha1.SetKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()}
+			Kind: libsveltosv1beta1.SetKind, APIVersion: libsveltosv1beta1.GroupVersion.String()}
 		getConsumersForEntry(r.SetMap, setInfo).Insert(profileInfo)
 	}
 
@@ -375,7 +375,7 @@ func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, namespace s
 
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range setRefs {
-		set := &libsveltosv1alpha1.Set{}
+		set := &libsveltosv1beta1.Set{}
 		if err := r.Client.Get(ctx,
 			types.NamespacedName{Namespace: namespace, Name: setRefs[i]},
 			set); err != nil {

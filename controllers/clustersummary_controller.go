@@ -44,10 +44,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -120,7 +120,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	logger.V(logs.LogInfo).Info("Reconciling")
 
 	// Fecth the clusterSummary instance
-	clusterSummary := &configv1alpha1.ClusterSummary{}
+	clusterSummary := &configv1beta1.ClusterSummary{}
 	if err := r.Get(ctx, req.NamespacedName, clusterSummary); err != nil {
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, nil
@@ -134,7 +134,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Fetch the (Cluster)Profile.
-	profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
+	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
 		return reconcile.Result{}, errors.Wrapf(
@@ -202,7 +202,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if !isReady {
 		logger.V(logs.LogInfo).Info("cluster is not ready.")
 		r.setFailureMessage(clusterSummaryScope, "cluster is not ready")
-		r.resetFeatureStatus(clusterSummaryScope, configv1alpha1.FeatureStatusFailed)
+		r.resetFeatureStatus(clusterSummaryScope, configv1beta1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
 		r.updateMaps(clusterSummaryScope, logger)
@@ -277,9 +277,9 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	// Cluster is not present anymore or cleanup succeeded
 	logger.V(logs.LogInfo).Info("Removing finalizer")
-	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
+	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer) {
 		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
-			configv1alpha1.ClusterSummaryFinalizer); !finalizersUpdated {
+			configv1beta1.ClusterSummaryFinalizer); !finalizersUpdated {
 			return reconcile.Result{}, fmt.Errorf("failed to remove finalizer")
 		}
 	}
@@ -306,7 +306,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary")
 
-	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer) {
+	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer) {
 		if err := r.addFinalizer(ctx, clusterSummaryScope); err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to add finalizer")
 			return reconcile.Result{}, err
@@ -376,11 +376,11 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1alpha1.ClusterSummary{}).
+		For(&configv1beta1.ClusterSummary{}).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
-		Watches(&libsveltosv1alpha1.SveltosCluster{},
+		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForSveltosCluster),
 			builder.WithPredicates(
 				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
@@ -473,7 +473,7 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
 	// If the SveltosCluster doesn't have our finalizer, add it.
-	controllerutil.AddFinalizer(clusterSummaryScope.ClusterSummary, configv1alpha1.ClusterSummaryFinalizer)
+	controllerutil.AddFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer)
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := clusterSummaryScope.PatchObject(ctx); err != nil {
 		clusterSummaryScope.Error(err, "Failed to add finalizer")
@@ -514,13 +514,13 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs == nil {
 		logger.V(logs.LogDebug).Info("no kustomize policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureKustomize) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1alpha1.FeatureKustomize)
+	f := getHandlersForFeature(configv1beta1.FeatureKustomize)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -528,13 +528,13 @@ func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clus
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs == nil {
 		logger.V(logs.LogDebug).Info("no policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureResources) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1alpha1.FeatureResources)
+	f := getHandlersForFeature(configv1beta1.FeatureResources)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -542,13 +542,13 @@ func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterS
 func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		logger.V(logs.LogDebug).Info("no helm configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("no helm status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1alpha1.FeatureHelm)
+	f := getHandlersForFeature(configv1beta1.FeatureHelm)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -594,17 +594,17 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 }
 
 func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureResources)
+	f := getHandlersForFeature(configv1beta1.FeatureResources)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployKustomizeResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureKustomize)
+	f := getHandlersForFeature(configv1beta1.FeatureKustomize)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1alpha1.FeatureHelm)
+	f := getHandlersForFeature(configv1beta1.FeatureHelm)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
@@ -619,7 +619,7 @@ func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSu
 	// 1) this ClusterSummary would be elected as manager
 	// 2) ClusterSummary is in DryRun mode so it actually won't deploy anything
 	// 3) If another ClusterProfile in not DryRun mode tried to manage same helm chart, it would not be allowed.
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
 
@@ -675,7 +675,7 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 }
 
 func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime {
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeOneTime {
 		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
 		return
 	}
@@ -684,9 +684,9 @@ func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.Cluster
 
 	cs := clusterSummaryScope.ClusterSummary
 	var kind, apiVersion string
-	if cs.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
-		kind = libsveltosv1alpha1.SveltosClusterKind
-		apiVersion = libsveltosv1alpha1.GroupVersion.String()
+	if cs.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos {
+		kind = libsveltosv1beta1.SveltosClusterKind
+		apiVersion = libsveltosv1beta1.GroupVersion.String()
 	} else {
 		kind = clusterv1.ClusterKind
 		apiVersion = clusterv1.GroupVersion.String()
@@ -702,8 +702,8 @@ func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.Cluster
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
 
-	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
-		Kind: configv1alpha1.ClusterSummaryKind, Namespace: clusterSummaryScope.Namespace(),
+	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1beta1.GroupVersion.String(),
+		Kind: configv1beta1.ClusterSummaryKind, Namespace: clusterSummaryScope.Namespace(),
 		Name: clusterSummaryScope.Name()}
 	r.getClusterMapForEntry(clusterInfo).Insert(&clusterSummaryInfo)
 
@@ -719,8 +719,8 @@ func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.Cluster
 		tmpResource := referencedResource
 		r.getReferenceMapForEntry(&tmpResource).Insert(
 			&corev1.ObjectReference{
-				APIVersion: configv1alpha1.GroupVersion.String(),
-				Kind:       configv1alpha1.ClusterSummaryKind,
+				APIVersion: configv1beta1.GroupVersion.String(),
+				Kind:       configv1beta1.ClusterSummaryKind,
 				Namespace:  clusterSummaryScope.Namespace(),
 				Name:       clusterSummaryScope.Name(),
 			},
@@ -742,35 +742,35 @@ func (r *ClusterSummaryReconciler) getClusterMapForEntry(entry *corev1.ObjectRef
 func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous ||
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuous ||
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Mode set to %s. Reconciliation is needed.",
 			clusterSummary.Spec.ClusterProfileSpec.SyncMode))
 		return true
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		logger.V(logs.LogDebug).Info("Mode set to dryRun. Reconciliation is needed.")
 		return true
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureResources) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureHelm) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Helm Charts not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1alpha1.FeatureKustomize) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Kustomization resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
@@ -842,7 +842,7 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 // getKustomizationValueFrom gets referenced ConfigMap/Secret in a KustomizationRef.
 // KustomizationRef can reference both ConfigMap/Secret each containing key-value pairs that will be used, if defined,
 // to replace placeholder value in the output generated by Kustomize SDK.
-func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1alpha1.KustomizationRef) *libsveltosset.Set {
+func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1beta1.KustomizationRef) *libsveltosset.Set {
 	currentValuesFromReferences := &libsveltosset.Set{}
 
 	for i := range kr.ValuesFrom {
@@ -875,7 +875,7 @@ func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *
 
 // getHelmChartValueFrom gets referenced ConfigMap/Secret in a HelmChart.
 // HelmChart can reference both ConfigMap/Secret each containing configuration for the helm release.
-func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1alpha1.HelmChart) *libsveltosset.Set {
+func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1beta1.HelmChart) *libsveltosset.Set {
 	currentValuesFromReferences := &libsveltosset.Set{}
 
 	for i := range hc.ValuesFrom {
@@ -906,15 +906,15 @@ func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectR
 
 // isReady returns true if Sveltos/Cluster is ready
 func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (bool, error) {
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (bool, error) {
 
 	clusterRef := &corev1.ObjectReference{
 		Namespace: clusterSummary.Spec.ClusterNamespace,
 		Name:      clusterSummary.Spec.ClusterName,
 	}
-	if clusterSummary.Spec.ClusterType == libsveltosv1alpha1.ClusterTypeSveltos {
-		clusterRef.Kind = libsveltosv1alpha1.SveltosClusterKind
-		clusterRef.APIVersion = libsveltosv1alpha1.GroupVersion.String()
+	if clusterSummary.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos {
+		clusterRef.Kind = libsveltosv1beta1.SveltosClusterKind
+		clusterRef.APIVersion = libsveltosv1beta1.GroupVersion.String()
 	} else {
 		clusterRef.Kind = clusterKind
 		clusterRef.APIVersion = clusterv1.GroupVersion.String()
@@ -934,7 +934,7 @@ func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
 
 // isPaused returns true if Sveltos/Cluster is paused or ClusterSummary has paused annotation.
 func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary) (bool, error) {
+	clusterSummary *configv1beta1.ClusterSummary) (bool, error) {
 
 	isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
@@ -982,7 +982,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
 		// ClusterProfile is moved away from DryRun mode.
-		profile, _, err := configv1alpha1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummaryScope.ClusterSummary)
+		profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummaryScope.ClusterSummary)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterProfile %v", err))
 			return false
@@ -1002,7 +1002,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 
 	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
 		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
-		if fs.Status != configv1alpha1.FeatureStatusRemoved {
+		if fs.Status != configv1beta1.FeatureStatusRemoved {
 			logger.V(logs.LogInfo).Info("Not all features marked as removed")
 			return false
 		}
@@ -1039,10 +1039,10 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 }
 
 func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) error {
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
-	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1alpha1.ComponentAddonManager,
-		string(configv1alpha1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
+		string(configv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType); err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to check/update cluster:shard pair %v", err))
 		return err
@@ -1059,7 +1059,7 @@ func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
 
 // isClusterAShardMatch checks if cluster is matching this addon-controller deployment shard.
 func (r *ClusterSummaryReconciler) isClusterAShardMatch(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger) (bool, error) {
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (bool, error) {
 
 	cluster, err := clusterproxy.GetCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
@@ -1098,16 +1098,16 @@ func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
 	}
 
 	switch clusterSummaryScope.ClusterSummary.Spec.ClusterType {
-	case libsveltosv1alpha1.ClusterTypeSveltos:
-		clusterInfo.Kind = string(libsveltosv1alpha1.ClusterTypeSveltos)
-		clusterInfo.APIVersion = libsveltosv1alpha1.GroupVersion.String()
-	case libsveltosv1alpha1.ClusterTypeCapi:
+	case libsveltosv1beta1.ClusterTypeSveltos:
+		clusterInfo.Kind = string(libsveltosv1beta1.ClusterTypeSveltos)
+		clusterInfo.APIVersion = libsveltosv1beta1.GroupVersion.String()
+	case libsveltosv1beta1.ClusterTypeCapi:
 		clusterInfo.Kind = clusterKind
 		clusterInfo.APIVersion = clusterv1.GroupVersion.String()
 	}
 
-	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1alpha1.GroupVersion.String(),
-		Kind: configv1alpha1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
+	clusterSummaryInfo := corev1.ObjectReference{APIVersion: configv1beta1.GroupVersion.String(),
+		Kind: configv1beta1.ClusterProfileKind, Namespace: clusterSummaryScope.Namespace(),
 		Name: clusterSummaryScope.Name()}
 
 	r.PolicyMux.Lock()
@@ -1127,7 +1127,7 @@ func (r *ClusterSummaryReconciler) refreshInternalState(ctx context.Context,
 func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) (allDeployed bool, dependencyMessage string, err error) {
 
-	profileReference, err := configv1alpha1.GetProfileOwnerReference(clusterSummaryScope.ClusterSummary)
+	profileReference, err := configv1beta1.GetProfileOwnerReference(clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get profile owner: %v", err))
 		return false, "", fmt.Errorf("failed to get profile owner: %w", err)
@@ -1140,7 +1140,7 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn {
 		profileName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn[i]
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Considering %s %s", profileReference.Kind, profileName))
-		var cs *configv1alpha1.ClusterSummary
+		var cs *configv1beta1.ClusterSummary
 		cs, err = getClusterSummary(ctx, r.Client, profileReference.Kind, profileName,
 			clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace, clusterSummaryScope.ClusterSummary.Spec.ClusterName,
 			clusterSummaryScope.ClusterSummary.Spec.ClusterType)
@@ -1171,25 +1171,25 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 
 func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.ClusterSummaryScope, failureMessage string) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
-		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureHelm, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureHelm, &failureMessage)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
-		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureResources, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureResources, &failureMessage)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
-		clusterSummaryScope.SetFailureMessage(configv1alpha1.FeatureKustomize, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureKustomize, &failureMessage)
 	}
 }
 
-func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status configv1alpha1.FeatureStatus) {
+func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status configv1beta1.FeatureStatus) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureHelm, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureHelm, status, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureResources, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureResources, status, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1alpha1.FeatureKustomize, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureKustomize, status, nil)
 	}
 }
 
@@ -1198,7 +1198,7 @@ func (r *ClusterSummaryReconciler) GetController() controller.Controller {
 }
 
 func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx context.Context,
-	clusterSummary *configv1alpha1.ClusterSummary) error {
+	clusterSummary *configv1beta1.ClusterSummary) error {
 
 	manager := getManager()
 	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {

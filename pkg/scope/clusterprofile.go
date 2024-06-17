@@ -22,10 +22,11 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 // ProfileScopeParams defines the input parameters used to create a new Profile Scope.
@@ -51,8 +52,8 @@ func NewProfileScope(params ProfileScopeParams) (*ProfileScope, error) {
 		return nil, errors.Wrap(err, "failed to init patch helper")
 	}
 
-	if params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1alpha1.ClusterProfileKind &&
-		params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1alpha1.ProfileKind {
+	if params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1beta1.ClusterProfileKind &&
+		params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1beta1.ProfileKind {
 
 		return nil, errors.Wrap(err, "only ClusterProfile or Profile can be used")
 	}
@@ -105,9 +106,9 @@ func (s *ProfileScope) ControllerName() string {
 }
 
 // GetSelector returns the ClusterSelector
-func (s *ProfileScope) GetSelector() string {
+func (s *ProfileScope) GetSelector() *metav1.LabelSelector {
 	spec := s.GetSpec()
-	return string(spec.ClusterSelector)
+	return &spec.ClusterSelector.LabelSelector
 }
 
 // SetMatchingClusterRefs sets the feature status.
@@ -119,29 +120,29 @@ func (s *ProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectRe
 // IsContinuousSync returns true if Profile is set to keep updating workload cluster
 func (s *ProfileScope) IsContinuousSync() bool {
 	spec := s.GetSpec()
-	return spec.SyncMode == configv1alpha1.SyncModeContinuous ||
-		spec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
+	return spec.SyncMode == configv1beta1.SyncModeContinuous ||
+		spec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 }
 
 // IsOneTimeSync returns true if Profile sync mod is set to one time
 func (s *ProfileScope) IsOneTimeSync() bool {
 	spec := s.GetSpec()
-	return spec.SyncMode == configv1alpha1.SyncModeOneTime
+	return spec.SyncMode == configv1beta1.SyncModeOneTime
 }
 
 // IsDryRunSync returns true if Profile sync mod is set to dryRun
 func (s *ProfileScope) IsDryRunSync() bool {
 	spec := s.GetSpec()
-	return spec.SyncMode == configv1alpha1.SyncModeDryRun
+	return spec.SyncMode == configv1beta1.SyncModeDryRun
 }
 
-func (s *ProfileScope) GetSpec() *configv1alpha1.Spec {
+func (s *ProfileScope) GetSpec() *configv1beta1.Spec {
 	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
-	case configv1alpha1.ClusterProfileKind:
-		clusterProfile := s.Profile.(*configv1alpha1.ClusterProfile)
+	case configv1beta1.ClusterProfileKind:
+		clusterProfile := s.Profile.(*configv1beta1.ClusterProfile)
 		return &clusterProfile.Spec
-	case configv1alpha1.ProfileKind:
-		profile := s.Profile.(*configv1alpha1.Profile)
+	case configv1beta1.ProfileKind:
+		profile := s.Profile.(*configv1beta1.Profile)
 		return &profile.Spec
 	}
 
@@ -149,13 +150,13 @@ func (s *ProfileScope) GetSpec() *configv1alpha1.Spec {
 	return nil
 }
 
-func (s *ProfileScope) GetStatus() *configv1alpha1.Status {
+func (s *ProfileScope) GetStatus() *configv1beta1.Status {
 	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
-	case configv1alpha1.ClusterProfileKind:
-		clusterProfile := s.Profile.(*configv1alpha1.ClusterProfile)
+	case configv1beta1.ClusterProfileKind:
+		clusterProfile := s.Profile.(*configv1beta1.ClusterProfile)
 		return &clusterProfile.Status
-	case configv1alpha1.ProfileKind:
-		profile := s.Profile.(*configv1alpha1.Profile)
+	case configv1beta1.ProfileKind:
+		profile := s.Profile.(*configv1beta1.Profile)
 		return &profile.Status
 	}
 
@@ -163,20 +164,20 @@ func (s *ProfileScope) GetStatus() *configv1alpha1.Status {
 	return nil
 }
 
-func (s *ProfileScope) GetClusterProfile() *configv1alpha1.ClusterProfile {
-	return s.Profile.(*configv1alpha1.ClusterProfile)
+func (s *ProfileScope) GetClusterProfile() *configv1beta1.ClusterProfile {
+	return s.Profile.(*configv1beta1.ClusterProfile)
 }
 
-func (s *ProfileScope) GetProfile() *configv1alpha1.Profile {
-	return s.Profile.(*configv1alpha1.Profile)
+func (s *ProfileScope) GetProfile() *configv1beta1.Profile {
+	return s.Profile.(*configv1beta1.Profile)
 }
 
 func (s *ProfileScope) GetKind() string {
 	switch s.Profile.GetObjectKind().GroupVersionKind().Kind {
-	case configv1alpha1.ClusterProfileKind:
-		return configv1alpha1.ClusterProfileKind
-	case configv1alpha1.ProfileKind:
-		return configv1alpha1.ProfileKind
+	case configv1beta1.ClusterProfileKind:
+		return configv1beta1.ClusterProfileKind
+	case configv1beta1.ProfileKind:
+		return configv1beta1.ProfileKind
 	}
 
 	return ""

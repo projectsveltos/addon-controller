@@ -1,6 +1,6 @@
 # This shows how to deploy Kyverno and Nginx in any cluster
 # matching label selector env=fv
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: multiple-helm-charts

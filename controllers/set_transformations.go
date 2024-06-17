@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 func (r *SetReconciler) requeueSetForSveltosCluster(
@@ -37,7 +37,7 @@ func (r *SetReconciler) requeueSetForSveltosCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1alpha1.SetKind, r.Logger)
+	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1beta1.SetKind, r.Logger)
 }
 
 func (r *SetReconciler) requeueSetForCluster(
@@ -49,5 +49,5 @@ func (r *SetReconciler) requeueSetForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1alpha1.SetKind, r.Logger)
+	return requeueForCluster(cluster, r.Sets, r.ClusterLabels, r.ClusterMap, libsveltosv1beta1.SetKind, r.Logger)
 }

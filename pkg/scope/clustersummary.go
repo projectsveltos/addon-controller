@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 // ClusterSummaryScopeParams defines the input parameters used to create a new ClusterSummary Scope.
@@ -33,7 +33,7 @@ type ClusterSummaryScopeParams struct {
 	Client         client.Client
 	Logger         logr.Logger
 	Profile        client.Object
-	ClusterSummary *configv1alpha1.ClusterSummary
+	ClusterSummary *configv1beta1.ClusterSummary
 	ControllerName string
 }
 
@@ -67,7 +67,7 @@ type ClusterSummaryScope struct {
 	client         client.Client
 	patchHelper    *patch.Helper
 	Profile        client.Object
-	ClusterSummary *configv1alpha1.ClusterSummary
+	ClusterSummary *configv1beta1.ClusterSummary
 	controllerName string
 }
 
@@ -96,13 +96,13 @@ func (s *ClusterSummaryScope) Namespace() string {
 
 func (s *ClusterSummaryScope) initializeFeatureStatusSummary() {
 	if s.ClusterSummary.Status.FeatureSummaries == nil {
-		s.ClusterSummary.Status.FeatureSummaries = make([]configv1alpha1.FeatureSummary, 0)
+		s.ClusterSummary.Status.FeatureSummaries = make([]configv1beta1.FeatureSummary, 0)
 	}
 }
 
 // SetFeatureStatus sets the feature status.
-func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1alpha1.FeatureID,
-	status configv1alpha1.FeatureStatus, hash []byte) {
+func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1beta1.FeatureID,
+	status configv1beta1.FeatureStatus, hash []byte) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
@@ -116,7 +116,7 @@ func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1alpha1.FeatureI
 
 	s.ClusterSummary.Status.FeatureSummaries = append(
 		s.ClusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
+		configv1beta1.FeatureSummary{
 			FeatureID: featureID,
 			Status:    status,
 			Hash:      hash,
@@ -130,7 +130,7 @@ func (s *ClusterSummaryScope) SetDependenciesMessage(message *string) {
 }
 
 // SetFailureMessage sets the infrastructure status failure message.
-func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1alpha1.FeatureID, failureMessage *string) {
+func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1beta1.FeatureID, failureMessage *string) {
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].FailureMessage = failureMessage
@@ -142,7 +142,7 @@ func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1alpha1.Feature
 
 	s.ClusterSummary.Status.FeatureSummaries = append(
 		s.ClusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
+		configv1beta1.FeatureSummary{
 			FeatureID:      featureID,
 			FailureMessage: failureMessage,
 		},
@@ -150,7 +150,7 @@ func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1alpha1.Feature
 }
 
 // SetFailureReason sets the feature status failure reason.
-func (s *ClusterSummaryScope) SetFailureReason(featureID configv1alpha1.FeatureID,
+func (s *ClusterSummaryScope) SetFailureReason(featureID configv1beta1.FeatureID,
 	failureReason *string) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
@@ -164,14 +164,14 @@ func (s *ClusterSummaryScope) SetFailureReason(featureID configv1alpha1.FeatureI
 
 	s.ClusterSummary.Status.FeatureSummaries = append(
 		s.ClusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
+		configv1beta1.FeatureSummary{
 			FeatureID:     featureID,
 			FailureReason: failureReason,
 		},
 	)
 }
 
-func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.FeatureID,
+func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1beta1.FeatureID,
 	lastAppliedTime *metav1.Time) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
@@ -185,7 +185,7 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 
 	s.ClusterSummary.Status.FeatureSummaries = append(
 		s.ClusterSummary.Status.FeatureSummaries,
-		configv1alpha1.FeatureSummary{
+		configv1beta1.FeatureSummary{
 			FeatureID:       featureID,
 			LastAppliedTime: lastAppliedTime,
 		},
@@ -194,21 +194,21 @@ func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1alpha1.Featur
 
 // IsContinuousWithDriftDetection returns true if ClusterProfile is set to SyncModeContinuousWithDriftDetection
 func (s *ClusterSummaryScope) IsContinuousWithDriftDetection() bool {
-	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 }
 
 // IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterSummaryScope) IsContinuousSync() bool {
-	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuous ||
-		s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuous ||
+		s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 }
 
 // IsOneTimeSync returns true if ClusterProfile sync mod is set to one time
 func (s *ClusterSummaryScope) IsOneTimeSync() bool {
-	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeOneTime
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeOneTime
 }
 
 // IsDryRunSync returns true if ClusterProfile sync mod is set to dryRun
 func (s *ClusterSummaryScope) IsDryRunSync() bool {
-	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun
+	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 }

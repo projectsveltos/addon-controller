@@ -28,9 +28,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -56,10 +56,10 @@ func startDriftDetectionInMgmtCluster(o deployer.Options) bool {
 type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error)
 
-type getPolicyRefs func(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef
+type getPolicyRefs func(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef
 
 type feature struct {
-	id          configv1alpha1.FeatureID
+	id          configv1beta1.FeatureID
 	currentHash getCurrentHash
 	deploy      deployer.RequestHandler
 	undeploy    deployer.RequestHandler
@@ -109,7 +109,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 		return nil
 	}
 
-	var status *configv1alpha1.FeatureStatus
+	var status *configv1beta1.FeatureStatus
 	var resultError error
 
 	// Feature is not deployed yet
@@ -124,24 +124,24 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if status != nil {
 		logger.V(logs.LogDebug).Info("result is available. updating status.")
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
-		if *status == configv1alpha1.FeatureStatusProvisioned {
+		if *status == configv1beta1.FeatureStatusProvisioned {
 			return nil
 		}
 		if resultError != nil {
 			// Check if error is a NonRetriableError type
 			var nonRetriableError *NonRetriableError
 			if errors.As(resultError, &nonRetriableError) {
-				nonRetriableStatus := configv1alpha1.FeatureStatusFailedNonRetriable
+				nonRetriableStatus := configv1beta1.FeatureStatusFailedNonRetriable
 				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
 				return nil
 			}
 		}
-		if *status == configv1alpha1.FeatureStatusProvisioning {
+		if *status == configv1beta1.FeatureStatusProvisioning {
 			return fmt.Errorf("feature is still being provisioned")
 		}
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available. mark status as provisioning")
-		s := configv1alpha1.FeatureStatusProvisioning
+		s := configv1beta1.FeatureStatusProvisioning
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
 	}
@@ -166,7 +166,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 
 func genericDeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	clusterType libsveltosv1alpha1.ClusterType,
+	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
@@ -176,7 +176,7 @@ func genericDeploy(ctx context.Context, c client.Client,
 	// Before any per feature specific code
 
 	// Invoking per feature specific code
-	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
+	featureHandler := getHandlersForFeature(configv1beta1.FeatureID(featureID))
 	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger)
 	if err != nil {
 		return err
@@ -222,8 +222,8 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	status := r.convertResultStatus(result)
 
 	if status != nil {
-		if *status == configv1alpha1.FeatureStatusProvisioning {
-			s := configv1alpha1.FeatureStatusRemoving
+		if *status == configv1beta1.FeatureStatusProvisioning {
+			s := configv1beta1.FeatureStatusRemoving
 			status = &s
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return fmt.Errorf("feature is still being removed")
@@ -232,19 +232,19 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		// Failure to undeploy because of missing permission is ignored.
 		if apierrors.IsForbidden(result.Err) {
 			logger.V(logs.LogInfo).Info("undeploying failing because of missing permission.")
-			tmpStatus := configv1alpha1.FeatureStatusRemoved
+			tmpStatus := configv1beta1.FeatureStatusRemoved
 			status = &tmpStatus
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return nil
 		}
 
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
-		if *status == configv1alpha1.FeatureStatusRemoved {
+		if *status == configv1beta1.FeatureStatusRemoved {
 			return nil
 		}
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available. mark status as removing")
-		s := configv1alpha1.FeatureStatusRemoving
+		s := configv1beta1.FeatureStatusRemoving
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
 	}
@@ -261,7 +261,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 
 func genericUndeploy(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, featureID string,
-	clusterType libsveltosv1alpha1.ClusterType, o deployer.Options, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, o deployer.Options, logger logr.Logger) error {
 
 	// Code common to all features
 	// Feature specific code (featureHandler.undeploy is invoked)
@@ -281,7 +281,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	}
 
 	// Invoking per feature specific code
-	featureHandler := getHandlersForFeature(configv1alpha1.FeatureID(featureID))
+	featureHandler := getHandlersForFeature(configv1beta1.FeatureID(featureID))
 	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger); err != nil {
 		return err
 	}
@@ -293,8 +293,8 @@ func genericUndeploy(ctx context.Context, c client.Client,
 
 // isFeatureStatusPresent returns true if feature status is set.
 // That means feature was deployed/being deployed
-func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID) bool {
+func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID) bool {
 
 	if fs := getFeatureSummaryForFeatureID(clusterSummary, featureID); fs != nil {
 		return true
@@ -305,11 +305,11 @@ func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *config
 
 // isFeatureDeployed returns true if feature is marked as deployed (present in FeatureSummaries and status
 // is set to Provisioned).
-func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID) bool {
+func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID) bool {
 
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1alpha1.FeatureStatusProvisioned {
+	if fs != nil && fs.Status == configv1beta1.FeatureStatusProvisioned {
 		return true
 	}
 
@@ -317,11 +317,11 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1alp
 }
 
 // isFeatureFailedWithNonRetriableError returns true if feature is marked as failed with a non retriable error
-func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID) bool {
+func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID) bool {
 
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1alpha1.FeatureStatusFailedNonRetriable {
+	if fs != nil && fs.Status == configv1beta1.FeatureStatusFailedNonRetriable {
 		return true
 	}
 
@@ -330,11 +330,11 @@ func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterS
 
 // isFeatureRemoved returns true if feature is marked as removed (present in FeatureSummaries and status
 // is set to Removed).
-func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1alpha1.ClusterSummary,
-	featureID configv1alpha1.FeatureID) bool {
+func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1beta1.ClusterSummary,
+	featureID configv1beta1.FeatureID) bool {
 
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1alpha1.FeatureStatusRemoved {
+	if fs != nil && fs.Status == configv1beta1.FeatureStatusRemoved {
 		return true
 	}
 
@@ -344,7 +344,7 @@ func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1alph
 // getHash returns, if available, the hash corresponding to the featureID configuration last time it
 // was processed.
 func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1alpha1.FeatureID) []byte {
+	featureID configv1beta1.FeatureID) []byte {
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
@@ -356,7 +356,7 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 }
 
 func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1alpha1.FeatureID, status *configv1alpha1.FeatureStatus, hash []byte, statusError error,
+	featureID configv1beta1.FeatureID, status *configv1beta1.FeatureStatus, hash []byte, statusError error,
 	logger logr.Logger) {
 
 	if status == nil {
@@ -367,17 +367,17 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	now := metav1.NewTime(time.Now())
 
 	switch *status {
-	case configv1alpha1.FeatureStatusProvisioned:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioned, hash)
+	case configv1beta1.FeatureStatusProvisioned:
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioned, hash)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
-	case configv1alpha1.FeatureStatusRemoved:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusRemoved, hash)
+	case configv1beta1.FeatureStatusRemoved:
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoved, hash)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
-	case configv1alpha1.FeatureStatusProvisioning:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusProvisioning, hash)
-	case configv1alpha1.FeatureStatusRemoving:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1alpha1.FeatureStatusRemoving, hash)
-	case configv1alpha1.FeatureStatusFailed, configv1alpha1.FeatureStatusFailedNonRetriable:
+	case configv1beta1.FeatureStatusProvisioning:
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, hash)
+	case configv1beta1.FeatureStatusRemoving:
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoving, hash)
+	case configv1beta1.FeatureStatusFailed, configv1beta1.FeatureStatusFailedNonRetriable:
 		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash)
 		err := statusError.Error()
 		clusterSummaryScope.SetFailureMessage(featureID, &err)
@@ -386,19 +386,19 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	clusterSummaryScope.SetLastAppliedTime(featureID, &now)
 }
 
-func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *configv1alpha1.FeatureStatus {
+func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *configv1beta1.FeatureStatus {
 	switch result.ResultStatus {
 	case deployer.Deployed:
-		s := configv1alpha1.FeatureStatusProvisioned
+		s := configv1beta1.FeatureStatusProvisioned
 		return &s
 	case deployer.Failed:
-		s := configv1alpha1.FeatureStatusFailed
+		s := configv1beta1.FeatureStatusFailed
 		return &s
 	case deployer.InProgress:
-		s := configv1alpha1.FeatureStatusProvisioning
+		s := configv1beta1.FeatureStatusProvisioning
 		return &s
 	case deployer.Removed:
-		s := configv1alpha1.FeatureStatusRemoved
+		s := configv1beta1.FeatureStatusRemoved
 		return &s
 	case deployer.Unavailable:
 		return nil

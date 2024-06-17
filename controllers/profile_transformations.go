@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
 
 func (r *ProfileReconciler) requeueProfileForSveltosCluster(
@@ -37,7 +37,7 @@ func (r *ProfileReconciler) requeueProfileForSveltosCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
+	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ProfileKind, r.Logger)
 }
 
 func (r *ProfileReconciler) requeueProfileForCluster(
@@ -49,7 +49,7 @@ func (r *ProfileReconciler) requeueProfileForCluster(
 
 	addTypeInformationToObject(r.Scheme, cluster)
 
-	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
+	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ProfileKind, r.Logger)
 }
 
 func (r *ProfileReconciler) requeueProfileForMachine(
@@ -61,7 +61,7 @@ func (r *ProfileReconciler) requeueProfileForMachine(
 	r.Mux.Lock()
 	defer r.Mux.Unlock()
 
-	return requeueForMachine(machine, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1alpha1.ProfileKind, r.Logger)
+	return requeueForMachine(machine, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ProfileKind, r.Logger)
 }
 
 func (r *ProfileReconciler) requeueProfileForSet(
@@ -75,5 +75,5 @@ func (r *ProfileReconciler) requeueProfileForSet(
 
 	addTypeInformationToObject(r.Scheme, set)
 
-	return requeueForSet(set, r.SetMap, configv1alpha1.ProfileKind, r.Logger)
+	return requeueForSet(set, r.SetMap, configv1beta1.ProfileKind, r.Logger)
 }

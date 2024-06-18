@@ -21,7 +21,7 @@ SHELL = /usr/bin/env bash -o pipefail
 # Define Docker related variables.
 REGISTRY ?= projectsveltos
 IMAGE_NAME ?= addon-controller
-ARCH ?= amd64
+ARCH ?= $(shell go env GOARCH)
 OS ?= $(shell uname -s | tr A-Z a-z)
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
@@ -317,6 +317,12 @@ deploy-projectsveltos: $(KUSTOMIZE)
 
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
+
+	@echo "Install sveltos conversion webhook"
+	$(KUBECTL) apply -f  https://raw.githubusercontent.com/projectsveltos/conversion-webhook/$(TAG)/manifest/manifest.yaml
+
+	@echo "Waiting for projectsveltos conversion webhook to be available..."
+	$(KUBECTL) wait --for=condition=Available deployment/conversion-webhook -n projectsveltos --timeout=$(TIMEOUT)
 
 prepare-configmap-with-kustomize: $(KUBECTL)
 	mkdir tmp; cd tmp; git clone git@github.com:gianlucam76/kustomize.git; \

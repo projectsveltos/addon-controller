@@ -39,11 +39,20 @@ var _ = Describe("Conversion", func() {
 			key := randomString()
 			value := randomString()
 
+			const tier = 100
 			clusterProfile := configv1alpha1.ClusterProfile{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randomString(),
 				},
 				Spec: configv1alpha1.Spec{
+					Tier:                 tier,
+					StopMatchingBehavior: configv1alpha1.LeavePolicies,
+					ValidateHealths: []configv1alpha1.ValidateHealth{
+						{
+							Name:      randomString(),
+							FeatureID: configv1alpha1.FeatureHelm,
+						},
+					},
 					ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", key, value)),
 					HelmCharts: []configv1alpha1.HelmChart{
 						{
@@ -99,6 +108,9 @@ var _ = Describe("Conversion", func() {
 			Expect(reflect.DeepEqual(final.Spec.KustomizationRefs, clusterProfile.Spec.KustomizationRefs)).To(BeTrue())
 			Expect(reflect.DeepEqual(final.Spec.ClusterRefs, clusterProfile.Spec.ClusterRefs)).To(BeTrue())
 			Expect(reflect.DeepEqual(final.Status, clusterProfile.Status)).To(BeTrue())
+			Expect(reflect.DeepEqual(final.Spec.ValidateHealths, clusterProfile.Spec.ValidateHealths)).To(BeTrue())
+			Expect(reflect.DeepEqual(final.Spec.StopMatchingBehavior, clusterProfile.Spec.StopMatchingBehavior)).To(BeTrue())
+			Expect(final.Spec.Tier).To(Equal(clusterProfile.Spec.Tier))
 		})
 
 		It("Profile conversion", func() {

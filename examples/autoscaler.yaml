@@ -23,7 +23,9 @@ kind: ClusterProfile
 metadata:
   name: deploy-resources
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   templateResourceRefs:
   - resource:
       kind: Secret

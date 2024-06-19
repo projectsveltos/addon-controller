@@ -3,7 +3,9 @@ kind: ClusterProfile
 metadata:
   name: istio
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts

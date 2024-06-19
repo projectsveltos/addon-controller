@@ -9,7 +9,9 @@ kind: ClusterProfile
 metadata:
   name: deploy-kyverno
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://kyverno.github.io/kyverno/

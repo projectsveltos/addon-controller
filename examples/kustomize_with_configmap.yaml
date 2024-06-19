@@ -24,7 +24,9 @@ kind: ClusterProfile
 metadata:
   name: flux-system
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   kustomizationRefs:
   - namespace: default

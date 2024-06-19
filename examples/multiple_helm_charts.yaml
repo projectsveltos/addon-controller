@@ -5,7 +5,9 @@ kind: ClusterProfile
 metadata:
   name: multiple-helm-charts
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://helm.nginx.com/stable/

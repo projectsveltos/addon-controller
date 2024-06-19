@@ -54,7 +54,9 @@ kind: ClusterProfile
 metadata:
   name: deploy-kyverno
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://kyverno.github.io/kyverno/
@@ -88,7 +90,9 @@ kind: ClusterProfile
 metadata:
   name: flux-system
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   kustomizationRefs:
   - namespace: flux-system

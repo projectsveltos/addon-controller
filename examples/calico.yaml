@@ -3,7 +3,9 @@ kind: ClusterProfile
 metadata:
   name: deploy-calico
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   helmCharts:
   - repositoryURL:    https://projectcalico.docs.tigera.io/charts
     repositoryName:   projectcalico

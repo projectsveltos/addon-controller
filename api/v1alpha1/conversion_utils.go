@@ -17,101 +17,45 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"encoding/json"
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	conversion "k8s.io/apimachinery/pkg/conversion"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
-func convertV1Alpha1SpecToV1Beta1(srcSpec *Spec) (configv1beta1.Spec, error) {
-	dstSpec := configv1beta1.Spec{}
+func Convert_v1alpha1_Spec_To_v1beta1_Spec(srcSpec *Spec, dstSpec *configv1beta1.Spec, scope conversion.Scope,
+) error {
 
-	dstSpec.ClusterRefs = srcSpec.ClusterRefs
-	dstSpec.ContinueOnConflict = srcSpec.ContinueOnConflict
-	dstSpec.DependsOn = srcSpec.DependsOn
-	dstSpec.ExtraAnnotations = srcSpec.ExtraAnnotations
-	dstSpec.ExtraLabels = srcSpec.ExtraLabels
-
-	jsonData, err := json.Marshal(srcSpec.HelmCharts) // Marshal the Spec field
-	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.HelmCharts: %w", err)
+	if err := autoConvert_v1alpha1_Spec_To_v1beta1_Spec(srcSpec, dstSpec, nil); err != nil {
+		return err
 	}
-	err = json.Unmarshal(jsonData, &dstSpec.HelmCharts) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
-	}
-
-	jsonData, err = json.Marshal(srcSpec.KustomizationRefs) // Marshal the Spec field
-	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.KustomizationRefs: %w", err)
-	}
-	err = json.Unmarshal(jsonData, &dstSpec.KustomizationRefs) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
-	}
-
-	jsonData, err = json.Marshal(srcSpec.PolicyRefs) // Marshal the Spec field
-	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.PolicyRefs: %w", err)
-	}
-	err = json.Unmarshal(jsonData, &dstSpec.PolicyRefs) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
-	}
-
-	dstSpec.Reloader = srcSpec.Reloader
-	dstSpec.SetRefs = srcSpec.SetRefs
 
 	labelSelector, err := metav1.ParseToLabelSelector(string(srcSpec.ClusterSelector))
 	if err != nil {
-		return dstSpec, fmt.Errorf("error converting labels.Selector to metav1.Selector: %w", err)
+		return fmt.Errorf("error converting labels.Selector to metav1.Selector: %w", err)
 	}
 	dstSpec.ClusterSelector = libsveltosv1beta1.Selector{LabelSelector: *labelSelector}
 
-	return dstSpec, nil
+	return nil
 }
 
-func convertV1Beta1SpecToV1Alpha1(srcSpec *configv1beta1.Spec) (Spec, error) {
-	dstSpec := Spec{}
+func Convert_v1beta1_Spec_To_v1alpha1_Spec(srcSpec *configv1beta1.Spec, dstSpec *Spec, scope conversion.Scope,
+) error {
 
-	dstSpec.ClusterRefs = srcSpec.ClusterRefs
-	dstSpec.ContinueOnConflict = srcSpec.ContinueOnConflict
-	dstSpec.DependsOn = srcSpec.DependsOn
-	dstSpec.ExtraAnnotations = srcSpec.ExtraAnnotations
-	dstSpec.ExtraLabels = srcSpec.ExtraLabels
-
-	jsonData, err := json.Marshal(srcSpec.HelmCharts) // Marshal the Spec field
-	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.HelmCharts: %w", err)
-	}
-	err = json.Unmarshal(jsonData, &dstSpec.HelmCharts) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
+	if err := autoConvert_v1beta1_Spec_To_v1alpha1_Spec(srcSpec, dstSpec, nil); err != nil {
+		return err
 	}
 
-	jsonData, err = json.Marshal(srcSpec.KustomizationRefs) // Marshal the Spec field
+	labelSelector, err := srcSpec.ClusterSelector.ToSelector()
 	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.KustomizationRefs: %w", err)
-	}
-	err = json.Unmarshal(jsonData, &dstSpec.KustomizationRefs) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
+		return fmt.Errorf("failed to convert : %w", err)
 	}
 
-	jsonData, err = json.Marshal(srcSpec.PolicyRefs) // Marshal the Spec field
-	if err != nil {
-		return dstSpec, fmt.Errorf("error marshaling Spec.PolicyRefs: %w", err)
-	}
-	err = json.Unmarshal(jsonData, &dstSpec.PolicyRefs) // Unmarshal to v1beta1 type
-	if err != nil {
-		return dstSpec, fmt.Errorf("error unmarshaling JSON: %w", err)
-	}
+	dstSpec.ClusterSelector = libsveltosv1alpha1.Selector(labelSelector.String())
 
-	dstSpec.Reloader = srcSpec.Reloader
-	dstSpec.SetRefs = srcSpec.SetRefs
-
-	return dstSpec, nil
+	return nil
 }

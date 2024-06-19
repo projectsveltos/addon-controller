@@ -13,6 +13,7 @@ require (
 	github.com/fluxcd/source-controller/api v1.3.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2
+	github.com/google/gofuzz v1.2.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	github.com/pkg/errors v0.9.1
@@ -30,7 +31,7 @@ require (
 	k8s.io/cli-runtime v0.30.1
 	k8s.io/client-go v0.30.1
 	k8s.io/component-base v0.30.1
-	k8s.io/klog/v2 v2.120.1
+	k8s.io/klog/v2 v2.130.0
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/cluster-api v1.7.3
 	sigs.k8s.io/controller-runtime v0.18.4
@@ -88,7 +89,6 @@ require (
 	github.com/google/cel-go v0.17.8 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.4.0 // indirect

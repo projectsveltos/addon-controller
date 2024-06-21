@@ -87,6 +87,10 @@ CONVERSION_GEN_PKG := k8s.io/code-generator/cmd/conversion-gen
 .PHONY: $(CONVERSION_GEN_BIN)
 $(CONVERSION_GEN_BIN): $(CONVERSION_GEN) ## Build a local copy of conversion-gen.
 
+.PHONY: $(CONVERSION_GEN)
+ $(CONVERSION_GEN): # Build conversion-gen from tools folder.
+     GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONVERSION_GEN_PKG) $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
+
 SETUP_ENVTEST_VER := v0.0.0-20240522175850-2e9781e9fc60
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
@@ -176,6 +180,7 @@ lint: $(GOLANGCI_LINT) generate ## Lint codebase
 .PHONY: check-manifests
 check-manifests: manifests ## Verify manifests file is up to date
 	test `git status --porcelain $(GENERATED_FILES) | grep -cE '(^\?)|(^ M)'` -eq 0 || (echo "The manifest file changed, please 'make manifests' and commit the results"; exit 1)
+	test `git status --porcelain ./api/v1alpha1/zz_generated.conversion.go | grep -cE '(^\?)|(^ M)'` -eq 0 || (echo "The conversion generated file changed, please 'make generate-go-conversions' and commit the results"; exit 1)
 
 ifeq ($(shell go env GOOS),darwin) # Use the darwin/amd64 binary until an arm64 version is available
 KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path --arch amd64 $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))

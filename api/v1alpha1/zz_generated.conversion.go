@@ -23,15 +23,14 @@ package v1alpha1
 import (
 	unsafe "unsafe"
 
+	v1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	apiv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	apiv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
-
-	v1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	apiv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
-	apiv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 func init() {
@@ -381,16 +380,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*Spec)(nil), (*v1beta1.Spec)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_Spec_To_v1beta1_Spec(a.(*Spec), b.(*v1beta1.Spec), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.Spec)(nil), (*Spec)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_Spec_To_v1alpha1_Spec(a.(*v1beta1.Spec), b.(*Spec), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*Status)(nil), (*v1beta1.Status)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Status_To_v1beta1_Status(a.(*Status), b.(*v1beta1.Status), scope)
 	}); err != nil {
@@ -428,6 +417,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*v1beta1.ValueFrom)(nil), (*ValueFrom)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_ValueFrom_To_v1alpha1_ValueFrom(a.(*v1beta1.ValueFrom), b.(*ValueFrom), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*Spec)(nil), (*v1beta1.Spec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_Spec_To_v1beta1_Spec(a.(*Spec), b.(*v1beta1.Spec), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.Spec)(nil), (*Spec)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_Spec_To_v1alpha1_Spec(a.(*v1beta1.Spec), b.(*Spec), scope)
 	}); err != nil {
 		return err
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -25,11 +26,29 @@ import (
 // ConvertTo converts v1alpha1 to the Hub version (v1beta1).
 func (src *Profile) ConvertTo(dstRaw conversion.Hub) error {
 	dst := dstRaw.(*configv1beta1.Profile)
-	return Convert_v1alpha1_Profile_To_v1beta1_Profile(src, dst, nil)
+	err := Convert_v1alpha1_Profile_To_v1beta1_Profile(src, dst, nil)
+	if err != nil {
+		return err
+	}
+
+	if src.Spec.ClusterSelector == "" {
+		dst.Spec.ClusterSelector.LabelSelector = metav1.LabelSelector{}
+	}
+
+	return nil
 }
 
 // ConvertFrom converts from the Hub version (v1beta1) to this v1alpha1.
 func (dst *Profile) ConvertFrom(srcRaw conversion.Hub) error {
 	src := srcRaw.(*configv1beta1.Profile)
-	return Convert_v1beta1_Profile_To_v1alpha1_Profile(src, dst, nil)
+	err := Convert_v1beta1_Profile_To_v1alpha1_Profile(src, dst, nil)
+	if err != nil {
+		return err
+	}
+
+	if src.Spec.ClusterSelector.MatchLabels == nil {
+		dst.Spec.ClusterSelector = ""
+	}
+
+	return nil
 }

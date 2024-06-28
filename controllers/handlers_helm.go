@@ -402,6 +402,8 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += render.AsCode(mgmtResources[i])
 	}
 
+	config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -849,7 +851,7 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, url string, logger logr.Lo
 // No action in DryRun mode.
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
+	kubeconfig string, values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -871,7 +873,12 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		chartName = defaultUploadPath + "/" + chartName
 	}
 
-	installClient, err := getHelmInstallClient(requestedChart, kubeconfig)
+	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
+	if err != nil {
+		return err
+	}
+
+	installClient, err := getHelmInstallClient(requestedChart, kubeconfig, patches)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm install client: %v", err))
 		return err
@@ -985,7 +992,7 @@ func uninstallRelease(clusterSummary *configv1beta1.ClusterSummary,
 // No action in DryRun mode.
 func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, values map[string]interface{}, logger logr.Logger) error {
+	kubeconfig string, values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -1012,7 +1019,12 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return err
 	}
 
-	upgradeClient, err := getHelmUpgradeClient(requestedChart, actionConfig)
+	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
+	if err != nil {
+		return err
+	}
+
+	upgradeClient, err := getHelmUpgradeClient(requestedChart, actionConfig, patches)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm upgrade client: %v", err))
 		return err
@@ -1038,7 +1050,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	hisClient.Max = 1
 	_, err = hisClient.Run(requestedChart.ReleaseName)
 	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+		err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, mgmtResources, logger)
 		if err != nil {
 			return err
 		}
@@ -1264,7 +1276,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		return err
 	}
 
-	err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+	err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, mgmtResources, logger)
 	if err != nil {
 		return err
 	}
@@ -1321,7 +1333,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		return err
 	}
 
-	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, logger)
+	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, values, mgmtResources, logger)
 	if err != nil {
 		return err
 	}
@@ -1951,7 +1963,7 @@ func getRecreateValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string) (*action.Install, error) {
+func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string, patches []configv1beta1.Patch) (*action.Install, error) {
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return nil, err
@@ -1978,10 +1990,14 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	installClient.Labels = getLabelsValue(requestedChart.Options)
 	installClient.Description = getDescriptionValue(requestedChart.Options)
 
+	if len(patches) > 0 {
+		installClient.PostRenderer = &CustomPatchPostRenderer{Patches: patches}
+	}
+
 	return installClient, nil
 }
 
-func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration) (*action.Upgrade, error) {
+func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration, patches []configv1beta1.Patch) (*action.Upgrade, error) {
 	upgradeClient := action.NewUpgrade(actionConfig)
 	upgradeClient.Install = true
 	upgradeClient.Namespace = requestedChart.ReleaseNamespace
@@ -2009,6 +2025,10 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.CleanupOnFail = getCleanupOnFailValue(requestedChart.Options)
 	upgradeClient.SubNotes = getSubNotesValue(requestedChart.Options)
 	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
+
+	if len(patches) > 0 {
+		upgradeClient.PostRenderer = &CustomPatchPostRenderer{Patches: patches}
+	}
 
 	return upgradeClient, nil
 }

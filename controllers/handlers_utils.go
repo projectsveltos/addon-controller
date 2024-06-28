@@ -261,7 +261,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
-		configv1beta1.FeatureResources, clusterSummary, logger)
+		configv1beta1.FeatureResources, clusterSummary, mgmtResources, logger)
 }
 
 // adjustNamespace fixes namespace.
@@ -290,9 +290,11 @@ func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config)
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
+//
+//nolint:funlen // requires a lot of arguments because kustomize and plain resources are using this function
 func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
+	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1beta1.ResourceReport, err error) {
 
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
@@ -301,6 +303,19 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
 		profile.SetName(profileNameToOwnerReferenceName(profile))
+	}
+
+	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(patches) > 0 {
+		patcher := &CustomPatchPostRenderer{Patches: patches}
+		referencedUnstructured, err = patcher.RunUnstructured(referencedUnstructured)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	conflictErrorMsg := ""
@@ -1573,4 +1588,28 @@ func addToMap(m map[string]string, key, value string) {
 		// Key doesn't exist, add it with the value
 		m[key] = value
 	}
+}
+
+// Return Templated Patch Objects
+func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	requestor string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (instantiatedPatches []configv1beta1.Patch, err error) {
+
+	if len(clusterSummary.Spec.ClusterProfileSpec.Patches) == 0 {
+		return
+	}
+
+	instantiatedPatches = clusterSummary.Spec.ClusterProfileSpec.Patches
+
+	for k := range instantiatedPatches {
+		instantiatedPatch, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			requestor, instantiatedPatches[k].Patch, mgmtResources, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		instantiatedPatches[k].Patch = instantiatedPatch
+	}
+
+	return
 }

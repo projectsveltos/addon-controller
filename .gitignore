@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+.idea/
 
 # tmp files
 *.tmp

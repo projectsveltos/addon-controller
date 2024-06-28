@@ -426,6 +426,10 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		config += render.AsCode(mgmtResources[i])
 	}
 
+	if clusterSummary.Spec.ClusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

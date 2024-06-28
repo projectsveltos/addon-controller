@@ -485,6 +485,61 @@ type Clusters struct {
 	Clusters []corev1.ObjectReference `json:"clusters,omitempty"`
 }
 
+type PatchSelector struct {
+
+	// Version of the API Group to select resources from.
+	// Together with Group and Kind it is capable of unambiguously identifying and/or selecting resources.
+	// https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// Group is the API group to select resources from.
+	// Together with Version and Kind it is capable of unambiguously identifying and/or selecting resources.
+	// https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// Kind of the API Group to select resources from.
+	// Together with Group and Version it is capable of unambiguously
+	// identifying and/or selecting resources.
+	// https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// Namespace to select resources from.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Name to match resources with.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// AnnotationSelector is a string that follows the label selection expression
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+	// It matches with the resource annotations.
+	// +optional
+	AnnotationSelector string `json:"annotationSelector,omitempty"`
+
+	// LabelSelector is a string that follows the label selection expression
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+	// It matches with the resource labels.
+	// +optional
+	LabelSelector string `json:"labelSelector,omitempty"`
+}
+
+// Patch contains an inline StrategicMerge or JSON6902 patch, and the target the patch should
+// be applied to.
+type Patch struct {
+	// Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
+	// an array of operation objects.
+	// +required
+	Patch string `json:"patch,omitempty"`
+
+	// Target points to the resources that the patch document should be applied to.
+	// +optional
+	Target *PatchSelector `json:"target,omitempty"`
+}
+
 type Spec struct {
 	// ClusterSelector identifies clusters to associate to.
 	// +optional
@@ -596,6 +651,11 @@ type Spec struct {
 	// the managed cluster to validate the state of those add-ons/applications
 	// is healthy
 	ValidateHealths []ValidateHealth `json:"validateHealths,omitempty"`
+
+	// Define additional Kustomize inline Patches applied for all resources on this profile
+	// Within the Patch Spec you can use templating
+	// +optional
+	Patches []Patch `json:"patches,omitempty"`
 
 	// ExtraLabels: These labels will be added by Sveltos to all Kubernetes resources deployed in
 	// a managed cluster based on this ClusterProfile/Profile instance.

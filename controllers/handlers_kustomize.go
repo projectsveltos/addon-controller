@@ -28,6 +28,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -59,6 +60,28 @@ const (
 	permission0755 = 0755
 	maxSize        = int64(20 * 1024 * 1024)
 )
+
+var (
+	kustomizeRenderMutex sync.Mutex
+)
+
+// buildKustomization wraps krusty.MakeKustomizer with the following settings:
+// - load files from outside the kustomization.yaml root
+// - disable plugins except for the builtin ones
+func buildKustomization(fs filesys.FileSystem, dirPath string) (resmap.ResMap, error) {
+	// Temporary workaround for concurrent map read and map write bug
+	// https://github.com/kubernetes-sigs/kustomize/issues/3659
+	kustomizeRenderMutex.Lock()
+	defer kustomizeRenderMutex.Unlock()
+
+	buildOptions := &krusty.Options{
+		LoadRestrictions: kustomizetypes.LoadRestrictionsNone,
+		PluginConfig:     kustomizetypes.DisabledPluginConfig(),
+	}
+
+	k := krusty.MakeKustomizer(buildOptions)
+	return k.Run(fs, dirPath)
+}
 
 func deployKustomizeRefs(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
@@ -329,6 +352,10 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		config += render.AsCode(mgmtResources[i])
 	}
 
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
@@ -483,14 +510,8 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	fs := filesys.MakeFsOnDisk()
 
-	buildOptions := &krusty.Options{
-		LoadRestrictions: kustomizetypes.LoadRestrictionsNone,
-		PluginConfig:     kustomizetypes.DisabledPluginConfig(),
-	}
-
-	kustomizer := krusty.MakeKustomizer(buildOptions)
 	var resMap resmap.ResMap
-	resMap, err = kustomizer.Run(fs, dirPath)
+	resMap, err = buildKustomization(fs, dirPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -586,18 +607,17 @@ func prepareFileSystemWithData(binaryData map[string][]byte,
 func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	deploymentType configv1beta1.DeploymentType, resMap resmap.ResMap,
 	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger,
-) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, err error) {
+) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, mgmtResources map[string]*unstructured.Unstructured, err error) {
 
-	var mgmtResources map[string]*unstructured.Unstructured
 	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get key-value pairs from ValuesFrom
 	values, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get substitute values. Those are collected from Data sections of referenced ConfigMap/Secret instances.
@@ -605,7 +625,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	// the managemenet cluster
 	instantiateSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, values, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	resources := resMap.Resources()
@@ -614,7 +634,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		yaml, err := resource.AsYAML()
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get resource YAML %v", err))
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		// Assume it is a template only if there are values to substitute
@@ -626,7 +646,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 			if err != nil {
 				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
 				logger.V(logs.LogInfo).Info(msg)
-				return nil, nil, errors.Wrap(err, msg)
+				return nil, nil, nil, errors.Wrap(err, msg)
 			}
 		}
 
@@ -634,7 +654,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		u, err = utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		if kustomizationRef.TargetNamespace != "" {
@@ -648,7 +668,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		}
 	}
 
-	return objectsToDeployLocally, objectsToDeployRemotely, nil
+	return objectsToDeployLocally, objectsToDeployRemotely, mgmtResources, nil
 }
 
 func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestConfig *rest.Config,
@@ -667,7 +687,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		}
 	}
 
-	objectsToDeployLocally, objectsToDeployRemotely, err :=
+	objectsToDeployLocally, objectsToDeployRemotely, mgmtResources, err :=
 		getKustomizedResources(ctx, c, clusterSummary, kustomizationRef.DeploymentType, resMap,
 			kustomizationRef, logger)
 	if err != nil {
@@ -680,7 +700,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
-		ref, configv1beta1.FeatureKustomize, clusterSummary, logger)
+		ref, configv1beta1.FeatureKustomize, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
 		return localReports, nil, err
@@ -692,7 +712,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
-		ref, configv1beta1.FeatureKustomize, clusterSummary, logger)
+		ref, configv1beta1.FeatureKustomize, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))
 		return localReports, remoteReports, err

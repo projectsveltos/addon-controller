@@ -355,6 +355,13 @@ var _ = Describe("Hash methods", func() {
 							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
+					Patches: []configv1beta1.Patch{
+						{
+							Patch: `- op: add
+  path: /metadata/labels/environment
+  value: production`,
+						},
+					},
 					Tier: 100,
 				},
 			},
@@ -382,6 +389,8 @@ var _ = Describe("Hash methods", func() {
 		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
 		config += controllers.GetStringDataSectionHash(configMap1.Data)
 		config += controllers.GetStringDataSectionHash(configMap2.Data)
+		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+
 		h := sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)

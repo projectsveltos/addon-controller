@@ -2303,6 +2303,64 @@ spec:
                   in those cluster succeed, other matching clusters are updated.
                 pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
+              patches:
+                description: |-
+                  Define additional Kustomize inline Patches applied for all resources on this profile
+                  Within the Patch Spec you can use templating
+                items:
+                  description: |-
+                    Patch contains an inline StrategicMerge or JSON6902 patch, and the target the patch should
+                    be applied to.
+                  properties:
+                    patch:
+                      description: |-
+                        Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
+                        an array of operation objects.
+                      type: string
+                    target:
+                      description: Target points to the resources that the patch document
+                        should be applied to.
+                      properties:
+                        annotationSelector:
+                          description: |-
+                            AnnotationSelector is a string that follows the label selection expression
+                            https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                            It matches with the resource annotations.
+                          type: string
+                        group:
+                          description: |-
+                            Group is the API group to select resources from.
+                            Together with Version and Kind it is capable of unambiguously identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the API Group to select resources from.
+                            Together with Group and Version it is capable of unambiguously
+                            identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                        labelSelector:
+                          description: |-
+                            LabelSelector is a string that follows the label selection expression
+                            https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                            It matches with the resource labels.
+                          type: string
+                        name:
+                          description: Name to match resources with.
+                          type: string
+                        namespace:
+                          description: Namespace to select resources from.
+                          type: string
+                        version:
+                          description: |-
+                            Version of the API Group to select resources from.
+                            Together with Group and Kind it is capable of unambiguously identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                      type: object
+                  type: object
+                type: array
               policyRefs:
                 description: |-
                   PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
@@ -4922,6 +4980,64 @@ spec:
                       in those cluster succeed, other matching clusters are updated.
                     pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                     x-kubernetes-int-or-string: true
+                  patches:
+                    description: |-
+                      Define additional Kustomize inline Patches applied for all resources on this profile
+                      Within the Patch Spec you can use templating
+                    items:
+                      description: |-
+                        Patch contains an inline StrategicMerge or JSON6902 patch, and the target the patch should
+                        be applied to.
+                      properties:
+                        patch:
+                          description: |-
+                            Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
+                            an array of operation objects.
+                          type: string
+                        target:
+                          description: Target points to the resources that the patch
+                            document should be applied to.
+                          properties:
+                            annotationSelector:
+                              description: |-
+                                AnnotationSelector is a string that follows the label selection expression
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                                It matches with the resource annotations.
+                              type: string
+                            group:
+                              description: |-
+                                Group is the API group to select resources from.
+                                Together with Version and Kind it is capable of unambiguously identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the API Group to select resources from.
+                                Together with Group and Version it is capable of unambiguously
+                                identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                            labelSelector:
+                              description: |-
+                                LabelSelector is a string that follows the label selection expression
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                                It matches with the resource labels.
+                              type: string
+                            name:
+                              description: Name to match resources with.
+                              type: string
+                            namespace:
+                              description: Namespace to select resources from.
+                              type: string
+                            version:
+                              description: |-
+                                Version of the API Group to select resources from.
+                                Together with Group and Kind it is capable of unambiguously identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                          type: object
+                      type: object
+                    type: array
                   policyRefs:
                     description: |-
                       PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
@@ -6889,6 +7005,64 @@ spec:
                   in those cluster succeed, other matching clusters are updated.
                 pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
                 x-kubernetes-int-or-string: true
+              patches:
+                description: |-
+                  Define additional Kustomize inline Patches applied for all resources on this profile
+                  Within the Patch Spec you can use templating
+                items:
+                  description: |-
+                    Patch contains an inline StrategicMerge or JSON6902 patch, and the target the patch should
+                    be applied to.
+                  properties:
+                    patch:
+                      description: |-
+                        Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
+                        an array of operation objects.
+                      type: string
+                    target:
+                      description: Target points to the resources that the patch document
+                        should be applied to.
+                      properties:
+                        annotationSelector:
+                          description: |-
+                            AnnotationSelector is a string that follows the label selection expression
+                            https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                            It matches with the resource annotations.
+                          type: string
+                        group:
+                          description: |-
+                            Group is the API group to select resources from.
+                            Together with Version and Kind it is capable of unambiguously identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the API Group to select resources from.
+                            Together with Group and Version it is capable of unambiguously
+                            identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                        labelSelector:
+                          description: |-
+                            LabelSelector is a string that follows the label selection expression
+                            https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                            It matches with the resource labels.
+                          type: string
+                        name:
+                          description: Name to match resources with.
+                          type: string
+                        namespace:
+                          description: Namespace to select resources from.
+                          type: string
+                        version:
+                          description: |-
+                            Version of the API Group to select resources from.
+                            Together with Group and Kind it is capable of unambiguously identifying and/or selecting resources.
+                            https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                          type: string
+                      type: object
+                  type: object
+                type: array
               policyRefs:
                 description: |-
                   PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources

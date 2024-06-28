@@ -601,6 +601,13 @@ var _ = Describe("Hash methods", func() {
 						kyvernoChart,
 						nginxChart,
 					},
+					Patches: []configv1beta1.Patch{
+						{
+							Patch: `- op: add
+  path: /metadata/labels/environment
+  value: production`,
+						},
+					},
 					Tier: 100,
 				},
 			},
@@ -626,6 +633,9 @@ var _ = Describe("Hash methods", func() {
 		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
 		config += render.AsCode(kyvernoChart)
 		config += render.AsCode(nginxChart)
+
+		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+
 		h := sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)

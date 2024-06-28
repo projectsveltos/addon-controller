@@ -279,7 +279,15 @@ var _ = Describe("Hash methods", func() {
 				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1beta1.Spec{
 					KustomizationRefs: make([]configv1beta1.KustomizationRef, repoNum),
-					Tier:              100,
+					Patches: []configv1beta1.Patch{
+						{
+							Patch: `- op: add
+  path: /metadata/labels/environment
+  value: production`,
+						},
+					},
+
+					Tier: 100,
 				},
 			},
 		}
@@ -317,6 +325,8 @@ var _ = Describe("Hash methods", func() {
 		for i := 0; i < repoNum; i++ {
 			config += gitRepositories[i].Status.Artifact.Revision
 		}
+		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+
 		h := sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)

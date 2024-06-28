@@ -402,7 +402,9 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		config += render.AsCode(mgmtResources[i])
 	}
 
-	config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+	if clusterSummary.Spec.ClusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+	}
 
 	h.Write([]byte(config))
 	return h.Sum(nil), nil

@@ -352,7 +352,9 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		config += render.AsCode(mgmtResources[i])
 	}
 
-	config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+	}
 
 	h.Write([]byte(config))
 	return h.Sum(nil), nil

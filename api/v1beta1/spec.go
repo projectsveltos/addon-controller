@@ -127,6 +127,10 @@ type ValueFrom struct {
 	Namespace string `json:"namespace"`
 
 	// Name of the referenced resource.
+	// Name can be expressed as a template and instantiate using
+	// - cluster namespace: .Cluster.metadata.namespace
+	// - cluster name: .Cluster.metadata.name
+	// - cluster type: .Cluster.kind
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -325,7 +329,7 @@ type HelmChart struct {
 	// Values field allows to define configuration for the Helm release.
 	// These values can be static or leverage Go templates for dynamic customization.
 	// When expressed as templates, the values are filled in using information from
-	// resources within the management cluster before deployment.
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	Values string `json:"values,omitempty"`
 
@@ -333,7 +337,7 @@ type HelmChart struct {
 	// it is possible to store configuration for the Helm release.
 	// These values can be static or leverage Go templates for dynamic customization.
 	// When expressed as templates, the values are filled in using information from
-	// resources within the management cluster before deployment.
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
 
@@ -355,6 +359,10 @@ type KustomizationRef struct {
 	Namespace string `json:"namespace"`
 
 	// Name of the referenced resource.
+	// Name can be expressed as a template and instantiate using
+	// - cluster namespace: .Cluster.metadata.namespace
+	// - cluster name: .Cluster.metadata.name
+	// - cluster type: .Cluster.kind
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -367,6 +375,9 @@ type KustomizationRef struct {
 	// Path to the directory containing the kustomization.yaml file, or the
 	// set of plain YAMLs a kustomization.yaml should be generated for.
 	// Defaults to 'None', which translates to the root path of the SourceRef.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment (Cluster)
 	// +optional
 	Path string `json:"path,omitempty"`
 
@@ -435,6 +446,12 @@ const (
 type TemplateResourceRef struct {
 	// Resource references a Kubernetes instance in the management
 	// cluster to fetch and use during template instantiation.
+	// For ClusterProfile namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	// Name can be expressed as a template and instantiate using
+	// - cluster namespace: .Cluster.metadata.namespace
+	// - cluster name: .Cluster.metadata.name
+	// - cluster type: .Cluster.kind
 	Resource corev1.ObjectReference `json:"resource"`
 
 	// Identifier is how the resource will be referred to in the
@@ -451,6 +468,10 @@ type PolicyRef struct {
 	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
+	// Name can be expressed as a template and instantiate using
+	// - cluster namespace: .Cluster.metadata.namespace
+	// - cluster name: .Cluster.metadata.name
+	// - cluster type: .Cluster.kind
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -532,6 +553,9 @@ type PatchSelector struct {
 type Patch struct {
 	// Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
 	// an array of operation objects.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +required
 	Patch string `json:"patch,omitempty"`
 
@@ -620,8 +644,7 @@ type Spec struct {
 	Reloader bool `json:"reloader,omitempty"`
 
 	// TemplateResourceRefs is a list of resource to collect from the management cluster.
-	// Those resources' values will be used to instantiate templates contained in referenced
-	// PolicyRefs and Helm charts
+	// Those resources' values will be used to instantiate templates
 	// +patchMergeKey=identifier
 	// +patchStrategy=merge,retainKeys
 	// +listType=map
@@ -635,8 +658,11 @@ type Spec struct {
 	// ClusterProfiles listed as dependencies are deployed.
 	DependsOn []string `json:"dependsOn,omitempty"`
 
-	// PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
-	// that need to be deployed in the matching CAPI clusters.
+	// PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
+	// that need to be deployed in the matching managed clusters.
+	// The values contained in those resources can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
 
@@ -661,6 +687,7 @@ type Spec struct {
 	// a managed cluster based on this ClusterProfile/Profile instance.
 	// **Important:** If a resource deployed by Sveltos already has a label with a key present in
 	// `ExtraLabels`, the value from `ExtraLabels` will override the existing value.
+	// (Deprecated use Patches instead)
 	// +optional
 	ExtraLabels map[string]string `json:"extraLabels,omitempty"`
 
@@ -668,6 +695,7 @@ type Spec struct {
 	// deployed in a managed cluster based on this ClusterProfile/Profile instance.
 	// **Important:** If a resource deployed by Sveltos already has a annotation with a key present in
 	// `ExtraAnnotations`, the value from `ExtraAnnotations` will override the existing value.
+	// (Deprecated use Patches instead)
 	// +optional
 	ExtraAnnotations map[string]string `json:"extraAnnotations,omitempty"`
 }

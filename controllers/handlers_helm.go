@@ -730,7 +730,7 @@ func handleUninstall(clusterSummary *configv1beta1.ClusterSummary, currentChart 
 	kubeconfig string, logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
 
 	var report *configv1beta1.ReleaseReport
-	logger.V(logs.LogDebug).Info("uniinstall helm release")
+	logger.V(logs.LogDebug).Info("uninstall helm release")
 	err := doUninstallRelease(clusterSummary, currentChart, kubeconfig, logger)
 	if err != nil {
 		return nil, err

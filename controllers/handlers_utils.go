@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"text/template"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -810,6 +811,43 @@ func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace
 	return clusterNamespace
 }
 
+// Resources referenced in the management cluster can have their name expressed in function
+// of cluster information:
+// clusterNamespace => .Cluster.metadata.namespace
+// clusterName => .Cluster.metadata.name
+// clusterType => .Cluster.kind
+func getReferenceResourceName(clusterSummary *configv1beta1.ClusterSummary, tempalatedName string) (string, error) {
+	// Accept name that are templates
+	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		string(clusterSummary.Spec.ClusterType))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(tempalatedName)
+	if err != nil {
+		return "", err
+	}
+
+	var buffer bytes.Buffer
+
+	// Cluster namespace and name can be used to instantiate the name of the resource that
+	// needs to be fetched from the management cluster. Defined an unstructured with namespace and name set
+	u := &unstructured.Unstructured{}
+	u.SetNamespace(clusterSummary.Spec.ClusterNamespace)
+	u.SetName(clusterSummary.Spec.ClusterName)
+	u.SetKind(string(clusterSummary.Spec.ClusterType))
+
+	if err := tmpl.Execute(&buffer,
+		struct {
+			Cluster map[string]interface{}
+			// deprecated. This used to be original format which was different than rest of templating
+			ClusterNamespace, ClusterName string
+		}{
+			Cluster:          u.UnstructuredContent(),
+			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
+		return "", errors.Wrapf(err, "error executing template")
+	}
+	return buffer.String(), nil
+}
+
 func appendPathAnnotations(object client.Object, reference *configv1beta1.PolicyRef) {
 	if object == nil {
 		return
@@ -826,8 +864,9 @@ func appendPathAnnotations(object client.Object, reference *configv1beta1.Policy
 // collectReferencedObjects collects all referenced configMaps/secrets in control cluster
 // local contains all configMaps/Secrets whose content need to be deployed locally (in the management cluster)
 // remote contains all configMap/Secrets whose content need to be deployed remotely (in the managed cluster)
-func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client, clusterNamespace string,
-	references []configv1beta1.PolicyRef, logger logr.Logger) (local, remote []client.Object, err error) {
+func collectReferencedObjects(ctx context.Context, controlClusterClient client.Client,
+	clusterSummary *configv1beta1.ClusterSummary, references []configv1beta1.PolicyRef,
+	logger logr.Logger) (local, remote []client.Object, err error) {
 
 	local = make([]client.Object, 0)
 	remote = make([]client.Object, 0)
@@ -835,22 +874,29 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var object client.Object
 		reference := &references[i]
 
-		namespace := getReferenceResourceNamespace(clusterNamespace, references[i].Namespace)
+		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, references[i].Namespace)
+
+		name, err := getReferenceResourceName(clusterSummary, references[i].Name)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			return nil, nil, err
+		}
 
 		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			object, err = getConfigMap(ctx, controlClusterClient,
-				types.NamespacedName{Namespace: namespace, Name: reference.Name})
+				types.NamespacedName{Namespace: namespace, Name: name})
 		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			object, err = getSecret(ctx, controlClusterClient,
-				types.NamespacedName{Namespace: namespace, Name: reference.Name})
+				types.NamespacedName{Namespace: namespace, Name: name})
 		} else {
-			object, err = getSource(ctx, controlClusterClient, namespace, reference.Name, reference.Kind)
+			object, err = getSource(ctx, controlClusterClient, namespace, name, reference.Kind)
 			appendPathAnnotations(object, reference)
 		}
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
-					reference.Kind, reference.Namespace, reference.Name)
+					reference.Kind, reference.Namespace, name)
 				logger.V(logs.LogInfo).Info(msg)
 				return nil, nil, &NonRetriableError{Message: msg}
 			}
@@ -1501,9 +1547,17 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 	var config string
 	for i := range valuesFrom {
 		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+
+		name, err := getReferenceResourceName(clusterSummary, valuesFrom[i].Name)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return "", err
+		}
+
 		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap, err := getConfigMap(ctx, c,
-				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+				types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
 				return "", err
@@ -1515,7 +1569,7 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 			config += getDataSectionHash(configMap.BinaryData)
 		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c,
-				types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+				types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
 				return "", err
@@ -1545,10 +1599,18 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 	values := make(map[string]string)
 	for i := range valuesFrom {
 		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+
+		name, err := getReferenceResourceName(clusterSummary, valuesFrom[i].Name)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return nil, err
+		}
+
 		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
-				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, valuesFrom[i].Name)
+				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
 				return nil, errors.Wrapf(err, msg)
 			}
@@ -1560,9 +1622,9 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 				}
 			}
 		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: valuesFrom[i].Name})
+			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
-				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, valuesFrom[i].Name)
+				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
 				return nil, errors.Wrapf(err, msg)
 			}
@@ -1592,7 +1654,8 @@ func addToMap(m map[string]string, key, value string) {
 
 // Return Templated Patch Objects
 func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	requestor string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (instantiatedPatches []configv1beta1.Patch, err error) {
+	requestor string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (instantiatedPatches []configv1beta1.Patch, err error) {
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.Patches) == 0 {
 		return

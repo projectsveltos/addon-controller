@@ -1116,6 +1116,7 @@ spec:
                       deployed in a managed cluster based on this ClusterProfile/Profile instance.
                       **Important:** If a resource deployed by Sveltos already has a annotation with a key present in
                       `ExtraAnnotations`, the value from `ExtraAnnotations` will override the existing value.
+                      (Deprecated use Patches instead)
                     type: object
                   extraLabels:
                     additionalProperties:
@@ -1125,6 +1126,7 @@ spec:
                       a managed cluster based on this ClusterProfile/Profile instance.
                       **Important:** If a resource deployed by Sveltos already has a label with a key present in
                       `ExtraLabels`, the value from `ExtraLabels` will override the existing value.
+                      (Deprecated use Patches instead)
                     type: object
                   helmCharts:
                     description: Helm charts is a list of helm charts that need to
@@ -1325,7 +1327,7 @@ spec:
                             Values field allows to define configuration for the Helm release.
                             These values can be static or leverage Go templates for dynamic customization.
                             When expressed as templates, the values are filled in using information from
-                            resources within the management cluster before deployment.
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
                           type: string
                         valuesFrom:
                           description: |-
@@ -1333,7 +1335,7 @@ spec:
                             it is possible to store configuration for the Helm release.
                             These values can be static or leverage Go templates for dynamic customization.
                             When expressed as templates, the values are filled in using information from
-                            resources within the management cluster before deployment.
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
                           items:
                             properties:
                               kind:
@@ -1345,7 +1347,12 @@ spec:
                                 - Secret
                                 type: string
                               name:
-                                description: Name of the referenced resource.
+                                description: |-
+                                  Name of the referenced resource.
+                                  Name can be expressed as a template and instantiate using
+                                  - cluster namespace: .Cluster.metadata.namespace
+                                  - cluster name: .Cluster.metadata.name
+                                  - cluster type: .Cluster.kind
                                 minLength: 1
                                 type: string
                               namespace:
@@ -1398,7 +1405,12 @@ spec:
                           - Secret
                           type: string
                         name:
-                          description: Name of the referenced resource.
+                          description: |-
+                            Name of the referenced resource.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
                           minLength: 1
                           type: string
                         namespace:
@@ -1413,6 +1425,9 @@ spec:
                             Path to the directory containing the kustomization.yaml file, or the
                             set of plain YAMLs a kustomization.yaml should be generated for.
                             Defaults to 'None', which translates to the root path of the SourceRef.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster)
                           type: string
                         targetNamespace:
                           description: |-
@@ -1468,7 +1483,12 @@ spec:
                                 - Secret
                                 type: string
                               name:
-                                description: Name of the referenced resource.
+                                description: |-
+                                  Name of the referenced resource.
+                                  Name can be expressed as a template and instantiate using
+                                  - cluster namespace: .Cluster.metadata.namespace
+                                  - cluster name: .Cluster.metadata.name
+                                  - cluster type: .Cluster.kind
                                 minLength: 1
                                 type: string
                               namespace:
@@ -1516,6 +1536,9 @@ spec:
                           description: |-
                             Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
                             an array of operation objects.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
                           type: string
                         target:
                           description: Target points to the resources that the patch
@@ -1563,8 +1586,11 @@ spec:
                     type: array
                   policyRefs:
                     description: |-
-                      PolicyRefs references all the ConfigMaps/Secrets containing kubernetes resources
-                      that need to be deployed in the matching CAPI clusters.
+                      PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
+                      that need to be deployed in the matching managed clusters.
+                      The values contained in those resources can be static or leverage Go templates for dynamic customization.
+                      When expressed as templates, the values are filled in using information from
+                      resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
                     items:
                       properties:
                         deploymentType:
@@ -1589,7 +1615,12 @@ spec:
                           - Secret
                           type: string
                         name:
-                          description: Name of the referenced resource.
+                          description: |-
+                            Name of the referenced resource.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
                           minLength: 1
                           type: string
                         namespace:
@@ -1657,8 +1688,7 @@ spec:
                   templateResourceRefs:
                     description: |-
                       TemplateResourceRefs is a list of resource to collect from the management cluster.
-                      Those resources' values will be used to instantiate templates contained in referenced
-                      PolicyRefs and Helm charts
+                      Those resources' values will be used to instantiate templates
                     items:
                       properties:
                         identifier:
@@ -1670,6 +1700,12 @@ spec:
                           description: |-
                             Resource references a Kubernetes instance in the management
                             cluster to fetch and use during template instantiation.
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
                           properties:
                             apiVersion:
                               description: API version of the referent.

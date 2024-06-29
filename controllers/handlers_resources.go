@@ -363,24 +363,31 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), reference.Namespace)
-		var err error
+
+		name, err := getReferenceResourceName(clusterSummary, reference.Name)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			return nil, err
+		}
+
 		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, configmap)
+			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, configmap)
 			if err == nil {
 				config += getDataSectionHash(configmap.Data)
 				config += getDataSectionHash(configmap.BinaryData)
 			}
 		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: reference.Name}, secret)
+			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, secret)
 			if err == nil {
 				config += getDataSectionHash(secret.Data)
 				config += getDataSectionHash(secret.StringData)
 			}
 		} else {
 			var source client.Object
-			source, err = getSource(ctx, c, namespace, reference.Name, reference.Kind)
+			source, err = getSource(ctx, c, namespace, name, reference.Kind)
 			if err == nil && source == nil {
 				s := source.(sourcev1.Source)
 				if s.GetArtifact() != nil {
@@ -391,11 +398,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
-					reference.Kind, reference.Namespace, reference.Name))
+					reference.Kind, reference.Namespace, name))
 				continue
 			}
 			logger.Error(err, fmt.Sprintf("failed to get %s %s/%s",
-				reference.Kind, reference.Namespace, reference.Name))
+				reference.Kind, reference.Namespace, name))
 			return nil, err
 		}
 	}
@@ -510,7 +517,7 @@ func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.C
 	// collect all referenced resources whose content need to be deployed
 	// in the management cluster (local) or manaded cluster (remote)
 	objectsToDeployLocally, objectsToDeployRemotely, err =
-		collectReferencedObjects(ctx, c, clusterSummary.Namespace, refs, logger)
+		collectReferencedObjects(ctx, c, clusterSummary, refs, logger)
 	if err != nil {
 		return nil, nil, err
 	}

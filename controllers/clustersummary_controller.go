@@ -205,7 +205,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.resetFeatureStatus(clusterSummaryScope, configv1beta1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
-		r.updateMaps(clusterSummaryScope, logger)
+		_ = r.updateMaps(clusterSummaryScope, logger)
+
 		return reconcile.Result{}, nil
 	}
 
@@ -265,6 +266,10 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	// If cluster is not present anymore or is it marked for deletion
 	if !isPresent || isDeleted {
+		// in case cleanup operations were already queued, before removing ClusterSummary
+		// remove those
+		r.cleanupQueuedCleanOperations(clusterSummaryScope.ClusterSummary)
+
 		logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
 		cs := clusterSummaryScope.ClusterSummary
 		if err := removeDriftDetectionManagerFromManagementCluster(ctx,
@@ -318,7 +323,10 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{}, nil
 	}
 
-	r.updateMaps(clusterSummaryScope, logger)
+	err := r.updateMaps(clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -674,13 +682,17 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 	}
 }
 
-func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
+func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeOneTime {
 		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
-		return
+		return nil
 	}
 	logger.V(logs.LogDebug).Info("update policy map")
-	currentReferences := r.getCurrentReferences(clusterSummaryScope)
+	currentReferences, err := r.getCurrentReferences(clusterSummaryScope)
+	if err != nil {
+		logger.V(logs.LogInfo).Info("failed to get current references: %v", err)
+		return err
+	}
 
 	cs := clusterSummaryScope.ClusterSummary
 	var kind, apiVersion string
@@ -726,6 +738,7 @@ func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.Cluster
 			},
 		)
 	}
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) getClusterMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
@@ -779,21 +792,43 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 	return false
 }
 
-func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
-	currentReferences := r.getPolicyRefReferences(clusterSummaryScope)
-	currentReferences.Append(r.getKustomizationRefReferences(clusterSummaryScope))
-	currentReferences.Append(r.getHelmChartsReferences(clusterSummaryScope))
-	return currentReferences
+func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope,
+) (*libsveltosset.Set, error) {
+
+	currentReferences, err := r.getPolicyRefReferences(clusterSummaryScope)
+	if err != nil {
+		return nil, err
+	}
+
+	kustomizationRefs, err := r.getKustomizationRefReferences(clusterSummaryScope)
+	if err != nil {
+		return nil, err
+	}
+	currentReferences.Append(kustomizationRefs)
+
+	helmRefs, err := r.getHelmChartsReferences(clusterSummaryScope)
+	if err != nil {
+		return nil, err
+	}
+	currentReferences.Append(helmRefs)
+
+	return currentReferences, nil
 }
 
 // getPolicyRefReferences get all references considering the PolicyRef section
-func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *scope.ClusterSummaryScope,
+) (*libsveltosset.Set, error) {
+
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
-		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name
-
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name)
+		if err != nil {
+			return nil, err
+		}
 
 		currentReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(), // the only resources that can be referenced are Secret and ConfigMap
@@ -802,17 +837,23 @@ func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *s
 			Name:       referencedName,
 		})
 	}
-	return currentReferences
+	return currentReferences, nil
 }
 
 // getKustomizationRefReferences get all references considering the KustomizationRef section
-func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryScope *scope.ClusterSummaryScope,
+) (*libsveltosset.Set, error) {
+
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Namespace
-		referencedName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name
-
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name)
+		if err != nil {
+			return nil, err
+		}
 
 		var apiVersion string
 		switch clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind {
@@ -833,23 +874,32 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 		})
 
 		kr := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
-		valuesFromReferences := getKustomizationValueFrom(clusterSummaryScope, kr)
+		valuesFromReferences, err := getKustomizationValueFrom(clusterSummaryScope, kr)
+		if err != nil {
+			return nil, err
+		}
 		currentReferences.Append(valuesFromReferences)
 	}
-	return currentReferences
+	return currentReferences, nil
 }
 
 // getKustomizationValueFrom gets referenced ConfigMap/Secret in a KustomizationRef.
 // KustomizationRef can reference both ConfigMap/Secret each containing key-value pairs that will be used, if defined,
 // to replace placeholder value in the output generated by Kustomize SDK.
-func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1beta1.KustomizationRef) *libsveltosset.Set {
+func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1beta1.KustomizationRef,
+) (*libsveltosset.Set, error) {
+
 	currentValuesFromReferences := &libsveltosset.Set{}
 
 	for i := range kr.ValuesFrom {
 		referencedNamespace := kr.ValuesFrom[i].Namespace
-		referencedName := kr.ValuesFrom[i].Name
-
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
+			kr.ValuesFrom[i].Name)
+		if err != nil {
+			return nil, err
+		}
 
 		currentValuesFromReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
@@ -859,30 +909,41 @@ func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, k
 		})
 	}
 
-	return currentValuesFromReferences
+	return currentValuesFromReferences, nil
 }
 
 // getHelmChartsReferences get all references considering the HelmChart section
-func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *scope.ClusterSummaryScope) *libsveltosset.Set {
+func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *scope.ClusterSummaryScope,
+) (*libsveltosset.Set, error) {
+
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		hc := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		valuesFromReferences := getHelmChartValueFrom(clusterSummaryScope, hc)
+		valuesFromReferences, err := getHelmChartValueFrom(clusterSummaryScope, hc)
+		if err != nil {
+			return nil, err
+		}
 		currentReferences.Append(valuesFromReferences)
 	}
-	return currentReferences
+	return currentReferences, nil
 }
 
 // getHelmChartValueFrom gets referenced ConfigMap/Secret in a HelmChart.
 // HelmChart can reference both ConfigMap/Secret each containing configuration for the helm release.
-func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1beta1.HelmChart) *libsveltosset.Set {
+func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1beta1.HelmChart,
+) (*libsveltosset.Set, error) {
+
 	currentValuesFromReferences := &libsveltosset.Set{}
 
 	for i := range hc.ValuesFrom {
 		referencedNamespace := hc.ValuesFrom[i].Namespace
-		referencedName := hc.ValuesFrom[i].Name
-
 		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+
+		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
+			hc.ValuesFrom[i].Name)
+		if err != nil {
+			return nil, err
+		}
 
 		currentValuesFromReferences.Insert(&corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
@@ -892,7 +953,7 @@ func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *c
 		})
 	}
 
-	return currentValuesFromReferences
+	return currentValuesFromReferences, nil
 }
 
 func (r *ClusterSummaryReconciler) getReferenceMapForEntry(entry *corev1.ObjectReference) *libsveltosset.Set {
@@ -1213,4 +1274,16 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 
 	manager.stopStaleWatchForTemplateResourceRef(clusterSummary, false)
 	return nil
+}
+
+// Removes any cleanup job
+func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *configv1beta1.ClusterSummary) {
+	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+		string(configv1beta1.FeatureHelm), clusterSummary.Spec.ClusterType, true)
+
+	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+		string(configv1beta1.FeatureKustomize), clusterSummary.Spec.ClusterType, true)
+
+	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+		string(configv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
 }

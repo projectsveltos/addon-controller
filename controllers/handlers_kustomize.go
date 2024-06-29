@@ -365,8 +365,14 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 
 	var result string
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return nil, err
+	}
+
 	if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
-		configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+		configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
 			return nil, err
@@ -377,7 +383,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		result += getDataSectionHash(configMap.Data)
 		result += getDataSectionHash(configMap.BinaryData)
 	} else if kustomizationRef.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
-		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
 			return nil, err
@@ -388,7 +394,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		result += getDataSectionHash(secret.Data)
 		result += getDataSectionHash(secret.StringData)
 	} else {
-		source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+		source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
 			return nil, err
@@ -530,13 +536,19 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 	}
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)
 	if err != nil {
 		return "", err
 	}
 
 	if source == nil {
-		return "", fmt.Errorf("source %s %s/%s not found", kustomizationRef.Kind, namespace, kustomizationRef.Name)
+		return "", fmt.Errorf("source %s %s/%s not found", kustomizationRef.Kind, namespace, name)
 	}
 
 	s := source.(sourcev1.Source)
@@ -548,7 +560,13 @@ func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
 	logger logr.Logger) (string, error) {
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 	if err != nil {
 		return "", err
 	}
@@ -561,7 +579,13 @@ func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
 	logger logr.Logger) (string, error) {
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 	if err != nil {
 		return "", err
 	}

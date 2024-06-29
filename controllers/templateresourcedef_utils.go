@@ -44,7 +44,10 @@ func getTemplateResourceNamespace(clusterSummary *configv1beta1.ClusterSummary,
 }
 
 // Resources referenced in the management cluster can have their name expressed in function
-// of cluster information (clusterNamespace, clusterName, clusterType)
+// of cluster information:
+// clusterNamespace => .Cluster.metadata.namespace
+// clusterName => .Cluster.metadata.name
+// clusterType => .Cluster.kind
 func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 	ref *configv1beta1.TemplateResourceRef) (string, error) {
 
@@ -63,6 +66,7 @@ func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 	u := &unstructured.Unstructured{}
 	u.SetNamespace(clusterSummary.Spec.ClusterNamespace)
 	u.SetName(clusterSummary.Spec.ClusterName)
+	u.SetKind(string(clusterSummary.Spec.ClusterType))
 
 	if err := tmpl.Execute(&buffer,
 		struct {

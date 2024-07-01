@@ -124,7 +124,8 @@ type ValueFrom struct {
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. The Profile namespace will be used.
-	Namespace string `json:"namespace"`
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
 	// Name can be expressed as a template and instantiate using

@@ -2165,7 +2165,6 @@ spec:
                         required:
                         - kind
                         - name
-                        - namespace
                         type: object
                       type: array
                   required:
@@ -2301,7 +2300,6 @@ spec:
                         required:
                         - kind
                         - name
-                        - namespace
                         type: object
                       type: array
                   required:
@@ -4878,7 +4876,6 @@ spec:
                             required:
                             - kind
                             - name
-                            - namespace
                             type: object
                           type: array
                       required:
@@ -5014,7 +5011,6 @@ spec:
                             required:
                             - kind
                             - name
-                            - namespace
                             type: object
                           type: array
                       required:
@@ -6939,7 +6935,6 @@ spec:
                         required:
                         - kind
                         - name
-                        - namespace
                         type: object
                       type: array
                   required:
@@ -7075,7 +7070,6 @@ spec:
                         required:
                         - kind
                         - name
-                        - namespace
                         type: object
                       type: array
                   required:

@@ -492,11 +492,12 @@ func deployResourceSummary(ctx context.Context, c client.Client,
 
 	for i := range deployed {
 		resources[i] = libsveltosv1beta1.Resource{
-			Namespace: deployed[i].Namespace,
-			Name:      deployed[i].Name,
-			Group:     deployed[i].Group,
-			Kind:      deployed[i].Kind,
-			Version:   deployed[i].Version,
+			Namespace:                   deployed[i].Namespace,
+			Name:                        deployed[i].Name,
+			Group:                       deployed[i].Group,
+			Kind:                        deployed[i].Kind,
+			Version:                     deployed[i].Version,
+			IgnoreForConfigurationDrift: deployed[i].IgnoreForConfigurationDrift,
 		}
 	}
 

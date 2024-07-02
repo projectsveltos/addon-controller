@@ -332,7 +332,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
-		resource, policyHash := getResource(policy, referencedObject, profileTier, featureID, logger)
+		resource, policyHash := getResource(policy, hasIgnoreConfigurationDriftAnnotation(policy), referencedObject, profileTier, featureID, logger)
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())
@@ -520,17 +520,20 @@ func canDeployResource(ctx context.Context, dr dynamic.ResourceInterface, policy
 	return resourceInfo, false, nil
 }
 
-func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo, resource *configv1beta1.Resource,
-) *configv1beta1.ResourceReport {
+func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo,
+	resource *configv1beta1.Resource) *configv1beta1.ResourceReport {
 
+	resourceReport := &configv1beta1.ResourceReport{Resource: *resource}
 	if resourceInfo.ResourceVersion == "" {
-		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.CreateResourceAction)}
+		resourceReport.Action = string(configv1beta1.CreateResourceAction)
 	} else if policyHash != resourceInfo.Hash {
-		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.UpdateResourceAction)}
+		resourceReport.Action = string(configv1beta1.UpdateResourceAction)
 	} else {
-		return &configv1beta1.ResourceReport{Resource: *resource, Action: string(configv1beta1.NoResourceAction),
-			Message: "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."}
+		resourceReport.Action = string(configv1beta1.NoResourceAction)
+		resourceReport.Message = "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."
 	}
+
+	return resourceReport
 }
 
 // addExtraLabels adds ExtraLabels to policy.
@@ -580,8 +583,8 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 }
 
 // getResource returns sveltos Resource and the resource hash hash
-func getResource(policy *unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	tier int32, featureID configv1beta1.FeatureID, logger logr.Logger,
+func getResource(policy *unstructured.Unstructured, ignoreForConfigurationDrift bool,
+	referencedObject *corev1.ObjectReference, tier int32, featureID configv1beta1.FeatureID, logger logr.Logger,
 ) (resource *configv1beta1.Resource, policyHash string) {
 
 	resource = &configv1beta1.Resource{
@@ -595,6 +598,7 @@ func getResource(policy *unstructured.Unstructured, referencedObject *corev1.Obj
 			Name:      referencedObject.Name,
 			Kind:      referencedObject.Kind,
 		},
+		IgnoreForConfigurationDrift: ignoreForConfigurationDrift,
 	}
 
 	var err error

@@ -207,10 +207,14 @@ type ClusterSummaryStatus struct {
 	HelmReleaseSummaries []HelmChartSummary `json:"helmReleaseSummaries,omitempty"`
 }
 
+//nolint: lll // marker
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=clustersummaries,scope=Namespaced
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="HelmCharts",type="string",JSONPath=".status.featureSummaries[?(@.featureID==\"Helm\")].status",description="Indicates whether HelmCharts are all provisioned",priority=2
+// +kubebuilder:printcolumn:name="KustomizeRefs",type="string",JSONPath=".status.featureSummaries[?(@.featureID==\"Kustomize\")].status",description="Indicates whether KustomizeRefs are all provisioned",priority=2
+// +kubebuilder:printcolumn:name="PolicyRefs",type="string",JSONPath=".status.featureSummaries[?(@.featureID==\"Resources\")].status",description="Indicates whether PolicyRefs are all provisioned",priority=2
 
 // ClusterSummary is the Schema for the clustersummaries API
 type ClusterSummary struct {

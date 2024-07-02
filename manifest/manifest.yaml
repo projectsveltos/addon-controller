@@ -4480,7 +4480,23 @@ spec:
     storage: false
     subresources:
       status: {}
-  - name: v1beta1
+  - additionalPrinterColumns:
+    - description: Indicates whether HelmCharts are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Helm")].status
+      name: HelmCharts
+      priority: 2
+      type: string
+    - description: Indicates whether KustomizeRefs are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Kustomize")].status
+      name: KustomizeRefs
+      priority: 2
+      type: string
+    - description: Indicates whether PolicyRefs are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Resources")].status
+      name: PolicyRefs
+      priority: 2
+      type: string
+    name: v1beta1
     schema:
       openAPIV3Schema:
         description: ClusterSummary is the Schema for the clustersummaries API

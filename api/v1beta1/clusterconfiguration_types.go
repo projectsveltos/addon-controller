@@ -54,6 +54,11 @@ type Resource struct {
 
 	// Owner is the list of ConfigMap/Secret containing this resource.
 	Owner corev1.ObjectReference `json:"owner"`
+
+	// IgnoreForConfigurationDrift indicates to not track resource
+	// for configuration drift detection.
+	// This field has a meaning only when mode is ContinuousWithDriftDetection
+	IgnoreForConfigurationDrift bool `json:"ignoreForConfigurationDrift"`
 }
 
 type Chart struct {

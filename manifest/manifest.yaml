@@ -483,6 +483,12 @@ spec:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
+                                ignoreForConfigurationDrift:
+                                  description: |-
+                                    IgnoreForConfigurationDrift indicates to not track resource
+                                    for configuration drift detection.
+                                    This field has a meaning only when mode is ContinuousWithDriftDetection
+                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
@@ -555,6 +561,7 @@ spec:
                                   type: string
                               required:
                               - group
+                              - ignoreForConfigurationDrift
                               - kind
                               - name
                               - owner
@@ -648,6 +655,12 @@ spec:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
+                                ignoreForConfigurationDrift:
+                                  description: |-
+                                    IgnoreForConfigurationDrift indicates to not track resource
+                                    for configuration drift detection.
+                                    This field has a meaning only when mode is ContinuousWithDriftDetection
+                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
@@ -720,6 +733,7 @@ spec:
                                   type: string
                               required:
                               - group
+                              - ignoreForConfigurationDrift
                               - kind
                               - name
                               - owner
@@ -3268,6 +3282,12 @@ spec:
                         group:
                           description: Group of the resource deployed in the Cluster.
                           type: string
+                        ignoreForConfigurationDrift:
+                          description: |-
+                            IgnoreForConfigurationDrift indicates to not track resource
+                            for configuration drift detection.
+                            This field has a meaning only when mode is ContinuousWithDriftDetection
+                          type: boolean
                         kind:
                           description: Kind of the resource deployed in the Cluster.
                           minLength: 1
@@ -3337,6 +3357,7 @@ spec:
                           type: string
                       required:
                       - group
+                      - ignoreForConfigurationDrift
                       - kind
                       - name
                       - owner
@@ -3414,6 +3435,12 @@ spec:
                         group:
                           description: Group of the resource deployed in the Cluster.
                           type: string
+                        ignoreForConfigurationDrift:
+                          description: |-
+                            IgnoreForConfigurationDrift indicates to not track resource
+                            for configuration drift detection.
+                            This field has a meaning only when mode is ContinuousWithDriftDetection
+                          type: boolean
                         kind:
                           description: Kind of the resource deployed in the Cluster.
                           minLength: 1
@@ -3483,6 +3510,7 @@ spec:
                           type: string
                       required:
                       - group
+                      - ignoreForConfigurationDrift
                       - kind
                       - name
                       - owner

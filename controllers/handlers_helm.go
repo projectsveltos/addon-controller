@@ -149,7 +149,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection ||
 		clusterSummary.Spec.ClusterProfileSpec.Reloader {
 
-		helmResources, err = collectResourcesFromManagedHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
+		helmResources, err = collectResourcesFromManagedHelmChartsForDriftDetection(ctx, c, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return err
 		}
@@ -1685,10 +1685,11 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, false, logger)
 }
 
-// collectResourcesFromManagedHelmCharts collects resources considering all
+// collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all
 // helm charts contained in a ClusterSummary that are currently managed by the
-// ClusterProfile instance
-func collectResourcesFromManagedHelmCharts(ctx context.Context, c client.Client,
+// ClusterProfile instance.
+// Resources with "projectsveltos.io/driftDetectionIgnore" annotation won't be included
+func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context, c client.Client,
 	clusterSummary *configv1beta1.ClusterSummary, kubeconfig string, logger logr.Logger,
 ) ([]libsveltosv1beta1.HelmResources, error) {
 
@@ -1764,11 +1765,12 @@ func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []lib
 
 	for i := range policies {
 		r := libsveltosv1beta1.Resource{
-			Namespace: policies[i].GetNamespace(),
-			Name:      policies[i].GetName(),
-			Kind:      policies[i].GetKind(),
-			Group:     policies[i].GetObjectKind().GroupVersionKind().Group,
-			Version:   policies[i].GetObjectKind().GroupVersionKind().Version,
+			Namespace:                   policies[i].GetNamespace(),
+			Name:                        policies[i].GetName(),
+			Kind:                        policies[i].GetKind(),
+			Group:                       policies[i].GetObjectKind().GroupVersionKind().Group,
+			Version:                     policies[i].GetObjectKind().GroupVersionKind().Version,
+			IgnoreForConfigurationDrift: hasIgnoreConfigurationDriftAnnotation(policies[i]),
 		}
 
 		resources = append(resources, r)

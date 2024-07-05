@@ -36,11 +36,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers/external"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -49,7 +49,7 @@ const (
 
 var _ = Describe("Profile: Reconciler", func() {
 	var logger logr.Logger
-	var clusterProfile *configv1alpha1.ClusterProfile
+	var clusterProfile *configv1beta1.ClusterProfile
 	var matchingCluster *clusterv1.Cluster
 	var nonMatchingCluster *clusterv1.Cluster
 	var namespace string
@@ -92,13 +92,19 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 		Expect(addTypeInformationToObject(scheme, nonMatchingCluster)).To(Succeed())
 
-		clusterProfile = &configv1alpha1.ClusterProfile{
+		clusterProfile = &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s,%s=%s",
-					key1, value1, key2, value2)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key1: value1,
+							key2: value2,
+						},
+					},
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, clusterProfile)).To(Succeed())
@@ -154,10 +160,10 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi),
+				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi),
 			},
 		}
 
@@ -173,7 +179,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Kind: clusterKind, APIVersion: clusterv1.GroupVersion.String()}
 		Expect(controllers.UpdateClusterConfigurationWithProfile(context.TODO(), c, clusterProfile, &clusterRef)).To(Succeed())
 
-		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
 
@@ -195,10 +201,10 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterConfiguration := &configv1alpha1.ClusterConfiguration{
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
-				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi),
+				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi),
 			},
 		}
 
@@ -210,10 +216,10 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		currentClusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{
 				Namespace: clusterConfiguration.Namespace,
@@ -248,8 +254,8 @@ var _ = Describe("Profile: Reconciler", func() {
 			currentClusterConfiguration)).To(Succeed())
 
 		currentClusterConfiguration.Status =
-			configv1alpha1.ClusterConfigurationStatus{
-				ClusterProfileResources: []configv1alpha1.ClusterProfileResource{
+			configv1beta1.ClusterConfigurationStatus{
+				ClusterProfileResources: []configv1beta1.ClusterProfileResource{
 					{
 						ClusterProfileName: clusterProfile.Name,
 					},
@@ -304,7 +310,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			})
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
@@ -317,7 +323,7 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("UpdateClusterSummary updates ClusterSummary with proper fields when ClusterProfile syncmode set to continuous", func() {
-		sveltosCluster := &libsveltosv1alpha1.SveltosCluster{
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
@@ -325,22 +331,22 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			sveltosCluster.Name, sveltosCluster.Name, false)
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: sveltosCluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: sveltosCluster.Namespace,
 				ClusterName:      sveltosCluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeSveltos,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					SyncMode: configv1alpha1.SyncModeOneTime,
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+				ClusterProfileSpec: configv1beta1.Spec{
+					SyncMode: configv1beta1.SyncModeOneTime,
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
-							Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 							Namespace: randomString(),
 							Name:      randomString(),
 						},
@@ -348,17 +354,17 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, sveltosCluster.Name, libsveltosv1alpha1.ClusterTypeSveltos)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos)
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 			{
-				Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
@@ -383,10 +389,10 @@ var _ = Describe("Profile: Reconciler", func() {
 		err = controllers.UpdateClusterSummary(context.TODO(), c,
 			clusterProfileScope, &corev1.ObjectReference{
 				Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
-				Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String()})
+				Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String()})
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(sveltosCluster.Name))
@@ -395,35 +401,35 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("UpdateClusterSummary does not update ClusterSummary when ClusterProfile syncmode set to one time", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, matchingCluster.Name, false)
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: matchingCluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace:   matchingCluster.Namespace,
 				ClusterName:        matchingCluster.Name,
 				ClusterProfileSpec: clusterProfile.Spec,
-				ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:        libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -433,9 +439,9 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
@@ -455,7 +461,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
@@ -465,24 +471,24 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("cleanClusterSummaries removes ClusterSummary for non-matching cluster", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeOneTime
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 			{
 
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: randomString(),
 				Name:      randomString(),
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, nonMatchingCluster.Name, false)
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: nonMatchingCluster.Namespace,
@@ -494,15 +500,15 @@ var _ = Describe("Profile: Reconciler", func() {
 					},
 				},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace:   nonMatchingCluster.Namespace,
 				ClusterName:        nonMatchingCluster.Name,
 				ClusterProfileSpec: clusterProfile.Spec,
-				ClusterType:        libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:        libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name,
-			libsveltosv1alpha1.ClusterTypeCapi)
+			libsveltosv1beta1.ClusterTypeCapi)
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -524,26 +530,26 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("clusterSummaries still present"))
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(BeZero())
 	})
 
 	It("updateClusterSummarySyncMode updates ClusterSummary SyncMode", func() {
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      clusterProfileNamePrefix + randomString(),
 				Labels: map[string]string{
 					controllers.ClusterProfileLabelName: clusterProfile.Name,
 				},
-				Finalizers: []string{configv1alpha1.ClusterSummaryFinalizer},
+				Finalizers: []string{configv1beta1.ClusterSummaryFinalizer},
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
-				ClusterProfileSpec: configv1alpha1.Spec{
-					SyncMode: configv1alpha1.SyncModeDryRun,
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterProfileSpec: configv1beta1.Spec{
+					SyncMode: configv1beta1.SyncModeDryRun,
 				},
-				ClusterType: libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -565,14 +571,14 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
 		Expect(controllers.UpdateClusterSummarySyncMode(context.TODO(), testEnv.Client, clusterSummary,
 			clusterProfile.Spec.SyncMode)).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 			if err != nil {
@@ -613,7 +619,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		err = controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(0))
 	})
@@ -654,7 +660,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		err = controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
@@ -677,31 +683,31 @@ var _ = Describe("Profile: Reconciler", func() {
 				APIVersion: clusterv1.GroupVersion.String(),
 			},
 		}
-		clusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: "x-" + randomString(),
 				Name:      "y-" + randomString(),
 			},
 		}
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1alpha1.ClusterProfileKind,
+		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, matchingCluster.Name, false)
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummaryName,
 				Namespace: matchingCluster.Namespace,
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: matchingCluster.Namespace,
 				ClusterName:      matchingCluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1alpha1.Spec{
-					SyncMode: configv1alpha1.SyncModeContinuous,
-					PolicyRefs: []configv1alpha1.PolicyRef{
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					SyncMode: configv1beta1.SyncModeContinuous,
+					PolicyRefs: []configv1beta1.PolicyRef{
 						{
-							Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 							Namespace: randomString(),
 							Name:      randomString(),
 						},
@@ -709,7 +715,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 		}
-		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name, libsveltosv1alpha1.ClusterTypeCapi)
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -731,7 +737,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		err = controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)
 		Expect(err).To(BeNil())
 
-		clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(Equal(1))
 		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(matchingCluster.Name))
@@ -740,7 +746,7 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("updateClusterReports creates ClusterReport for matching cluster in DryRun mode", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace:  matchingCluster.Namespace,
@@ -768,7 +774,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(controllers.UpdateClusterReports(context.TODO(), c, clusterProfileScope)).To(Succeed())
 
 		// ClusterReport for matching cluster is created
-		currentClusterReportList := &configv1alpha1.ClusterReportList{}
+		currentClusterReportList := &configv1beta1.ClusterReportList{}
 		listOptions := []client.ListOption{
 			client.MatchingLabels{
 				controllers.ClusterProfileLabelName: clusterProfile.Name,
@@ -781,7 +787,7 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("updateClusterReports does not create ClusterReport for matching cluster in non dryRun mode", func() {
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{
 				Namespace:  matchingCluster.Namespace,
@@ -809,13 +815,13 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(controllers.UpdateClusterReports(context.TODO(), c, clusterProfileScope)).To(Succeed())
 
 		// No ClusterReports are created
-		currentClusterReportList := &configv1alpha1.ClusterReportList{}
+		currentClusterReportList := &configv1beta1.ClusterReportList{}
 		Expect(c.List(context.TODO(), currentClusterReportList)).To(Succeed())
 		Expect(len(currentClusterReportList.Items)).To(Equal(0))
 	})
 
 	It("cleanClusterReports removes all ClusterReports created for a ClusterProfile instance", func() {
-		clusterReport1 := &configv1alpha1.ClusterReport{
+		clusterReport1 := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
@@ -825,7 +831,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterReport2 := &configv1alpha1.ClusterReport{
+		clusterReport2 := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
@@ -844,7 +850,7 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		Expect(controllers.CleanClusterReports(context.TODO(), c, clusterProfile)).To(Succeed())
 		// ClusterReport1 is gone
-		currentClusterReport := &configv1alpha1.ClusterReport{}
+		currentClusterReport := &configv1beta1.ClusterReport{}
 		err := c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterReport1.Namespace, Name: clusterReport1.Name}, currentClusterReport)
 		Expect(err).ToNot(BeNil())
@@ -857,7 +863,7 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("cleanClusterReports removes all ClusterReports instances created for a Profile instance", func() {
-		profile := configv1alpha1.Profile{
+		profile := configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -865,7 +871,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 		Expect(addTypeInformationToObject(scheme, &profile)).To(Succeed())
 
-		clusterReport1 := &configv1alpha1.ClusterReport{
+		clusterReport1 := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: profile.Namespace,
 				Name:      randomString(),
@@ -875,14 +881,14 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
 		}
 
-		clusterReport2 := &configv1alpha1.ClusterReport{
+		clusterReport2 := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -892,14 +898,14 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
 		}
 
-		clusterReport3 := &configv1alpha1.ClusterReport{
+		clusterReport3 := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -909,8 +915,8 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ClusterProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ClusterProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
@@ -926,7 +932,7 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		Expect(controllers.CleanClusterReports(context.TODO(), c, &profile)).To(Succeed())
 		// ClusterReport1 is gone
-		currentClusterReport := &configv1alpha1.ClusterReport{}
+		currentClusterReport := &configv1beta1.ClusterReport{}
 		err := c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterReport1.Namespace, Name: clusterReport1.Name}, currentClusterReport)
 		Expect(err).ToNot(BeNil())
@@ -944,7 +950,7 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("cleanClusterSummaries removes all ClusterSummary instances created for a Profile instance", func() {
-		profile := configv1alpha1.Profile{
+		profile := configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -952,7 +958,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 		Expect(addTypeInformationToObject(scheme, &profile)).To(Succeed())
 
-		clusterSummary1 := &configv1alpha1.ClusterSummary{
+		clusterSummary1 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: profile.Namespace,
 				Name:      randomString(),
@@ -962,15 +968,15 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
 		}
 
 		// clusterSummary2 is created by a Profile in a different namespace with same name as Profile
-		clusterSummary2 := &configv1alpha1.ClusterSummary{
+		clusterSummary2 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -980,15 +986,15 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
 		}
 
 		// clusterSummary3 is created by a ClusterProfile with same name as Profile
-		clusterSummary3 := &configv1alpha1.ClusterSummary{
+		clusterSummary3 := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: randomString(),
 				Name:      randomString(),
@@ -998,8 +1004,8 @@ var _ = Describe("Profile: Reconciler", func() {
 				OwnerReferences: []metav1.OwnerReference{
 					{
 						Name:       profile.Name,
-						Kind:       configv1alpha1.ClusterProfileKind,
-						APIVersion: configv1alpha1.GroupVersion.String(),
+						Kind:       configv1beta1.ClusterProfileKind,
+						APIVersion: configv1beta1.GroupVersion.String(),
 					},
 				},
 			},
@@ -1026,7 +1032,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err.Error()).To(Equal("clusterSummaries still present"))
 
 		// ClusterSummary1 is gone
-		currentClusterSummary := &configv1alpha1.ClusterSummary{}
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err = c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary1.Namespace, Name: clusterSummary1.Name},
 			currentClusterSummary)
@@ -1067,10 +1073,10 @@ var _ = Describe("Profile: Reconciler", func() {
 		const maxUpdate = 50
 		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.String, StrVal: fmt.Sprintf("%d%%", maxUpdate)}
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -1090,8 +1096,8 @@ var _ = Describe("Profile: Reconciler", func() {
 		const maxUpdate = 30
 		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.String, StrVal: fmt.Sprintf("%d%%", maxUpdate)}
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
-			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1alpha1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
+			{Namespace: randomString(), Name: randomString(), Kind: libsveltosv1beta1.SveltosClusterKind},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -1114,40 +1120,40 @@ var _ = Describe("Profile: Reconciler", func() {
 			clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 				{
 					Namespace: cluster1.Namespace, Name: cluster1.Name,
-					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 				},
 				{
 					Namespace: cluster2.Namespace, Name: cluster2.Name,
-					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 				},
 				{
 					Namespace: randomString(), Name: randomString(),
-					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 				},
 			}
-			clusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{
+			clusterProfile.Status.UpdatedClusters = configv1beta1.Clusters{
 				Hash: []byte(randomString()),
 				Clusters: []corev1.ObjectReference{
 					{
 						Namespace: cluster1.Namespace, Name: cluster1.Name,
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 					{
 						Namespace: randomString(), Name: randomString(),
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 				},
 			}
-			clusterProfile.Status.UpdatingClusters = configv1alpha1.Clusters{
+			clusterProfile.Status.UpdatingClusters = configv1beta1.Clusters{
 				Hash: []byte(randomString()),
 				Clusters: []corev1.ObjectReference{
 					{
 						Namespace: cluster2.Namespace, Name: cluster2.Name,
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 					{
 						Namespace: randomString(), Name: randomString(),
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 				},
 			}
@@ -1166,13 +1172,13 @@ var _ = Describe("Profile: Reconciler", func() {
 			Expect(len(clusterProfile.Status.UpdatedClusters.Clusters)).To(Equal(1))
 			Expect(clusterProfile.Status.UpdatedClusters.Clusters).To(ContainElement(corev1.ObjectReference{
 				Namespace: cluster1.Namespace, Name: cluster1.Name,
-				Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 			}))
 
 			Expect(len(clusterProfile.Status.UpdatingClusters.Clusters)).To(Equal(1))
 			Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(ContainElement(corev1.ObjectReference{
 				Namespace: cluster2.Namespace, Name: cluster2.Name,
-				Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+				Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 			}))
 		})
 
@@ -1180,21 +1186,21 @@ var _ = Describe("Profile: Reconciler", func() {
 		cluster1 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
 		cluster2 := types.NamespacedName{Namespace: randomString(), Name: randomString()}
 
-		clusterProfile.Status.UpdatedClusters = configv1alpha1.Clusters{
+		clusterProfile.Status.UpdatedClusters = configv1beta1.Clusters{
 			Hash: []byte(randomString()),
 			Clusters: []corev1.ObjectReference{
 				{
 					Namespace: cluster1.Namespace, Name: cluster1.Name,
-					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 				},
 			},
 		}
-		clusterProfile.Status.UpdatingClusters = configv1alpha1.Clusters{
+		clusterProfile.Status.UpdatingClusters = configv1beta1.Clusters{
 			Hash: []byte(randomString()),
 			Clusters: []corev1.ObjectReference{
 				{
 					Namespace: cluster2.Namespace, Name: cluster2.Name,
-					Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+					Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 				},
 			},
 		}
@@ -1222,15 +1228,15 @@ var _ = Describe("Profile: Reconciler", func() {
 		cluster1 := corev1.ObjectReference{
 			Namespace:  randomString(),
 			Name:       randomString(),
-			Kind:       libsveltosv1alpha1.SveltosClusterKind,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
-		sveltosCluster1 := libsveltosv1alpha1.SveltosCluster{
+		sveltosCluster1 := libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster1.Namespace,
 				Name:      cluster1.Name,
 			},
-			Status: libsveltosv1alpha1.SveltosClusterStatus{
+			Status: libsveltosv1beta1.SveltosClusterStatus{
 				Ready: true,
 			},
 		}
@@ -1238,15 +1244,15 @@ var _ = Describe("Profile: Reconciler", func() {
 		cluster2 := corev1.ObjectReference{
 			Namespace:  randomString(),
 			Name:       randomString(),
-			Kind:       libsveltosv1alpha1.SveltosClusterKind,
-			APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
 		}
-		sveltosCluster2 := libsveltosv1alpha1.SveltosCluster{
+		sveltosCluster2 := libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster2.Namespace,
 				Name:      cluster2.Name,
 			},
-			Status: libsveltosv1alpha1.SveltosClusterStatus{
+			Status: libsveltosv1beta1.SveltosClusterStatus{
 				Ready: true,
 			},
 		}
@@ -1276,7 +1282,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)).ToNot(BeNil())
 
 		// Since MaxUpdate is set to 1 expect only one clusterSummary is created
-		clusterSummaries := &configv1alpha1.ClusterSummaryList{}
+		clusterSummaries := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaries)).To(Succeed())
 		Expect(len(clusterSummaries.Items)).To(Equal(1))
 

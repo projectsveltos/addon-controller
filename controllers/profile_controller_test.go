@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -33,34 +32,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 var _ = Describe("Profile Controller", func() {
-	var profile *configv1alpha1.Profile
+	var profile *configv1beta1.Profile
 	var logger logr.Logger
 
 	BeforeEach(func() {
 		logger = textlogger.NewLogger(textlogger.NewConfig())
 
 		namespace := randomString()
-		profile = &configv1alpha1.Profile{
+		profile = &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
 				Name:      clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(fmt.Sprintf("%s=%s", randomString(), randomString())),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, profile)).To(Succeed())
 	})
 
 	It("limitReferencesToNamespace resets any reference to be within namespace", func() {
-		profile.Spec = configv1alpha1.Spec{
+		profile.Spec = configv1beta1.Spec{
 			ClusterRefs: []corev1.ObjectReference{
 				{
 					Namespace: randomString(),
@@ -71,26 +76,26 @@ var _ = Describe("Profile Controller", func() {
 					Name:      randomString(),
 				},
 			},
-			PolicyRefs: []configv1alpha1.PolicyRef{
+			PolicyRefs: []configv1beta1.PolicyRef{
 				{
-					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					Namespace: randomString(),
 					Name:      randomString(),
 				},
 				{
-					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 					Namespace: randomString(),
 					Name:      randomString(),
 				},
 			},
-			KustomizationRefs: []configv1alpha1.KustomizationRef{
+			KustomizationRefs: []configv1beta1.KustomizationRef{
 				{
-					Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					Namespace: randomString(),
 					Name:      randomString(),
 				},
 				{
-					Kind:      string(libsveltosv1alpha1.SecretReferencedResourceKind),
+					Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
 					Namespace: randomString(),
 					Name:      randomString(),
 				},
@@ -112,7 +117,7 @@ var _ = Describe("Profile Controller", func() {
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
 		}
@@ -133,16 +138,16 @@ var _ = Describe("Profile Controller", func() {
 	})
 
 	It("getClustersFromClusterSets gets cluster selected by referenced sets", func() {
-		set1 := &libsveltosv1alpha1.Set{
+		set1 := &libsveltosv1beta1.Set{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: profile.Namespace,
 			},
-			Status: libsveltosv1alpha1.Status{
+			Status: libsveltosv1beta1.Status{
 				SelectedClusterRefs: []corev1.ObjectReference{
 					{
 						Namespace: profile.Namespace, Name: randomString(),
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 					{
 						Namespace: profile.Namespace, Name: randomString(),
@@ -152,20 +157,20 @@ var _ = Describe("Profile Controller", func() {
 			},
 		}
 
-		set2 := &libsveltosv1alpha1.Set{
+		set2 := &libsveltosv1beta1.Set{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: profile.Namespace,
 			},
-			Status: libsveltosv1alpha1.Status{
+			Status: libsveltosv1beta1.Status{
 				SelectedClusterRefs: []corev1.ObjectReference{
 					{
 						Namespace: profile.Namespace, Name: randomString(),
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 					{
 						Namespace: profile.Namespace, Name: randomString(),
-						Kind: libsveltosv1alpha1.SveltosClusterKind, APIVersion: libsveltosv1alpha1.GroupVersion.String(),
+						Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String(),
 					},
 				},
 			},
@@ -190,7 +195,7 @@ var _ = Describe("Profile Controller", func() {
 			Scheme:        scheme,
 			SetMap:        make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
 		}

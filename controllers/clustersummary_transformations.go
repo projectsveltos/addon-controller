@@ -29,7 +29,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -143,14 +143,14 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 	case *corev1.ConfigMap:
 		key = corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+			Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
 	case *corev1.Secret:
 		key = corev1.ObjectReference{
 			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       string(libsveltosv1alpha1.SecretReferencedResourceKind),
+			Kind:       string(libsveltosv1beta1.SecretReferencedResourceKind),
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}

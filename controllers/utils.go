@@ -42,8 +42,8 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -78,10 +78,10 @@ func InitScheme() (*runtime.Scheme, error) {
 	if err := clusterv1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := configv1alpha1.AddToScheme(s); err != nil {
+	if err := configv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := libsveltosv1alpha1.AddToScheme(s); err != nil {
+	if err := libsveltosv1beta1.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	if err := apiextensionsv1.AddToScheme(s); err != nil {
@@ -97,9 +97,9 @@ func InitScheme() (*runtime.Scheme, error) {
 	return s, nil
 }
 
-func getPrefix(clusterType libsveltosv1alpha1.ClusterType) string {
+func getPrefix(clusterType libsveltosv1beta1.ClusterType) string {
 	prefix := "capi"
-	if clusterType == libsveltosv1alpha1.ClusterTypeSveltos {
+	if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
 		prefix = "sveltos"
 	}
 	return prefix
@@ -108,12 +108,12 @@ func getPrefix(clusterType libsveltosv1alpha1.ClusterType) string {
 // GetClusterSummaryName returns the ClusterSummary name given a ClusterProfile/Profile kind/name and
 // cluster type/Name.
 func GetClusterSummaryName(profileKind, profileName, clusterName string, isSveltosCluster bool) string {
-	clusterType := libsveltosv1alpha1.ClusterTypeCapi
+	clusterType := libsveltosv1beta1.ClusterTypeCapi
 	if isSveltosCluster {
-		clusterType = libsveltosv1alpha1.ClusterTypeSveltos
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
 	}
 	prefix := getPrefix(clusterType)
-	if profileKind == configv1alpha1.ClusterProfileKind {
+	if profileKind == configv1beta1.ClusterProfileKind {
 		// For backward compatibility (code before addition of Profiles) do not change this
 		return fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
 	}
@@ -125,30 +125,30 @@ func GetClusterSummaryName(profileKind, profileName, clusterName string, isSvelt
 // ClusterProfile/Profile for a specific Cluster
 func getClusterSummary(ctx context.Context, c client.Client,
 	profileKind, profileName string, clusterNamespace, clusterName string,
-	clusterType libsveltosv1alpha1.ClusterType) (*configv1alpha1.ClusterSummary, error) {
+	clusterType libsveltosv1beta1.ClusterType) (*configv1beta1.ClusterSummary, error) {
 
 	profileLabel := ClusterProfileLabelName
-	if profileKind == configv1alpha1.ProfileKind {
+	if profileKind == configv1beta1.ProfileKind {
 		profileLabel = ProfileLabelName
 	}
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
-			profileLabel:                    profileName,
-			configv1alpha1.ClusterNameLabel: clusterName,
-			configv1alpha1.ClusterTypeLabel: string(clusterType),
+			profileLabel:                   profileName,
+			configv1beta1.ClusterNameLabel: clusterName,
+			configv1beta1.ClusterTypeLabel: string(clusterType),
 		},
 	}
 
-	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	if err := c.List(ctx, clusterSummaryList, listOptions...); err != nil {
 		return nil, err
 	}
 
 	if len(clusterSummaryList.Items) == 0 {
 		return nil, apierrors.NewNotFound(
-			schema.GroupResource{Group: configv1alpha1.GroupVersion.Group, Resource: configv1alpha1.ClusterSummaryKind}, "")
+			schema.GroupResource{Group: configv1beta1.GroupVersion.Group, Resource: configv1beta1.ClusterSummaryKind}, "")
 	}
 
 	if len(clusterSummaryList.Items) != 1 {
@@ -161,9 +161,9 @@ func getClusterSummary(ctx context.Context, c client.Client,
 
 // getClusterConfiguration returns the ClusterConfiguration instance for a specific CAPI Cluster
 func getClusterConfiguration(ctx context.Context, c client.Client,
-	clusterNamespace, clusterConfigurationName string) (*configv1alpha1.ClusterConfiguration, error) {
+	clusterNamespace, clusterConfigurationName string) (*configv1beta1.ClusterConfiguration, error) {
 
-	clusterConfiguration := &configv1alpha1.ClusterConfiguration{}
+	clusterConfiguration := &configv1beta1.ClusterConfiguration{}
 	if err := c.Get(ctx,
 		types.NamespacedName{
 			Namespace: clusterNamespace,
@@ -183,17 +183,17 @@ func getEntryKey(resourceKind, resourceNamespace, resourceName string) string {
 	return fmt.Sprintf("%s-%s", resourceKind, resourceName)
 }
 
-func getClusterReportName(profileKind, profileName, clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+func getClusterReportName(profileKind, profileName, clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
 	// TODO: shorten this value
 	prefix := "" // For backward compatibility (before addition of Profile) leave this empty for ClusterProfiles
-	if profileKind == configv1alpha1.ProfileKind {
+	if profileKind == configv1beta1.ProfileKind {
 		prefix = "p--"
 	}
 	return prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
 		nameSeparator + clusterName
 }
 
-func getClusterConfigurationName(clusterName string, clusterType libsveltosv1alpha1.ClusterType) string {
+func getClusterConfigurationName(clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
 	// TODO: shorten this value
 	return strings.ToLower(string(clusterType)) + nameSeparator + clusterName
 }
@@ -231,7 +231,7 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) {
 }
 
 // isCluterSummaryProvisioned returns true if ClusterSummary is currently fully deployed.
-func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bool {
+func isCluterSummaryProvisioned(clusterSumary *configv1beta1.ClusterSummary) bool {
 	hasHelmCharts := false
 	hasRawYAMLs := false
 	hasKustomize := false
@@ -260,15 +260,15 @@ func isCluterSummaryProvisioned(clusterSumary *configv1alpha1.ClusterSummary) bo
 
 	for i := range clusterSumary.Status.FeatureSummaries {
 		fs := &clusterSumary.Status.FeatureSummaries[i]
-		if fs.Status != configv1alpha1.FeatureStatusProvisioned {
+		if fs.Status != configv1beta1.FeatureStatusProvisioned {
 			return false
 		}
 		switch fs.FeatureID {
-		case configv1alpha1.FeatureHelm:
+		case configv1beta1.FeatureHelm:
 			deployedHelmCharts = true
-		case configv1alpha1.FeatureResources:
+		case configv1beta1.FeatureResources:
 			deployedRawYAMLs = true
-		case configv1alpha1.FeatureKustomize:
+		case configv1beta1.FeatureKustomize:
 			deployedKustomize = true
 		}
 	}
@@ -381,7 +381,7 @@ func parseMapFromString(data string) (map[string]string, error) {
 // For Profile resources (namespaced), Sveltos dynamically modifies the owner name to incorporate both
 // namespace and name for proper identification.
 func profileNameToOwnerReferenceName(profile client.Object) string {
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1alpha1.ProfileKind {
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
 		return fmt.Sprintf("%s/%s", profile.GetNamespace(), profile.GetName())
 	}
 
@@ -413,8 +413,8 @@ func unique[T comparable](input []T) []T {
 }
 
 // Return FeatureSummaries for featureID
-func getFeatureSummaryForFeatureID(clusterSummay *configv1alpha1.ClusterSummary, fID configv1alpha1.FeatureID,
-) *configv1alpha1.FeatureSummary {
+func getFeatureSummaryForFeatureID(clusterSummay *configv1beta1.ClusterSummary, fID configv1beta1.FeatureID,
+) *configv1beta1.FeatureSummary {
 
 	for i := range clusterSummay.Status.FeatureSummaries {
 		if clusterSummay.Status.FeatureSummaries[i].FeatureID == fID {
@@ -426,8 +426,8 @@ func getFeatureSummaryForFeatureID(clusterSummay *configv1alpha1.ClusterSummary,
 }
 
 // Return FeatureDeploymentInfo for featureID
-func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1alpha1.ClusterSummary,
-	fID configv1alpha1.FeatureID) *configv1alpha1.FeatureDeploymentInfo {
+func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1beta1.ClusterSummary,
+	fID configv1beta1.FeatureID) *configv1beta1.FeatureDeploymentInfo {
 
 	for i := range clusterSummay.Status.DeployedGVKs {
 		if clusterSummay.Status.DeployedGVKs[i].FeatureID == fID {

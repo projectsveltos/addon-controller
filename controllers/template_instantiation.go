@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +30,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
@@ -103,7 +102,7 @@ func fetchKubeadmControlPlane(ctx context.Context, config *rest.Config, cluster 
 // All fetched objects are in the management cluster.
 // Currently limited to Cluster and Infrastructure Provider
 func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) (*currentClusterObjects, error) {
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Fetch cluster %s: %s/%s",
@@ -119,7 +118,7 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	var unstructuredCluster map[string]interface{}
 	var provider *unstructured.Unstructured
 	var kubeadmControlPlane *unstructured.Unstructured
-	if clusterType == libsveltosv1alpha1.ClusterTypeCapi {
+	if clusterType == libsveltosv1beta1.ClusterTypeCapi {
 		cluster = genericCluster.(*clusterv1.Cluster)
 		provider, err = fetchInfrastructureProvider(ctx, config, cluster, logger)
 		if err != nil {
@@ -154,7 +153,7 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 }
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client,
-	clusterType libsveltosv1alpha1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
+	clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
 	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
@@ -171,8 +170,13 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		}
 	}
 
+	funcMap := ExtraFuncMap()
+	funcMap["getResource"] = func(id string) map[string]interface{} {
+		return objects.MgmtResources[id]
+	}
+
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(values)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcMap).Parse(values)
 	if err != nil {
 		return "", err
 	}

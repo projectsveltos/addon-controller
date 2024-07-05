@@ -24,14 +24,17 @@ import (
 type Status struct {
 	// MatchingClusterRefs reference all the clusters currently matching
 	// ClusterProfile ClusterSelector
+	// +optional
 	MatchingClusterRefs []corev1.ObjectReference `json:"matchingClusters,omitempty"`
 
 	// UpdatingClusters reference all the cluster currently matching
 	// ClusterProfile ClusterSelector and being updated
+	// +optional
 	UpdatingClusters Clusters `json:"updatingClusters,omitempty"`
 
 	// UpdatedClusters contains information all the cluster currently matching
 	// ClusterProfile ClusterSelector and already updated to latest ClusterProfile
 	// Spec
+	// +optional
 	UpdatedClusters Clusters `json:"updatedClusters,omitempty"`
 }

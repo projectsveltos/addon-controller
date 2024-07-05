@@ -3,7 +3,9 @@ kind: ClusterProfile
 metadata:
   name: clusterprofile-sample
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   helmCharts:
   - repositoryURL: https://kyverno.github.io/kyverno/

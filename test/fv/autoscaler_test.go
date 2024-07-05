@@ -27,9 +27,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -81,7 +81,7 @@ var _ = Describe("Feature", func() {
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -100,7 +100,7 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Define it as template as content of autoscalerServiceAccount and autoscalerSecret is a template
 		currentConfigMap.Annotations = map[string]string{
-			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
@@ -112,14 +112,14 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Defined it as template as content of autoscalerInfo is a template
 		currentConfigMap.Annotations = map[string]string{
-			libsveltosv1alpha1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to reference both ConfigMaps", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.TemplateResourceRefs = []configv1alpha1.TemplateResourceRef{
+		currentClusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
 					Kind: "Secret",
@@ -128,20 +128,20 @@ var _ = Describe("Feature", func() {
 				Identifier: "AutoscalerSecret",
 			},
 		}
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs,
 				Name:      configMap1Name,
 				// Deploy content of this configMap into management cluster
-				DeploymentType: configv1alpha1.DeploymentTypeLocal,
+				DeploymentType: configv1beta1.DeploymentTypeLocal,
 			},
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs,
 				Name:      configMap2Name,
 				// Deploy content of this configMap into managed cluster
-				DeploymentType: configv1alpha1.DeploymentTypeRemote,
+				DeploymentType: configv1beta1.DeploymentTypeRemote,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -195,7 +195,7 @@ var _ = Describe("Feature", func() {
 		Expect(workloadCurrentSecret.Data["ca.crt"]).To(Equal(mgmtCurrentSecret.Data["ca.crt"]))
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
 
 		deleteClusterProfile(clusterProfile)
 

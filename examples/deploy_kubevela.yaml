@@ -1,9 +1,11 @@
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile 
 metadata: 
   name: kubevela-core
 spec:
-  clusterSelector: env=production
+  clusterSelector:
+    matchLabels:
+      env: production
   syncMode: Continuous
   helmCharts:
   - repositoryURL: https://kubevela.github.io/charts

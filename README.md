@@ -49,12 +49,14 @@ Here is an example of how to require that any CAPI Cluster with label *env: prod
 3. kubernetes resource(s) contained in the referenced ConfigMap: *default/contour*.
 
 ```yaml
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-kyverno
 spec:
-  clusterSelector: env=prod
+  clusterSelector:
+    matchLabels:
+      env: prod
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://kyverno.github.io/kyverno/
@@ -83,12 +85,14 @@ As soon as a cluster is a match for above ClusterProfile instance, all reference
 Here is an example using Kustomize:
 
 ```yaml
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: flux-system
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   kustomizationRefs:
   - namespace: flux-system

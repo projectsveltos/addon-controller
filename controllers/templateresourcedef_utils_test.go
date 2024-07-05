@@ -24,9 +24,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("TemplateResourceDef utils ", func() {
@@ -51,22 +51,46 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 		}
 	})
 
-	It("GetTemplateResourceName returns the correct name", func() {
-		ref := &configv1alpha1.TemplateResourceRef{
+	It("GetTemplateResourceName returns the correct name (uses ClusterNamespace and ClusterName)", func() {
+		ref := &configv1beta1.TemplateResourceRef{
 			Resource: corev1.ObjectReference{
 				Name: "{{ .ClusterNamespace }}-{{ .ClusterName }}",
 			},
 			Identifier: randomString(),
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+
+		value, err := controllers.GetTemplateResourceName(clusterSummary, ref)
+		Expect(err).To(BeNil())
+		Expect(value).To(Equal(cluster.Namespace + "-" + cluster.Name))
+	})
+
+	It("GetTemplateResourceNamespace returns the correct namespace (uses Cluster)", func() {
+		ref := &configv1beta1.TemplateResourceRef{
+			Resource: corev1.ObjectReference{
+				Name: "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
+			},
+			Identifier: randomString(),
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 
@@ -76,21 +100,21 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 	})
 
 	It("GetTemplateResourceNamespace returns the correct namespace", func() {
-		ref := &configv1alpha1.TemplateResourceRef{
+		ref := &configv1beta1.TemplateResourceRef{
 			Resource: corev1.ObjectReference{
 				Name: randomString(),
 			},
 			Identifier: randomString(),
 		}
 
-		clusterSummary := &configv1alpha1.ClusterSummary{
+		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 			},
-			Spec: configv1alpha1.ClusterSummarySpec{
+			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterNamespace: cluster.Namespace,
 				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1alpha1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
 

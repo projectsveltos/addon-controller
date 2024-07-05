@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -61,25 +60,35 @@ var _ = Describe("Profile Transformations", func() {
 
 		Expect(addTypeInformationToObject(scheme, cluster)).To(BeNil())
 
-		matchingProfile := &configv1alpha1.ClusterProfile{
+		matchingProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", key, value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+				},
 			},
 		}
 
-		nonMatchingProfile := &configv1alpha1.ClusterProfile{
+		nonMatchingProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", randomString(), value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): value,
+						},
+					},
+				},
 			},
 		}
 
@@ -95,17 +104,17 @@ var _ = Describe("Profile Transformations", func() {
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
 		}
 
 		By("Setting ProfileReconciler internal structures")
 		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion,
-			Kind: configv1alpha1.ProfileKind, Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}
+			Kind: configv1beta1.ProfileKind, Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}
 
 		nonMatchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion,
-			Kind: configv1alpha1.ProfileKind, Namespace: nonMatchingProfile.Namespace, Name: nonMatchingProfile.Name}
+			Kind: configv1beta1.ProfileKind, Namespace: nonMatchingProfile.Namespace, Name: nonMatchingProfile.Name}
 
 		// ClusterMap contains, per ClusterName, list of ClusterProfiles matching it.
 		profileSet := &libsveltosset.Set{}
@@ -147,36 +156,51 @@ var _ = Describe("Profile Transformations", func() {
 			},
 		}
 
-		matchingProfile := &configv1alpha1.Profile{
+		matchingProfile := &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", key, value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+				},
 			},
 		}
 
-		nonMatchingProfile1 := &configv1alpha1.Profile{
+		nonMatchingProfile1 := &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
 				Namespace: cluster.Namespace,
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", randomString(), value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): value,
+						},
+					},
+				},
 			},
 		}
 
-		nonMatchingProfile2 := &configv1alpha1.Profile{
+		nonMatchingProfile2 := &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterProfileNamePrefix + randomString(),
 				Namespace: randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", key, value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+				},
 			},
 		}
 
@@ -193,21 +217,21 @@ var _ = Describe("Profile Transformations", func() {
 			Client:        c,
 			Scheme:        scheme,
 			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-			Profiles:      make(map[corev1.ObjectReference]libsveltosv1alpha1.Selector),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
 			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
 			Mux:           sync.Mutex{},
 		}
 
 		By("Setting ProfileReconciler internal structures")
-		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ProfileKind,
+		matchingInfo := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1beta1.ProfileKind,
 			Namespace: matchingProfile.Namespace, Name: matchingProfile.Name}
 		reconciler.Profiles[matchingInfo] = matchingProfile.Spec.ClusterSelector
 
-		nonMatchingInfo1 := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ProfileKind,
+		nonMatchingInfo1 := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1beta1.ProfileKind,
 			Namespace: nonMatchingProfile1.Namespace, Name: nonMatchingProfile1.Name}
 		reconciler.Profiles[nonMatchingInfo1] = nonMatchingProfile1.Spec.ClusterSelector
 
-		nonMatchingInfo2 := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1alpha1.ProfileKind,
+		nonMatchingInfo2 := corev1.ObjectReference{APIVersion: cluster.APIVersion, Kind: configv1beta1.ProfileKind,
 			Namespace: nonMatchingProfile2.Namespace, Name: nonMatchingProfile2.Name}
 		reconciler.Profiles[nonMatchingInfo2] = nonMatchingProfile2.Spec.ClusterSelector
 
@@ -270,13 +294,18 @@ var _ = Describe("Profile Transformations", func() {
 			},
 		}
 
-		profile := &configv1alpha1.Profile{
+		profile := &configv1beta1.Profile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterProfileNamePrefix + randomString(),
 			},
-			Spec: configv1alpha1.Spec{
-				ClusterSelector: libsveltosv1alpha1.Selector(
-					fmt.Sprintf("%s=%s", key, value)),
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+				},
 			},
 		}
 

@@ -21,19 +21,18 @@ import (
 	"context"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 // The TemplateResource namespace can be specified or it will inherit the cluster namespace
-func getTemplateResourceNamespace(clusterSummary *configv1alpha1.ClusterSummary,
-	ref *configv1alpha1.TemplateResourceRef) string {
+func getTemplateResourceNamespace(clusterSummary *configv1beta1.ClusterSummary,
+	ref *configv1beta1.TemplateResourceRef) string {
 
 	namespace := ref.Resource.Namespace
 	if namespace == "" {
@@ -45,22 +44,37 @@ func getTemplateResourceNamespace(clusterSummary *configv1alpha1.ClusterSummary,
 }
 
 // Resources referenced in the management cluster can have their name expressed in function
-// of cluster information (clusterNamespace, clusterName, clusterType)
-func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
-	ref *configv1alpha1.TemplateResourceRef) (string, error) {
+// of cluster information:
+// clusterNamespace => .Cluster.metadata.namespace
+// clusterName => .Cluster.metadata.name
+// clusterType => .Cluster.kind
+func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
+	ref *configv1beta1.TemplateResourceRef) (string, error) {
 
 	// Accept name that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(ref.Resource.Name)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(ref.Resource.Name)
 	if err != nil {
 		return "", err
 	}
 
 	var buffer bytes.Buffer
 
+	// Cluster namespace and name can be used to instantiate the name of the resource that
+	// needs to be fetched from the management cluster. Defined an unstructured with namespace and name set
+	u := &unstructured.Unstructured{}
+	u.SetNamespace(clusterSummary.Spec.ClusterNamespace)
+	u.SetName(clusterSummary.Spec.ClusterName)
+	u.SetKind(string(clusterSummary.Spec.ClusterType))
+
 	if err := tmpl.Execute(&buffer,
-		struct{ ClusterNamespace, ClusterName string }{
+		struct {
+			Cluster map[string]interface{}
+			// deprecated. This used to be original format which was different than rest of templating
+			ClusterNamespace, ClusterName string
+		}{
+			Cluster:          u.UnstructuredContent(),
 			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
 			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
 		return "", errors.Wrapf(err, "error executing template")
@@ -70,7 +84,7 @@ func getTemplateResourceName(clusterSummary *configv1alpha1.ClusterSummary,
 
 // collectTemplateResourceRefs collects clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs
 // from management cluster
-func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 ) (map[string]*unstructured.Unstructured, error) {
 
 	if clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs == nil {

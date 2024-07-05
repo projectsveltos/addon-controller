@@ -28,9 +28,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var (
@@ -59,7 +59,7 @@ var _ = Describe("Profile", func() {
 		Byf("Create a Profile matching Cluster %s/%s",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		profile := getProfile(defaultNamespace, namePrefix, map[string]string{key: value})
-		profile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
 		Expect(k8sClient.Create(context.TODO(), profile)).To(Succeed())
 
@@ -84,13 +84,13 @@ var _ = Describe("Profile", func() {
 		Byf("Update Profile %s to reference ConfigMap %s/%s",
 			profile.Name, configMap.Namespace, configMap.Name)
 
-		currentProfile := &configv1alpha1.Profile{}
+		currentProfile := &configv1beta1.Profile{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: profile.Namespace, Name: profile.Name},
 			currentProfile)).To(Succeed())
-		currentProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMap.Namespace,
 				Name:      configMap.Name,
 			},
@@ -118,8 +118,8 @@ var _ = Describe("Profile", func() {
 		policies := []policy{
 			{kind: "Job", name: jobName, namespace: ns, group: "batch"},
 		}
-		verifyClusterConfiguration(configv1alpha1.ProfileKind, profile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+		verifyClusterConfiguration(configv1beta1.ProfileKind, profile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)
 
 		deleteProfile(profile)

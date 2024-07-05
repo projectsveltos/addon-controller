@@ -1,0 +1,9 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterReport
+metadata:
+  labels:
+    app.kubernetes.io/name: addon-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: clusterreport-sample
+spec:
+  # TODO(user): Add fields here

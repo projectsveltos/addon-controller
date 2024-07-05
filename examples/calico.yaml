@@ -14,7 +14,7 @@ metadata:
   namespace: default
 ---
 # Create calico-namespace with label pod-security.kubernetes.io/enforce: privileged
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: create-calico-ns
@@ -33,7 +33,9 @@ spec:
   dependsOn:
   - create-calico-ns
   syncMode: Continuous
-  clusterSelector: cni=calico
+  clusterSelector:
+    matchLabels:
+      cni: calico
   helmCharts:
   - repositoryURL:    https://projectcalico.docs.tigera.io/charts
     repositoryName:   projectcalico

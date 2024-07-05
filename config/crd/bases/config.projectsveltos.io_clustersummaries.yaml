@@ -938,6 +938,1084 @@ spec:
             type: object
         type: object
     served: true
+    storage: false
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - description: Indicates whether HelmCharts are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Helm")].status
+      name: HelmCharts
+      priority: 2
+      type: string
+    - description: Indicates whether KustomizeRefs are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Kustomize")].status
+      name: KustomizeRefs
+      priority: 2
+      type: string
+    - description: Indicates whether PolicyRefs are all provisioned
+      jsonPath: .status.featureSummaries[?(@.featureID=="Resources")].status
+      name: PolicyRefs
+      priority: 2
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: ClusterSummary is the Schema for the clustersummaries API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSummarySpec defines the desired state of ClusterSummary
+            properties:
+              clusterName:
+                description: ClusterName is the name of the workload Cluster this
+                  ClusterSummary is for.
+                type: string
+              clusterNamespace:
+                description: |-
+                  ClusterNamespace is the namespace of the workload Cluster this
+                  ClusterSummary is for.
+                type: string
+              clusterProfileSpec:
+                description: |-
+                  ClusterProfileSpec represent the configuration that will be applied to
+                  the workload cluster.
+                properties:
+                  clusterRefs:
+                    description: ClusterRefs identifies clusters to associate to.
+                    items:
+                      description: |-
+                        ObjectReference contains enough information to let you inspect or modify the referred object.
+                        ---
+                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
+                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
+                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
+                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
+                            Those cannot be well described when embedded.
+                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
+                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
+                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
+                            and the version of the actual struct is irrelevant.
+                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
+                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
+
+
+                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
+                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                            TODO: this design is not final and this field is subject to change in the future.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    type: array
+                  clusterSelector:
+                    description: ClusterSelector identifies clusters to associate
+                      to.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  continueOnConflict:
+                    default: false
+                    description: |-
+                      By default (when ContinueOnConflict is unset or set to false), Sveltos stops deployment after
+                      encountering the first conflict (e.g., another ClusterProfile already deployed the resource).
+                      If set to true, Sveltos will attempt to deploy remaining resources in the ClusterProfile even
+                      if conflicts are detected for previous resources.
+                    type: boolean
+                  dependsOn:
+                    description: |-
+                      DependsOn specifies a list of other ClusterProfiles that this instance depends on.
+                      In any managed cluster that matches this ClusterProfile, the add-ons and applications
+                      defined in this instance will not be deployed until all add-ons and applications in the
+                      ClusterProfiles listed as dependencies are deployed.
+                    items:
+                      type: string
+                    type: array
+                  extraAnnotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ExtraAnnotations: These annotations will be added by Sveltos to all Kubernetes resources
+                      deployed in a managed cluster based on this ClusterProfile/Profile instance.
+                      **Important:** If a resource deployed by Sveltos already has a annotation with a key present in
+                      `ExtraAnnotations`, the value from `ExtraAnnotations` will override the existing value.
+                      (Deprecated use Patches instead)
+                    type: object
+                  extraLabels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      ExtraLabels: These labels will be added by Sveltos to all Kubernetes resources deployed in
+                      a managed cluster based on this ClusterProfile/Profile instance.
+                      **Important:** If a resource deployed by Sveltos already has a label with a key present in
+                      `ExtraLabels`, the value from `ExtraLabels` will override the existing value.
+                      (Deprecated use Patches instead)
+                    type: object
+                  helmCharts:
+                    description: Helm charts is a list of helm charts that need to
+                      be deployed
+                    items:
+                      properties:
+                        chartName:
+                          description: ChartName is the chart name
+                          minLength: 1
+                          type: string
+                        chartVersion:
+                          description: ChartVersion is the chart version
+                          minLength: 1
+                          type: string
+                        helmChartAction:
+                          default: Install
+                          description: HelmChartAction is the action that will be
+                            taken on the helm chart
+                          enum:
+                          - Install
+                          - Uninstall
+                          type: string
+                        options:
+                          description: Options allows to set flags which are used
+                            during installation.
+                          properties:
+                            atomic:
+                              default: false
+                              description: |-
+                                if set, the installation process deletes the installation/upgrades on failure.
+                                The --wait flag will be set automatically if --atomic is used
+                                Default to false
+                              type: boolean
+                            dependencyUpdate:
+                              default: false
+                              description: |-
+                                update dependencies if they are missing before installing the chart
+                                Default to false
+                              type: boolean
+                            description:
+                              description: Description is the description of an helm
+                                operation
+                              type: string
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install/upgrade/uninstall
+                                Default to false
+                              type: boolean
+                            disableOpenAPIValidation:
+                              default: false
+                              description: |-
+                                if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema
+                                Default to false
+                              type: boolean
+                            enableClientCache:
+                              default: false
+                              description: EnableClientCache is a flag to enable Helm
+                                client cache. If it is not specified, it will be set
+                                to false.
+                              type: boolean
+                            installOptions:
+                              description: HelmInstallOptions are options specific
+                                to helm install
+                              properties:
+                                createNamespace:
+                                  default: true
+                                  description: Create the release namespace if not
+                                    present. Defaults to true
+                                  type: boolean
+                                replace:
+                                  default: true
+                                  description: Replaces if set indicates to replace
+                                    an older release with this one
+                                  type: boolean
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: Labels that would be added to release metadata.
+                              type: object
+                            skipCRDs:
+                              default: false
+                              description: |-
+                                SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
+                                By default, CRDs are installed if not already present.
+                              type: boolean
+                            timeout:
+                              description: time to wait for any individual Kubernetes
+                                operation (like Jobs for hooks) (default 5m0s)
+                              type: string
+                            uninstallOptions:
+                              description: HelmUninstallOptions are options specific
+                                to helm uninstall
+                              properties:
+                                deletionPropagation:
+                                  description: DeletionPropagation
+                                  enum:
+                                  - orphan
+                                  - foreground
+                                  - background
+                                  type: string
+                                keepHistory:
+                                  description: |-
+                                    When uninstall a chart with this flag, Helm removes the resources associated with the chart,
+                                    but it keeps the release information. This allows to see details about the uninstalled release
+                                    using the helm history command.
+                                  type: boolean
+                              type: object
+                            upgradeOptions:
+                              description: HelmUpgradeOptions are options specific
+                                to helm upgrade
+                              properties:
+                                cleanupOnFail:
+                                  default: false
+                                  description: CleanupOnFail will, if true, cause
+                                    the upgrade to delete newly-created resources
+                                    on a failed update.
+                                  type: boolean
+                                force:
+                                  default: false
+                                  description: |-
+                                    Force will, if set to `true`, ignore certain warnings and perform the upgrade anyway.
+                                    This should be used with caution.
+                                  type: boolean
+                                maxHistory:
+                                  default: 2
+                                  description: |-
+                                    MaxHistory limits the maximum number of revisions saved per release
+                                    Default to 2
+                                  type: integer
+                                recreate:
+                                  default: false
+                                  description: Recreate will (if true) recreate pods
+                                    after a rollback.
+                                  type: boolean
+                                resetThenReuseValues:
+                                  default: false
+                                  description: ResetThenReuseValues will reset the
+                                    values to the chart's built-ins then merge with
+                                    user's last supplied values.
+                                  type: boolean
+                                resetValues:
+                                  default: false
+                                  description: ResetValues will reset the values to
+                                    the chart's built-ins rather than merging with
+                                    existing.
+                                  type: boolean
+                                reuseValues:
+                                  default: false
+                                  description: |-
+                                    ReuseValues copies values from the current release to a new release if the
+                                    new release does not have any values. If the request already has values,
+                                    or if there are no values in the current release, this does nothing.
+                                    This is skipped if the ResetValues flag is set, in which case the
+                                    request values are not altered.
+                                  type: boolean
+                                subNotes:
+                                  default: false
+                                  description: SubNotes determines whether sub-notes
+                                    are rendered in the chart.
+                                  type: boolean
+                              type: object
+                            wait:
+                              default: false
+                              description: |-
+                                if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
+                                are in a ready state before marking the release as successful. It will wait for as long as --timeout
+                                Default to false
+                              type: boolean
+                            waitForJobs:
+                              default: false
+                              description: |-
+                                if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful.
+                                It will wait for as long as --timeout
+                                Default to false
+                              type: boolean
+                          type: object
+                        releaseName:
+                          description: ReleaseName is the chart release
+                          minLength: 1
+                          type: string
+                        releaseNamespace:
+                          description: ReleaseNamespace is the namespace release will
+                            be installed
+                          minLength: 1
+                          type: string
+                        repositoryName:
+                          description: RepositoryName is the name helm chart repository
+                          minLength: 1
+                          type: string
+                        repositoryURL:
+                          description: RepositoryURL is the URL helm chart repository
+                          minLength: 1
+                          type: string
+                        values:
+                          description: |-
+                            Values field allows to define configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+                          type: string
+                        valuesFrom:
+                          description: |-
+                            ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                            it is possible to store configuration for the Helm release.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+                          items:
+                            properties:
+                              kind:
+                                description: |-
+                                  Kind of the resource. Supported kinds are:
+                                  - ConfigMap/Secret
+                                enum:
+                                - ConfigMap
+                                - Secret
+                                type: string
+                              name:
+                                description: |-
+                                  Name of the referenced resource.
+                                  Name can be expressed as a template and instantiate using
+                                  - cluster namespace: .Cluster.metadata.namespace
+                                  - cluster name: .Cluster.metadata.name
+                                  - cluster type: .Cluster.kind
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referenced resource.
+                                  For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                  be implicit set to cluster's namespace.
+                                  For Profile namespace must be left empty. The Profile namespace will be used.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - chartName
+                      - chartVersion
+                      - releaseName
+                      - releaseNamespace
+                      - repositoryName
+                      - repositoryURL
+                      type: object
+                    type: array
+                  kustomizationRefs:
+                    description: |-
+                      Kustomization refs is a list of kustomization paths. Kustomization will
+                      be run on those paths and the outcome will be deployed.
+                    items:
+                      properties:
+                        deploymentType:
+                          default: Remote
+                          description: |-
+                            DeploymentType indicates whether resources need to be deployed
+                            into the management cluster (local) or the managed cluster (remote)
+                          enum:
+                          - Local
+                          - Remote
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the resource. Supported kinds are:
+                            - flux GitRepository;OCIRepository;Bucket
+                            - ConfigMap/Secret
+                          enum:
+                          - GitRepository
+                          - OCIRepository
+                          - Bucket
+                          - ConfigMap
+                          - Secret
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referenced resource.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referenced resource.
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            For Profile namespace must be left empty. The Profile namespace will be used.
+                          type: string
+                        path:
+                          description: |-
+                            Path to the directory containing the kustomization.yaml file, or the
+                            set of plain YAMLs a kustomization.yaml should be generated for.
+                            Defaults to 'None', which translates to the root path of the SourceRef.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster)
+                          type: string
+                        targetNamespace:
+                          description: |-
+                            TargetNamespace sets or overrides the namespace in the
+                            kustomization.yaml file.
+                          maxLength: 63
+                          minLength: 1
+                          type: string
+                        values:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Values is a map[string]string type that allows to define a set of key-value pairs.
+                            These key-value pairs can optionally leverage Go templates for further processing.
+                            With Sveltos, you can define key-value pairs where the values can be Go templates.
+                            These templates have access to management cluster information during deployment. This allows
+                            to do more than just replace placeholders. Variables can be used to dynamically
+                            construct values based on other resources or variables within the Kustomize output.
+                            For example, imagine you have a Region key with a template value like:
+                            '{{ index .Cluster.metadata.labels "region" }}'.
+                            This template retrieves the region label from the cluster instance metadata.
+                            Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                            The output itself can also contain templates, like:
+                            region: '{{ default "west" .Region }}'.
+                            This way, the final output from Kustomize will have the region set dynamically based on
+                            the actual region retrieved earlier.
+                          type: object
+                        valuesFrom:
+                          description: |-
+                            ValuesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                            it is possible to define key-value pairs. These key-value pairs can optionally leverage
+                            Go templates for further processing.
+                            With Sveltos, you can define key-value pairs where the values can be Go templates.
+                            These templates have access to management cluster information during deployment. This allows
+                            to do more than just replace placeholders. Variables can be used to dynamically
+                            construct values based on other resources or variables within the Kustomize output.
+                            For example, imagine you have a Region key with a template value like:
+                            '{{ index .Cluster.metadata.labels "region" }}'.
+                            This template retrieves the region label from the cluster instance metadata.
+                            Finally, Sveltos uses these processed values to fill placeholders in the Kustomize output.
+                            The output itself can also contain templates, like:
+                            region: '{{ default "west" .Region }}'.
+                            This way, the final output from Kustomize will have the region set dynamically based on
+                            the actual region retrieved earlier.
+                          items:
+                            properties:
+                              kind:
+                                description: |-
+                                  Kind of the resource. Supported kinds are:
+                                  - ConfigMap/Secret
+                                enum:
+                                - ConfigMap
+                                - Secret
+                                type: string
+                              name:
+                                description: |-
+                                  Name of the referenced resource.
+                                  Name can be expressed as a template and instantiate using
+                                  - cluster namespace: .Cluster.metadata.namespace
+                                  - cluster name: .Cluster.metadata.name
+                                  - cluster type: .Cluster.kind
+                                minLength: 1
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referenced resource.
+                                  For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                  be implicit set to cluster's namespace.
+                                  For Profile namespace must be left empty. The Profile namespace will be used.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - kind
+                      - name
+                      - namespace
+                      type: object
+                    type: array
+                  maxUpdate:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: |-
+                      The maximum number of clusters that can be updated concurrently.
+                      Value can be an absolute number (ex: 5) or a percentage of desired cluster (ex: 10%).
+                      Defaults to 100%.
+                      Example: when this is set to 30%, when list of add-ons/applications in ClusterProfile
+                      changes, only 30% of matching clusters will be updated in parallel. Only when updates
+                      in those cluster succeed, other matching clusters are updated.
+                    pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                    x-kubernetes-int-or-string: true
+                  patches:
+                    description: |-
+                      Define additional Kustomize inline Patches applied for all resources on this profile
+                      Within the Patch Spec you can use templating
+                    items:
+                      description: |-
+                        Patch contains an inline StrategicMerge or JSON6902 patch, and the target the patch should
+                        be applied to.
+                      properties:
+                        patch:
+                          description: |-
+                            Patch contains an inline StrategicMerge patch or an inline JSON6902 patch with
+                            an array of operation objects.
+                            These values can be static or leverage Go templates for dynamic customization.
+                            When expressed as templates, the values are filled in using information from
+                            resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+                          type: string
+                        target:
+                          description: Target points to the resources that the patch
+                            document should be applied to.
+                          properties:
+                            annotationSelector:
+                              description: |-
+                                AnnotationSelector is a string that follows the label selection expression
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                                It matches with the resource annotations.
+                              type: string
+                            group:
+                              description: |-
+                                Group is the API group to select resources from.
+                                Together with Version and Kind it is capable of unambiguously identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the API Group to select resources from.
+                                Together with Group and Version it is capable of unambiguously
+                                identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                            labelSelector:
+                              description: |-
+                                LabelSelector is a string that follows the label selection expression
+                                https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#api
+                                It matches with the resource labels.
+                              type: string
+                            name:
+                              description: Name to match resources with.
+                              type: string
+                            namespace:
+                              description: Namespace to select resources from.
+                              type: string
+                            version:
+                              description: |-
+                                Version of the API Group to select resources from.
+                                Together with Group and Kind it is capable of unambiguously identifying and/or selecting resources.
+                                https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
+                              type: string
+                          type: object
+                      type: object
+                    type: array
+                  policyRefs:
+                    description: |-
+                      PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
+                      that need to be deployed in the matching managed clusters.
+                      The values contained in those resources can be static or leverage Go templates for dynamic customization.
+                      When expressed as templates, the values are filled in using information from
+                      resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+                    items:
+                      properties:
+                        deploymentType:
+                          default: Remote
+                          description: |-
+                            DeploymentType indicates whether resources need to be deployed
+                            into the management cluster (local) or the managed cluster (remote)
+                          enum:
+                          - Local
+                          - Remote
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the resource. Supported kinds are:
+                            - ConfigMap/Secret
+                            - flux GitRepository;OCIRepository;Bucket
+                          enum:
+                          - GitRepository
+                          - OCIRepository
+                          - Bucket
+                          - ConfigMap
+                          - Secret
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referenced resource.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referenced resource.
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            For Profile namespace must be left empty. Profile namespace will be used.
+                          type: string
+                        path:
+                          description: |-
+                            Path to the directory containing the YAML files.
+                            Defaults to 'None', which translates to the root path of the SourceRef.
+                            Used only for GitRepository;OCIRepository;Bucket
+                          type: string
+                      required:
+                      - kind
+                      - name
+                      type: object
+                    type: array
+                  reloader:
+                    default: false
+                    description: |-
+                      Reloader indicates whether Deployment/StatefulSet/DaemonSet instances deployed
+                      by Sveltos and part of this ClusterProfile need to be restarted via rolling upgrade
+                      when a ConfigMap/Secret instance mounted as volume is modified.
+                      When set to true, when any mounted ConfigMap/Secret is modified, Sveltos automatically
+                      starts a rolling upgrade for Deployment/StatefulSet/DaemonSet instances mounting it.
+                    type: boolean
+                  setRefs:
+                    description: |-
+                      SetRefs identifies referenced (cluster)Sets.
+                      - ClusterProfile can reference ClusterSet;
+                      - Profile can reference Set;
+                    items:
+                      type: string
+                    type: array
+                  stopMatchingBehavior:
+                    default: WithdrawPolicies
+                    description: |-
+                      StopMatchingBehavior indicates what behavior should be when a Cluster stop matching
+                      the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
+                      be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
+                      leave ClusterProfile deployed policies in the Cluster.
+                    type: string
+                  syncMode:
+                    default: Continuous
+                    description: |-
+                      SyncMode specifies how features are synced in a matching workload cluster.
+                      - OneTime means, first time a workload cluster matches the ClusterProfile,
+                      features will be deployed in such cluster. Any subsequent feature configuration
+                      change won't be applied into the matching workload clusters;
+                      - Continuous means first time a workload cluster matches the ClusterProfile,
+                      features will be deployed in such a cluster. Any subsequent feature configuration
+                      change will be applied into the matching workload clusters.
+                      - DryRun means no change will be propagated to any matching cluster. A report
+                      instead will be generated summarizing what would happen in any matching cluster
+                      because of the changes made to ClusterProfile while in DryRun mode.
+                    enum:
+                    - OneTime
+                    - Continuous
+                    - ContinuousWithDriftDetection
+                    - DryRun
+                    type: string
+                  templateResourceRefs:
+                    description: |-
+                      TemplateResourceRefs is a list of resource to collect from the management cluster.
+                      Those resources' values will be used to instantiate templates
+                    items:
+                      properties:
+                        identifier:
+                          description: |-
+                            Identifier is how the resource will be referred to in the
+                            template
+                          type: string
+                        resource:
+                          description: |-
+                            Resource references a Kubernetes instance in the management
+                            cluster to fetch and use during template instantiation.
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            Name can be expressed as a template and instantiate using
+                            - cluster namespace: .Cluster.metadata.namespace
+                            - cluster name: .Cluster.metadata.name
+                            - cluster type: .Cluster.kind
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: |-
+                                If referring to a piece of an object instead of an entire object, this string
+                                should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container within a pod, this would take on a value like:
+                                "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                the event) or if no container name is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                referencing a part of an object.
+                                TODO: this design is not final and this field is subject to change in the future.
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the referent.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            name:
+                              description: |-
+                                Name of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                              type: string
+                            resourceVersion:
+                              description: |-
+                                Specific resourceVersion to which this reference is made, if any.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                              type: string
+                            uid:
+                              description: |-
+                                UID of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                      required:
+                      - identifier
+                      - resource
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - identifier
+                    x-kubernetes-list-type: map
+                  tier:
+                    default: 100
+                    description: |-
+                      Tier controls the order of deployment for ClusterProfile or Profile resources targeting
+                      the same cluster resources.
+                      Imagine two configurations (ClusterProfiles or Profiles) trying to deploy the same resource (a Kubernetes
+                      resource or an helm chart). By default, the first one to reach the cluster "wins" and deploys it.
+                      Tier allows you to override this. When conflicts arise, the ClusterProfile or Profile with the **lowest**
+                      Tier value takes priority and deploys the resource.
+                      Higher Tier values represent lower priority. The default Tier value is 100.
+                      Using Tiers provides finer control over resource deployment within your cluster, particularly useful
+                      when multiple configurations manage the same resources.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  validateHealths:
+                    description: |-
+                      ValidateHealths is a slice of Lua functions to run against
+                      the managed cluster to validate the state of those add-ons/applications
+                      is healthy
+                    items:
+                      properties:
+                        featureID:
+                          description: |-
+                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            This field indicates when to run this check.
+                            For instance:
+                            - if set to Helm this check will be run after all helm
+                            charts specified in the ClusterProfile are deployed.
+                            - if set to Resources this check will be run after the content
+                            of all the ConfigMaps/Secrets referenced by ClusterProfile in the
+                            PolicyRef sections is deployed
+                          enum:
+                          - Resources
+                          - Helm
+                          - Kustomize
+                          type: string
+                        group:
+                          description: Group of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                        kind:
+                          description: Kind of the resource to fetch in the managed
+                            Cluster.
+                          minLength: 1
+                          type: string
+                        labelFilters:
+                          description: LabelFilters allows to filter resources based
+                            on current labels.
+                          items:
+                            properties:
+                              key:
+                                description: Key is the label key
+                                type: string
+                              operation:
+                                description: Operation is the comparison operation
+                                enum:
+                                - Equal
+                                - Different
+                                type: string
+                              value:
+                                description: Value is the label value
+                                type: string
+                            required:
+                            - key
+                            - operation
+                            - value
+                            type: object
+                          type: array
+                        name:
+                          description: Name is the name of this check
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the resource to fetch in the managed Cluster.
+                            Empty for resources scoped at cluster level.
+                          type: string
+                        script:
+                          description: |-
+                            Script is a text containing a lua script.
+                            Must return struct with field "health"
+                            representing whether object is a match (true or false)
+                          type: string
+                        version:
+                          description: Version of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                      required:
+                      - featureID
+                      - group
+                      - kind
+                      - name
+                      - version
+                      type: object
+                    type: array
+                type: object
+              clusterType:
+                description: ClusterType is the type of Cluster
+                type: string
+            required:
+            - clusterName
+            - clusterNamespace
+            - clusterType
+            type: object
+          status:
+            description: ClusterSummaryStatus defines the observed state of ClusterSummary
+            properties:
+              dependencies:
+                description: |-
+                  Dependencies is a summary reporting the status of the dependencies
+                  for the associated ClusterProfile
+                type: string
+              deployedGVKs:
+                description: |-
+                  DeployedGVKs reports the list of GVKs deployed by ClusterSummary
+                  in a managed cluster
+                items:
+                  properties:
+                    deployedGroupVersionKind:
+                      description: |-
+                        DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
+                        the workload cluster or the management cluster because of this feature.
+                        Each element has format kind.version.group
+                      items:
+                        type: string
+                      type: array
+                    featureID:
+                      description: FeatureID is an indentifier of the feature whose
+                        status is reported
+                      enum:
+                      - Resources
+                      - Helm
+                      - Kustomize
+                      type: string
+                  required:
+                  - featureID
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - featureID
+                x-kubernetes-list-type: map
+              featureSummaries:
+                description: |-
+                  FeatureSummaries reports the status of each workload cluster feature
+                  directly managed by ClusterProfile.
+                items:
+                  description: |-
+                    FeatureSummary contains a summary of the state of a workload
+                    cluster feature.
+                  properties:
+                    deployedGroupVersionKind:
+                      description: |-
+                        DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
+                        the workload cluster or the management cluster because of this feature.
+                        Each element has format kind.version.group
+                        Deprecated: Replaced by FeatureDeploymentInfo field instead
+                      items:
+                        type: string
+                      type: array
+                    failureMessage:
+                      description: FailureMessage provides more information about
+                        the error.
+                      type: string
+                    failureReason:
+                      description: FailureReason indicates the type of error that
+                        occurred.
+                      type: string
+                    featureID:
+                      description: FeatureID is an indentifier of the feature whose
+                        status is reported
+                      enum:
+                      - Resources
+                      - Helm
+                      - Kustomize
+                      type: string
+                    hash:
+                      description: |-
+                        Hash represents of a unique value for a feature at a fixed point in
+                        time
+                      format: byte
+                      type: string
+                    lastAppliedTime:
+                      description: LastAppliedTime is the time feature was last reconciled
+                      format: date-time
+                      type: string
+                    status:
+                      description: Status represents the state of the feature in the
+                        workload cluster
+                      enum:
+                      - Provisioning
+                      - Provisioned
+                      - Failed
+                      - FailedNonRetriable
+                      - Removing
+                      - Removed
+                      type: string
+                  required:
+                  - featureID
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - featureID
+                x-kubernetes-list-type: map
+              helmReleaseSummaries:
+                description: |-
+                  HelmReleaseSummaries reports the status of each helm chart
+                  directly managed by ClusterProfile.
+                items:
+                  properties:
+                    conflictMessage:
+                      description: |-
+                        Status indicates whether ClusterSummary can manage the helm
+                        chart or there is a conflict
+                      type: string
+                    releaseName:
+                      description: ReleaseName is the chart release
+                      minLength: 1
+                      type: string
+                    releaseNamespace:
+                      description: ReleaseNamespace is the namespace release will
+                        be installed
+                      minLength: 1
+                      type: string
+                    status:
+                      description: |-
+                        Status indicates whether ClusterSummary can manage the helm
+                        chart or there is a conflict
+                      enum:
+                      - Managing
+                      - Conflict
+                      type: string
+                    valuesHash:
+                      description: ValuesHash represents of a unique value for the
+                        values section
+                      format: byte
+                      type: string
+                  required:
+                  - releaseName
+                  - releaseNamespace
+                  - status
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+            type: object
+        type: object
+    served: true
     storage: true
     subresources:
       status: {}

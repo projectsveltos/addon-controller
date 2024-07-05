@@ -32,9 +32,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var (
@@ -89,18 +89,21 @@ const (
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
 	cleanupControllerDeplName   = "kyverno-cleanup-controller"
+	cleanupImage                = "ghcr.io/kyverno/cleanup-controller:v1.11.0"
+	admissionImage              = "ghcr.io/kyverno/kyverno:v1.11.0"
 )
 
 var _ = Describe("Helm", Serial, func() {
 	const (
-		namePrefix       = "drift-"
-		kyvernoImageName = "kyverno"
+		namePrefix                = "drift-"
+		kyvernoAdmissionImageName = "kyverno"
+		kyvernoCleanupImageName   = "controller"
 	)
 
 	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuousWithDriftDetection
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -130,11 +133,11 @@ var _ = Describe("Helm", Serial, func() {
 		Expect(k8sClient.Create(context.TODO(), admissionControllerConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -142,7 +145,7 @@ var _ = Describe("Helm", Serial, func() {
 				ChartVersion:     "v3.1.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				Values: `admissionController:
   replicas: 1
 backgroundController:
@@ -151,20 +154,36 @@ cleanupController:
   replicas: 1
 reportsController:
   replicas: 1`,
-				ValuesFrom: []configv1alpha1.ValueFrom{
+				ValuesFrom: []configv1beta1.ValueFrom{
 					{
-						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						Namespace: cleanupControllerConfigMap.Namespace,
 						Name:      cleanupControllerConfigMap.Name,
 					},
 					{
-						Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						Namespace: admissionControllerConfigMap.Namespace,
 						Name:      admissionControllerConfigMap.Name,
 					},
 				},
 			},
 		}
+		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
+		currentClusterProfile.Spec.Patches = []configv1beta1.Patch{
+			{
+				Patch: `- op: add
+  path: /metadata/annotations/projectsveltos.io~1driftDetectionIgnore
+  value: ok`,
+				Target: &configv1beta1.PatchSelector{
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Namespace: "kyverno",
+					Name:      "kyverno-admission-controller",
+				},
+			},
+		}
+
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
@@ -230,22 +249,22 @@ reportsController:
 		}
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
-		charts := []configv1alpha1.Chart{
+		charts := []configv1beta1.Chart{
 			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.4", Namespace: "kyverno"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		// Verify ResourceSummary is present
 		Eventually(func() bool {
-			currentResourceSummary := &libsveltosv1alpha1.ResourceSummary{}
-			resiurceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
+			currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+			resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: resiurceSummaryName},
+				types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
 				currentResourceSummary)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -257,12 +276,51 @@ reportsController:
 		// Change Kyverno image
 		depl := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-cleanup-controller"}, depl)).To(Succeed())
 		imageChanged := false
 		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
+			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
 				imageChanged = true
-				depl.Spec.Template.Spec.Containers[i].Image = "ghcr.io/kyverno/kyverno:v1.11.0"
+				depl.Spec.Template.Spec.Containers[i].Image = cleanupImage
+			}
+		}
+		Expect(imageChanged).To(BeTrue())
+		Expect(workloadClient.Update(context.TODO(), depl)).To(Succeed())
+
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-cleanup-controller"}, depl)).To(Succeed())
+		for i := range depl.Spec.Template.Spec.Containers {
+			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
+				By("Kyverno image is set to v1.11.0")
+				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(cleanupImage))
+			}
+		}
+
+		Byf("Verifying Sveltos reacts to drift configuration change")
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-cleanup-controller"}, depl)
+			if err != nil {
+				return false
+			}
+			for i := range depl.Spec.Template.Spec.Containers {
+				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
+					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/cleanup-controller:v1.11.4"
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+		By("Kyverno image is reset to v1.11.4")
+
+		// Change Kyverno image for admission controller
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
+		imageChanged = false
+		for i := range depl.Spec.Template.Spec.Containers {
+			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
+				imageChanged = true
+				depl.Spec.Template.Spec.Containers[i].Image = admissionImage
 			}
 		}
 		Expect(imageChanged).To(BeTrue())
@@ -271,14 +329,14 @@ reportsController:
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
+			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
 				By("Kyverno image is set to v1.11.0")
-				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal("ghcr.io/kyverno/kyverno:v1.11.0"))
+				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(admissionImage))
 			}
 		}
 
-		Byf("Verifying Sveltos reacts to drift configuration change")
-		Eventually(func() bool {
+		Byf("Verifying Sveltos does not reacts to drift configuration change as admission controller has ignore annotation")
+		Consistently(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
@@ -286,19 +344,19 @@ reportsController:
 				return false
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
-				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/kyverno:v1.11.4"
+				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
+					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
 				}
 			}
 			return false
-		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.11.4")
+		}, timeout/4, pollingInterval).Should(BeTrue())
+		By("Kyverno image is NOT reset to v1.11.4")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
@@ -306,7 +364,7 @@ reportsController:
 				ChartVersion:     "v3.1.4",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				Values: `admissionController:
   replicas: 3
 backgroundController:

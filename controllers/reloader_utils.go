@@ -30,8 +30,8 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -53,7 +53,7 @@ func isReloaderInstalled(ctx context.Context, c client.Client) (bool, error) {
 
 // removeReloaderInstance removes Reloader instance from the managed cluster
 func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
-	clusterProfileName string, feature configv1alpha1.FeatureID, logger logr.Logger) error {
+	clusterProfileName string, feature configv1beta1.FeatureID, logger logr.Logger) error {
 
 	installed, err := isReloaderInstalled(ctx, remoteClient)
 	if err != nil {
@@ -87,15 +87,15 @@ func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
 // Reloader instance contains list of Deployment, StatefulSet, DaemonSet instances sveltos-agent needs
 // to watch (along with mounted ConfigMaps/Secrets) to detect when is time to trigger a rolling upgrade.
 func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
-	clusterProfileName string, feature configv1alpha1.FeatureID, resources []corev1.ObjectReference,
+	clusterProfileName string, feature configv1beta1.FeatureID, resources []corev1.ObjectReference,
 	logger logr.Logger) error {
 
-	reloaderInfo := make([]libsveltosv1alpha1.ReloaderInfo, 0)
+	reloaderInfo := make([]libsveltosv1beta1.ReloaderInfo, 0)
 	for i := range resources {
 		resource := &resources[i]
 		if watchForRollingUpgrade(resource) {
 			reloaderInfo = append(reloaderInfo,
-				libsveltosv1alpha1.ReloaderInfo{
+				libsveltosv1beta1.ReloaderInfo{
 					Namespace: resource.Namespace,
 					Name:      resource.Name,
 					Kind:      resource.Kind,
@@ -120,18 +120,18 @@ func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
 
 // createReloaderInstance creates Reloader instance to managed cluster.
 func createReloaderInstance(ctx context.Context, remoteClient client.Client, clusterProfileName string,
-	feature configv1alpha1.FeatureID, reloaderInfo []libsveltosv1alpha1.ReloaderInfo) error {
+	feature configv1beta1.FeatureID, reloaderInfo []libsveltosv1beta1.ReloaderInfo) error {
 
 	h := sha256.New()
 	fmt.Fprintf(h, "%s--%s", clusterProfileName, feature)
 	hash := h.Sum(nil)
-	reloader := &libsveltosv1alpha1.Reloader{
+	reloader := &libsveltosv1beta1.Reloader{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        fmt.Sprintf("%x", hash),
 			Labels:      getReloaderLabels(clusterProfileName, feature),
 			Annotations: getReloaderAnnotations(),
 		},
-		Spec: libsveltosv1alpha1.ReloaderSpec{
+		Spec: libsveltosv1beta1.ReloaderSpec{
 			ReloaderInfo: reloaderInfo,
 		},
 	}
@@ -141,9 +141,9 @@ func createReloaderInstance(ctx context.Context, remoteClient client.Client, clu
 
 // getReloaderInstance returns ReloaderInstance if present in the managed cluster.
 func getReloaderInstance(ctx context.Context, remoteClient client.Client, clusterProfileName string,
-	feature configv1alpha1.FeatureID, logger logr.Logger) (*libsveltosv1alpha1.Reloader, error) {
+	feature configv1beta1.FeatureID, logger logr.Logger) (*libsveltosv1beta1.Reloader, error) {
 
-	reloaders := &libsveltosv1alpha1.ReloaderList{}
+	reloaders := &libsveltosv1beta1.ReloaderList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(getReloaderLabels(clusterProfileName, feature)),
 	}
@@ -165,7 +165,7 @@ func getReloaderInstance(ctx context.Context, remoteClient client.Client, cluste
 }
 
 // getReloaderLabels returns labels a Reloader instance has in a managed cluster
-func getReloaderLabels(clusterProfileName string, feature configv1alpha1.FeatureID) map[string]string {
+func getReloaderLabels(clusterProfileName string, feature configv1beta1.FeatureID) map[string]string {
 	return map[string]string{
 		"clusterprofile": clusterProfileName,
 		"feature":        string(feature),
@@ -175,7 +175,7 @@ func getReloaderLabels(clusterProfileName string, feature configv1alpha1.Feature
 // getReloaderAnnotations returns annotations a Reloader instance has in a managed cluster
 func getReloaderAnnotations() map[string]string {
 	return map[string]string{
-		libsveltosv1alpha1.DeployedBySveltosAnnotation: "ok",
+		libsveltosv1beta1.DeployedBySveltosAnnotation: "ok",
 	}
 }
 
@@ -198,8 +198,8 @@ func watchForRollingUpgrade(resource *corev1.ObjectReference) bool {
 // Reload indicates whether reloader instance needs to be removed, which can happen
 // because ClusterSummary is being deleted or ClusterProfile.Spec.Reloader is set to false.
 func updateReloaderWithDeployedResources(ctx context.Context, c client.Client,
-	clusterProfileOwnerRef *metav1.OwnerReference, feature configv1alpha1.FeatureID,
-	resources []corev1.ObjectReference, clusterSummary *configv1alpha1.ClusterSummary,
+	clusterProfileOwnerRef *metav1.OwnerReference, feature configv1beta1.FeatureID,
+	resources []corev1.ObjectReference, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) error {
 
 	// Ignore admin. Deploying Reloaders must be done as Sveltos.
@@ -224,7 +224,7 @@ func updateReloaderWithDeployedResources(ctx context.Context, c client.Client,
 
 // convertResourceReportsToObjectReference converts a slice of ResourceReports to
 // a slice of ObjectReference
-func convertResourceReportsToObjectReference(resourceReports []configv1alpha1.ResourceReport,
+func convertResourceReportsToObjectReference(resourceReports []configv1beta1.ResourceReport,
 ) []corev1.ObjectReference {
 
 	resources := make([]corev1.ObjectReference, len(resourceReports))
@@ -243,7 +243,7 @@ func convertResourceReportsToObjectReference(resourceReports []configv1alpha1.Re
 
 // convertHelmResourcesToObjectReference converts a slice of HelmResources to
 // a slice of ObjectReference
-func convertHelmResourcesToObjectReference(helmResources []libsveltosv1alpha1.HelmResources,
+func convertHelmResourcesToObjectReference(helmResources []libsveltosv1beta1.HelmResources,
 ) []corev1.ObjectReference {
 
 	resources := make([]corev1.ObjectReference, 0)

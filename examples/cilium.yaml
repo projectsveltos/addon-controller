@@ -1,9 +1,11 @@
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-cilium-v1-26
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   helmCharts:
   - chartName: cilium/cilium
     chartVersion: 1.12.12

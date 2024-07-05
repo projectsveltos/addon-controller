@@ -28,9 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -92,7 +92,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Create a ClusterProfile in Continuous syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -102,11 +102,11 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Update ClusterProfile %s to reference ConfigMap with Kong ServiceAccount %s/%s",
 			clusterProfile.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
-		currentClusterProfile := &configv1alpha1.ClusterProfile{}
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: kongSAConfigMap.Namespace,
 				Name:      kongSAConfigMap.Name,
 			},
@@ -115,7 +115,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Update ClusterProfile %s to deploy mysql helm chart", clusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -123,7 +123,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "9.10.4",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -133,26 +133,26 @@ var _ = Describe("DryRun", func() {
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
 
 		verifyDeployedGroupVersionKind(clusterProfile.Name)
 
-		charts := []configv1alpha1.Chart{
+		charts := []configv1beta1.Chart{
 			{ReleaseName: "mysql", ChartVersion: "9.10.4", Namespace: "mysql"},
 		}
 
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureHelm,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
 		policies := []policy{
 			{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
 		}
-		verifyClusterConfiguration(configv1alpha1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1alpha1.FeatureResources,
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)
 
 		Byf("Create a configMap with kong Role")
@@ -161,7 +161,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Create a new ClusterProfile in DryRun syncMode matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		dryRunClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		dryRunClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
+		dryRunClusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
 		Expect(k8sClient.Create(context.TODO(), dryRunClusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(dryRunClusterProfile)
@@ -174,13 +174,13 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: dryRunClusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs, Name: kongRoleConfigMap.Name,
 			},
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs, Name: kongSAConfigMap.Name,
 			},
 		}
@@ -190,7 +190,7 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: dryRunClusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -198,7 +198,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "9.10.4",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -207,7 +207,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "17.11.6",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -216,7 +216,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "12.5.8",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
-				HelmChartAction:  configv1alpha1.HelmChartActionUninstall,
+				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -228,7 +228,7 @@ var _ = Describe("DryRun", func() {
 		By("Verifying ClusterReport for helm reports")
 		clusterReportName := fmt.Sprintf("%s--capi--%s", dryRunClusterProfile.Name, dryRunClusterSummary.Spec.ClusterName)
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName},
 				currentClusterReport)
@@ -237,19 +237,19 @@ var _ = Describe("DryRun", func() {
 			}
 			// Another ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.ConflictHelmAction))
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1beta1.ConflictHelmAction))
 			if err != nil {
 				return err
 			}
 			// If not in DryRun, it would install redis release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.InstallHelmAction))
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1beta1.InstallHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is Uninstall and not installed yet so no action
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.NoHelmAction))
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1beta1.NoHelmAction))
 			if err != nil {
 				return err
 			}
@@ -258,7 +258,7 @@ var _ = Describe("DryRun", func() {
 
 		By("Verifying ClusterReport for policy reports")
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
@@ -266,13 +266,13 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1alpha1.CreateResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(configv1beta1.CreateResourceAction))
 			if err != nil {
 				return err
 			}
 			// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1alpha1.ConflictResourceAction))
+				"ServiceAccount", "", string(configv1beta1.ConflictResourceAction))
 			if err != nil {
 				return err
 			}
@@ -297,8 +297,8 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Changing syncMode to Continuous and HelmCharts (all install) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -306,7 +306,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "9.10.4",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -315,7 +315,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "17.11.6",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -324,7 +324,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "12.5.8",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -334,10 +334,10 @@ var _ = Describe("DryRun", func() {
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", dryRunClusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1beta1.FeatureResources)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1alpha1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1beta1.FeatureHelm)
 
 		Byf("Verifying ServiceAccount kong/kong-serviceaccount is deployed managed cluster")
 		err = workloadClient.Get(context.TODO(),
@@ -346,14 +346,14 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Changing syncMode to DryRun and HelmCharts (some install, one uninstall) for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeDryRun
-		currentClusterProfile.Spec.PolicyRefs = []configv1alpha1.PolicyRef{
+		currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
-				Kind:      string(libsveltosv1alpha1.ConfigMapReferencedResourceKind),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace: configMapNs, Name: kongRoleConfigMap.Name,
 			},
 		}
-		currentClusterProfile.Spec.HelmCharts = []configv1alpha1.HelmChart{
+		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
@@ -361,7 +361,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "9.10.4",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -370,7 +370,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "17.11.6",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
-				HelmChartAction:  configv1alpha1.HelmChartActionInstall,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
@@ -379,7 +379,7 @@ var _ = Describe("DryRun", func() {
 				ChartVersion:     "12.5.8",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
-				HelmChartAction:  configv1alpha1.HelmChartActionUninstall,
+				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -390,7 +390,7 @@ var _ = Describe("DryRun", func() {
 
 		By("Verifying ClusterReport")
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
@@ -398,19 +398,19 @@ var _ = Describe("DryRun", func() {
 			}
 			// ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.NoHelmAction))
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1beta1.NoHelmAction))
 			if err != nil {
 				return err
 			}
 			// ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.NoHelmAction))
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1beta1.NoHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is installed and action is Uninstall
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1beta1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
@@ -419,7 +419,7 @@ var _ = Describe("DryRun", func() {
 
 		By("Verifying ClusterReport for policy reports")
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
@@ -427,14 +427,14 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1alpha1.NoResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(configv1beta1.NoResourceAction))
 			if err != nil {
 				return err
 			}
 			// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 			// So action would be delete
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1alpha1.DeleteResourceAction))
+				"ServiceAccount", "", string(configv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
@@ -443,8 +443,14 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Changing clusterSelector for ClusterProfile %s so to not match any CAPI cluster", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		selector := "bar=foo"
-		currentClusterProfile.Spec.ClusterSelector = libsveltosv1alpha1.Selector(selector)
+
+		currentClusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"bar": "foo",
+				},
+			},
+		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		// Since ClusterProfile is in DryRun mode, ClusterSummary should be marked as deleted but not removed
@@ -452,7 +458,7 @@ var _ = Describe("DryRun", func() {
 
 		// First wait for clusterSummary to be marked for deletion
 		Eventually(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Namespace, Name: dryRunClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
@@ -463,7 +469,7 @@ var _ = Describe("DryRun", func() {
 
 		// Then verify ClusterSummary is not removed.
 		Consistently(func() bool {
-			currentClusterSummary := &configv1alpha1.ClusterSummary{}
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Namespace, Name: dryRunClusterSummary.Name}, currentClusterSummary)
 			if err != nil {
@@ -474,7 +480,7 @@ var _ = Describe("DryRun", func() {
 
 		By("Verifying ClusterReport")
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
@@ -482,19 +488,19 @@ var _ = Describe("DryRun", func() {
 			}
 			// ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1beta1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
 			// ClusterProfile is managing mysql release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1beta1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
 			// postgres is installed and action is Uninstall
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[2].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1alpha1.UninstallHelmAction))
+				currentClusterProfile.Spec.HelmCharts[2].ReleaseName, string(configv1beta1.UninstallHelmAction))
 			if err != nil {
 				return err
 			}
@@ -503,7 +509,7 @@ var _ = Describe("DryRun", func() {
 
 		By("Verifying ClusterReport for policy reports")
 		Eventually(func() error {
-			currentClusterReport := &configv1alpha1.ClusterReport{}
+			currentClusterReport := &configv1beta1.ClusterReport{}
 			err = k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: dryRunClusterSummary.Spec.ClusterNamespace, Name: clusterReportName}, currentClusterReport)
 			if err != nil {
@@ -511,14 +517,14 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1alpha1.DeleteResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(configv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
 			// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 			// So action would be delete
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1alpha1.DeleteResourceAction))
+				"ServiceAccount", "", string(configv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
@@ -527,7 +533,7 @@ var _ = Describe("DryRun", func() {
 
 		Byf("Changing syncMode to Continuous for ClusterProfile %s", dryRunClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: dryRunClusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.SyncMode = configv1alpha1.SyncModeContinuous
+		currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile))
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
@@ -545,7 +551,7 @@ var _ = Describe("DryRun", func() {
 	})
 })
 
-func verifyReleaseReport(clusterReport *configv1alpha1.ClusterReport,
+func verifyReleaseReport(clusterReport *configv1beta1.ClusterReport,
 	releaseNamespace, releaseName, action string) error {
 
 	for i := range clusterReport.Status.ReleaseReports {
@@ -563,7 +569,7 @@ func verifyReleaseReport(clusterReport *configv1alpha1.ClusterReport,
 		releaseNamespace, releaseName)
 }
 
-func verifyResourceReport(clusterReport *configv1alpha1.ClusterReport,
+func verifyResourceReport(clusterReport *configv1beta1.ClusterReport,
 	resourceNamespace, resourceName, resourceKind, resourceGroup, action string) error {
 
 	for i := range clusterReport.Status.ResourceReports {
@@ -596,13 +602,13 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 			controllers.ClusterProfileLabelName: clusterProfileName,
 		},
 	}
-	clusterSummaryList := &configv1alpha1.ClusterSummaryList{}
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
 	Expect(len(clusterSummaryList.Items)).To(Equal(1))
 	found := false
 	for i := range clusterSummaryList.Items[0].Status.DeployedGVKs {
 		fs := clusterSummaryList.Items[0].Status.DeployedGVKs[i]
-		if fs.FeatureID == configv1alpha1.FeatureResources {
+		if fs.FeatureID == configv1beta1.FeatureResources {
 			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
 			found = true
 		}

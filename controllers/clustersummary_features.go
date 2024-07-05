@@ -22,27 +22,27 @@ import (
 
 	"github.com/go-logr/logr"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 
 var (
-	featuresHandlers map[configv1alpha1.FeatureID]feature
+	featuresHandlers map[configv1beta1.FeatureID]feature
 )
 
 func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
-	err := d.RegisterFeatureID(string(configv1alpha1.FeatureResources))
+	err := d.RegisterFeatureID(string(configv1beta1.FeatureResources))
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureResources")
 		os.Exit(1)
 	}
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureHelm))
+	err = d.RegisterFeatureID(string(configv1beta1.FeatureHelm))
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureHelm")
 		os.Exit(1)
 	}
 
-	err = d.RegisterFeatureID(string(configv1alpha1.FeatureKustomize))
+	err = d.RegisterFeatureID(string(configv1beta1.FeatureKustomize))
 	if err != nil {
 		setupLog.Error(err, "failed to register feature FeatureKustomize")
 		os.Exit(1)
@@ -52,19 +52,19 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 }
 
 func creatFeatureHandlerMaps() {
-	featuresHandlers = make(map[configv1alpha1.FeatureID]feature)
+	featuresHandlers = make(map[configv1beta1.FeatureID]feature)
 
-	featuresHandlers[configv1alpha1.FeatureResources] = feature{id: configv1alpha1.FeatureResources, currentHash: resourcesHash,
+	featuresHandlers[configv1beta1.FeatureResources] = feature{id: configv1beta1.FeatureResources, currentHash: resourcesHash,
 		deploy: deployResources, undeploy: undeployResources, getRefs: getResourceRefs}
 
-	featuresHandlers[configv1alpha1.FeatureHelm] = feature{id: configv1alpha1.FeatureHelm, currentHash: helmHash,
+	featuresHandlers[configv1beta1.FeatureHelm] = feature{id: configv1beta1.FeatureHelm, currentHash: helmHash,
 		deploy: deployHelmCharts, undeploy: undeployHelmCharts, getRefs: getHelmRefs}
 
-	featuresHandlers[configv1alpha1.FeatureKustomize] = feature{id: configv1alpha1.FeatureKustomize, currentHash: kustomizationHash,
+	featuresHandlers[configv1beta1.FeatureKustomize] = feature{id: configv1beta1.FeatureKustomize, currentHash: kustomizationHash,
 		deploy: deployKustomizeRefs, undeploy: undeployKustomizeRefs, getRefs: getKustomizationRefs}
 }
 
-func getHandlersForFeature(featureID configv1alpha1.FeatureID) feature {
+func getHandlersForFeature(featureID configv1beta1.FeatureID) feature {
 	v, ok := featuresHandlers[featureID]
 	if !ok {
 		panic(fmt.Errorf("feature %s has no feature handler registered", featureID))

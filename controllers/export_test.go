@@ -98,6 +98,7 @@ var (
 
 	AddExtraLabels      = addExtraLabels
 	AddExtraAnnotations = addExtraAnnotations
+	AdjustNamespace     = adjustNamespace
 
 	ResourcesHash   = resourcesHash
 	GetResourceRefs = getResourceRefs

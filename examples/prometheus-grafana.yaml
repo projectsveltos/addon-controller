@@ -1,9 +1,11 @@
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: prometheus-grafana
 spec:
-  clusterSelector: env=fv
+  clusterSelector:
+    matchLabels:
+      env: fv
   syncMode: Continuous
   helmCharts:
   - repositoryURL:    https://prometheus-community.github.io/helm-charts

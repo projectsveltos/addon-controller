@@ -28,9 +28,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 
-	"github.com/Masterminds/sprig/v3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
@@ -46,9 +46,9 @@ import (
 	kustomizetypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
-	configv1alpha1 "github.com/projectsveltos/addon-controller/api/v1alpha1"
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
-	libsveltosv1alpha1 "github.com/projectsveltos/libsveltos/api/v1alpha1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -61,12 +61,34 @@ const (
 	maxSize        = int64(20 * 1024 * 1024)
 )
 
+var (
+	kustomizeRenderMutex sync.Mutex
+)
+
+// buildKustomization wraps krusty.MakeKustomizer with the following settings:
+// - load files from outside the kustomization.yaml root
+// - disable plugins except for the builtin ones
+func buildKustomization(fs filesys.FileSystem, dirPath string) (resmap.ResMap, error) {
+	// Temporary workaround for concurrent map read and map write bug
+	// https://github.com/kubernetes-sigs/kustomize/issues/3659
+	kustomizeRenderMutex.Lock()
+	defer kustomizeRenderMutex.Unlock()
+
+	buildOptions := &krusty.Options{
+		LoadRestrictions: kustomizetypes.LoadRestrictionsNone,
+		PluginConfig:     kustomizetypes.DisabledPluginConfig(),
+	}
+
+	k := krusty.MakeKustomizer(buildOptions)
+	return k.Run(fs, dirPath)
+}
+
 func deployKustomizeRefs(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	clusterType libsveltosv1alpha1.ClusterType,
+	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
-	featureHandler := getHandlersForFeature(configv1alpha1.FeatureKustomize)
+	featureHandler := getHandlersForFeature(configv1beta1.FeatureKustomize)
 
 	// Get ClusterSummary that requested this
 	clusterSummary, remoteClient, err := getClusterSummaryAndClusterClient(ctx, clusterNamespace, applicant, c, logger)
@@ -92,25 +114,25 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 
 	// Irrespective of error, update deployed gvks. Otherwise cleanup won't happen in case
 	var gvkErr error
-	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1alpha1.FeatureKustomize,
+	clusterSummary, gvkErr = updateDeployedGroupVersionKind(ctx, clusterSummary, configv1beta1.FeatureKustomize,
 		localResourceReports, remoteResourceReports, logger)
 	if gvkErr != nil {
 		return gvkErr
 	}
 
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 	remoteResources := convertResourceReportsToObjectReference(remoteResourceReports)
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureKustomize,
 		remoteResources, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
 	// If we are here there are no conflicts (and error would have been returned by deployKustomizeRef)
-	remoteDeployed := make([]configv1alpha1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, 0)
 	for i := range remoteResourceReports {
 		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
 	}
@@ -121,7 +143,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var undeployed []configv1alpha1.ResourceReport
+	var undeployed []configv1beta1.ResourceReport
 	_, undeployed, err = cleanStaleKustomizeResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		localResourceReports, remoteResourceReports, logger)
 	if err != nil {
@@ -134,7 +156,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, remoteResourceReports, configv1alpha1.FeatureKustomize)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, remoteResourceReports, configv1beta1.FeatureKustomize)
 	if err != nil {
 		return err
 	}
@@ -145,20 +167,20 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return &configv1alpha1.DryRunReconciliationError{}
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	if deployError != nil {
 		return deployError
 	}
 
-	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1alpha1.FeatureKustomize, logger)
+	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1beta1.FeatureKustomize, logger)
 }
 
 func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
-	clusterSummary *configv1alpha1.ClusterSummary, localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport,
-	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1alpha1.ResourceReport, err error) {
+	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []configv1beta1.ResourceReport,
+	logger logr.Logger) (localUndeployed, remoteUndeployed []configv1beta1.ResourceReport, err error) {
 	// Clean stale resources in the management cluster
 	localUndeployed, err = cleanKustomizeResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary, localResourceReports, logger)
@@ -178,10 +200,10 @@ func cleanStaleKustomizeResources(ctx context.Context, remoteRestConfig *rest.Co
 
 func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant, _ string,
-	clusterType libsveltosv1alpha1.ClusterType,
+	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
-	clusterSummary, err := configv1alpha1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
+	clusterSummary, err := configv1beta1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -196,12 +218,12 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("undeployKustomizeRefs")
 
-	var resourceReports []configv1alpha1.ResourceReport
+	var resourceReports []configv1beta1.ResourceReport
 
 	// Undeploy from management cluster
-	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1alpha1.FeatureKustomize,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize),
-		map[string]configv1alpha1.Resource{}, logger)
+	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, configv1beta1.FeatureKustomize,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureKustomize),
+		map[string]configv1beta1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
@@ -219,41 +241,41 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	// Undeploy from managed cluster
-	resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient, configv1alpha1.FeatureKustomize,
-		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize),
-		map[string]configv1alpha1.Resource{}, logger)
+	resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient, configv1beta1.FeatureKustomize,
+		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureKustomize),
+		map[string]configv1beta1.Resource{}, logger)
 	if err != nil {
 		return err
 	}
 
-	profileOwnerRef, err := configv1alpha1.GetProfileOwnerReference(clusterSummary)
+	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1alpha1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureKustomize,
 		nil, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
 
 	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
-		configv1alpha1.FeatureKustomize, []configv1alpha1.Resource{}, nil)
+		configv1beta1.FeatureKustomize, []configv1beta1.Resource{}, nil)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports, configv1alpha1.FeatureKustomize)
+	err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, resourceReports, configv1beta1.FeatureKustomize)
 	if err != nil {
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeDryRun {
-		return &configv1alpha1.DryRunReconciliationError{}
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	manager := getManager()
-	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1alpha1.FeatureKustomize)
+	manager.stopStaleWatchForMgmtResource(nil, clusterSummary, configv1beta1.FeatureKustomize)
 
 	return nil
 }
@@ -303,13 +325,13 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
-		if h.FeatureID == configv1alpha1.FeatureKustomize {
+		if h.FeatureID == configv1beta1.FeatureKustomize {
 			config += render.AsCode(h)
 		}
 	}
 
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode ==
-		configv1alpha1.SyncModeContinuousWithDriftDetection {
+		configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Use the version. This will cause drift-detection, Sveltos CRDs
 		// to be redeployed on upgrade
 		config += getVersion()
@@ -317,7 +339,7 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
-		if h.FeatureID == configv1alpha1.FeatureHelm {
+		if h.FeatureID == configv1beta1.FeatureHelm {
 			config += render.AsCode(h)
 		}
 	}
@@ -330,17 +352,27 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		config += render.AsCode(mgmtResources[i])
 	}
 
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }
 
-func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) ([]byte, error) {
+func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) ([]byte, error) {
 
 	var result string
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
-		configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
+		configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
 			return nil, err
@@ -350,8 +382,8 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		}
 		result += getDataSectionHash(configMap.Data)
 		result += getDataSectionHash(configMap.BinaryData)
-	} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
-		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+	} else if kustomizationRef.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
+		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
 			return nil, err
@@ -362,7 +394,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		result += getDataSectionHash(secret.Data)
 		result += getDataSectionHash(secret.StringData)
 	} else {
-		source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+		source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get source %v", err))
 			return nil, err
@@ -381,7 +413,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 
 // instantiateKustomizeSubstituteValues gets all substitute values for a KustomizationRef and
 // instantiate those using resources in the management cluster.
-func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
+func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, values map[string]string, logger logr.Logger,
 ) (map[string]string, error) {
 
@@ -412,8 +444,8 @@ func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *c
 }
 
 // getKustomizeSubstituteValues returns all key-value pair looking at both Values and ValuesFrom
-func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
 
 	values := make(map[string]string)
 	for k := range kustomizationRef.Values {
@@ -432,25 +464,25 @@ func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterS
 }
 
 // getKustomizeSubstituteValuesFrom return key-value pair from referenced ConfigMap/Secret
-func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
 
 	return getValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
 }
 
-func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (string, error) {
+func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (string, error) {
 
 	return getValuesFromResourceHash(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, logger)
 }
 
-func getKustomizationRefs(clusterSummary *configv1alpha1.ClusterSummary) []configv1alpha1.PolicyRef {
+func getKustomizationRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef {
 	return nil
 }
 
 func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *rest.Config,
-	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
-	logger logr.Logger) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
+	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) (localReports, remoteReports []configv1beta1.ResourceReport, err error) {
 
 	var tmpDir string
 	tmpDir, err = prepareFileSystem(ctx, c, kustomizationRef, clusterSummary, logger)
@@ -484,14 +516,8 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	fs := filesys.MakeFsOnDisk()
 
-	buildOptions := &krusty.Options{
-		LoadRestrictions: kustomizetypes.LoadRestrictionsNone,
-		PluginConfig:     kustomizetypes.DisabledPluginConfig(),
-	}
-
-	kustomizer := krusty.MakeKustomizer(buildOptions)
 	var resMap resmap.ResMap
-	resMap, err = kustomizer.Run(fs, dirPath)
+	resMap, err = buildKustomization(fs, dirPath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -500,23 +526,29 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 }
 
 func prepareFileSystem(ctx context.Context, c client.Client,
-	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	if kustomizationRef.Kind == string(libsveltosv1alpha1.ConfigMapReferencedResourceKind) {
+	if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 		return prepareFileSystemWithConfigMap(ctx, c, kustomizationRef, clusterSummary, logger)
-	} else if kustomizationRef.Kind == string(libsveltosv1alpha1.SecretReferencedResourceKind) {
+	} else if kustomizationRef.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
 	}
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	source, err := getSource(ctx, c, namespace, kustomizationRef.Name, kustomizationRef.Kind)
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)
 	if err != nil {
 		return "", err
 	}
 
 	if source == nil {
-		return "", fmt.Errorf("source %s %s/%s not found", kustomizationRef.Kind, namespace, kustomizationRef.Name)
+		return "", fmt.Errorf("source %s %s/%s not found", kustomizationRef.Kind, namespace, name)
 	}
 
 	s := source.(sourcev1.Source)
@@ -524,11 +556,17 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 }
 
 func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
-	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 	if err != nil {
 		return "", err
 	}
@@ -537,11 +575,17 @@ func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
 }
 
 func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
-	kustomizationRef *configv1alpha1.KustomizationRef, clusterSummary *configv1alpha1.ClusterSummary,
+	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
 	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
-	secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: kustomizationRef.Name})
+
+	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	if err != nil {
+		return "", err
+	}
+
+	secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 	if err != nil {
 		return "", err
 	}
@@ -550,7 +594,7 @@ func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
 }
 
 func prepareFileSystemWithData(binaryData map[string][]byte,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger) (string, error) {
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (string, error) {
 
 	key := "kustomize.tar.gz"
 	binaryTarGz, ok := binaryData[key]
@@ -584,21 +628,20 @@ func prepareFileSystemWithData(binaryData map[string][]byte,
 	return tmpDir, nil
 }
 
-func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	deploymentType configv1alpha1.DeploymentType, resMap resmap.ResMap,
-	kustomizationRef *configv1alpha1.KustomizationRef, logger logr.Logger,
-) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, err error) {
+func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	deploymentType configv1beta1.DeploymentType, resMap resmap.ResMap,
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger,
+) (objectsToDeployLocally, objectsToDeployRemotely []*unstructured.Unstructured, mgmtResources map[string]*unstructured.Unstructured, err error) {
 
-	var mgmtResources map[string]*unstructured.Unstructured
 	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get key-value pairs from ValuesFrom
 	values, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Get substitute values. Those are collected from Data sections of referenced ConfigMap/Secret instances.
@@ -606,7 +649,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	// the managemenet cluster
 	instantiateSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, values, logger)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	resources := resMap.Resources()
@@ -615,7 +658,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		yaml, err := resource.AsYAML()
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get resource YAML %v", err))
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		// Assume it is a template only if there are values to substitute
@@ -627,7 +670,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 			if err != nil {
 				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
 				logger.V(logs.LogInfo).Info(msg)
-				return nil, nil, errors.Wrap(err, msg)
+				return nil, nil, nil, errors.Wrap(err, msg)
 			}
 		}
 
@@ -635,27 +678,27 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		u, err = utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		if kustomizationRef.TargetNamespace != "" {
 			u.SetNamespace(kustomizationRef.TargetNamespace)
 		}
 
-		if deploymentType == configv1alpha1.DeploymentTypeLocal {
+		if deploymentType == configv1beta1.DeploymentTypeLocal {
 			objectsToDeployLocally = append(objectsToDeployLocally, u)
 		} else {
 			objectsToDeployRemotely = append(objectsToDeployRemotely, u)
 		}
 	}
 
-	return objectsToDeployLocally, objectsToDeployRemotely, nil
+	return objectsToDeployLocally, objectsToDeployRemotely, mgmtResources, nil
 }
 
 func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestConfig *rest.Config,
-	kustomizationRef *configv1alpha1.KustomizationRef, resMap resmap.ResMap,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
-) (localReports, remoteReports []configv1alpha1.ResourceReport, err error) {
+	kustomizationRef *configv1beta1.KustomizationRef, resMap resmap.ResMap,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
+) (localReports, remoteReports []configv1beta1.ResourceReport, err error) {
 
 	// Assume that if objects are deployed in the management clusters, those are needed before any resource is deployed
 	// in the managed cluster. So try to deploy those first if any.
@@ -668,7 +711,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		}
 	}
 
-	objectsToDeployLocally, objectsToDeployRemotely, err :=
+	objectsToDeployLocally, objectsToDeployRemotely, mgmtResources, err :=
 		getKustomizedResources(ctx, c, clusterSummary, kustomizationRef.DeploymentType, resMap,
 			kustomizationRef, logger)
 	if err != nil {
@@ -681,7 +724,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
-		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
+		ref, configv1beta1.FeatureKustomize, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
 		return localReports, nil, err
@@ -693,7 +736,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
-		ref, configv1alpha1.FeatureKustomize, clusterSummary, logger)
+		ref, configv1beta1.FeatureKustomize, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))
 		return localReports, remoteReports, err
@@ -703,17 +746,17 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 }
 
 func cleanKustomizeResources(ctx context.Context, isMgmtCluster bool, destRestConfig *rest.Config,
-	destClient client.Client, clusterSummary *configv1alpha1.ClusterSummary,
-	resourceReports []configv1alpha1.ResourceReport, logger logr.Logger) ([]configv1alpha1.ResourceReport, error) {
+	destClient client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	resourceReports []configv1beta1.ResourceReport, logger logr.Logger) ([]configv1beta1.ResourceReport, error) {
 
-	currentPolicies := make(map[string]configv1alpha1.Resource, 0)
+	currentPolicies := make(map[string]configv1beta1.Resource, 0)
 	for i := range resourceReports {
 		key := getPolicyInfo(&resourceReports[i].Resource)
 		currentPolicies[key] = resourceReports[i].Resource
 	}
 	undeployed, err := undeployStaleResources(ctx, isMgmtCluster, destRestConfig, destClient,
-		configv1alpha1.FeatureKustomize, clusterSummary,
-		getDeployedGroupVersionKinds(clusterSummary, configv1alpha1.FeatureKustomize), currentPolicies, logger)
+		configv1beta1.FeatureKustomize, clusterSummary,
+		getDeployedGroupVersionKinds(clusterSummary, configv1beta1.FeatureKustomize), currentPolicies, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -722,11 +765,11 @@ func cleanKustomizeResources(ctx context.Context, isMgmtCluster bool, destRestCo
 
 // handleDriftDetectionManagerDeploymentForKustomize deploys, if sync mode is SyncModeContinuousWithDriftDetection,
 // drift-detection-manager in the managed clyuster
-func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType, startInMgmtCluster bool,
+func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, startInMgmtCluster bool,
 	logger logr.Logger) error {
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err := deployDriftDetectionManagerInCluster(ctx, getManagementClusterClient(), clusterNamespace,
 			clusterName, clusterSummary.Name, clusterType, startInMgmtCluster, logger)
@@ -738,7 +781,7 @@ func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clus
 		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
 		// a configuration drift is happening)
 		err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-			clusterType, []configv1alpha1.Resource{}, logger)
+			clusterType, []configv1beta1.Resource{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 			return err
@@ -750,11 +793,11 @@ func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clus
 
 // handleKustomizeResourceSummaryDeployment deploys, if sync mode is SyncModeContinuousWithDriftDetection,
 // ResourceSummary in the managed cluster
-func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummary *configv1alpha1.ClusterSummary,
-	clusterNamespace, clusterName string, clusterType libsveltosv1alpha1.ClusterType,
-	remoteDeployed []configv1alpha1.Resource, logger logr.Logger) error {
+func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	remoteDeployed []configv1beta1.Resource, logger logr.Logger) error {
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1alpha1.SyncModeContinuousWithDriftDetection {
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// deploy ResourceSummary
 		err := deployResourceSummaryWithKustomizeResources(ctx, getManagementClusterClient(),
 			clusterNamespace, clusterName, clusterSummary.Name, clusterType, remoteDeployed, logger)
@@ -768,13 +811,13 @@ func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummar
 
 func deployResourceSummaryWithKustomizeResources(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant string,
-	clusterType libsveltosv1alpha1.ClusterType,
-	deployed []configv1alpha1.Resource, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType,
+	deployed []configv1beta1.Resource, logger logr.Logger) error {
 
-	resources := make([]libsveltosv1alpha1.Resource, len(deployed))
+	resources := make([]libsveltosv1beta1.Resource, len(deployed))
 
 	for i := range deployed {
-		resources[i] = libsveltosv1alpha1.Resource{
+		resources[i] = libsveltosv1beta1.Resource{
 			Namespace: deployed[i].Namespace,
 			Name:      deployed[i].Name,
 			Group:     deployed[i].Group,
@@ -789,13 +832,13 @@ func deployResourceSummaryWithKustomizeResources(ctx context.Context, c client.C
 
 // deployEachKustomizeRefs walks KustomizationRefs and deploys resources
 func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestConfig *rest.Config,
-	clusterSummary *configv1alpha1.ClusterSummary, logger logr.Logger,
-) (localResourceReports, remoteResourceReports []configv1alpha1.ResourceReport, err error) {
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
+) (localResourceReports, remoteResourceReports []configv1beta1.ResourceReport, err error) {
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
-		var tmpLocal []configv1alpha1.ResourceReport
-		var tmpRemote []configv1alpha1.ResourceReport
+		var tmpLocal []configv1beta1.ResourceReport
+		var tmpRemote []configv1beta1.ResourceReport
 		tmpLocal, tmpRemote, err = deployKustomizeRef(ctx, c, remoteRestConfig, kustomizationRef, clusterSummary, logger)
 		if err != nil {
 			return nil, nil, err
@@ -863,7 +906,7 @@ func extractTarGz(src, dest string) error {
 func instantiateResourceWithSubstituteValues(templateName string, resource []byte,
 	substituteValues map[string]string, logger logr.Logger) ([]byte, error) {
 
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(sprig.FuncMap()).Parse(string(resource))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(string(resource))
 	if err != nil {
 		return nil, err
 	}

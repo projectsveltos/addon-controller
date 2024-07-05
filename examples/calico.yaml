@@ -1,16 +1,46 @@
+apiVersion: v1
+data:
+  calico-ns.yaml: |
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: tigera-operator
+      labels:
+        name: tigera-operator
+        pod-security.kubernetes.io/enforce: privileged
+kind: ConfigMap
+metadata:
+  name: calico-namespace
+  namespace: default
+---
+# Create calico-namespace with label pod-security.kubernetes.io/enforce: privileged
 apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: create-calico-ns
+spec:
+  clusterSelector: cni=calico
+  policyRefs:
+  - name: calico-namespace
+    namespace: default
+    kind: ConfigMap
+---
+apiVersion: config.projectsveltos.io/v1alpha1
 kind: ClusterProfile
 metadata:
   name: deploy-calico
 spec:
+  dependsOn:
+  - create-calico-ns
+  syncMode: Continuous
   clusterSelector:
     matchLabels:
-      env: prod
+      cni: calico
   helmCharts:
   - repositoryURL:    https://projectcalico.docs.tigera.io/charts
     repositoryName:   projectcalico
     chartName:        projectcalico/tigera-operator
-    chartVersion:     v3.24.5
+    chartVersion:     v3.28.0
     releaseName:      calico
     releaseNamespace: tigera-operator
     helmChartAction:  Install
@@ -22,3 +52,4 @@ spec:
             - cidr: {{ $cidr }}
               encapsulation: VXLAN
           {{ end }}
+

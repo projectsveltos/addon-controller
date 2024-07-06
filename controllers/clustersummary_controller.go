@@ -53,6 +53,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/sharding"
+	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
 
 const (
@@ -822,10 +823,11 @@ func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *s
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
 
-		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
-			clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name)
+		cs := clusterSummaryScope.ClusterSummary
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+			string(cs.Spec.ClusterType), clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name)
 		if err != nil {
 			return nil, err
 		}
@@ -846,17 +848,22 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
-		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Namespace
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+		kr := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 
-		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
-			clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Name)
+		referencedNamespace := kr.Namespace
+
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummaryScope.Namespace(), referencedNamespace)
+
+		cs := clusterSummaryScope.ClusterSummary
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, string(cs.Spec.ClusterType), kr.Name)
 		if err != nil {
 			return nil, err
 		}
 
 		var apiVersion string
-		switch clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind {
+		switch kr.Kind {
 		case sourcev1.GitRepositoryKind:
 			apiVersion = sourcev1.GroupVersion.String()
 		case sourcev1b2.OCIRepositoryKind:
@@ -868,12 +875,11 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 		}
 		currentReferences.Insert(&corev1.ObjectReference{
 			APIVersion: apiVersion,
-			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i].Kind,
+			Kind:       kr.Kind,
 			Namespace:  namespace,
 			Name:       referencedName,
 		})
 
-		kr := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 		valuesFromReferences, err := getKustomizationValueFrom(clusterSummaryScope, kr)
 		if err != nil {
 			return nil, err
@@ -893,10 +899,12 @@ func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, k
 
 	for i := range kr.ValuesFrom {
 		referencedNamespace := kr.ValuesFrom[i].Namespace
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummaryScope.Namespace(), referencedNamespace)
 
-		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
-			kr.ValuesFrom[i].Name)
+		cs := clusterSummaryScope.ClusterSummary
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, string(cs.Spec.ClusterType), kr.ValuesFrom[i].Name)
 		if err != nil {
 			return nil, err
 		}
@@ -937,10 +945,12 @@ func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *c
 
 	for i := range hc.ValuesFrom {
 		referencedNamespace := hc.ValuesFrom[i].Namespace
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummaryScope.Namespace(), referencedNamespace)
 
-		referencedName, err := getReferenceResourceName(clusterSummaryScope.ClusterSummary,
-			hc.ValuesFrom[i].Name)
+		cs := clusterSummaryScope.ClusterSummary
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, string(cs.Spec.ClusterType), hc.ValuesFrom[i].Name)
 		if err != nil {
 			return nil, err
 		}

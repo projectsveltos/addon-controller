@@ -345,21 +345,14 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error) {
 
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
 	h := sha256.New()
 	var config string
-
-	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
-	// or viceversa) reconcile.
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
-
-	// If Reloader changes, Reloader needs to be deployed or undeployed
-	// So consider it in the hash
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
-
-	// If Tier changes, conflicts might be resolved differently
-	// So consider it in the hash
-	config += fmt.Sprintf("%d", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
-	config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
+	config += string(clusterProfileSpecHash)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
@@ -386,24 +379,6 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 		if h.FeatureID == configv1beta1.FeatureHelm {
 			config += render.AsCode(h)
 		}
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-		// Use the version. This will cause drift-detection, Sveltos CRDs
-		// to be redeployed on upgrade
-		config += getVersion()
-	}
-
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
-	if err != nil {
-		return nil, err
-	}
-	for i := range mgmtResources {
-		config += render.AsCode(mgmtResources[i])
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.Patches != nil {
-		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
 	}
 
 	h.Write([]byte(config))

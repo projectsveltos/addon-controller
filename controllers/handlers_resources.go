@@ -38,6 +38,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
 
 func deployResources(ctx context.Context, c client.Client,
@@ -343,28 +344,23 @@ func undeployResources(ctx context.Context, c client.Client,
 func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error) {
 
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
 	h := sha256.New()
 	var config string
-
-	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
-	// or viceversa) reconcile.
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
-
-	// If Reloader changes, Reloader needs to be deployed or undeployed
-	// So consider it in the hash
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
-
-	// If Tier changes, conflicts might be resolved differently
-	// So consider it in the hash
-	config += fmt.Sprintf("%d", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
-	config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
+	config += string(clusterProfileSpecHash)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
-		namespace := getReferenceResourceNamespace(clusterSummaryScope.Namespace(), reference.Namespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummaryScope.Namespace(), reference.Namespace)
 
-		name, err := getReferenceResourceName(clusterSummary, reference.Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), reference.Name)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))
@@ -412,29 +408,6 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		if h.FeatureID == configv1beta1.FeatureResources {
 			config += render.AsCode(h)
 		}
-	}
-
-	for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
-		tr := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i]
-		config += render.AsCode(tr)
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-		// Use the version. This will cause drift-detection, Sveltos CRDs
-		// to be redeployed on upgrade
-		config += getVersion()
-	}
-
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
-	if err != nil {
-		return nil, err
-	}
-	for i := range mgmtResources {
-		config += render.AsCode(mgmtResources[i])
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.Patches != nil {
-		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
 	}
 
 	h.Write([]byte(config))

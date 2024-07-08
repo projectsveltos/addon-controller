@@ -17,6 +17,10 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -24,11 +28,16 @@ import (
 var (
 	managementClusterClient client.Client
 	managementClusterConfig *rest.Config
+	driftdetectionConfigMap string
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config) {
 	managementClusterClient = c
 	managementClusterConfig = config
+}
+
+func SetDriftdetectionConfigMap(name string) {
+	driftdetectionConfigMap = name
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -37,4 +46,20 @@ func getManagementClusterConfig() *rest.Config {
 
 func getManagementClusterClient() client.Client {
 	return managementClusterClient
+}
+
+func getDriftDetectionConfigMap() string {
+	return driftdetectionConfigMap
+}
+
+func collectDriftDetectionConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error) {
+	c := getManagementClusterClient()
+	configMap := &corev1.ConfigMap{}
+
+	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: name}, configMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return configMap, nil
 }

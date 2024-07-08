@@ -96,6 +96,7 @@ func (k *CustomPatchPostRenderer) Run(renderedManifests *bytes.Buffer) (modified
 	if err != nil {
 		return nil, err
 	}
+
 	return bytes.NewBuffer(yaml), nil
 }
 

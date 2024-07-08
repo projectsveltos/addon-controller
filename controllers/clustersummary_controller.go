@@ -695,6 +695,19 @@ func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.Cluster
 		return err
 	}
 
+	// If there is a ConfigMap with drift-detection-manager configuration, if the syncMode is ContinuousWithDriftDetection
+	// this clusterSummary needs to be redeployed when the ConfigMap changes
+	if clusterSummaryScope.IsContinuousWithDriftDetection() {
+		if driftDetectionConfigMap := getDriftDetectionConfigMap(); driftDetectionConfigMap != "" {
+			currentReferences.Insert(&corev1.ObjectReference{
+				APIVersion: corev1.SchemeGroupVersion.String(),
+				Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				Namespace:  projectsveltos,
+				Name:       driftDetectionConfigMap,
+			})
+		}
+	}
+
 	cs := clusterSummaryScope.ClusterSummary
 	var kind, apiVersion string
 	if cs.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos {

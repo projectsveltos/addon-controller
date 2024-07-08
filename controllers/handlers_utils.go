@@ -1676,6 +1676,16 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		config += render.AsCode(clusterProfileSpec.Patches)
 	}
 
+	// If drift-detectionmanager configuration is in a ConfigMap. fetch ConfigMap and use its Data
+	// section in the hash evaluation.
+	if driftDetectionConfigMap := getDriftDetectionConfigMap(); driftDetectionConfigMap != "" {
+		configMap, err := collectDriftDetectionConfigMap(ctx, driftDetectionConfigMap)
+		if err != nil {
+			return nil, err
+		}
+		config += render.AsCode(configMap.Data)
+	}
+
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

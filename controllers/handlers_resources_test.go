@@ -387,11 +387,16 @@ var _ = Describe("Hash methods", func() {
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
 		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
+		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
+		h := sha256.New()
+		h.Write([]byte(config))
+		tmpHash := h.Sum(nil)
+
+		config = string(tmpHash)
 		config += controllers.GetStringDataSectionHash(configMap1.Data)
 		config += controllers.GetStringDataSectionHash(configMap2.Data)
-		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
 
-		h := sha256.New()
+		h = sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 

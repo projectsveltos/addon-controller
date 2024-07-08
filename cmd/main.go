@@ -65,23 +65,24 @@ import (
 )
 
 var (
-	setupLog             = ctrl.Log.WithName("setup")
-	diagnosticsAddress   string
-	insecureDiagnostics  bool
-	shardKey             string
-	workers              int
-	concurrentReconciles int
-	agentInMgmtCluster   bool
-	reportMode           controllers.ReportMode
-	tmpReportMode        int
-	restConfigQPS        float32
-	restConfigBurst      int
-	webhookPort          int
-	syncPeriod           time.Duration
-	conflictRetryTime    time.Duration
-	version              string
-	healthAddr           string
-	profilerAddress      string
+	setupLog                = ctrl.Log.WithName("setup")
+	diagnosticsAddress      string
+	insecureDiagnostics     bool
+	shardKey                string
+	workers                 int
+	concurrentReconciles    int
+	agentInMgmtCluster      bool
+	reportMode              controllers.ReportMode
+	tmpReportMode           int
+	restConfigQPS           float32
+	restConfigBurst         int
+	webhookPort             int
+	syncPeriod              time.Duration
+	conflictRetryTime       time.Duration
+	version                 string
+	healthAddr              string
+	profilerAddress         string
+	driftDetectionConfigMap string
 )
 
 const (
@@ -140,6 +141,7 @@ func main() {
 	// Setup the context that's going to be used in controllers and for the manager.
 	ctx := ctrl.SetupSignalHandler()
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
+	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 
 	logsettings.RegisterForLogSettings(ctx,
 		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
@@ -163,14 +165,10 @@ func main() {
 }
 
 func initFlags(fs *pflag.FlagSet) {
-	fs.IntVar(&tmpReportMode,
-		"report-mode",
-		defaulReportMode,
+	fs.IntVar(&tmpReportMode, "report-mode", defaulReportMode,
 		"Indicates how ReportSummaries need to be collected")
 
-	fs.BoolVar(&agentInMgmtCluster,
-		"agent-in-mgmt-cluster",
-		false,
+	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
 
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
@@ -181,33 +179,25 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&insecureDiagnostics, "insecure-diagnostics", false,
 		"Enable insecure diagnostics serving. For more details see the description of --diagnostics-address.")
 
-	fs.StringVar(&shardKey,
-		"shard-key",
-		"",
+	fs.StringVar(&shardKey, "shard-key", "",
 		"If set, only clusters will annotation matching this shard key will be reconciled by this deployment")
 
-	fs.IntVar(
-		&workers,
-		"worker-number",
-		defaultWorkers,
+	fs.IntVar(&workers, "worker-number", defaultWorkers,
 		"Number of worker. Workers are used to deploy features in CAPI clusters")
 
-	fs.IntVar(
-		&concurrentReconciles,
-		"concurrent-reconciles",
-		defaultReconcilers,
+	fs.IntVar(&concurrentReconciles, "concurrent-reconciles", defaultReconcilers,
 		"concurrent reconciles is the maximum number of concurrent Reconciles which can be run. Defaults to 10")
 
-	fs.StringVar(&version,
-		"version",
-		"",
-		"current sveltos version")
+	fs.StringVar(&version, "version", "", "current sveltos version")
 
 	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")
 
 	fs.StringVar(&profilerAddress, "profiler-address", "",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
+
+	fs.StringVar(&driftDetectionConfigMap, "drift-detection-config", "",
+		"The name of the ConfigMap in the projectsveltos namespace containing the drift-detection-manager configuration")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,

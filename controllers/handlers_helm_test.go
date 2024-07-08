@@ -631,12 +631,17 @@ var _ = Describe("Hash methods", func() {
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
 		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
 		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
-		config += render.AsCode(kyvernoChart)
-		config += render.AsCode(nginxChart)
-
 		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
 
 		h := sha256.New()
+		h.Write([]byte(config))
+		tmpHash := h.Sum(nil)
+
+		config = string(tmpHash)
+		config += render.AsCode(kyvernoChart)
+		config += render.AsCode(nginxChart)
+
+		h = sha256.New()
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 

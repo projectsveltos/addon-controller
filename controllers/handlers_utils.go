@@ -25,10 +25,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"text/template"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -54,6 +54,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -804,54 +805,6 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 	return clusterSummary, clusterClient, nil
 }
 
-// getReferenceResourceNamespace returns the namespace to use for a referenced resource.
-// If namespace is set on referencedResource, that namespace will be used.
-// If namespace is not set, cluster namespace will be used
-func getReferenceResourceNamespace(clusterNamespace, referencedResourceNamespace string) string {
-	if referencedResourceNamespace != "" {
-		return referencedResourceNamespace
-	}
-
-	return clusterNamespace
-}
-
-// Resources referenced in the management cluster can have their name expressed in function
-// of cluster information:
-// clusterNamespace => .Cluster.metadata.namespace
-// clusterName => .Cluster.metadata.name
-// clusterType => .Cluster.kind
-func getReferenceResourceName(clusterSummary *configv1beta1.ClusterSummary, tempalatedName string) (string, error) {
-	// Accept name that are templates
-	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(tempalatedName)
-	if err != nil {
-		return "", err
-	}
-
-	var buffer bytes.Buffer
-
-	// Cluster namespace and name can be used to instantiate the name of the resource that
-	// needs to be fetched from the management cluster. Defined an unstructured with namespace and name set
-	u := &unstructured.Unstructured{}
-	u.SetNamespace(clusterSummary.Spec.ClusterNamespace)
-	u.SetName(clusterSummary.Spec.ClusterName)
-	u.SetKind(string(clusterSummary.Spec.ClusterType))
-
-	if err := tmpl.Execute(&buffer,
-		struct {
-			Cluster map[string]interface{}
-			// deprecated. This used to be original format which was different than rest of templating
-			ClusterNamespace, ClusterName string
-		}{
-			Cluster:          u.UnstructuredContent(),
-			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
-			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
-		return "", errors.Wrapf(err, "error executing template")
-	}
-	return buffer.String(), nil
-}
-
 func appendPathAnnotations(object client.Object, reference *configv1beta1.PolicyRef) {
 	if object == nil {
 		return
@@ -878,9 +831,11 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var object client.Object
 		reference := &references[i]
 
-		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, references[i].Namespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummary.Namespace, references[i].Namespace)
 
-		name, err := getReferenceResourceName(clusterSummary, references[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), references[i].Name)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))
@@ -1550,9 +1505,11 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 
 	var config string
 	for i := range valuesFrom {
-		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummary.Namespace, valuesFrom[i].Namespace)
 
-		name, err := getReferenceResourceName(clusterSummary, valuesFrom[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), valuesFrom[i].Name)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
@@ -1602,9 +1559,11 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 
 	values := make(map[string]string)
 	for i := range valuesFrom {
-		namespace := getReferenceResourceNamespace(clusterSummary.Namespace, valuesFrom[i].Namespace)
+		namespace := libsveltostemplate.GetReferenceResourceNamespace(
+			clusterSummary.Namespace, valuesFrom[i].Namespace)
 
-		name, err := getReferenceResourceName(clusterSummary, valuesFrom[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), valuesFrom[i].Name)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
@@ -1679,4 +1638,54 @@ func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 	}
 
 	return
+}
+
+func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary) ([]byte, error) {
+	h := sha256.New()
+	var config string
+
+	clusterProfileSpec := clusterSummary.Spec.ClusterProfileSpec
+	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
+	// or viceversa) reconcile.
+	config += fmt.Sprintf("%v", clusterProfileSpec.SyncMode)
+
+	// If Reloader changes, Reloader needs to be deployed or undeployed
+	// So consider it in the hash
+	config += fmt.Sprintf("%v", clusterProfileSpec.Reloader)
+
+	// If Tier changes, conflicts might be resolved differently
+	// So consider it in the hash
+	config += fmt.Sprintf("%d", clusterProfileSpec.Tier)
+	config += fmt.Sprintf("%t", clusterProfileSpec.ContinueOnConflict)
+
+	if clusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		// Use the version. This will cause drift-detection, Sveltos CRDs
+		// to be redeployed on upgrade
+		config += getVersion()
+	}
+
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mgmtResources {
+		config += render.AsCode(mgmtResources[i])
+	}
+
+	if clusterProfileSpec.Patches != nil {
+		config += render.AsCode(clusterProfileSpec.Patches)
+	}
+
+	// If drift-detectionmanager configuration is in a ConfigMap. fetch ConfigMap and use its Data
+	// section in the hash evaluation.
+	if driftDetectionConfigMap := getDriftDetectionConfigMap(); driftDetectionConfigMap != "" {
+		configMap, err := collectDriftDetectionConfigMap(ctx, driftDetectionConfigMap)
+		if err != nil {
+			return nil, err
+		}
+		config += render.AsCode(configMap.Data)
+	}
+
+	h.Write([]byte(config))
+	return h.Sum(nil), nil
 }

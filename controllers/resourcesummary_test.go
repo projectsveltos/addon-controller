@@ -136,7 +136,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterType := libsveltosv1beta1.ClusterTypeSveltos
 
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
-			clusterNamespace, clusterName, "", clusterType,
+			clusterNamespace, clusterName, "", clusterType, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)

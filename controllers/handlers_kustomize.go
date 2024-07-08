@@ -52,6 +52,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -284,35 +285,28 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
 	logger logr.Logger) ([]byte, error) {
 
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
 	h := sha256.New()
 	var config string
+	config += string(clusterProfileSpecHash)
 
-	// If SyncMode changes (from not ContinuousWithDriftDetection to ContinuousWithDriftDetection
-	// or viceversa) reconcile.
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
-
-	// If Reloader changes, Reloader needs to be deployed or undeployed
-	// So consider it in the hash
-	config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
-
-	// If Tier changes, conflicts might be resolved differently
-	// So consider it in the hash
-	config += fmt.Sprintf("%d", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
-	config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
-
-	config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
-
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
+	for i := range clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 
-		result, err := getHashFromKustomizationRef(ctx, c, clusterSummaryScope.ClusterSummary,
+		result, err := getHashFromKustomizationRef(ctx, c, clusterSummary,
 			kustomizationRef, logger)
 		if err != nil {
 			return nil, err
 		}
 		config += string(result)
 
-		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
+		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummary,
 			kustomizationRef, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(
@@ -323,37 +317,11 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 		config += valueFromHash
 	}
 
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
-		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
+		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
 		if h.FeatureID == configv1beta1.FeatureKustomize {
 			config += render.AsCode(h)
 		}
-	}
-
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode ==
-		configv1beta1.SyncModeContinuousWithDriftDetection {
-		// Use the version. This will cause drift-detection, Sveltos CRDs
-		// to be redeployed on upgrade
-		config += getVersion()
-	}
-
-	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
-		h := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
-		if h.FeatureID == configv1beta1.FeatureHelm {
-			config += render.AsCode(h)
-		}
-	}
-
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
-	if err != nil {
-		return nil, err
-	}
-	for i := range mgmtResources {
-		config += render.AsCode(mgmtResources[i])
-	}
-
-	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches != nil {
-		config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Patches)
 	}
 
 	h.Write([]byte(config))
@@ -364,9 +332,11 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) ([]byte, error) {
 
 	var result string
-	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace := libsveltostemplate.GetReferenceResourceNamespace(
+		clusterSummary.Namespace, kustomizationRef.Namespace)
 
-	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -535,9 +505,11 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
 	}
 
-	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace := libsveltostemplate.GetReferenceResourceNamespace(
+		clusterSummary.Namespace, kustomizationRef.Namespace)
 
-	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
 	if err != nil {
 		return "", err
 	}
@@ -559,9 +531,11 @@ func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
 	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace := libsveltostemplate.GetReferenceResourceNamespace(
+		clusterSummary.Namespace, kustomizationRef.Namespace)
 
-	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
 	if err != nil {
 		return "", err
 	}
@@ -578,9 +552,11 @@ func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
 	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	namespace := getReferenceResourceNamespace(clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace := libsveltostemplate.GetReferenceResourceNamespace(
+		clusterSummary.Namespace, kustomizationRef.Namespace)
 
-	name, err := getReferenceResourceName(clusterSummary, kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
 	if err != nil {
 		return "", err
 	}

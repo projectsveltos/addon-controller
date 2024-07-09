@@ -58,7 +58,9 @@ type Resource struct {
 	// IgnoreForConfigurationDrift indicates to not track resource
 	// for configuration drift detection.
 	// This field has a meaning only when mode is ContinuousWithDriftDetection
-	IgnoreForConfigurationDrift bool `json:"ignoreForConfigurationDrift"`
+	// +kubebuilder:default:=false
+	// +optional
+	IgnoreForConfigurationDrift bool `json:"ignoreForConfigurationDrift,omitempty"`
 }
 
 type Chart struct {

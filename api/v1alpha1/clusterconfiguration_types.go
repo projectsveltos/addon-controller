@@ -54,6 +54,13 @@ type Resource struct {
 
 	// Owner is the list of ConfigMap/Secret containing this resource.
 	Owner corev1.ObjectReference `json:"owner"`
+
+	// IgnoreForConfigurationDrift indicates to not track resource
+	// for configuration drift detection.
+	// This field has a meaning only when mode is ContinuousWithDriftDetection
+	// +kubebuilder:default:=false
+	// +optional
+	IgnoreForConfigurationDrift bool `json:"ignoreForConfigurationDrift,omitempty"`
 }
 
 type Chart struct {

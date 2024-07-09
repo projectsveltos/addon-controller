@@ -54,6 +54,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/patcher"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
@@ -313,8 +314,8 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	if len(patches) > 0 {
-		patcher := &CustomPatchPostRenderer{Patches: patches}
-		referencedUnstructured, err = patcher.RunUnstructured(referencedUnstructured)
+		p := &patcher.CustomPatchPostRenderer{Patches: patches}
+		referencedUnstructured, err = p.RunUnstructured(referencedUnstructured)
 		if err != nil {
 			return nil, err
 		}
@@ -1618,7 +1619,7 @@ func addToMap(m map[string]string, key, value string) {
 // Return Templated Patch Objects
 func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	requestor string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (instantiatedPatches []configv1beta1.Patch, err error) {
+) (instantiatedPatches []libsveltosv1beta1.Patch, err error) {
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.Patches) == 0 {
 		return

@@ -31,13 +31,13 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/patcher"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -219,7 +219,7 @@ func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespac
 // deployDriftDetectionManager deploys drift-detection-manager in the managed cluster
 func deployDriftDetectionManager(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []configv1beta1.Patch, logger logr.Logger) error {
+	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in managed cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerYAML())
@@ -236,7 +236,7 @@ func deployDriftDetectionManager(ctx context.Context, remoteRestConfig *rest.Con
 // Those instances are all running in the "projectsveltos" namespace.
 func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []configv1beta1.Patch, logger logr.Logger) error {
+	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in management cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerInMgmtClusterYAML())
@@ -260,7 +260,7 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 }
 
 func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.Config,
-	driftDetectionManagerYAML string, lbls map[string]string, patches []configv1beta1.Patch,
+	driftDetectionManagerYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
 	logger logr.Logger) error {
 
 	elements, err := customSplit(driftDetectionManagerYAML)
@@ -288,8 +288,8 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 
 		var referencedUnstructured []*unstructured.Unstructured
 		if len(patches) > 0 {
-			patcher := &CustomPatchPostRenderer{Patches: patches}
-			referencedUnstructured, err = patcher.RunUnstructured(
+			p := &patcher.CustomPatchPostRenderer{Patches: patches}
+			referencedUnstructured, err = p.RunUnstructured(
 				[]*unstructured.Unstructured{policy},
 			)
 			if err != nil {
@@ -562,9 +562,9 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 }
 
 func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
-	logger logr.Logger) ([]configv1beta1.Patch, error) {
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
 
-	patches := make([]configv1beta1.Patch, 0)
+	patches := make([]libsveltosv1beta1.Patch, 0)
 	configMapName := getDriftDetectionConfigMap()
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
@@ -580,9 +580,9 @@ func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 
 	for k := range configMap.Data {
 		// Only Deployment can be patched
-		patch := configv1beta1.Patch{
+		patch := libsveltosv1beta1.Patch{
 			Patch: configMap.Data[k],
-			Target: &configv1beta1.PatchSelector{
+			Target: &libsveltosv1beta1.PatchSelector{
 				Kind:  "Deployment",
 				Group: "apps",
 			},

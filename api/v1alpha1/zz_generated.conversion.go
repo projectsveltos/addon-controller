@@ -1376,6 +1376,7 @@ func autoConvert_v1alpha1_Resource_To_v1beta1_Resource(in *Resource, out *v1beta
 	out.Version = in.Version
 	out.LastAppliedTime = (*v1.Time)(unsafe.Pointer(in.LastAppliedTime))
 	out.Owner = in.Owner
+	out.IgnoreForConfigurationDrift = in.IgnoreForConfigurationDrift
 	return nil
 }
 
@@ -1392,6 +1393,7 @@ func autoConvert_v1beta1_Resource_To_v1alpha1_Resource(in *v1beta1.Resource, out
 	out.Version = in.Version
 	out.LastAppliedTime = (*v1.Time)(unsafe.Pointer(in.LastAppliedTime))
 	out.Owner = in.Owner
+	out.IgnoreForConfigurationDrift = in.IgnoreForConfigurationDrift
 	return nil
 }
 
@@ -1465,6 +1467,7 @@ func autoConvert_v1beta1_Spec_To_v1alpha1_Spec(in *v1beta1.Spec, out *Spec, s co
 	out.HelmCharts = *(*[]HelmChart)(unsafe.Pointer(&in.HelmCharts))
 	out.KustomizationRefs = *(*[]KustomizationRef)(unsafe.Pointer(&in.KustomizationRefs))
 	out.ValidateHealths = *(*[]ValidateHealth)(unsafe.Pointer(&in.ValidateHealths))
+	// WARNING: in.Patches requires manual conversion: does not exist in peer-type
 	out.ExtraLabels = *(*map[string]string)(unsafe.Pointer(&in.ExtraLabels))
 	out.ExtraAnnotations = *(*map[string]string)(unsafe.Pointer(&in.ExtraAnnotations))
 	return nil

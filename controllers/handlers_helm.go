@@ -60,6 +60,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/patcher"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -1942,7 +1943,7 @@ func getRecreateValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string, patches []configv1beta1.Patch) (*action.Install, error) {
+func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string, patches []libsveltosv1beta1.Patch) (*action.Install, error) {
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return nil, err
@@ -1970,13 +1971,15 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	installClient.Description = getDescriptionValue(requestedChart.Options)
 
 	if len(patches) > 0 {
-		installClient.PostRenderer = &CustomPatchPostRenderer{Patches: patches}
+		installClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
 	}
 
 	return installClient, nil
 }
 
-func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration, patches []configv1beta1.Patch) (*action.Upgrade, error) {
+func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration,
+	patches []libsveltosv1beta1.Patch) (*action.Upgrade, error) {
+
 	upgradeClient := action.NewUpgrade(actionConfig)
 	upgradeClient.Install = true
 	upgradeClient.Namespace = requestedChart.ReleaseNamespace
@@ -2006,7 +2009,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
 
 	if len(patches) > 0 {
-		upgradeClient.PostRenderer = &CustomPatchPostRenderer{Patches: patches}
+		upgradeClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
 	}
 
 	return upgradeClient, nil

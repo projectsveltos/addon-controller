@@ -116,6 +116,13 @@ spec:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
+                                ignoreForConfigurationDrift:
+                                  default: false
+                                  description: |-
+                                    IgnoreForConfigurationDrift indicates to not track resource
+                                    for configuration drift detection.
+                                    This field has a meaning only when mode is ContinuousWithDriftDetection
+                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
@@ -281,6 +288,13 @@ spec:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
+                                ignoreForConfigurationDrift:
+                                  default: false
+                                  description: |-
+                                    IgnoreForConfigurationDrift indicates to not track resource
+                                    for configuration drift detection.
+                                    This field has a meaning only when mode is ContinuousWithDriftDetection
+                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
@@ -480,6 +494,7 @@ spec:
                                     Cluster.
                                   type: string
                                 ignoreForConfigurationDrift:
+                                  default: false
                                   description: |-
                                     IgnoreForConfigurationDrift indicates to not track resource
                                     for configuration drift detection.
@@ -557,7 +572,6 @@ spec:
                                   type: string
                               required:
                               - group
-                              - ignoreForConfigurationDrift
                               - kind
                               - name
                               - owner
@@ -652,6 +666,7 @@ spec:
                                     Cluster.
                                   type: string
                                 ignoreForConfigurationDrift:
+                                  default: false
                                   description: |-
                                     IgnoreForConfigurationDrift indicates to not track resource
                                     for configuration drift detection.
@@ -729,7 +744,6 @@ spec:
                                   type: string
                               required:
                               - group
-                              - ignoreForConfigurationDrift
                               - kind
                               - name
                               - owner

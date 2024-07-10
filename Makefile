@@ -267,6 +267,9 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "prepare configMap with kustomize files"
 	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz
 
+	@echo "prepare configMap with flux resources"
+	$(KUBECTL) create configmap install-flux --from-file=test/flux-install.yaml
+
 	@echo apply reloader CRD to managed cluster
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaders.lib.projectsveltos.io.yaml
 

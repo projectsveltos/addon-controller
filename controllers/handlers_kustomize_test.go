@@ -279,7 +279,7 @@ var _ = Describe("Hash methods", func() {
 				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 				ClusterProfileSpec: configv1beta1.Spec{
 					KustomizationRefs: make([]configv1beta1.KustomizationRef, repoNum),
-					Patches: []configv1beta1.Patch{
+					Patches: []libsveltosv1beta1.Patch{
 						{
 							Patch: `- op: add
   path: /metadata/labels/environment

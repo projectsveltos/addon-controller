@@ -69,7 +69,7 @@ KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 GOLANGCI_LINT_VERSION := "v1.57.2"
-CLUSTERCTL_VERSION := "v1.7.3"
+CLUSTERCTL_VERSION := "v1.7.4"
 
 KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE_BIN := kustomize
@@ -266,6 +266,9 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 
 	@echo "prepare configMap with kustomize files"
 	$(KUBECTL) create configmap kustomize --from-file=test/kustomize.tar.gz
+
+	@echo "prepare configMap with flux resources"
+	$(KUBECTL) create configmap install-flux --from-file=test/flux-install.yaml
 
 	@echo apply reloader CRD to managed cluster
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaders.lib.projectsveltos.io.yaml

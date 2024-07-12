@@ -601,7 +601,7 @@ var _ = Describe("Hash methods", func() {
 						kyvernoChart,
 						nginxChart,
 					},
-					Patches: []configv1beta1.Patch{
+					Patches: []libsveltosv1beta1.Patch{
 						{
 							Patch: `- op: add
   path: /metadata/labels/environment

@@ -169,12 +169,12 @@ reportsController:
 			},
 		}
 		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
-		currentClusterProfile.Spec.Patches = []configv1beta1.Patch{
+		currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 			{
 				Patch: `- op: add
   path: /metadata/annotations/projectsveltos.io~1driftDetectionIgnore
   value: ok`,
-				Target: &configv1beta1.PatchSelector{
+				Target: &libsveltosv1beta1.PatchSelector{
 					Group:     "apps",
 					Version:   "v1",
 					Kind:      "Deployment",

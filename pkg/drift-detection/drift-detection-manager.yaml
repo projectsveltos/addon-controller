@@ -112,7 +112,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: projectsveltos/drift-detection-manager:v0.34.0
+        image: projectsveltos/drift-detection-manager:v0.34.1
         livenessProbe:
           failureThreshold: 3
           httpGet:

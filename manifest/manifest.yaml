@@ -8405,10 +8405,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.34.0
+        - --version=v0.34.1
         command:
         - /manager
-        image: projectsveltos/addon-controller:v0.34.0
+        image: projectsveltos/addon-controller:v0.34.1
         livenessProbe:
           failureThreshold: 3
           httpGet:

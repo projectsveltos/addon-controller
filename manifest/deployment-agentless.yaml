@@ -23,10 +23,10 @@ spec:
         - --report-mode=0
         - --agent-in-mgmt-cluster
         - --v=5
-        - --version=v0.34.0
+        - --version=main
         command:
         - /manager
-        image: projectsveltos/addon-controller:v0.34.0
+        image: projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:

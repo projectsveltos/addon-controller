@@ -89,8 +89,8 @@ const (
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
 	cleanupControllerDeplName   = "kyverno-cleanup-controller"
-	cleanupImage                = "ghcr.io/kyverno/cleanup-controller:v1.11.0"
-	admissionImage              = "ghcr.io/kyverno/kyverno:v1.11.0"
+	cleanupImage                = "ghcr.io/kyverno/cleanup-controller:v1.12.5"
+	admissionImage              = "ghcr.io/kyverno/kyverno:v1.12.5"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -142,7 +142,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.1.4",
+				ChartVersion:     "v3.2.6",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -252,7 +252,7 @@ reportsController:
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.4", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.6", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -306,12 +306,12 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/cleanup-controller:v1.11.4"
+					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/cleanup-controller:v1.12.5"
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.11.4")
+		By("Kyverno image is reset to v1.12.5")
 
 		// Change Kyverno image for admission controller
 		Expect(workloadClient.Get(context.TODO(),
@@ -350,7 +350,7 @@ reportsController:
 			}
 			return false
 		}, timeout/4, pollingInterval).Should(BeTrue())
-		By("Kyverno image is NOT reset to v1.11.4")
+		By("Kyverno image is NOT reset to v1.12.5")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
@@ -361,7 +361,7 @@ reportsController:
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.1.4",
+				ChartVersion:     "v3.2.6",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

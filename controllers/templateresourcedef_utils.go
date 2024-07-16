@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/funcmap"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
@@ -54,7 +55,7 @@ func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 	// Accept name that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(ref.Resource.Name)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).Parse(ref.Resource.Name)
 	if err != nil {
 		return "", err
 	}

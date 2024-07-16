@@ -51,6 +51,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/funcmap"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 	"github.com/projectsveltos/libsveltos/lib/utils"
@@ -882,7 +883,7 @@ func extractTarGz(src, dest string) error {
 func instantiateResourceWithSubstituteValues(templateName string, resource []byte,
 	substituteValues map[string]string, logger logr.Logger) ([]byte, error) {
 
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(ExtraFuncMap()).Parse(string(resource))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).Parse(string(resource))
 	if err != nil {
 		return nil, err
 	}

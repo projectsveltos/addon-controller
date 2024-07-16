@@ -364,8 +364,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v0.34.1-0.20240711155935-75fbc59d75dc h1:qZB1eNQLeahLKF45SeMgMhzPGt5O/fU7u0p8I3lrn88=
-github.com/projectsveltos/libsveltos v0.34.1-0.20240711155935-75fbc59d75dc/go.mod h1:U5pdpUNAgHaI5JAmZRHBu/Crf11h/wTAZ2H5cXef6bg=
+github.com/projectsveltos/libsveltos v0.34.2-0.20240716085602-4631ad816a10 h1:iF28HwpqfLKCNya5Q0kaLm6joQEIS5nQOgeXwFTOh54=
+github.com/projectsveltos/libsveltos v0.34.2-0.20240716085602-4631ad816a10/go.mod h1:U5pdpUNAgHaI5JAmZRHBu/Crf11h/wTAZ2H5cXef6bg=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
 github.com/prometheus/client_golang v1.1.0/go.mod h1:I1FGZT9+L76gKKOs5djB6ezCbFQP1xR9D75/vuwEF3g=

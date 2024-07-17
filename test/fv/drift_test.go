@@ -37,7 +37,14 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
+const (
+	clusterKey = "cluster"
+)
+
 var (
+	labelsValues = `customLabels:
+  %s: "{{ .Cluster.metadata.name }}"`
+
 	cleanupControllerValues = `cleanupController:
   livenessProbe:
     httpGet:
@@ -132,6 +139,14 @@ var _ = Describe("Helm", Serial, func() {
 			fmt.Sprintf(admissionControllerValues, livenessPeriodSecond, readinessPeriodSecond))
 		Expect(k8sClient.Create(context.TODO(), admissionControllerConfigMap)).To(Succeed())
 
+		Byf("Creating ConfigMap to hold labels controller values (with template annotation)")
+		labelsConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(labelsValues, clusterKey))
+		labelsConfigMap.Annotations = map[string]string{
+			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+		}
+		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
+
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		Expect(k8sClient.Get(context.TODO(),
@@ -155,6 +170,11 @@ cleanupController:
 reportsController:
   replicas: 1`,
 				ValuesFrom: []configv1beta1.ValueFrom{
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: labelsConfigMap.Namespace,
+						Name:      labelsConfigMap.Name,
+					},
 					{
 						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						Namespace: cleanupControllerConfigMap.Namespace,
@@ -202,6 +222,9 @@ reportsController:
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 			if err != nil {
+				return false
+			}
+			if !isDeplLabelCorrect(depl.Labels, clusterKey, kindWorkloadCluster.Name) {
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
@@ -442,4 +465,13 @@ func verifyHelmValues(workloadClient client.Client, deploymentNamespace, deploym
 	Byf("Verifying LivenessProbe.PeriodSeconds on deployment %s/%s is %d", deploymentNamespace, deploymentName, livenessPeriodSecond)
 	Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe).ToNot(BeNil())
 	Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(livenessPeriodSecond))
+}
+
+func isDeplLabelCorrect(lbls map[string]string, key, value string) bool {
+	if lbls == nil {
+		return false
+	}
+	v := lbls[key]
+
+	return v == value
 }

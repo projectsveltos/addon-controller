@@ -416,27 +416,30 @@ func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *c
 
 // getKustomizeSubstituteValues returns all key-value pair looking at both Values and ValuesFrom
 func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
 
 	values := make(map[string]string)
 	for k := range kustomizationRef.Values {
 		values[k] = kustomizationRef.Values[k]
 	}
+
 	// Get key-value pairs from ValuesFrom
-	valuesFrom, err := getKustomizeSubstituteValuesFrom(ctx, c, clusterSummary, kustomizationRef, logger)
+	templatedValues, nonTemplatedValues, err = getKustomizeSubstituteValuesFrom(ctx, c, clusterSummary, kustomizationRef, logger)
 	if err != nil {
-		return nil, err
-	}
-	for k := range valuesFrom {
-		values[k] = valuesFrom[k]
+		return nil, nil, err
 	}
 
-	return values, nil
+	// Values are always treated as templates. So copy the templated values here
+	for k := range templatedValues {
+		values[k] = templatedValues[k]
+	}
+
+	return values, nonTemplatedValues, nil
 }
 
 // getKustomizeSubstituteValuesFrom return key-value pair from referenced ConfigMap/Secret
 func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (map[string]string, error) {
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
 
 	return getValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
 }
@@ -616,17 +619,20 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	}
 
 	// Get key-value pairs from ValuesFrom
-	values, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
+	templatedValues, nonTemplatedValues, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Get substitute values. Those are collected from Data sections of referenced ConfigMap/Secret instances.
-	// Those values can be expressed as template. This method collects them and instantiate those using resources in
+	// Those values can be expressed as template. This method instantiates those using resources in
 	// the managemenet cluster
-	instantiateSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, values, logger)
+	instantiatedSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, templatedValues, logger)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	for k := range nonTemplatedValues {
+		instantiatedSubstituteValues[k] = nonTemplatedValues[k]
 	}
 
 	resources := resMap.Resources()
@@ -639,11 +645,11 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		}
 
 		// Assume it is a template only if there are values to substitute
-		if len(instantiateSubstituteValues) > 0 {
+		if len(instantiatedSubstituteValues) > 0 {
 			// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
 			// substitute values first, and the resource in the management cluster later.
 			templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
-			yaml, err = instantiateResourceWithSubstituteValues(templateName, yaml, instantiateSubstituteValues, logger)
+			yaml, err = instantiateResourceWithSubstituteValues(templateName, yaml, instantiatedSubstituteValues, logger)
 			if err != nil {
 				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
 				logger.V(logs.LogInfo).Info(msg)

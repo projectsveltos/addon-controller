@@ -1634,29 +1634,33 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 	}
 
 	c := getManagementClusterClient()
-	valuesFrom, err := getHelmChartValuesFrom(ctx, c, clusterSummary, requestedChart, logger)
+	templatedValuesFrom, valuesFrom, err := getHelmChartValuesFrom(ctx, c, clusterSummary, requestedChart, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	for k := range valuesFrom {
+	for k := range templatedValuesFrom {
 		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			requestedChart.ChartName, valuesFrom[k], mgmtResources, logger)
+			requestedChart.ChartName, templatedValuesFrom[k], mgmtResources, logger)
 		if err != nil {
 			return nil, err
 		}
 		instantiatedValues += fmt.Sprintf("\n\n%s", instantiatedValuesFrom)
 	}
 
-	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Deploying helm charts with Values %q", instantiatedValues))
+	for k := range valuesFrom {
+		instantiatedValues += fmt.Sprintf("\n\n%s", valuesFrom[k])
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying helm charts with Values %q", instantiatedValues))
 
 	return chartutil.ReadValues([]byte(instantiatedValues))
 }
 
 // getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret
 func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	helmChart *configv1beta1.HelmChart, logger logr.Logger) (map[string]string, error) {
+	helmChart *configv1beta1.HelmChart, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
 
 	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, false, logger)
 }

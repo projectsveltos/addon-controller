@@ -62,7 +62,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/minio",
-				ChartVersion:     "12.6.4",
+				ChartVersion:     "14.6.20",
 				ReleaseName:      minio,
 				ReleaseNamespace: minio,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -90,7 +90,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: minio, ChartVersion: "12.6.4", Namespace: minio},
+			{ReleaseName: minio, ChartVersion: "14.6.20", Namespace: minio},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

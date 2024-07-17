@@ -54,7 +54,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.1.1",
+				ChartVersion:     "v3.2.6",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -63,7 +63,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
 				RepositoryName:   "prometheus-community",
 				ChartName:        "prometheus-community/prometheus",
-				ChartVersion:     "23.4.0",
+				ChartVersion:     "25.24.0",
 				ReleaseName:      "prometheus",
 				ReleaseNamespace: "prometheus",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -72,7 +72,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://grafana.github.io/helm-charts",
 				RepositoryName:   "grafana",
 				ChartName:        "grafana/grafana",
-				ChartVersion:     "6.58.9",
+				ChartVersion:     "8.3.4",
 				ReleaseName:      "grafana",
 				ReleaseNamespace: "grafana",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -103,9 +103,9 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.1", Namespace: "kyverno"},
-			{ReleaseName: "grafana", ChartVersion: "6.58.9", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "23.4.0", Namespace: "prometheus"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.6", Namespace: "kyverno"},
+			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -126,7 +126,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.1.4",
+				ChartVersion:     "v3.2.5",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -180,8 +180,8 @@ var _ = Describe("Helm", Serial, func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "grafana", ChartVersion: "6.58.9", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "23.4.0", Namespace: "prometheus"},
+			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -189,7 +189,7 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.1.4", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.5", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,

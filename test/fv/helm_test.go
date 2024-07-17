@@ -70,7 +70,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.0.1",
+				ChartVersion:     "v3.2.6",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -79,7 +79,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/wildfly",
-				ChartVersion:     "17.2.1",
+				ChartVersion:     "20.2.8",
 				ReleaseName:      "wildfly",
 				ReleaseNamespace: "wildfly",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -138,8 +138,8 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.1", Namespace: "kyverno"},
-			{ReleaseName: "wildfly", ChartVersion: "17.2.1", Namespace: "wildfly"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.6", Namespace: "kyverno"},
+			{ReleaseName: "wildfly", ChartVersion: "20.2.8", Namespace: "wildfly"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -153,7 +153,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.0.0",
+				ChartVersion:     "v3.2.5",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -162,7 +162,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/wildfly",
-				ChartVersion:     "17.2.1",
+				ChartVersion:     "20.2.8",
 				ReleaseName:      "wildfly",
 				ReleaseNamespace: "wildfly",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -198,8 +198,8 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.0", Namespace: "kyverno"},
-			{ReleaseName: "wildfly", ChartVersion: "17.2.1", Namespace: "wildfly"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.5", Namespace: "kyverno"},
+			{ReleaseName: "wildfly", ChartVersion: "20.2.8", Namespace: "wildfly"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -222,7 +222,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.0.0",
+				ChartVersion:     "v3.2.5",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -250,7 +250,7 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.0.0", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.5", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

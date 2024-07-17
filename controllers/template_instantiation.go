@@ -32,6 +32,7 @@ import (
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/funcmap"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/utils"
 )
@@ -170,7 +171,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		}
 	}
 
-	funcMap := ExtraFuncMap()
+	funcMap := funcmap.SveltosFuncMap()
 	funcMap["getResource"] = func(id string) map[string]interface{} {
 		return objects.MgmtResources[id]
 	}

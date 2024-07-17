@@ -352,7 +352,7 @@ var _ = Describe("Hash methods", func() {
 				Name:      randomString(),
 			},
 			Data: map[string]string{
-				randomString(): randomString(),
+				"cluster-name": "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
 				randomString(): randomString(),
 			},
 		}
@@ -568,41 +568,56 @@ var _ = Describe("Hash methods", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		// This will get alll substitute values considering only ValuesFrom
-		values, err := controllers.GetKustomizeSubstituteValuesFrom(context.TODO(), c, clusterSummary, kustomizationRef,
+		templatedValues, nonTemplatedValues, err := controllers.GetKustomizeSubstituteValuesFrom(context.TODO(), c, clusterSummary, kustomizationRef,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		for k := range configMap.Data {
-			v, ok := values[k]
+			v, ok := templatedValues[k]
+			if !ok {
+				v, ok = nonTemplatedValues[k]
+			}
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(configMap.Data[k]))
 		}
 
 		for k := range secret.Data {
-			v, ok := values[k]
+			v, ok := templatedValues[k]
+			if !ok {
+				v, ok = nonTemplatedValues[k]
+			}
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(string(secret.Data[k])))
 		}
 
 		// This will get alll substitute values considering both Values and ValuesFrom
-		values, err = controllers.GetKustomizeSubstituteValues(context.TODO(), c, clusterSummary, kustomizationRef,
+		templatedValues, nonTemplatedValues, err = controllers.GetKustomizeSubstituteValues(context.TODO(), c, clusterSummary, kustomizationRef,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		for k := range configMap.Data {
-			v, ok := values[k]
+			v, ok := templatedValues[k]
+			if !ok {
+				v, ok = nonTemplatedValues[k]
+			}
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(configMap.Data[k]))
 		}
 
 		for k := range secret.Data {
-			v, ok := values[k]
+			v, ok := templatedValues[k]
+			if !ok {
+				v, ok = nonTemplatedValues[k]
+			}
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(string(secret.Data[k])))
 		}
 
 		for k := range kustomizationRef.Values {
-			v, ok := values[k]
+			v, ok := templatedValues[k]
+			if !ok {
+				v, ok = nonTemplatedValues[k]
+			}
 			Expect(ok).To(BeTrue())
 			Expect(v).To(Equal(kustomizationRef.Values[k]))
 		}

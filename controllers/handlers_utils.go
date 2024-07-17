@@ -1556,9 +1556,10 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 //
 // It returns a map containing the collected key-value pairs and any encountered error.
 func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	valuesFrom []configv1beta1.ValueFrom, overrideKeys bool, logger logr.Logger) (map[string]string, error) {
+	valuesFrom []configv1beta1.ValueFrom, overrideKeys bool, logger logr.Logger) (template, nonTemplate map[string]string, err error) {
 
-	values := make(map[string]string)
+	template = make(map[string]string)
+	nonTemplate = make(map[string]string)
 	for i := range valuesFrom {
 		namespace := libsveltostemplate.GetReferenceResourceNamespace(
 			clusterSummary.Namespace, valuesFrom[i].Namespace)
@@ -1568,7 +1569,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
-			return nil, err
+			return nil, nil, err
 		}
 
 		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
@@ -1576,13 +1577,24 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 			if err != nil {
 				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				return nil, errors.Wrapf(err, msg)
+				return nil, nil, errors.Wrapf(err, msg)
 			}
-			for key, value := range configMap.Data {
-				if overrideKeys {
-					values[key] = value
-				} else {
-					addToMap(values, key, value)
+
+			if instantiateTemplate(configMap, logger) {
+				for key, value := range configMap.Data {
+					if overrideKeys {
+						template[key] = value
+					} else {
+						addToMap(template, key, value)
+					}
+				}
+			} else {
+				for key, value := range configMap.Data {
+					if overrideKeys {
+						nonTemplate[key] = value
+					} else {
+						addToMap(nonTemplate, key, value)
+					}
 				}
 			}
 		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
@@ -1590,19 +1602,29 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 			if err != nil {
 				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				return nil, errors.Wrapf(err, msg)
+				return nil, nil, errors.Wrapf(err, msg)
 			}
-			for key, value := range secret.Data {
-				if overrideKeys {
-					values[key] = string(value)
-				} else {
-					addToMap(values, key, string(value))
+			if instantiateTemplate(secret, logger) {
+				for key, value := range secret.Data {
+					if overrideKeys {
+						template[key] = string(value)
+					} else {
+						addToMap(template, key, string(value))
+					}
+				}
+			} else {
+				for key, value := range secret.Data {
+					if overrideKeys {
+						nonTemplate[key] = string(value)
+					} else {
+						addToMap(nonTemplate, key, string(value))
+					}
 				}
 			}
 		}
 	}
 
-	return values, nil
+	return template, nonTemplate, nil
 }
 
 func addToMap(m map[string]string, key, value string) {

@@ -237,8 +237,10 @@ var _ = Describe("Feature", func() {
 			currentPod := &corev1.Pod{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: defaultNamespace, Name: podName}, currentPod)
-			return err != nil &&
-				apierrors.IsNotFound(err)
+			if err != nil {
+				return apierrors.IsNotFound(err)
+			}
+			return !currentPod.DeletionTimestamp.IsZero()
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		policies = []policy{
@@ -271,8 +273,10 @@ var _ = Describe("Feature", func() {
 			currentPod := &corev1.Pod{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: defaultNamespace, Name: newPodName}, currentPod)
-			return err != nil &&
-				apierrors.IsNotFound(err)
+			if err != nil {
+				return apierrors.IsNotFound(err)
+			}
+			return !currentPod.DeletionTimestamp.IsZero()
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)

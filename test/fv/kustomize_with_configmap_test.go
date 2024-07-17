@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -54,6 +56,22 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		_, ok := kustomizeConfigMap.BinaryData["kustomize.tar.gz"]
 		Expect(ok).To(BeTrue())
 
+		configMapNamespace := randomString()
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: configMapNamespace,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), ns))
+
+		Byf("Creating ConfigMap to hold labels controller values (with template annotation)")
+		labelsConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(labelsValues, clusterKey))
+		labelsConfigMap.Annotations = map[string]string{
+			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+		}
+		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
+
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
@@ -77,6 +95,13 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 				Name:            kustomizeConfigMapName, // this is created by Makefile and contains kustomize files
 				Path:            "./overlays/production/",
 				TargetNamespace: targetNamespace,
+				ValuesFrom: []configv1beta1.ValueFrom{
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: labelsConfigMap.Namespace,
+						Name:      labelsConfigMap.Name,
+					},
+				},
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())

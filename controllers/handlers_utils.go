@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -635,6 +636,10 @@ func customSplit(text string) ([]string, error) {
 	section := removeCommentsAndEmptyLines(text)
 	if section == "" {
 		return nil, nil
+	}
+
+	if !strings.Contains(text, "---") {
+		return []string{text}, nil
 	}
 
 	result := []string{}

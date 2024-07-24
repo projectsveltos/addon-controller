@@ -1525,27 +1525,17 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap, err := getConfigMap(ctx, c,
 				types.NamespacedName{Namespace: namespace, Name: name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %v", err))
-				return "", err
+			if err == nil {
+				config += getDataSectionHash(configMap.Data)
+				config += getDataSectionHash(configMap.BinaryData)
 			}
-			if configMap == nil {
-				continue
-			}
-			config += getDataSectionHash(configMap.Data)
-			config += getDataSectionHash(configMap.BinaryData)
 		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c,
 				types.NamespacedName{Namespace: namespace, Name: name})
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get Secret %v", err))
-				return "", err
+			if err == nil {
+				config += getDataSectionHash(secret.Data)
+				config += getDataSectionHash(secret.StringData)
 			}
-			if secret == nil {
-				continue
-			}
-			config += getDataSectionHash(secret.Data)
-			config += getDataSectionHash(secret.StringData)
 		}
 	}
 
@@ -1582,6 +1572,12 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 			if err != nil {
 				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
+				if apierrors.IsNotFound(err) {
+					msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
+						libsveltosv1beta1.ConfigMapReferencedResourceKind, namespace, name)
+					logger.V(logs.LogInfo).Info(msg)
+					return nil, nil, &NonRetriableError{Message: msg}
+				}
 				return nil, nil, errors.Wrapf(err, msg)
 			}
 
@@ -1607,6 +1603,12 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 			if err != nil {
 				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, name)
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
+				if apierrors.IsNotFound(err) {
+					msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
+						libsveltosv1beta1.SecretReferencedResourceKind, namespace, name)
+					logger.V(logs.LogInfo).Info(msg)
+					return nil, nil, &NonRetriableError{Message: msg}
+				}
 				return nil, nil, errors.Wrapf(err, msg)
 			}
 			if instantiateTemplate(secret, logger) {

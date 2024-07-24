@@ -8405,10 +8405,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=main
+        - --version=dev
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:main
+        image: docker.io/projectsveltos/addon-controller:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

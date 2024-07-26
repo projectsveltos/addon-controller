@@ -8408,7 +8408,7 @@ spec:
         - --version=main
         command:
         - /manager
-        image: projectsveltos/addon-controller:main
+        image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:

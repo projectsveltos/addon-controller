@@ -2096,7 +2096,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		addExtraLabels(r, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
 		addExtraAnnotations(r, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
-		err = updateResource(ctx, dr, clusterSummary, r, logger)
+		err = updateResource(ctx, dr, clusterSummary, r, []string{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
 				r.GetKind(), r.GetNamespace(), r.GetName(), err))

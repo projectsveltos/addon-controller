@@ -27,7 +27,7 @@ spec:
     namespace: default
     kind: ConfigMap
 ---
-apiVersion: config.projectsveltos.io/v1alpha1
+apiVersion: config.projectsveltos.io/v1beta1
 kind: ClusterProfile
 metadata:
   name: deploy-calico

@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -1316,6 +1317,71 @@ stringData:
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))
+	})
+
+	It("patchRessource with subresources correctly update instance", func() {
+		serviceName := randomString()
+		key := randomString()
+		value := randomString()
+		servicePatch := `apiVersion: v1
+kind: Service
+metadata:
+  name: %s
+  namespace: default
+  labels:
+    %s: %s
+spec:
+  selector:
+    %s: %s
+status:
+  loadBalancer:
+    ingress:
+    - ip: 1.1.1.1`
+
+		service := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: "default",
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeLoadBalancer,
+				Selector: map[string]string{
+					"app.kubernetes.io/name": "service0",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Protocol:   "TCP",
+						Port:       80,
+						TargetPort: intstr.FromInt(1234),
+					},
+				},
+			},
+		}
+
+		Expect(testEnv.Client.Create(context.TODO(), service)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, service)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(servicePatch,
+			serviceName, key, value, key, value))
+		configMap.Annotations = map[string]string{
+			"projectsveltos.io/subresources": "status"}
+		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false, testEnv.Config, testEnv.Client,
+			configMap, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		serviceOut := corev1.Service{}
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: "default", Name: serviceName}, &serviceOut)).To(Succeed())
+
+		// verify status has been updated
+		Expect(serviceOut.Status.LoadBalancer.Ingress[0].IP).To(Equal("1.1.1.1"))
+		// verify metadata has been updated
+		Expect(serviceOut.Labels).To(Not(BeNil()))
+		Expect(serviceOut.Labels[key]).To(Equal(value))
+		// verify spec has been updated
+		Expect(serviceOut.Spec.Selector).To(Not(BeNil()))
+		Expect(serviceOut.Spec.Selector[key]).To(Equal(value))
 	})
 })
 

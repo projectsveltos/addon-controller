@@ -64,6 +64,7 @@ const (
 	separator                = "---\n"
 	reasonLabel              = "projectsveltos.io/reason"
 	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
+	subresourcesAnnotation   = "projectsveltos.io/subresources"
 	pathAnnotation           = "path"
 )
 
@@ -202,7 +203,7 @@ func readFiles(dir string) (map[string]string, error) {
 // updateResource creates or updates a resource in a CAPI Cluster.
 // No action in DryRun mode.
 func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
-	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured,
+	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured, subresources []string,
 	logger logr.Logger) error {
 
 	// No-op in DryRun mode
@@ -210,9 +211,25 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 		return nil
 	}
 
-	l := logger.WithValues("resourceNamespace", object.GetNamespace(),
-		"resourceName", object.GetName(), "resourceGVK", object.GetObjectKind().GroupVersionKind())
+	l := logger.WithValues("resourceNamespace", object.GetNamespace(), "resourceName", object.GetName(),
+		"resourceGVK", object.GetObjectKind().GroupVersionKind(), "subresources", subresources)
 	l.V(logs.LogDebug).Info("deploying policy")
+
+	if len(subresources) > 0 {
+		// Patch without subresources. This will make sure metadata and spec are eventually updated
+		err := patchRessource(ctx, dr, object, nil)
+		if err != nil {
+			return err
+		}
+	}
+	// Reset resource version in case of subresources a patch has already been made
+	// and that alters the resourceVersion
+	object.SetResourceVersion("")
+	return patchRessource(ctx, dr, object, subresources)
+}
+
+func patchRessource(ctx context.Context, dr dynamic.ResourceInterface,
+	object *unstructured.Unstructured, subresources []string) error {
 
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
 	if err != nil {
@@ -224,7 +241,7 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 		FieldManager: "application/apply-patch",
 		Force:        &forceConflict,
 	}
-	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options)
+	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options, subresources...)
 	return err
 }
 
@@ -241,6 +258,18 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 	return false
 }
 
+func getSubresources(referencedObject client.Object) []string {
+	annotations := referencedObject.GetAnnotations()
+	if annotations != nil {
+		value, exists := annotations[subresourcesAnnotation]
+		if exists {
+			subresources := strings.Split(value, ",")
+			return subresources
+		}
+	}
+	return nil
+}
+
 // deployContent deploys policies contained in a ConfigMap/Secret.
 // data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
@@ -252,6 +281,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1beta1.ResourceReport, err error) {
 
+	subresources := getSubresources(referencedObject)
 	instantiateTemplate := instantiateTemplate(referencedObject, logger)
 	resources, err := collectContent(ctx, clusterSummary, mgmtResources, data, instantiateTemplate, logger)
 	if err != nil {
@@ -265,7 +295,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
-		configv1beta1.FeatureResources, clusterSummary, mgmtResources, logger)
+		configv1beta1.FeatureResources, clusterSummary, mgmtResources, subresources, logger)
 }
 
 // adjustNamespace fixes namespace.
@@ -298,8 +328,8 @@ func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config)
 //nolint:funlen // requires a lot of arguments because kustomize and plain resources are using this function
 func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (reports []configv1beta1.ResourceReport, err error) {
+	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
+	subresources []string, logger logr.Logger) (reports []configv1beta1.ResourceReport, err error) {
 
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
@@ -343,9 +373,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, err
 		}
 
-		// If policy already exists, just get current version and update it by overridding
-		// all metadata and spec.
-		// If policy does not exist already, create it
 		dr, err := utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			return nil, err
@@ -393,7 +420,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			}
 		}
 
-		err = updateResource(ctx, dr, clusterSummary, policy, logger)
+		err = updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
 		if err != nil {
 			return reports, err
 		}

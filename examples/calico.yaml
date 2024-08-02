@@ -19,7 +19,9 @@ kind: ClusterProfile
 metadata:
   name: create-calico-ns
 spec:
-  clusterSelector: cni=calico
+  clusterSelector:
+    matchLabels:
+      cni: calico
   policyRefs:
   - name: calico-namespace
     namespace: default

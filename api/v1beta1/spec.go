@@ -495,6 +495,16 @@ type PolicyRef struct {
 	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
 }
 
+type DriftExclusion struct {
+	// Paths is a slice of JSON6902 paths to exclude from configuration drift evaluation.
+	// +required
+	Paths []string `json:"paths"`
+
+	// Target points to the resources that the paths refers to.
+	// +optional
+	Target *libsveltosv1beta1.PatchSelector `json:"target,omitempty"`
+}
+
 type Clusters struct {
 	// Hash represents of a unique value for ClusterProfile Spec at
 	// a fixed point in time
@@ -625,6 +635,12 @@ type Spec struct {
 	// Within the Patch Spec you can use templating
 	// +optional
 	Patches []libsveltosv1beta1.Patch `json:"patches,omitempty"`
+
+	// DriftExclusions is a list of configuration drift exclusions to be applied when syncMode is
+	// set to ContinuousWithDriftDetection. Each exclusion specifies JSON6902 paths to ignore
+	// when evaluating drift, optionally targeting specific resources and features.
+	// +optional
+	DriftExclusions []DriftExclusion `json:"driftExclusions,omitempty"`
 
 	// ExtraLabels: These labels will be added by Sveltos to all Kubernetes resources deployed in
 	// a managed cluster based on this ClusterProfile/Profile instance.

@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -78,7 +80,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterNamespace := randomString()
 		clusterSummaryName := randomString()
 		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
-			clusterNamespace, clusterSummaryName, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+			clusterNamespace, clusterSummaryName, nil, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 		Expect(c.Get(context.TODO(),
@@ -119,7 +121,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployResourceSummaryInCluster(context.TODO(), testEnv.Client, cluster.Namespace, cluster.Name,
-			clusterSummaryName, libsveltosv1beta1.ClusterTypeCapi, nil, nil, nil,
+			clusterSummaryName, libsveltosv1beta1.ClusterTypeCapi, nil, nil, nil, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
@@ -182,6 +184,93 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			}
 			return true
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("transformDriftExclusionsToPatches transforms DriftExclusions to Patches", func() {
+		driftExclusions := []configv1beta1.DriftExclusion{
+			{
+				Paths: []string{"spec/replicas"},
+			},
+			{
+				Paths: []string{"spec/template/spec/containers[*]image"},
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Deployment",
+					Group:   "apps",
+					Version: "v1",
+				},
+			},
+		}
+
+		patches := controllers.TransformDriftExclusionsToPatches(driftExclusions)
+		Expect(len(patches)).To(Equal(len(driftExclusions)))
+
+		expectedPatch := libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[0].Paths[0]),
+		}
+
+		Expect(patches).To(ContainElement(expectedPatch))
+
+		expectedPatch = libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[1].Paths[0]),
+			Target: driftExclusions[1].Target,
+		}
+		Expect(patches).To(ContainElement(expectedPatch))
+	})
+
+	It("transformDriftExclusionsToPatches expands DriftExclusions paths to multiple to Patches", func() {
+		driftExclusions := []configv1beta1.DriftExclusion{
+			{
+				Paths: []string{"spec/replicas", "metadata/labels"},
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Deployment",
+					Group:   "apps",
+					Version: "v1",
+				},
+			},
+			{
+				Paths: []string{"metadata/annotations", "spec.securityContext"},
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Pod",
+					Group:   "",
+					Version: "v1",
+				},
+			},
+		}
+
+		patches := controllers.TransformDriftExclusionsToPatches(driftExclusions)
+		Expect(len(patches)).To(Equal(2 * len(driftExclusions))) // each Paths has two entries
+
+		expectedPatch := libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[0].Paths[0]),
+			Target: driftExclusions[0].Target,
+		}
+
+		Expect(patches).To(ContainElement(expectedPatch))
+
+		expectedPatch = libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[0].Paths[1]),
+			Target: driftExclusions[0].Target,
+		}
+
+		Expect(patches).To(ContainElement(expectedPatch))
+
+		expectedPatch = libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[1].Paths[0]),
+			Target: driftExclusions[1].Target,
+		}
+		Expect(patches).To(ContainElement(expectedPatch))
+
+		expectedPatch = libsveltosv1beta1.Patch{
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, driftExclusions[1].Paths[1]),
+			Target: driftExclusions[1].Target,
+		}
+		Expect(patches).To(ContainElement(expectedPatch))
 	})
 })
 

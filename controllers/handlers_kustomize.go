@@ -783,7 +783,7 @@ func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummar
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// deploy ResourceSummary
 		err := deployResourceSummaryWithKustomizeResources(ctx, getManagementClusterClient(),
-			clusterNamespace, clusterName, clusterSummary.Name, clusterType, remoteDeployed, logger)
+			clusterNamespace, clusterName, clusterSummary, clusterType, remoteDeployed, logger)
 		if err != nil {
 			return err
 		}
@@ -793,7 +793,7 @@ func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummar
 }
 
 func deployResourceSummaryWithKustomizeResources(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant string,
+	clusterNamespace, clusterName string, clusterSummary *configv1beta1.ClusterSummary,
 	clusterType libsveltosv1beta1.ClusterType,
 	deployed []configv1beta1.Resource, logger logr.Logger) error {
 
@@ -809,8 +809,8 @@ func deployResourceSummaryWithKustomizeResources(ctx context.Context, c client.C
 		}
 	}
 
-	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, applicant,
-		clusterType, nil, resources, nil, logger)
+	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+		clusterType, nil, resources, nil, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
 }
 
 // deployEachKustomizeRefs walks KustomizationRefs and deploys resources

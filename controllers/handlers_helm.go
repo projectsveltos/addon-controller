@@ -115,8 +115,8 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		// Since we are updating resources to watch for drift, remove helm section in ResourceSummary to eliminate
 		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
 		// a configuration drift is happening)
-		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
-			clusterType, nil, nil, []libsveltosv1beta1.HelmResources{}, logger)
+		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name, clusterType, nil, nil,
+			[]libsveltosv1beta1.HelmResources{}, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 			return err
@@ -159,7 +159,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Deploy resourceSummary
 		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
-			clusterType, nil, nil, helmResources, logger)
+			clusterType, nil, nil, helmResources, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
 		if err != nil {
 			return err
 		}
@@ -997,10 +997,14 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return err
 	}
 
+	driftExclusionPatches := transformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
+
 	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
 		return err
 	}
+
+	patches = append(patches, driftExclusionPatches...)
 
 	upgradeClient, err := getHelmUpgradeClient(requestedChart, actionConfig, patches)
 	if err != nil {

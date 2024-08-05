@@ -564,6 +564,22 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 			continue
 		}
 
+		if maxUpdate != 0 {
+			// maxUpdate is set. Skip paused clusters (which would not be updated anyhow as set to paused)
+			// and try to pcik any non paused cluster
+			isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, c, cluster.Namespace,
+				cluster.Name, clusterproxy.GetClusterType(&cluster))
+			if err != nil {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to verify if cluster is paused: %v", err))
+				return err
+			}
+			if isClusterPaused {
+				// No need to set skippedUpdated. Profile will react to a cluster switching from paused to unpaused
+				logger.V(logs.LogDebug).Info("Cluster is paused and maxUpdate is set. Ignore this cluster.")
+				continue
+			}
+		}
+
 		// if maxUpdate is set no more than maxUpdate clusters can be updated in parallel by ClusterProfile
 		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && int32(updatingClusters.Len()) >= maxUpdate {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("Already %d being updating", updatingClusters.Len()))
@@ -575,27 +591,9 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 		// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 		// continuous).
 		// ClusterSummary won't program cluster in paused state.
-		_, err = getClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(), cluster.Namespace,
-			cluster.Name, clusterproxy.GetClusterType(&cluster))
+		err = patchClusterSummary(ctx, c, profileScope, &cluster, logger)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				err = createClusterSummary(ctx, c, profileScope, &cluster)
-				if err != nil {
-					profileScope.Logger.Error(err, fmt.Sprintf("failed to create ClusterSummary for cluster %s/%s",
-						cluster.Namespace, cluster.Name))
-				}
-			} else {
-				profileScope.Logger.Error(err, "failed to get ClusterSummary for cluster %s/%s",
-					cluster.Namespace, cluster.Name)
-				return err
-			}
-		} else {
-			err = updateClusterSummary(ctx, c, profileScope, &cluster)
-			if err != nil {
-				profileScope.Logger.Error(err, "failed to update ClusterSummary for cluster %s/%s",
-					cluster.Namespace, cluster.Name)
-				return err
-			}
+			return err
 		}
 
 		if !updatingClusters.Has(&cluster) {
@@ -609,13 +607,43 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 	}
 
 	if skippedUpdate {
-		return fmt.Errorf("Not all clusters updated yet. %d still being updated",
+		return fmt.Errorf("not all clusters updated yet. %d still being updated",
 			len(profileScope.GetStatus().UpdatingClusters.Clusters))
 	}
 
 	// If all ClusterSummaries have been updated, reset Updated and Updating
 	profileScope.GetStatus().UpdatedClusters = configv1beta1.Clusters{}
 	profileScope.GetStatus().UpdatingClusters = configv1beta1.Clusters{}
+
+	return nil
+}
+
+func patchClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
+	cluster *corev1.ObjectReference, logger logr.Logger) error {
+
+	// ClusterProfile does not look at whether Cluster is paused or not.
+	// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
+	// continuous).
+	// ClusterSummary won't program cluster in paused state.
+	_, err := getClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(), cluster.Namespace,
+		cluster.Name, clusterproxy.GetClusterType(cluster))
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			err = createClusterSummary(ctx, c, profileScope, cluster)
+			if err != nil {
+				logger.Error(err, "failed to create ClusterSummary")
+			}
+		} else {
+			logger.Error(err, "failed to get ClusterSummary")
+			return err
+		}
+	} else {
+		err = updateClusterSummary(ctx, c, profileScope, cluster)
+		if err != nil {
+			logger.Error(err, "failed to update ClusterSummary")
+			return err
+		}
+	}
 
 	return nil
 }

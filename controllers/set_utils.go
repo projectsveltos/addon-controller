@@ -17,9 +17,11 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -27,25 +29,34 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/projectsveltos/addon-controller/pkg/scope"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
-func selectClusters(setScope *scope.SetScope) {
+func selectClusters(ctx context.Context, c client.Client, setScope *scope.SetScope, logger logr.Logger) error {
 	status := setScope.GetStatus()
 	spec := setScope.GetSpec()
 
 	// Verify all currently selected are still ready
 	// Status.MatchingClusterRef only contains ready cluster
-	currentMatchingCluster := make(map[corev1.ObjectReference]bool)
-	for i := range status.MatchingClusterRefs {
-		currentMatchingCluster[status.MatchingClusterRefs[i]] = true
+	// Set must consider only cluster with connectionStatus set to Healthy. Prune matching cluster whose
+	// connection is down
+	healthyMatchingClusters, err := pruneConnectionDownClusters(ctx, c, status.MatchingClusterRefs, logger)
+	if err != nil {
+		return err
+	}
+
+	currentMatchingHealthyCluster := make(map[corev1.ObjectReference]bool)
+	for i := range healthyMatchingClusters {
+		currentMatchingHealthyCluster[healthyMatchingClusters[i]] = true
 	}
 
 	currentSelectedClusters := make([]corev1.ObjectReference, 0)
 	for i := range status.SelectedClusterRefs {
 		cluster := &status.SelectedClusterRefs[i]
-		if _, ok := currentMatchingCluster[*cluster]; ok {
+		if _, ok := currentMatchingHealthyCluster[*cluster]; ok {
 			currentSelectedClusters = append(currentSelectedClusters, *cluster)
 		}
 	}
@@ -57,7 +68,7 @@ func selectClusters(setScope *scope.SetScope) {
 	if len(currentSelectedClusters) == spec.MaxReplicas {
 		// Number of selected cluster matches the MaxReplicas, so there
 		// is nothing else to do
-		return
+		return nil
 	}
 
 	if spec.MaxReplicas == 0 {
@@ -67,11 +78,13 @@ func selectClusters(setScope *scope.SetScope) {
 		status.SelectedClusterRefs = currentSelectedClusters[:spec.MaxReplicas-1]
 	} else if len(currentSelectedClusters) < spec.MaxReplicas {
 		// select more clusters
-		selectMoreClusters(setScope)
+		selectMoreClusters(setScope, healthyMatchingClusters)
 	}
+
+	return nil
 }
 
-func selectMoreClusters(setScope *scope.SetScope) {
+func selectMoreClusters(setScope *scope.SetScope, healthyMatchingClusters []corev1.ObjectReference) {
 	status := setScope.GetStatus()
 	spec := setScope.GetSpec()
 
@@ -86,8 +99,8 @@ func selectMoreClusters(setScope *scope.SetScope) {
 		currentSelectedCluster[status.SelectedClusterRefs[i]] = true
 	}
 
-	for i := range status.MatchingClusterRefs {
-		cluster := &status.MatchingClusterRefs[i]
+	for i := range healthyMatchingClusters {
+		cluster := &healthyMatchingClusters[i]
 		if _, ok := currentSelectedCluster[*cluster]; !ok {
 			status.SelectedClusterRefs = append(status.SelectedClusterRefs, *cluster)
 			if len(status.SelectedClusterRefs) == spec.MaxReplicas {
@@ -127,4 +140,45 @@ func requeueForSet(set client.Object,
 	}
 
 	return requests
+}
+
+func pruneConnectionDownClusters(ctx context.Context, c client.Client, matchingClusters []corev1.ObjectReference,
+	logger logr.Logger) ([]corev1.ObjectReference, error) {
+
+	result := make([]corev1.ObjectReference, 0)
+	for i := range matchingClusters {
+		cluster := &matchingClusters[i]
+		clusterType := clusterproxy.GetClusterType(cluster)
+
+		if clusterType == libsveltosv1beta1.ClusterTypeSveltos {
+			sveltosCluster, err := getSveltosCluster(ctx, c, cluster.Namespace, cluster.Name)
+			if err != nil {
+				return nil, err
+			}
+			if sveltosCluster.Status.ConnectionStatus == libsveltosv1beta1.ConnectionDown {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("connection to sveltosCluster %s/%s is down. Ignore cluster",
+					cluster.Namespace, cluster.Name))
+				continue
+			}
+		}
+
+		result = append(result, *cluster)
+	}
+
+	return result, nil
+}
+
+func getSveltosCluster(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string) (*libsveltosv1beta1.SveltosCluster, error) {
+
+	clusterNamespacedName := types.NamespacedName{
+		Namespace: clusterNamespace,
+		Name:      clusterName,
+	}
+
+	cluster := &libsveltosv1beta1.SveltosCluster{}
+	if err := c.Get(ctx, clusterNamespacedName, cluster); err != nil {
+		return nil, err
+	}
+	return cluster, nil
 }

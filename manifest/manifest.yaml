@@ -2408,6 +2408,8 @@ spec:
                             https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
                           type: string
                       type: object
+                  required:
+                  - patch
                   type: object
                 type: array
               policyRefs:
@@ -5163,6 +5165,8 @@ spec:
                                 https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
                               type: string
                           type: object
+                      required:
+                      - patch
                       type: object
                     type: array
                   policyRefs:
@@ -7222,6 +7226,8 @@ spec:
                             https://github.com/kubernetes/community/blob/master/contributors/design-proposals/api-machinery/api-group.md
                           type: string
                       type: object
+                  required:
+                  - patch
                   type: object
                 type: array
               policyRefs:
@@ -8405,10 +8411,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=main
+        - --version=dev
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:main
+        image: docker.io/projectsveltos/addon-controller:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

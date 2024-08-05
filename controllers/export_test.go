@@ -194,8 +194,9 @@ var (
 )
 
 var (
-	SelectClusters     = selectClusters
-	SelectMoreClusters = selectMoreClusters
+	SelectClusters              = selectClusters
+	SelectMoreClusters          = selectMoreClusters
+	PruneConnectionDownClusters = pruneConnectionDownClusters
 )
 
 var (

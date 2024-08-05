@@ -152,7 +152,10 @@ func (r *SetReconciler) reconcileNormal(
 
 	setScope.SetMatchingClusterRefs(matchingCluster)
 
-	selectClusters(setScope)
+	err = selectClusters(ctx, r.Client, setScope, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+	}
 
 	r.updateMaps(setScope)
 

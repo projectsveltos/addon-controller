@@ -188,6 +188,21 @@ reportsController:
 				},
 			},
 		}
+
+		By("use driftExclusion to ignore cleanup controller spec/replicas changes")
+		currentClusterProfile.Spec.DriftExclusions = []configv1beta1.DriftExclusion{
+			{
+				Paths: []string{"/spec/replicas"},
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:      "Deployment",
+					Group:     "apps",
+					Version:   "v1",
+					Namespace: kyvernoNamespace,
+					Name:      cleanupControllerDeplName,
+				},
+			},
+		}
+
 		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
 		currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 			{
@@ -198,8 +213,8 @@ reportsController:
 					Group:     "apps",
 					Version:   "v1",
 					Kind:      "Deployment",
-					Namespace: "kyverno",
-					Name:      "kyverno-admission-controller",
+					Namespace: kyvernoNamespace,
+					Name:      admissionControllerDeplName,
 				},
 			},
 		}
@@ -282,15 +297,7 @@ reportsController:
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
-		// Verify ResourceSummary is present
-		Eventually(func() bool {
-			currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-			resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
-				currentResourceSummary)
-			return err == nil
-		}, timeout, pollingInterval).Should(BeTrue())
+		verifyResourceSummary(workloadClient, clusterSummary)
 
 		// Wait to make sure a watcher is started in the managed cluster
 		const sleepTime = 30
@@ -474,4 +481,60 @@ func isDeplLabelCorrect(lbls map[string]string, key, value string) bool {
 	v := lbls[key]
 
 	return v == value
+}
+
+func verifyResourceSummary(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {
+	Byf("Verify ResourceSummary is present")
+	Eventually(func() bool {
+		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+		resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
+		err := c.Get(context.TODO(),
+			types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
+			currentResourceSummary)
+		return err == nil
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+	resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
+	err := c.Get(context.TODO(),
+		types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
+		currentResourceSummary)
+	Expect(err).To(BeNil())
+
+	deploymentKind := "Deployment"
+
+	// Patches has been configured to ignore admission controller for configuration
+	// drift (by adding annotation projectsveltos.io/driftDetectionIgnore)
+	Byf("Verify deployment %s/%s is marked to be ignored for configuration drift",
+		kyvernoNamespace, admissionControllerDeplName)
+	found := false
+	for i := range currentResourceSummary.Spec.ChartResources {
+		for j := range currentResourceSummary.Spec.ChartResources[i].Resources {
+			r := &currentResourceSummary.Spec.ChartResources[i].Resources[j]
+			if r.Kind == deploymentKind && r.Namespace == kyvernoNamespace &&
+				r.Name == admissionControllerDeplName {
+
+				Expect(r.IgnoreForConfigurationDrift).To(BeTrue())
+				found = true
+			} else {
+				Expect(r.IgnoreForConfigurationDrift).To(BeFalse())
+			}
+		}
+	}
+	Expect(found).To(BeTrue())
+
+	// DriftExclusion has been configured to ignore cleanup controller spec/replicas
+	found = false
+	Byf("Verify deployment %s/%s spec/replicas is marked to be ignored for configuration drift",
+		kyvernoNamespace, cleanupControllerDeplName)
+	for i := range currentResourceSummary.Spec.Patches {
+		p := &currentResourceSummary.Spec.Patches[i]
+		if p.Target.Kind == deploymentKind && p.Target.Namespace == kyvernoNamespace &&
+			p.Target.Name == cleanupControllerDeplName {
+
+			Expect(p.Patch).To(ContainSubstring("/spec/replicas"))
+			found = true
+		}
+	}
+	Expect(found).To(BeTrue())
 }

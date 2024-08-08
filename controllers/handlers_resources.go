@@ -192,7 +192,7 @@ func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *config
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// deploy ResourceSummary
 		err := deployResourceSummary(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
-			clusterSummary.Name, clusterType, remoteDeployed, logger)
+			clusterSummary, clusterType, remoteDeployed, logger)
 		if err != nil {
 			return err
 		}
@@ -457,7 +457,7 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 }
 
 func deployResourceSummary(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant string,
+	clusterNamespace, clusterName string, clusterSummary *configv1beta1.ClusterSummary,
 	clusterType libsveltosv1beta1.ClusterType,
 	deployed []configv1beta1.Resource, logger logr.Logger) error {
 
@@ -474,8 +474,8 @@ func deployResourceSummary(ctx context.Context, c client.Client,
 		}
 	}
 
-	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, applicant,
-		clusterType, resources, nil, nil, logger)
+	return deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+		clusterType, resources, nil, nil, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
 }
 
 // deployPolicyRefs deploys in a managed Cluster the policies contained in the Data section of each

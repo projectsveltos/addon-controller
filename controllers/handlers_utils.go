@@ -200,7 +200,24 @@ func readFiles(dir string) (map[string]string, error) {
 	return files, err
 }
 
-// updateResource creates or updates a resource in a CAPI Cluster.
+func applySubresources(ctx context.Context, dr dynamic.ResourceInterface,
+	object *unstructured.Unstructured, subresources []string, options *metav1.PatchOptions) error {
+
+	if len(subresources) == 0 {
+		return nil
+	}
+
+	object.SetResourceVersion("")
+	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
+	if err != nil {
+		return err
+	}
+
+	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, *options, subresources...)
+	return err
+}
+
+// updateResource creates or updates a resource in a Cluster.
 // No action in DryRun mode.
 func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured, subresources []string,
@@ -215,34 +232,54 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 		"resourceGVK", object.GetObjectKind().GroupVersionKind(), "subresources", subresources)
 	l.V(logs.LogDebug).Info("deploying policy")
 
-	if len(subresources) > 0 {
-		// Patch without subresources. This will make sure metadata and spec are eventually updated
-		err := patchRessource(ctx, dr, object, nil)
-		if err != nil {
-			return err
+	forceConflict := true
+	options := metav1.PatchOptions{
+		FieldManager: "application/apply-patch",
+		Force:        &forceConflict,
+	}
+
+	// When operating in SyncModeContinuousWithDriftDetection mode and DriftExclusions are specified,
+	// avoid resetting certain object fields if the object is being redeployed.
+	// For example, consider a Deployment with an Autoscaler. Since the Autoscaler manages the spec.replicas
+	// field, Sveltos is requested to deploy the Deployment and spec.replicas is specified as a field to ignore during
+	// configuration drift evaluation.
+	// If Sveltos is redeploying the deployment (for instance deployment image tag was changed), Sveltos must not
+	// override spec.replicas. So code first tries to create resource and if already existing, before applying a patch
+	// the spec.replicas is removed.
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		if clusterSummary.Spec.ClusterProfileSpec.DriftExclusions != nil {
+			_, err := dr.Create(ctx, object, metav1.CreateOptions{})
+			if err != nil {
+				if !apierrors.IsAlreadyExists(err) {
+					return err
+				}
+				// The resource already exist. Apply Patches to avoid resetting fields that should be ignored for
+				// drift evaluation
+				patches := transformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
+				p := &patcher.CustomPatchPostRenderer{Patches: patches}
+				var patchedObjects []*unstructured.Unstructured
+				patchedObjects, err = p.RunUnstructured([]*unstructured.Unstructured{object})
+				if err != nil {
+					return err
+				}
+				object = patchedObjects[0]
+			} else {
+				return applySubresources(ctx, dr, object, subresources, &options)
+			}
 		}
 	}
-	// Reset resource version in case of subresources a patch has already been made
-	// and that alters the resourceVersion
-	object.SetResourceVersion("")
-	return patchRessource(ctx, dr, object, subresources)
-}
-
-func patchRessource(ctx context.Context, dr dynamic.ResourceInterface,
-	object *unstructured.Unstructured, subresources []string) error {
 
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
 	if err != nil {
 		return err
 	}
 
-	forceConflict := true
-	options := metav1.PatchOptions{
-		FieldManager: "application/apply-patch",
-		Force:        &forceConflict,
+	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options)
+	if err != nil {
+		return err
 	}
-	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options, subresources...)
-	return err
+
+	return applySubresources(ctx, dr, object, subresources, &options)
 }
 
 func instantiateTemplate(referencedObject client.Object, logger logr.Logger) bool {

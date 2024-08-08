@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -98,7 +99,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1beta1.ClusterType,
 	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
-	helmResources []libsveltosv1beta1.HelmResources, logger logr.Logger) error {
+	helmResources []libsveltosv1beta1.HelmResources, driftExclusions []configv1beta1.DriftExclusion,
+	logger logr.Logger) error {
 
 	logger = logger.WithValues("clustersummary", applicant)
 	logger.V(logs.LogDebug).Info("deploy resourcesummary")
@@ -114,7 +116,7 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 
 	// Deploy ResourceSummary instance
 	err = deployResourceSummaryInstance(ctx, remoteClient, resources, kustomizeResources,
-		helmResources, clusterNamespace, applicant, logger)
+		helmResources, clusterNamespace, applicant, driftExclusions, logger)
 	if err != nil {
 		return err
 	}
@@ -338,7 +340,7 @@ func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig
 func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,
 	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
 	helmResources []libsveltosv1beta1.HelmResources, clusterNamespace, applicant string,
-	logger logr.Logger) error {
+	driftExclusions []configv1beta1.DriftExclusion, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
 
@@ -352,6 +354,8 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to create namespace %s: %v", ns.Name, err))
 		return err
 	}
+
+	patches := transformDriftExclusionsToPatches(driftExclusions)
 
 	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 	err = remoteClient.Get(ctx,
@@ -381,6 +385,7 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 			if helmResources != nil {
 				toDeployResourceSummary.Spec.ChartResources = helmResources
 			}
+			toDeployResourceSummary.Spec.Patches = patches
 
 			return remoteClient.Create(ctx, toDeployResourceSummary)
 		}
@@ -399,11 +404,51 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 	if currentResourceSummary.Labels == nil {
 		currentResourceSummary.Labels = map[string]string{}
 	}
+	currentResourceSummary.Spec.Patches = patches
 	currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNameLabel] = applicant
 	currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel] = clusterNamespace
 
 	logger.V(logsettings.LogDebug).Info("resourceSummary instance already present. updating it.")
 	return remoteClient.Update(ctx, currentResourceSummary)
+}
+
+// transformDriftExclusionPathsToPatches transforms a DriftExclusion instance to a Patch instance.
+// Operation is always set to remove (the goal of a DriftExclusion is to not consider, so to remove, a path
+// during configuration drift evaluation).
+func transformDriftExclusionPathsToPatches(driftExclusion *configv1beta1.DriftExclusion) []libsveltosv1beta1.Patch {
+	if len(driftExclusion.Paths) == 0 {
+		return nil
+	}
+
+	patches := make([]libsveltosv1beta1.Patch, len(driftExclusion.Paths))
+	for i := range driftExclusion.Paths {
+		path := driftExclusion.Paths[i]
+		// This patch is exclusively used for removing fields. The drift-detection-manager applies it upon detecting
+		// changes to Sveltos-deployed resources. By removing the specified field, it prevents the field from being
+		// considered during configuration drift evaluation.
+		patches[i] = libsveltosv1beta1.Patch{
+			Target: driftExclusion.Target,
+			Patch: fmt.Sprintf(`- op: remove
+  path: %s`, path),
+		}
+	}
+
+	return patches
+}
+
+// transformDriftExclusionsToPatches transforms a slice of driftExclusion to a slice of Patch
+// Operation on each Patch is always set to remove (the goal of a DriftExclusion is to not consider, so to remove,
+// a path during configuration drift evaluation).
+func transformDriftExclusionsToPatches(driftExclusions []configv1beta1.DriftExclusion) []libsveltosv1beta1.Patch {
+	patches := []libsveltosv1beta1.Patch{}
+
+	for i := range driftExclusions {
+		item := &driftExclusions[i]
+		tmpPatches := transformDriftExclusionPathsToPatches(item)
+		patches = append(patches, tmpPatches...)
+	}
+
+	return patches
 }
 
 func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,

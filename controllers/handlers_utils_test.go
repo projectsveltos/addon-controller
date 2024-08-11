@@ -100,6 +100,34 @@ spec:
         ports:
         - containerPort: 80`
 
+	deplTemplateWithStatus = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: %s
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nginx
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        ports:
+        - containerPort: 80
+status:
+  replicas: %d
+  unavailableReplicas: %d
+  readyReplicas: %d
+  availableReplicas: %d`
+
 	multusData = `apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -583,6 +611,140 @@ var _ = Describe("HandlersUtils", func() {
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
+	})
+
+	It("updateResource does not reset paths in DriftExclusions", func() {
+		depl := fmt.Sprintf(deplTemplate, namespace)
+		u, err := utils.GetUnstructured([]byte(depl))
+		Expect(err).To(BeNil())
+
+		dr, err := utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
+		Expect(err).To(BeNil())
+
+		// following will successfully create deployment
+		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		currentDeployment := &appsv1.Deployment{}
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []configv1beta1.DriftExclusion{
+			{
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Deployment",
+					Group:   "apps",
+					Version: "v1",
+				},
+				Paths: []string{"/spec/replicas"},
+			},
+		}
+
+		// Update deployment.spec.replicas
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+			currentDeployment)).To(Succeed())
+		newReplicas := int32(5)
+		currentDeployment.Spec.Replicas = &newReplicas
+		Expect(testEnv.Update(context.TODO(), currentDeployment)).To(Succeed())
+
+		// Wait cache to sync
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil &&
+				*currentDeployment.Spec.Replicas == newReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// New deploy will not override replicas
+		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		Consistently(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil &&
+				*currentDeployment.Spec.Replicas == newReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("updateResource: subresources and driftExclusions", func() {
+		depl := fmt.Sprintf(deplTemplate, namespace)
+		u, err := utils.GetUnstructured([]byte(depl))
+		Expect(err).To(BeNil())
+
+		dr, err := utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
+		Expect(err).To(BeNil())
+
+		// following will successfully create deployment
+		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		currentDeployment := &appsv1.Deployment{}
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []configv1beta1.DriftExclusion{
+			{
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Deployment",
+					Group:   "apps",
+					Version: "v1",
+				},
+				Paths: []string{"/spec/replicas"},
+			},
+		}
+
+		// Update deployment.spec.replicas
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+			currentDeployment)).To(Succeed())
+		newReplicas := int32(5)
+		currentDeployment.Spec.Replicas = &newReplicas
+		Expect(testEnv.Update(context.TODO(), currentDeployment)).To(Succeed())
+
+		// Wait cache to sync
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil &&
+				*currentDeployment.Spec.Replicas == newReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		readyReplicas := 3
+		availableReplicas := 3
+		unavailableReplicas := 2
+		depl = fmt.Sprintf(deplTemplateWithStatus, namespace, newReplicas,
+			unavailableReplicas, readyReplicas, availableReplicas)
+		u, err = utils.GetUnstructured([]byte(depl))
+		Expect(err).To(BeNil())
+
+		// New deploy will not override replicas
+		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, []string{"status"},
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		Consistently(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil &&
+				*currentDeployment.Spec.Replicas == newReplicas &&
+				currentDeployment.Status.AvailableReplicas == int32(availableReplicas) &&
+				currentDeployment.Status.UnavailableReplicas == int32(unavailableReplicas)
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("getSecret returns an error when type is different than ClusterProfileSecretType", func() {
@@ -1371,10 +1533,20 @@ status:
 		Expect(err).To(BeNil())
 
 		serviceOut := corev1.Service{}
+		// wait for cache to sync
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: "default", Name: serviceName},
+				&serviceOut)
+			return err == nil &&
+				serviceOut.Status.LoadBalancer.Ingress != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		Expect(testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: "default", Name: serviceName}, &serviceOut)).To(Succeed())
 
 		// verify status has been updated
+		Expect(serviceOut.Status.LoadBalancer.Ingress).ToNot(BeNil())
 		Expect(serviceOut.Status.LoadBalancer.Ingress[0].IP).To(Equal("1.1.1.1"))
 		// verify metadata has been updated
 		Expect(serviceOut.Labels).To(Not(BeNil()))

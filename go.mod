@@ -1,13 +1,13 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.22.4
+go 1.22.5
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/fluxcd/pkg/http/fetch v0.11.0
-	github.com/fluxcd/pkg/tar v0.7.0
+	github.com/fluxcd/pkg/http/fetch v0.12.0
+	github.com/fluxcd/pkg/tar v0.8.0
 	github.com/fluxcd/source-controller/api v1.3.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2
@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.0
 	github.com/onsi/gomega v1.34.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.35.1-0.20240805114830-bfe0e2b5e213
+	github.com/projectsveltos/libsveltos v0.36.0
 	github.com/prometheus/client_golang v1.20.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
@@ -54,7 +54,7 @@ require (
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/containerd/containerd v1.7.12 // indirect
 	github.com/containerd/log v0.1.0 // indirect
-	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
+	github.com/cyphar/filepath-securejoin v0.3.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v25.0.1+incompatible // indirect
@@ -99,7 +99,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.5 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -107,7 +107,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.8 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
@@ -161,7 +161,7 @@ require (
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect

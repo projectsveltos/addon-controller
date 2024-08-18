@@ -77,6 +77,7 @@ var (
 
 	GetClusterSummary            = getClusterSummary
 	AddLabel                     = addLabel
+	UpdateResource               = updateResource
 	CreateNamespace              = createNamespace
 	GetEntryKey                  = getEntryKey
 	DeployContentOfConfigMap     = deployContentOfConfigMap
@@ -155,6 +156,7 @@ var (
 	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels
 	RemoveDriftDetectionManagerFromManagementCluster = removeDriftDetectionManagerFromManagementCluster
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
+	TransformDriftExclusionsToPatches                = transformDriftExclusionsToPatches
 
 	GetResourceSummaryNamespace = getResourceSummaryNamespace
 	GetResourceSummaryName      = getResourceSummaryName
@@ -194,8 +196,9 @@ var (
 )
 
 var (
-	SelectClusters     = selectClusters
-	SelectMoreClusters = selectMoreClusters
+	SelectClusters              = selectClusters
+	SelectMoreClusters          = selectMoreClusters
+	PruneConnectionDownClusters = pruneConnectionDownClusters
 )
 
 var (

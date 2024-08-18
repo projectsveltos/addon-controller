@@ -624,6 +624,45 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(0))
 	})
 
+	It("updateClusterSummaries does not create ClusterSummary for matching Paused Cluster", func() {
+		maxUpdate := int32(3)
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: maxUpdate}
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			{
+				Namespace:  matchingCluster.Namespace,
+				Name:       matchingCluster.Name,
+				Kind:       clusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			},
+		}
+
+		matchingCluster.Status.ControlPlaneReady = true
+		matchingCluster.Spec.Paused = true
+
+		initObjects := []client.Object{
+			clusterProfile,
+			nonMatchingCluster,
+			matchingCluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		err = controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)
+		Expect(err).To(BeNil())
+
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
+		Expect(len(clusterSummaryList.Items)).To(Equal(0))
+	})
+
 	It("updateClusterSummaries creates ClusterSummary for each matching CAPI Cluster", func() {
 		matchingCluster.Status.Conditions = []clusterv1.Condition{
 			{

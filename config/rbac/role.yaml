@@ -8,13 +8,6 @@ rules:
   - ""
   resources:
   - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - secrets
   verbs:
   - get
@@ -53,29 +46,8 @@ rules:
   - cluster.x-k8s.io
   resources:
   - clusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machines
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machines/status
   verbs:
   - get
@@ -85,49 +57,6 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterconfigurations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterconfigurations/status
-  verbs:
-  - get
-  - list
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
   - clusterreports
   verbs:
   - create
@@ -139,10 +68,41 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
+  - clusterconfigurations/status
   - clusterreports/status
   verbs:
   - get
   - list
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles
+  - profiles
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles/finalizers
+  - clustersummaries/finalizers
+  - profiles/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles/status
+  - clustersummaries/status
+  - profiles/status
+  verbs:
+  - get
+  - patch
   - update
 - apiGroups:
   - config.projectsveltos.io
@@ -157,46 +117,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clustersummaries/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clustersummaries/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:
   - kubeadmcontrolplanes
@@ -208,13 +128,6 @@ rules:
   - extension.projectsveltos.io
   resources:
   - jsonnetsources
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - extension.projectsveltos.io
-  resources:
   - yttsources
   verbs:
   - get
@@ -232,39 +145,6 @@ rules:
   - lib.projectsveltos.io
   resources:
   - clustersets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - clustersets/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - clustersets/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - debuggingconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sets
   verbs:
   - create
@@ -277,12 +157,14 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clustersets/finalizers
   - sets/finalizers
   verbs:
   - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clustersets/status
   - sets/status
   verbs:
   - get
@@ -291,14 +173,8 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - debuggingconfigurations
   - sveltosclusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sveltosclusters/status
   verbs:
   - get
@@ -308,45 +184,10 @@ rules:
   - source.toolkit.fluxcd.io
   resources:
   - buckets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - buckets/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - gitrepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - gitrepositories/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - ocirepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - ocirepositories/status
   verbs:
   - get

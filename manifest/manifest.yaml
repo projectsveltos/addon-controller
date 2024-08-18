@@ -7,7 +7,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: clusterconfigurations.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -163,7 +163,6 @@ spec:
                                         the event) or if no container name is specified "spec.containers[2]" (container with
                                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                         referencing a part of an object.
-                                        TODO: this design is not final and this field is subject to change in the future.
                                       type: string
                                     kind:
                                       description: |-
@@ -335,7 +334,6 @@ spec:
                                         the event) or if no container name is specified "spec.containers[2]" (container with
                                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                         referencing a part of an object.
-                                        TODO: this design is not final and this field is subject to change in the future.
                                       type: string
                                     kind:
                                       description: |-
@@ -540,7 +538,6 @@ spec:
                                         the event) or if no container name is specified "spec.containers[2]" (container with
                                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                         referencing a part of an object.
-                                        TODO: this design is not final and this field is subject to change in the future.
                                       type: string
                                     kind:
                                       description: |-
@@ -712,7 +709,6 @@ spec:
                                         the event) or if no container name is specified "spec.containers[2]" (container with
                                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                         referencing a part of an object.
-                                        TODO: this design is not final and this field is subject to change in the future.
                                       type: string
                                     kind:
                                       description: |-
@@ -778,7 +774,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: clusterprofiles.config.projectsveltos.io
 spec:
   conversion:
@@ -826,24 +822,8 @@ spec:
               clusterRefs:
                 description: ClusterRefs identifies clusters to associate to.
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -857,7 +837,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -1422,7 +1401,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -1561,24 +1539,8 @@ spec:
                   MatchingClusterRefs reference all the clusters currently matching
                   ClusterProfile ClusterSelector
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -1592,7 +1554,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -1634,24 +1595,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -1665,7 +1610,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -1713,24 +1657,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -1744,7 +1672,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -1814,24 +1741,8 @@ spec:
               clusterRefs:
                 description: ClusterRefs identifies clusters to associate to.
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -1845,7 +1756,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -2606,7 +2516,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -2745,24 +2654,8 @@ spec:
                   MatchingClusterRefs reference all the clusters currently matching
                   ClusterProfile ClusterSelector
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -2776,7 +2669,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -2818,24 +2710,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -2849,7 +2725,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -2897,24 +2772,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -2928,7 +2787,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -2976,7 +2834,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: clusterreports.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -3098,7 +2956,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -3251,7 +3108,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -3412,7 +3268,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -3565,7 +3420,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -3621,7 +3475,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: clustersummaries.config.projectsveltos.io
 spec:
   conversion:
@@ -3684,24 +3538,8 @@ spec:
                   clusterRefs:
                     description: ClusterRefs identifies clusters to associate to.
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -3715,7 +3553,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -4283,7 +4120,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -4627,24 +4463,8 @@ spec:
                   clusterRefs:
                     description: ClusterRefs identifies clusters to associate to.
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -4658,7 +4478,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -5422,7 +5241,6 @@ spec:
                                 the event) or if no container name is specified "spec.containers[2]" (container with
                                 index 2 in this pod). This syntax is chosen only to have some well-defined way of
                                 referencing a part of an object.
-                                TODO: this design is not final and this field is subject to change in the future.
                               type: string
                             kind:
                               description: |-
@@ -5714,7 +5532,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.1
   name: profiles.config.projectsveltos.io
 spec:
   conversion:
@@ -5762,24 +5580,8 @@ spec:
               clusterRefs:
                 description: ClusterRefs identifies clusters to associate to.
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -5793,7 +5595,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -6358,7 +6159,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -6497,24 +6297,8 @@ spec:
                   MatchingClusterRefs reference all the clusters currently matching
                   ClusterProfile ClusterSelector
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -6528,7 +6312,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -6570,24 +6353,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -6601,7 +6368,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -6649,24 +6415,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -6680,7 +6430,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -6750,24 +6499,8 @@ spec:
               clusterRefs:
                 description: ClusterRefs identifies clusters to associate to.
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -6781,7 +6514,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -7542,7 +7274,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -7681,24 +7412,8 @@ spec:
                   MatchingClusterRefs reference all the clusters currently matching
                   ClusterProfile ClusterSelector
                 items:
-                  description: |-
-                    ObjectReference contains enough information to let you inspect or modify the referred object.
-                    ---
-                    New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                     1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                     2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                        restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                        Those cannot be well described when embedded.
-                     3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                     4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                        during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                        and the version of the actual struct is irrelevant.
-                     5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                        will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                    Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                    For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
                     apiVersion:
                       description: API version of the referent.
@@ -7712,7 +7427,6 @@ spec:
                         the event) or if no container name is specified "spec.containers[2]" (container with
                         index 2 in this pod). This syntax is chosen only to have some well-defined way of
                         referencing a part of an object.
-                        TODO: this design is not final and this field is subject to change in the future.
                       type: string
                     kind:
                       description: |-
@@ -7754,24 +7468,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -7785,7 +7483,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -7833,24 +7530,8 @@ spec:
                       ClusterProfile ClusterSelector and already updated/being updated
                       to ClusterProfile Spec
                     items:
-                      description: |-
-                        ObjectReference contains enough information to let you inspect or modify the referred object.
-                        ---
-                        New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
-                         1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.
-                         2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
-                            restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
-                            Those cannot be well described when embedded.
-                         3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
-                         4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity
-                            during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple
-                            and the version of the actual struct is irrelevant.
-                         5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
-                            will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
-
-
-                        Instead of using this type, create a locally provided and used type that is well-focused on your reference.
-                        For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -7864,7 +7545,6 @@ spec:
                             the event) or if no container name is specified "spec.containers[2]" (container with
                             index 2 in this pod). This syntax is chosen only to have some well-defined way of
                             referencing a part of an object.
-                            TODO: this design is not final and this field is subject to change in the future.
                           type: string
                         kind:
                           description: |-
@@ -8115,13 +7795,6 @@ rules:
   - ""
   resources:
   - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - secrets
   verbs:
   - get
@@ -8160,29 +7833,8 @@ rules:
   - cluster.x-k8s.io
   resources:
   - clusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machines
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machines/status
   verbs:
   - get
@@ -8192,49 +7844,6 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterconfigurations
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterconfigurations/status
-  verbs:
-  - get
-  - list
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clusterprofiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
   - clusterreports
   verbs:
   - create
@@ -8246,10 +7855,41 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
+  - clusterconfigurations/status
   - clusterreports/status
   verbs:
   - get
   - list
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles
+  - profiles
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles/finalizers
+  - clustersummaries/finalizers
+  - profiles/finalizers
+  verbs:
+  - patch
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - clusterprofiles/status
+  - clustersummaries/status
+  - profiles/status
+  verbs:
+  - get
+  - patch
   - update
 - apiGroups:
   - config.projectsveltos.io
@@ -8264,46 +7904,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clustersummaries/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - clustersummaries/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles/finalizers
-  verbs:
-  - patch
-  - update
-- apiGroups:
-  - config.projectsveltos.io
-  resources:
-  - profiles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - controlplane.cluster.x-k8s.io
   resources:
   - kubeadmcontrolplanes
@@ -8315,13 +7915,6 @@ rules:
   - extension.projectsveltos.io
   resources:
   - jsonnetsources
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - extension.projectsveltos.io
-  resources:
   - yttsources
   verbs:
   - get
@@ -8339,39 +7932,6 @@ rules:
   - lib.projectsveltos.io
   resources:
   - clustersets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - clustersets/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - clustersets/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - debuggingconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sets
   verbs:
   - create
@@ -8384,12 +7944,14 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clustersets/finalizers
   - sets/finalizers
   verbs:
   - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clustersets/status
   - sets/status
   verbs:
   - get
@@ -8398,14 +7960,8 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - debuggingconfigurations
   - sveltosclusters
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
   - sveltosclusters/status
   verbs:
   - get
@@ -8415,45 +7971,10 @@ rules:
   - source.toolkit.fluxcd.io
   resources:
   - buckets
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - buckets/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - gitrepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - gitrepositories/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - ocirepositories
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - source.toolkit.fluxcd.io
-  resources:
   - ocirepositories/status
   verbs:
   - get
@@ -8588,10 +8109,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.36.0
+        - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:v0.36.0
+        image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:

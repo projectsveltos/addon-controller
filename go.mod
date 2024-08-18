@@ -15,7 +15,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.0
 	github.com/onsi/gomega v1.34.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.36.0
+	github.com/projectsveltos/libsveltos v0.36.1-0.20240818102650-9efa40a38767
 	github.com/prometheus/client_golang v1.20.0
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
@@ -59,7 +59,7 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v25.0.1+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
-	github.com/docker/docker v25.0.6+incompatible // indirect
+	github.com/docker/docker v26.1.5+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect

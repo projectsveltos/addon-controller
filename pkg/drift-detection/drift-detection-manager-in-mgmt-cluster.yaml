@@ -28,7 +28,7 @@ spec:
         - --run-mode=do-not-send-updates
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager:main
+        image: docker.io/projectsveltos/drift-detection-manager:dev
         livenessProbe:
           failureThreshold: 3
           httpGet:

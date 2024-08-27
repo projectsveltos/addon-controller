@@ -245,7 +245,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
 			Name:      clusterSummary.Spec.ClusterName + sveltosKubeconfigPostfix,
 		},
 		Data: map[string][]byte{
-			"data": testEnv.Kubeconfig,
+			"value": testEnv.Kubeconfig,
 		},
 	}
 

@@ -371,15 +371,13 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 			configmap := &corev1.ConfigMap{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, configmap)
 			if err == nil {
-				config += getDataSectionHash(configmap.Data)
-				config += getDataSectionHash(configmap.BinaryData)
+				config += getConfigMapHash(configmap)
 			}
 		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, secret)
 			if err == nil {
-				config += getDataSectionHash(secret.Data)
-				config += getDataSectionHash(secret.StringData)
+				config += getSecretHash(secret)
 			}
 		} else {
 			var source client.Object
@@ -389,6 +387,9 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 				if s.GetArtifact() != nil {
 					config += s.GetArtifact().Revision
 				}
+			}
+			if source.GetAnnotations() != nil {
+				config += getDataSectionHash(source.GetAnnotations())
 			}
 		}
 		if err != nil {

@@ -334,6 +334,30 @@ func removeDuplicates(references []corev1.ObjectReference) []corev1.ObjectRefere
 	return set.Items()
 }
 
+func getConfigMapHash(configmap *corev1.ConfigMap) string {
+	var config string
+	if configmap.Annotations != nil {
+		config += getDataSectionHash(configmap.Annotations)
+	}
+
+	config += getDataSectionHash(configmap.Data)
+	config += getDataSectionHash(configmap.BinaryData)
+
+	return config
+}
+
+func getSecretHash(secret *corev1.Secret) string {
+	var config string
+	if secret.Annotations != nil {
+		config += getDataSectionHash(secret.Annotations)
+	}
+
+	config += getDataSectionHash(secret.Data)
+	config += getDataSectionHash(secret.StringData)
+
+	return config
+}
+
 // getDataSectionHash sorts map and return the hash
 func getDataSectionHash[T any](data map[string]T) string {
 	var keys []string

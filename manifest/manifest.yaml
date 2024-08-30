@@ -8109,10 +8109,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=dev
+        - --version=v0.37.0
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:dev
+        image: docker.io/projectsveltos/addon-controller:v0.37.0
         livenessProbe:
           failureThreshold: 3
           httpGet:

@@ -326,7 +326,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      cluster.Name + sveltosKubeconfigPostfix,
 		},
 		Data: map[string][]byte{
-			"data": testEnv.Kubeconfig,
+			"value": testEnv.Kubeconfig,
 		},
 	}
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())

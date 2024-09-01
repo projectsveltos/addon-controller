@@ -351,8 +351,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		if configMap == nil {
 			return nil, nil
 		}
-		result += getDataSectionHash(configMap.Data)
-		result += getDataSectionHash(configMap.BinaryData)
+		result += getConfigMapHash(configMap)
 	} else if kustomizationRef.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 		secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 		if err != nil {
@@ -362,8 +361,7 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		if secret == nil {
 			return nil, nil
 		}
-		result += getDataSectionHash(secret.Data)
-		result += getDataSectionHash(secret.StringData)
+		result += getSecretHash(secret)
 	} else {
 		source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)
 		if err != nil {
@@ -376,6 +374,9 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 		s := source.(sourcev1.Source)
 		if s.GetArtifact() != nil {
 			result += s.GetArtifact().Revision
+		}
+		if source.GetAnnotations() != nil {
+			result += getDataSectionHash(source.GetAnnotations())
 		}
 	}
 

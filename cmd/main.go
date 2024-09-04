@@ -408,6 +408,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		Client:               mgr.GetClient(),
 		Scheme:               mgr.GetScheme(),
 		ShardKey:             shardKey,
+		Version:              version,
 		ReportMode:           reportMode,
 		AgentInMgmtCluster:   agentInMgmtCluster,
 		Deployer:             d,

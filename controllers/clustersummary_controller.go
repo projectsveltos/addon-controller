@@ -88,6 +88,7 @@ type ClusterSummaryReconciler struct {
 	ReportMode           ReportMode
 	AgentInMgmtCluster   bool   // if true, indicates drift-detection-manager needs to be started in the management cluster
 	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled
+	Version              string
 	Deployer             deployer.DeployerInterface
 	ConcurrentReconciles int
 	PolicyMux            sync.Mutex                                    // use a Mutex to update Map as MaxConcurrentReconciles is higher than one
@@ -416,7 +417,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	if r.ReportMode == CollectFromManagementCluster {
-		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, mgr.GetLogger())
+		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, r.Version, mgr.GetLogger())
 	}
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())

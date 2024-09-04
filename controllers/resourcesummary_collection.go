@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,10 +35,13 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
-func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey string, logger logr.Logger) {
+func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey, version string,
+	logger logr.Logger) {
+
 	const interval = 10 * time.Second
 
 	for {
@@ -49,7 +53,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
-			err = collectResourceSummariesFromCluster(ctx, c, cluster, logger)
+			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)
 			if err != nil {
 				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
 					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
@@ -63,7 +67,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 }
 
 func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
-	cluster *corev1.ObjectReference, logger logr.Logger) error {
+	cluster *corev1.ObjectReference, version string, logger logr.Logger) error {
 
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
 	clusterRef := &corev1.ObjectReference{
@@ -88,6 +92,12 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		clusterproxy.GetClusterType(clusterRef), logger)
 	if err != nil {
 		return err
+	}
+
+	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, remoteClient, version) {
+		msg := "compatibility checks failed"
+		logger.V(logs.LogDebug).Info(msg)
+		return errors.New(msg)
 	}
 
 	var installed bool

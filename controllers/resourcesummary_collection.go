@@ -94,12 +94,6 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, remoteClient, version) {
-		msg := "compatibility checks failed"
-		logger.V(logs.LogDebug).Info(msg)
-		return errors.New(msg)
-	}
-
 	var installed bool
 	installed, err = isResourceSummaryInstalled(ctx, remoteClient)
 	if err != nil {
@@ -109,6 +103,12 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 
 	if !installed {
 		return nil
+	}
+
+	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, remoteClient, version) {
+		msg := "compatibility checks failed"
+		logger.V(logs.LogDebug).Info(msg)
+		return errors.New(msg)
 	}
 
 	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")

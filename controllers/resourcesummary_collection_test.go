@@ -123,7 +123,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		// - reset ClusterSummary.Status.FeatureSummaries hash for helm (indicating new reconciliation is needed)
 		// - reset ResourceSummary.Status
 		Expect(controllers.CollectResourceSummariesFromCluster(context.TODO(), testEnv.Client, getClusterRef(cluster),
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+			version, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {

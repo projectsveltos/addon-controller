@@ -459,7 +459,7 @@ func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Cl
 		types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(logsettings.LogDebug).Info("resourceSummary CRD not present.")
+			logger.V(logsettings.LogVerbose).Info("resourceSummary CRD not present.")
 			return nil
 		}
 		return err

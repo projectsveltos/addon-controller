@@ -15,11 +15,11 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.37.1-0.20240904135406-8f573456bb10
+	github.com/projectsveltos/libsveltos v0.37.1-0.20240905175912-f04f643d6175
 	github.com/prometheus/client_golang v1.20.2
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/text v0.17.0
+	golang.org/x/text v0.18.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.15.4
 	k8s.io/api v0.31.0
@@ -29,20 +29,21 @@ require (
 	k8s.io/client-go v0.31.0
 	k8s.io/component-base v0.31.0
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20240821151609-f90d01438635
-	sigs.k8s.io/cluster-api v1.8.1
+	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
+	sigs.k8s.io/cluster-api v1.8.2
 	sigs.k8s.io/controller-runtime v0.19.0
 	sigs.k8s.io/kustomize/api v0.17.3
 	sigs.k8s.io/kustomize/kyaml v0.17.2
 )
 
 require (
+	dario.cat/mergo v1.0.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
-	github.com/Masterminds/sprig/v3 v3.2.3 // indirect
+	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
@@ -101,7 +102,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
-	github.com/huandu/xstrings v1.4.0 // indirect
+	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jmoiron/sqlx v1.3.5 // indirect
@@ -138,9 +139,9 @@ require (
 	github.com/rivo/uniseg v0.4.2 // indirect
 	github.com/rubenv/sql-migrate v1.5.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
-	github.com/shopspring/decimal v1.3.1 // indirect
+	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/spf13/cast v1.6.0 // indirect
+	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -178,7 +179,7 @@ require (
 	k8s.io/apiserver v0.31.0 // indirect
 	k8s.io/cluster-bootstrap v0.30.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	k8s.io/kubectl v0.30.3 // indirect
+	k8s.io/kubectl v0.31.0 // indirect
 	oras.land/oras-go v1.2.5 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

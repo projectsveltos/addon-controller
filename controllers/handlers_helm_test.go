@@ -19,8 +19,10 @@ package controllers_test
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -781,4 +783,76 @@ var _ = Describe("Hash methods", func() {
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, h.Sum(nil))).To(BeTrue())
 	})
+
+	It("getCredentialsAndCAFiles returns files containing credentials and CA", func() {
+		type Credentials struct {
+			Username     string
+			Password     string
+			RefreshToken string
+			AccessToken  string
+		}
+
+		credentials := Credentials{
+			Username:     randomString(),
+			Password:     randomString(),
+			RefreshToken: randomString(),
+			AccessToken:  randomString(),
+		}
+
+		credentialsBytes, err := json.Marshal(credentials)
+		Expect(err).To(BeNil())
+
+		secretCredentials := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"credentials": credentialsBytes,
+			},
+		}
+
+		caByte := []byte(randomString())
+		secretCA := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Data: map[string][]byte{
+				"ca.crt": caByte,
+			},
+		}
+
+		initObjects := []client.Object{
+			secretCredentials, secretCA,
+		}
+
+		requestedChart := configv1beta1.HelmChart{
+			CredentialsSecretRef: &corev1.SecretReference{
+				Namespace: secretCredentials.Namespace,
+				Name:      secretCredentials.Name,
+			},
+			CASecretRef: &corev1.SecretReference{
+				Namespace: secretCA.Namespace,
+				Name:      secretCA.Name,
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		credentialsPath, caPath, err := controllers.GetCredentialsAndCAFiles(context.TODO(), c, &requestedChart)
+		Expect(err).To(BeNil())
+		Expect(credentialsPath).ToNot(BeEmpty())
+		verifyFileContent(credentialsPath, credentialsBytes)
+		Expect(os.Remove(credentialsPath)).To(Succeed())
+		Expect(caPath).ToNot(BeEmpty())
+		verifyFileContent(caPath, caByte)
+		Expect(os.Remove(caPath)).To(Succeed())
+	})
 })
+
+func verifyFileContent(filePath string, data []byte) {
+	content, err := os.ReadFile(filePath)
+	Expect(err).To(BeNil())
+	Expect(reflect.DeepEqual(content, data)).To(BeTrue())
+}

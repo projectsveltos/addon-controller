@@ -59,3 +59,13 @@ func Convert_v1beta1_Spec_To_v1alpha1_Spec(srcSpec *configv1beta1.Spec, dstSpec 
 
 	return nil
 }
+
+func Convert_v1beta1_HelmChart_To_v1alpha1_HelmChart(src *configv1beta1.HelmChart, dst *HelmChart, s conversion.Scope,
+) error {
+
+	if err := autoConvert_v1beta1_HelmChart_To_v1alpha1_HelmChart(src, dst, nil); err != nil {
+		return err
+	}
+
+	return nil
+}

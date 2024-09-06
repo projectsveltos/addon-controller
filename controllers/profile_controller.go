@@ -292,6 +292,16 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 		profile.Spec.KustomizationRefs[i].Namespace = profile.Namespace
 		r.limitKustomizationRefsToNamespace(profile, &profile.Spec.KustomizationRefs[i])
 	}
+
+	for i := range profile.Spec.HelmCharts {
+		hc := &profile.Spec.HelmCharts[i]
+		if hc.CredentialsSecretRef != nil {
+			hc.CredentialsSecretRef.Namespace = profile.Namespace
+		}
+		if hc.CASecretRef != nil {
+			hc.CASecretRef.Namespace = profile.Namespace
+		}
+	}
 }
 
 // limitKustomizationRefsToNamespace reset Namespace of all ConfigMap/Secret

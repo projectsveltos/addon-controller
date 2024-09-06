@@ -350,6 +350,16 @@ type HelmChart struct {
 	// Options allows to set flags which are used during installation.
 	// +optional
 	Options *HelmOptions `json:"options,omitempty"`
+
+	// CredentialsSecretRef references a secret containing credentials
+	// key: credentials
+	// +optional
+	CredentialsSecretRef *corev1.SecretReference `json:"credentials,omitempty"`
+
+	// CASecretRef references a secret containing the TLS CA certificate
+	// key: ca.crt
+	// +optional
+	CASecretRef *corev1.SecretReference `json:"ca,omitempty"`
 }
 
 type KustomizationRef struct {

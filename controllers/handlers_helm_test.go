@@ -808,7 +808,7 @@ var _ = Describe("Hash methods", func() {
 				Name:      randomString(),
 			},
 			Data: map[string][]byte{
-				"credentials": credentialsBytes,
+				"config.json": credentialsBytes,
 			},
 		}
 
@@ -832,15 +832,19 @@ var _ = Describe("Hash methods", func() {
 				Namespace: secretCredentials.Namespace,
 				Name:      secretCredentials.Name,
 			},
-			CASecretRef: &corev1.SecretReference{
-				Namespace: secretCA.Namespace,
-				Name:      secretCA.Name,
+			TLSConfig: &configv1beta1.TLSConfig{
+				CASecretRef: &corev1.SecretReference{
+					Namespace: secretCA.Namespace,
+					Name:      secretCA.Name,
+				},
+				InsecureSkipTLSVerify: false,
 			},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
-		credentialsPath, caPath, err := controllers.GetCredentialsAndCAFiles(context.TODO(), c, &requestedChart)
+		credentialsPath, caPath, err := controllers.GetCredentialsAndCAFiles(context.TODO(), c,
+			randomString(), &requestedChart)
 		Expect(err).To(BeNil())
 		Expect(credentialsPath).ToNot(BeEmpty())
 		verifyFileContent(credentialsPath, credentialsBytes)

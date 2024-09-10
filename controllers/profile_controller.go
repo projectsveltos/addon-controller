@@ -298,8 +298,8 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 		if hc.CredentialsSecretRef != nil {
 			hc.CredentialsSecretRef.Namespace = profile.Namespace
 		}
-		if hc.CASecretRef != nil {
-			hc.CASecretRef.Namespace = profile.Namespace
+		if hc.TLSConfig != nil && hc.TLSConfig.CASecretRef != nil {
+			hc.TLSConfig.CASecretRef.Namespace = profile.Namespace
 		}
 	}
 }

@@ -8226,10 +8226,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.38.0
+        - --version=v0.38.1
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:v0.38.0
+        image: docker.io/projectsveltos/addon-controller:v0.38.1
         livenessProbe:
           failureThreshold: 3
           httpGet:

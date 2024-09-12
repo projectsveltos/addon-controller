@@ -33,6 +33,16 @@ metadata:
   name: drift-detection-manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
   - '*'
   resources:
   - '*'
@@ -128,6 +138,7 @@ spec:
         - --cluster-type=
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-updates
+        - --version=main
         command:
         - /manager
         image: docker.io/projectsveltos/drift-detection-manager:main

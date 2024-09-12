@@ -141,6 +141,18 @@ type ValueFrom struct {
 	Kind string `json:"kind"`
 }
 
+// TLSConfig represents the TLS configuration.
+type TLSConfig struct {
+	// CASecretRef references a secret containing the TLS CA certificate
+	// key: ca.crt
+	// +optional
+	CASecretRef *corev1.SecretReference `json:"ca,omitempty"`
+
+	// InsecureSkipTLSVerify controls server certificate verification.
+	// +optional
+	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify,omitempty"`
+}
+
 // HelmChartAction specifies action on an helm chart
 // +kubebuilder:validation:Enum:=Install;Uninstall
 type HelmChartAction string
@@ -350,6 +362,15 @@ type HelmChart struct {
 	// Options allows to set flags which are used during installation.
 	// +optional
 	Options *HelmOptions `json:"options,omitempty"`
+
+	// CredentialsSecretRef references a secret containing credentials
+	// key: config.json
+	// +optional
+	CredentialsSecretRef *corev1.SecretReference `json:"credentials,omitempty"`
+
+	// TLSConfig represents the TLS configuration for private registries.
+	// +optional
+	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
 }
 
 type KustomizationRef struct {

@@ -44,6 +44,7 @@ import (
 const (
 	timeout         = 40 * time.Second
 	pollingInterval = 2 * time.Second
+	version         = "v0.31.0"
 )
 
 const (

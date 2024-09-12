@@ -26,6 +26,7 @@ spec:
         - --cluster-type=
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-updates
+        - --version=main
         command:
         - /manager
         image: docker.io/projectsveltos/drift-detection-manager:main

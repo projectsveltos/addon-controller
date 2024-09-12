@@ -332,6 +332,22 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
+	By("Create the ConfigMap with drift-detection version")
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: resourceSummaryNamespace,
+			Name:      "drift-detection-version",
+		},
+		Data: map[string]string{
+			"version": version,
+		},
+	}
+	err := testEnv.Client.Create(context.TODO(), cm)
+	if err != nil {
+		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+	}
+	Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
 	Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 
 	return cluster

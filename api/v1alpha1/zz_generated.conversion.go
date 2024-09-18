@@ -1010,8 +1010,7 @@ func autoConvert_v1beta1_HelmChart_To_v1alpha1_HelmChart(in *v1beta1.HelmChart, 
 	out.ValuesFrom = *(*[]ValueFrom)(unsafe.Pointer(&in.ValuesFrom))
 	out.HelmChartAction = HelmChartAction(in.HelmChartAction)
 	out.Options = (*HelmOptions)(unsafe.Pointer(in.Options))
-	// WARNING: in.CredentialsSecretRef requires manual conversion: does not exist in peer-type
-	// WARNING: in.TLSConfig requires manual conversion: does not exist in peer-type
+	// WARNING: in.RegistryCredentialsConfig requires manual conversion: does not exist in peer-type
 	return nil
 }
 

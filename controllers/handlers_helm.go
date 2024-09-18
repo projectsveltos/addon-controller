@@ -17,16 +17,20 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	dockerconfig "github.com/docker/cli/cli/config"
+	"github.com/docker/cli/cli/config/credentials"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -67,10 +71,8 @@ import (
 )
 
 var (
-	defaultUploadPath = "/tmp/charts"
-	chartExtension    = "tgz"
-	storage           = repo.File{}
-	helmLogger        = textlogger.NewLogger(textlogger.NewConfig())
+	storage    = repo.File{}
+	helmLogger = textlogger.NewLogger(textlogger.NewConfig())
 )
 
 const (
@@ -85,6 +87,7 @@ type registryClientOptions struct {
 	credentialsPath string
 	caPath          string
 	skipTLSVerify   bool
+	plainHTTP       bool
 }
 
 type releaseInfo struct {
@@ -329,7 +332,9 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 					registryOptions := &registryClientOptions{
 						credentialsPath: credentialsPath, caPath: caPath,
-						skipTLSVerify: getInsecureSkipTLSVerify(currentChart)}
+						skipTLSVerify: getInsecureSkipTLSVerify(currentChart),
+						plainHTTP:     getPlainHTTP(currentChart),
+					}
 
 					currentRelease, err := getReleaseInfo(currentChart.ReleaseName, currentChart.ReleaseNamespace,
 						kubeconfig, registryOptions, getEnableClientCacheValue(currentChart.Options))
@@ -757,7 +762,9 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 
 	registryOptions := &registryClientOptions{
 		credentialsPath: credentialsPath, caPath: caPath,
-		skipTLSVerify: getInsecureSkipTLSVerify(currentChart)}
+		skipTLSVerify: getInsecureSkipTLSVerify(currentChart),
+		plainHTTP:     getPlainHTTP(currentChart),
+	}
 
 	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
 		currentChart.ReleaseNamespace, kubeconfig, registryOptions, getEnableClientCacheValue(currentChart.Options))
@@ -773,23 +780,27 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("current installed version %s", currentChart.ChartVersion))
 	}
 
+	if registryOptions.credentialsPath != "" {
+		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
+			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
+		err = doLogin(ctx, getManagementClusterClient(), registryOptions, currentChart.ReleaseNamespace,
+			credentialSecretNamespace, currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Name,
+			currentChart.RepositoryURL)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to login %v", err))
+			return nil, nil, err
+		}
+	}
+
 	if shouldInstall(currentRelease, currentChart) {
 		report, err = handleInstall(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig,
 			registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
-		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, registryOptions, logger)
-		if err != nil {
-			return nil, nil, err
-		}
 	} else if shouldUpgrade(ctx, currentRelease, currentChart, clusterSummary, logger) {
 		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig,
 			registryOptions, logger)
-		if err != nil {
-			return nil, nil, err
-		}
-		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -807,11 +818,6 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		}
 		report.Message = notInstalledMessage
 	} else {
-		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, registryOptions, logger)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		logger.V(logs.LogDebug).Info("no action for helm release")
 		report = &configv1beta1.ReleaseReport{
 			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
@@ -819,6 +825,13 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		}
 
 		report.Message = "Already managing this helm release and specified version already installed"
+	}
+
+	if currentRelease != nil {
+		err = addExtraMetadata(ctx, currentChart, clusterSummary, kubeconfig, registryOptions, logger)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	currentRelease, err = getReleaseInfo(currentChart.ReleaseName, currentChart.ReleaseNamespace, kubeconfig,
@@ -831,10 +844,10 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 }
 
 // repoAddOrUpdate adds/updates repo with given name and url
-func repoAddOrUpdate(settings *cli.EnvSettings, name, url string, logger logr.Logger) error {
-	logger = logger.WithValues("repoURL", url, "repoName", name)
+func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, logger logr.Logger) error {
+	logger = logger.WithValues("repoURL", repoURL, "repoName", name)
 
-	entry := &repo.Entry{Name: name, URL: url}
+	entry := &repo.Entry{Name: name, URL: repoURL}
 	chartRepo, err := repo.NewChartRepository(entry, getter.All(settings))
 	if err != nil {
 		return err
@@ -876,20 +889,21 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil
 	}
 
-	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace",
-		requestedChart.ReleaseNamespace, "chart", requestedChart.ChartName, "chartVersion", requestedChart.ChartVersion)
-	logger.V(logs.LogDebug).Info("installing release")
-
 	if requestedChart.ChartName == "" {
 		return fmt.Errorf("chart name can not be empty")
 	}
 
-	chartName := requestedChart.ChartName
-	// install with local uploaded charts, *.tgz
-	splitChart := strings.Split(chartName, ".")
-	if splitChart[len(splitChart)-1] == chartExtension && !strings.Contains(chartName, ":") {
-		chartName = defaultUploadPath + "/" + chartName
+	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace",
+		requestedChart.ReleaseNamespace, "chart", requestedChart.ChartName, "chartVersion", requestedChart.ChartVersion)
+
+	chartName, repoURL, err := getHelmChartAndRepoName(requestedChart.ChartName, requestedChart.RepositoryURL)
+	if err != nil {
+		return err
 	}
+	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
+	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
+		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
+	logger.V(logs.LogDebug).Info("installing release")
 
 	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
@@ -1019,20 +1033,21 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil
 	}
 
-	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace", requestedChart.ReleaseNamespace, "chart",
-		requestedChart.ChartName, "chartVersion", requestedChart.ChartVersion)
-	logger.V(logs.LogDebug).Info("upgrading release")
-
 	if requestedChart.ChartName == "" {
 		return fmt.Errorf("chart name can not be empty")
 	}
 
-	chartName := requestedChart.ChartName
-	// upgrade with local uploaded charts *.tgz
-	splitChart := strings.Split(chartName, ".")
-	if splitChart[len(splitChart)-1] == chartExtension {
-		chartName = defaultUploadPath + "/" + chartName
+	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace", requestedChart.ReleaseNamespace,
+		"chartVersion", requestedChart.ChartVersion)
+
+	chartName, repoURL, err := getHelmChartAndRepoName(requestedChart.ChartName, requestedChart.RepositoryURL)
+	if err != nil {
+		return err
 	}
+	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
+	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
+		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
+	logger.V(logs.LogDebug).Info("upgrading release")
 
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
@@ -1103,8 +1118,7 @@ func debugf(format string, v ...interface{}) {
 func getRegistryClient(namespace string, registryOptions *registryClientOptions, enableClientCache bool,
 ) (*registry.Client, error) {
 
-	settings := getSettings(namespace)
-
+	settings := getSettings(namespace, registryOptions)
 	if registryOptions.caPath == "" && !registryOptions.skipTLSVerify {
 		options := []registry.ClientOption{
 			registry.ClientOptDebug(settings.Debug),
@@ -1114,7 +1128,9 @@ func getRegistryClient(namespace string, registryOptions *registryClientOptions,
 		if registryOptions.credentialsPath != "" {
 			options = append(options, registry.ClientOptCredentialsFile(registryOptions.credentialsPath))
 		}
-
+		if registryOptions.plainHTTP {
+			options = append(options, registry.ClientOptPlainHTTP())
+		}
 		return registry.NewClient(options...)
 	}
 
@@ -1142,6 +1158,7 @@ func actionConfigInit(namespace, kubeconfig string, registryOptions *registryCli
 	if err != nil {
 		return nil, err
 	}
+
 	actionConfig.RegistryClient = registryClient
 
 	return actionConfig, nil
@@ -1304,7 +1321,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		requestedChart.RepositoryURL,
 		requestedChart.RepositoryName))
 
-	settings := getSettings(requestedChart.ReleaseNamespace)
+	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
 		requestedChart.RepositoryURL, logger)
@@ -1362,7 +1379,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		requestedChart.RepositoryURL,
 		requestedChart.RepositoryName))
 
-	settings := getSettings(requestedChart.ReleaseNamespace)
+	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
 		requestedChart.RepositoryURL, logger)
@@ -1761,7 +1778,9 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 
 			registryOptions := &registryClientOptions{
 				credentialsPath: credentialsPath, caPath: caPath,
-				skipTLSVerify: getInsecureSkipTLSVerify(currentChart)}
+				skipTLSVerify: getInsecureSkipTLSVerify(currentChart),
+				plainHTTP:     getPlainHTTP(currentChart),
+			}
 
 			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig, registryOptions,
 				getEnableClientCacheValue(currentChart.Options))
@@ -1842,10 +1861,11 @@ func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []lib
 	return resources
 }
 
-func getSettings(namespace string) *cli.EnvSettings {
+func getSettings(namespace string, registryOptions *registryClientOptions) *cli.EnvSettings {
 	settings := cli.New()
 	settings.SetNamespace(namespace)
 	settings.Debug = true
+	settings.RegistryConfig = registryOptions.credentialsPath
 
 	return settings
 }
@@ -2029,7 +2049,8 @@ func getRecreateValue(options *configv1beta1.HelmOptions) bool {
 }
 
 func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string,
-	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch) (*action.Install, error) {
+	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch,
+) (*action.Install, error) {
 
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
@@ -2283,7 +2304,7 @@ func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
 func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterNamespace string,
 	requestedChart *configv1beta1.HelmChart) (credentialsPath, caPath string, err error) {
 
-	credentialsPath, err = createFileWithCredentials(ctx, c, requestedChart)
+	credentialsPath, err = createFileWithCredentials(ctx, c, clusterNamespace, requestedChart)
 	if err != nil {
 		return "", "", err
 	}
@@ -2298,18 +2319,23 @@ func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterNames
 
 // createFileWithCredentials fetches the credentials from a Secret and writes it to a temporary file.
 // Returns the path to the temporary file.
-func createFileWithCredentials(ctx context.Context, c client.Client, requestedChart *configv1beta1.HelmChart,
-) (string, error) {
+func createFileWithCredentials(ctx context.Context, c client.Client, clusterNamespace string,
+	requestedChart *configv1beta1.HelmChart) (string, error) {
 
-	if requestedChart.CredentialsSecretRef == nil {
+	if requestedChart.RegistryCredentialsConfig == nil ||
+		requestedChart.RegistryCredentialsConfig.CredentialsSecretRef == nil {
+
 		return "", nil
 	}
+	credSecretRef := requestedChart.RegistryCredentialsConfig.CredentialsSecretRef
+	namespace := libsveltostemplate.GetReferenceResourceNamespace(
+		clusterNamespace, requestedChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
 
 	secret := &corev1.Secret{}
 	err := c.Get(ctx,
 		types.NamespacedName{
-			Namespace: requestedChart.CredentialsSecretRef.Namespace,
-			Name:      requestedChart.CredentialsSecretRef.Name,
+			Namespace: namespace,
+			Name:      credSecretRef.Name,
 		},
 		secret)
 	if err != nil {
@@ -2318,18 +2344,23 @@ func createFileWithCredentials(ctx context.Context, c client.Client, requestedCh
 
 	if secret.Data == nil {
 		return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart section contains no data",
-			requestedChart.CredentialsSecretRef.Namespace, requestedChart.CredentialsSecretRef.Name))
+			namespace, credSecretRef.Name))
 	}
 
-	const key = "config.json"
-
-	_, ok := secret.Data[key]
-	if !ok {
-		return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart section contains no key %s",
-			requestedChart.CredentialsSecretRef.Namespace, requestedChart.CredentialsSecretRef.Name, key))
+	if requestedChart.RegistryCredentialsConfig.Key != "" {
+		if _, ok := secret.Data[requestedChart.RegistryCredentialsConfig.Key]; !ok {
+			return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart has no key %s",
+				namespace, credSecretRef.Name, requestedChart.RegistryCredentialsConfig.Key))
+		}
+		return createTemporaryFile(requestedChart.RegistryCredentialsConfig.Key,
+			secret.Data[requestedChart.RegistryCredentialsConfig.Key])
 	}
 
-	return createTemporaryFile(key, secret.Data[key])
+	for k := range secret.Data {
+		return createTemporaryFile("config-*.json", secret.Data[k])
+	}
+
+	return "", nil
 }
 
 // createFileWithCA fetches the CA certificate from a Secret and writes it to a temporary file.
@@ -2337,22 +2368,22 @@ func createFileWithCredentials(ctx context.Context, c client.Client, requestedCh
 func createFileWithCA(ctx context.Context, c client.Client, clusterNamespace string,
 	requestedChart *configv1beta1.HelmChart) (string, error) {
 
-	if requestedChart.TLSConfig == nil {
+	if requestedChart.RegistryCredentialsConfig == nil {
 		return "", nil
 	}
 
-	if requestedChart.TLSConfig.CASecretRef == nil {
+	if requestedChart.RegistryCredentialsConfig.CASecretRef == nil {
 		return "", nil
 	}
 
 	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterNamespace, requestedChart.TLSConfig.CASecretRef.Namespace)
+		clusterNamespace, requestedChart.RegistryCredentialsConfig.CASecretRef.Namespace)
 
 	secret := &corev1.Secret{}
 	err := c.Get(ctx,
 		types.NamespacedName{
 			Namespace: namespace,
-			Name:      requestedChart.TLSConfig.CASecretRef.Name,
+			Name:      requestedChart.RegistryCredentialsConfig.CASecretRef.Name,
 		},
 		secret)
 	if err != nil {
@@ -2361,18 +2392,19 @@ func createFileWithCA(ctx context.Context, c client.Client, clusterNamespace str
 
 	if secret.Data == nil {
 		return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart section contains no data",
-			requestedChart.TLSConfig.CASecretRef.Namespace, requestedChart.TLSConfig.CASecretRef.Name))
+			requestedChart.RegistryCredentialsConfig.CASecretRef.Namespace,
+			requestedChart.RegistryCredentialsConfig.CASecretRef.Name))
 	}
 
 	const key = "ca.crt"
-
 	_, ok := secret.Data[key]
 	if !ok {
 		return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart section contains no key %s",
-			requestedChart.TLSConfig.CASecretRef.Namespace, requestedChart.TLSConfig.CASecretRef.Name, key))
+			requestedChart.RegistryCredentialsConfig.CASecretRef.Namespace,
+			requestedChart.RegistryCredentialsConfig.CASecretRef.Name, key))
 	}
 
-	return createTemporaryFile(key, secret.Data[key])
+	return createTemporaryFile("ca-*.crt", secret.Data[key])
 }
 
 func createTemporaryFile(pattern string, data []byte) (string, error) {
@@ -2390,9 +2422,102 @@ func createTemporaryFile(pattern string, data []byte) (string, error) {
 }
 
 func getInsecureSkipTLSVerify(currentChart *configv1beta1.HelmChart) bool {
-	if currentChart.TLSConfig == nil {
-		return configv1beta1.TLSConfig{}.InsecureSkipTLSVerify
+	if currentChart.RegistryCredentialsConfig == nil {
+		return configv1beta1.RegistryCredentialsConfig{}.InsecureSkipTLSVerify
 	}
 
-	return currentChart.TLSConfig.InsecureSkipTLSVerify
+	return currentChart.RegistryCredentialsConfig.InsecureSkipTLSVerify
+}
+
+func getPlainHTTP(currentChart *configv1beta1.HelmChart) bool {
+	if currentChart.RegistryCredentialsConfig == nil {
+		return configv1beta1.RegistryCredentialsConfig{}.PlainHTTP
+	}
+
+	return currentChart.RegistryCredentialsConfig.PlainHTTP
+}
+
+// getHelmChartAndRepoName returns helm repo URL and chart name
+func getHelmChartAndRepoName(chartName, repoURL string) (string, string, error) { //nolint: gocritic // ignore
+	if registry.IsOCI(repoURL) {
+		u, err := url.Parse(repoURL)
+		if err != nil {
+			return "", "", err
+		}
+
+		u.Path = path.Join(u.Path, chartName)
+		chartName = u.String()
+		repoURL = ""
+	}
+
+	return chartName, repoURL, nil
+}
+
+func doLogin(ctx context.Context, c client.Client, registryOptions *registryClientOptions,
+	releaseNamespace, secretNamespace, secretName, registryURL string) error {
+
+	secret := &corev1.Secret{}
+	err := c.Get(ctx,
+		types.NamespacedName{
+			Namespace: secretNamespace,
+			Name:      secretName,
+		},
+		secret)
+	if err != nil {
+		return err
+	}
+
+	username, password, host, err := getUsernameAndPasswordFromSecret(registryURL, secret)
+	if err != nil {
+		return err
+	}
+
+	registryClient, err := getRegistryClient(releaseNamespace, registryOptions, true)
+	if err != nil {
+		return err
+	}
+
+	options := []registry.LoginOption{registry.LoginOptBasicAuth(username, password)}
+	return registryClient.Login(host, options...)
+}
+
+// usernameAndPasswordFromSecret derives authentication data from a Secret to login to an OCI registry. This Secret
+// may either hold "username" and "password" fields or be of the corev1.SecretTypeDockerConfigJson type and hold
+// a corev1.DockerConfigJsonKey field with a complete Docker configuration. If both, "username" and "password" are
+// empty a nil error will be returned.
+func getUsernameAndPasswordFromSecret(registryURL string, secret *corev1.Secret) (username, password, host string, err error) {
+	parsedURL, err := url.Parse(registryURL)
+	if err != nil {
+		return "", "", "", fmt.Errorf("unable to parse registry URL '%s' while reconciling Secret '%s': %w",
+			registryURL, secret.Name, err)
+	}
+	if secret.Type == corev1.SecretTypeDockerConfigJson {
+		dockerCfg, err := dockerconfig.LoadFromReader(bytes.NewReader(secret.Data[corev1.DockerConfigJsonKey]))
+		if err != nil {
+			return "", "", "", fmt.Errorf("unable to load Docker config from Secret '%s': %w", secret.Name, err)
+		}
+		authConfig, err := dockerCfg.GetAuthConfig(parsedURL.Host)
+		if err != nil {
+			return "", "", "", fmt.Errorf("unable to get authentication data from Secret '%s': %w", secret.Name, err)
+		}
+
+		// Make sure that the obtained auth config is for the requested host.
+		// When the docker config does not contain the credentials for a host,
+		// the credential store returns an empty auth config.
+		// Refer: https://github.com/docker/cli/blob/v20.10.16/cli/config/credentials/file_store.go#L44
+		if credentials.ConvertToHostname(authConfig.ServerAddress) != parsedURL.Host {
+			return "", "", "", fmt.Errorf("no auth config for '%s' in the docker-registry Secret '%s'", parsedURL.Host, secret.Name)
+		}
+		username = authConfig.Username
+		password = authConfig.Password
+	} else {
+		username, password = string(secret.Data["username"]), string(secret.Data["password"])
+	}
+	switch {
+	case username == "" && password == "":
+		return "", "", "", nil
+	case username == "" || password == "":
+		return "", "", "", fmt.Errorf("invalid '%s' secret data: required fields 'username' and 'password'", secret.Name)
+	}
+	return username, password, parsedURL.Host, nil
 }

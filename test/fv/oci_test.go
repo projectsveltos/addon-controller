@@ -35,7 +35,7 @@ var _ = Describe("Helm", func() {
 		namePrefix = "helm-oci-"
 	)
 
-	It("Deploy and updates oci helm charts correctly", Label("FV", "EXTENDED"), func() {
+	It("Deploy and updates oci helm charts correctly", Label("FV1", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
@@ -51,9 +51,9 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
+				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
 				RepositoryName:   "oci-vault",
-				ChartName:        "oci://registry-1.docker.io/bitnamicharts/vault",
+				ChartName:        "vault",
 				ChartVersion:     "1.4.12",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",
@@ -94,9 +94,9 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts/vault",
+				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
 				RepositoryName:   "oci-vault",
-				ChartName:        "oci://registry-1.docker.io/bitnamicharts/vault",
+				ChartName:        "vault",
 				ChartVersion:     "1.4.11",
 				ReleaseName:      "vault",
 				ReleaseNamespace: "vault",

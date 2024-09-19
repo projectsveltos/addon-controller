@@ -141,9 +141,21 @@ type ValueFrom struct {
 	Kind string `json:"kind"`
 }
 
-// TLSConfig represents the TLS configuration.
-type TLSConfig struct {
+type RegistryCredentialsConfig struct {
+	// CredentialsSecretRef references a secret containing credentials
+	// For ClusterProfile namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
+	// +optional
+	CredentialsSecretRef *corev1.SecretReference `json:"credentials,omitempty"`
+
+	// Key specifies the key within the CredentialsSecretRef containing the data
+	// If not specified, it defaults to the only key in the secret if there's just one.
+	// +optional
+	Key string `json:"key,omitempty"`
+
 	// CASecretRef references a secret containing the TLS CA certificate
+	// For ClusterProfile namespace can be left empty. In such a case, namespace will
+	// be implicit set to cluster's namespace.
 	// key: ca.crt
 	// +optional
 	CASecretRef *corev1.SecretReference `json:"ca,omitempty"`
@@ -151,6 +163,10 @@ type TLSConfig struct {
 	// InsecureSkipTLSVerify controls server certificate verification.
 	// +optional
 	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify,omitempty"`
+
+	// PlainHTTP indicates to use insecure HTTP connections for the chart download
+	// +optional
+	PlainHTTP bool `json:"plainHTTP,omitempty"`
 }
 
 // HelmChartAction specifies action on an helm chart
@@ -363,14 +379,10 @@ type HelmChart struct {
 	// +optional
 	Options *HelmOptions `json:"options,omitempty"`
 
-	// CredentialsSecretRef references a secret containing credentials
-	// key: config.json
+	// RegistryCredentialsConfig is an optional configuration for credentials,
+	// including information to connect to private registries.
 	// +optional
-	CredentialsSecretRef *corev1.SecretReference `json:"credentials,omitempty"`
-
-	// TLSConfig represents the TLS configuration for private registries.
-	// +optional
-	TLSConfig *TLSConfig `json:"tlsConfig,omitempty"`
+	RegistryCredentialsConfig *RegistryCredentialsConfig `json:"registryCredentialsConfig,omitempty"`
 }
 
 type KustomizationRef struct {

@@ -828,11 +828,11 @@ var _ = Describe("Hash methods", func() {
 		}
 
 		requestedChart := configv1beta1.HelmChart{
-			CredentialsSecretRef: &corev1.SecretReference{
-				Namespace: secretCredentials.Namespace,
-				Name:      secretCredentials.Name,
-			},
-			TLSConfig: &configv1beta1.TLSConfig{
+			RegistryCredentialsConfig: &configv1beta1.RegistryCredentialsConfig{
+				CredentialsSecretRef: &corev1.SecretReference{
+					Namespace: secretCredentials.Namespace,
+					Name:      secretCredentials.Name,
+				},
 				CASecretRef: &corev1.SecretReference{
 					Namespace: secretCA.Namespace,
 					Name:      secretCA.Name,

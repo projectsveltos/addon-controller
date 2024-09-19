@@ -2485,6 +2485,7 @@ func doLogin(ctx context.Context, c client.Client, registryOptions *registryClie
 // may either hold "username" and "password" fields or be of the corev1.SecretTypeDockerConfigJson type and hold
 // a corev1.DockerConfigJsonKey field with a complete Docker configuration. If both, "username" and "password" are
 // empty a nil error will be returned.
+// Credit to https://github.com/kubepack/lib-helm
 func getUsernameAndPasswordFromSecret(registryURL string, secret *corev1.Secret) (username, password, host string, err error) {
 	parsedURL, err := url.Parse(registryURL)
 	if err != nil {

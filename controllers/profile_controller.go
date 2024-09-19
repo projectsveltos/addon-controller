@@ -295,11 +295,13 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 
 	for i := range profile.Spec.HelmCharts {
 		hc := &profile.Spec.HelmCharts[i]
-		if hc.CredentialsSecretRef != nil {
-			hc.CredentialsSecretRef.Namespace = profile.Namespace
-		}
-		if hc.TLSConfig != nil && hc.TLSConfig.CASecretRef != nil {
-			hc.TLSConfig.CASecretRef.Namespace = profile.Namespace
+		if hc.RegistryCredentialsConfig != nil {
+			if hc.RegistryCredentialsConfig.CredentialsSecretRef != nil {
+				hc.RegistryCredentialsConfig.CredentialsSecretRef.Namespace = profile.Namespace
+			}
+			if hc.RegistryCredentialsConfig.CASecretRef != nil {
+				hc.RegistryCredentialsConfig.CASecretRef.Namespace = profile.Namespace
+			}
 		}
 	}
 }

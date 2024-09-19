@@ -1940,21 +1940,6 @@ spec:
                       description: ChartVersion is the chart version
                       minLength: 1
                       type: string
-                    credentials:
-                      description: |-
-                        CredentialsSecretRef references a secret containing credentials
-                        key: config.json
-                      properties:
-                        name:
-                          description: name is unique within a namespace to reference
-                            a secret resource.
-                          type: string
-                        namespace:
-                          description: namespace defines the space within which the
-                            secret name must be unique.
-                          type: string
-                      type: object
-                      x-kubernetes-map-type: atomic
                     helmChartAction:
                       default: Install
                       description: HelmChartAction is the action that will be taken
@@ -2117,6 +2102,58 @@ spec:
                             Default to false
                           type: boolean
                       type: object
+                    registryCredentialsConfig:
+                      description: |-
+                        RegistryCredentialsConfig is an optional configuration for credentials,
+                        including information to connect to private registries.
+                      properties:
+                        ca:
+                          description: |-
+                            CASecretRef references a secret containing the TLS CA certificate
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            key: ca.crt
+                          properties:
+                            name:
+                              description: name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        credentials:
+                          description: |-
+                            CredentialsSecretRef references a secret containing credentials
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                          properties:
+                            name:
+                              description: name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        insecureSkipTLSVerify:
+                          description: InsecureSkipTLSVerify controls server certificate
+                            verification.
+                          type: boolean
+                        key:
+                          description: |-
+                            Key specifies the key within the CredentialsSecretRef containing the data
+                            If not specified, it defaults to the only key in the secret if there's just one.
+                          type: string
+                        plainHTTP:
+                          description: PlainHTTP indicates to use insecure HTTP connections
+                            for the chart download
+                          type: boolean
+                      type: object
                     releaseName:
                       description: ReleaseName is the chart release
                       minLength: 1
@@ -2134,30 +2171,6 @@ spec:
                       description: RepositoryURL is the URL helm chart repository
                       minLength: 1
                       type: string
-                    tlsConfig:
-                      description: TLSConfig represents the TLS configuration for
-                        private registries.
-                      properties:
-                        ca:
-                          description: |-
-                            CASecretRef references a secret containing the TLS CA certificate
-                            key: ca.crt
-                          properties:
-                            name:
-                              description: name is unique within a namespace to reference
-                                a secret resource.
-                              type: string
-                            namespace:
-                              description: namespace defines the space within which
-                                the secret name must be unique.
-                              type: string
-                          type: object
-                          x-kubernetes-map-type: atomic
-                        insecureSkipTLSVerify:
-                          description: InsecureSkipTLSVerify controls server certificate
-                            verification.
-                          type: boolean
-                      type: object
                     values:
                       description: |-
                         Values field allows to define configuration for the Helm release.
@@ -4702,21 +4715,6 @@ spec:
                           description: ChartVersion is the chart version
                           minLength: 1
                           type: string
-                        credentials:
-                          description: |-
-                            CredentialsSecretRef references a secret containing credentials
-                            key: config.json
-                          properties:
-                            name:
-                              description: name is unique within a namespace to reference
-                                a secret resource.
-                              type: string
-                            namespace:
-                              description: namespace defines the space within which
-                                the secret name must be unique.
-                              type: string
-                          type: object
-                          x-kubernetes-map-type: atomic
                         helmChartAction:
                           default: Install
                           description: HelmChartAction is the action that will be
@@ -4881,6 +4879,58 @@ spec:
                                 Default to false
                               type: boolean
                           type: object
+                        registryCredentialsConfig:
+                          description: |-
+                            RegistryCredentialsConfig is an optional configuration for credentials,
+                            including information to connect to private registries.
+                          properties:
+                            ca:
+                              description: |-
+                                CASecretRef references a secret containing the TLS CA certificate
+                                For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                be implicit set to cluster's namespace.
+                                key: ca.crt
+                              properties:
+                                name:
+                                  description: name is unique within a namespace to
+                                    reference a secret resource.
+                                  type: string
+                                namespace:
+                                  description: namespace defines the space within
+                                    which the secret name must be unique.
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            credentials:
+                              description: |-
+                                CredentialsSecretRef references a secret containing credentials
+                                For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                be implicit set to cluster's namespace.
+                              properties:
+                                name:
+                                  description: name is unique within a namespace to
+                                    reference a secret resource.
+                                  type: string
+                                namespace:
+                                  description: namespace defines the space within
+                                    which the secret name must be unique.
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            insecureSkipTLSVerify:
+                              description: InsecureSkipTLSVerify controls server certificate
+                                verification.
+                              type: boolean
+                            key:
+                              description: |-
+                                Key specifies the key within the CredentialsSecretRef containing the data
+                                If not specified, it defaults to the only key in the secret if there's just one.
+                              type: string
+                            plainHTTP:
+                              description: PlainHTTP indicates to use insecure HTTP
+                                connections for the chart download
+                              type: boolean
+                          type: object
                         releaseName:
                           description: ReleaseName is the chart release
                           minLength: 1
@@ -4898,30 +4948,6 @@ spec:
                           description: RepositoryURL is the URL helm chart repository
                           minLength: 1
                           type: string
-                        tlsConfig:
-                          description: TLSConfig represents the TLS configuration
-                            for private registries.
-                          properties:
-                            ca:
-                              description: |-
-                                CASecretRef references a secret containing the TLS CA certificate
-                                key: ca.crt
-                              properties:
-                                name:
-                                  description: name is unique within a namespace to
-                                    reference a secret resource.
-                                  type: string
-                                namespace:
-                                  description: namespace defines the space within
-                                    which the secret name must be unique.
-                                  type: string
-                              type: object
-                              x-kubernetes-map-type: atomic
-                            insecureSkipTLSVerify:
-                              description: InsecureSkipTLSVerify controls server certificate
-                                verification.
-                              type: boolean
-                          type: object
                         values:
                           description: |-
                             Values field allows to define configuration for the Helm release.
@@ -6776,21 +6802,6 @@ spec:
                       description: ChartVersion is the chart version
                       minLength: 1
                       type: string
-                    credentials:
-                      description: |-
-                        CredentialsSecretRef references a secret containing credentials
-                        key: config.json
-                      properties:
-                        name:
-                          description: name is unique within a namespace to reference
-                            a secret resource.
-                          type: string
-                        namespace:
-                          description: namespace defines the space within which the
-                            secret name must be unique.
-                          type: string
-                      type: object
-                      x-kubernetes-map-type: atomic
                     helmChartAction:
                       default: Install
                       description: HelmChartAction is the action that will be taken
@@ -6953,6 +6964,58 @@ spec:
                             Default to false
                           type: boolean
                       type: object
+                    registryCredentialsConfig:
+                      description: |-
+                        RegistryCredentialsConfig is an optional configuration for credentials,
+                        including information to connect to private registries.
+                      properties:
+                        ca:
+                          description: |-
+                            CASecretRef references a secret containing the TLS CA certificate
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                            key: ca.crt
+                          properties:
+                            name:
+                              description: name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        credentials:
+                          description: |-
+                            CredentialsSecretRef references a secret containing credentials
+                            For ClusterProfile namespace can be left empty. In such a case, namespace will
+                            be implicit set to cluster's namespace.
+                          properties:
+                            name:
+                              description: name is unique within a namespace to reference
+                                a secret resource.
+                              type: string
+                            namespace:
+                              description: namespace defines the space within which
+                                the secret name must be unique.
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        insecureSkipTLSVerify:
+                          description: InsecureSkipTLSVerify controls server certificate
+                            verification.
+                          type: boolean
+                        key:
+                          description: |-
+                            Key specifies the key within the CredentialsSecretRef containing the data
+                            If not specified, it defaults to the only key in the secret if there's just one.
+                          type: string
+                        plainHTTP:
+                          description: PlainHTTP indicates to use insecure HTTP connections
+                            for the chart download
+                          type: boolean
+                      type: object
                     releaseName:
                       description: ReleaseName is the chart release
                       minLength: 1
@@ -6970,30 +7033,6 @@ spec:
                       description: RepositoryURL is the URL helm chart repository
                       minLength: 1
                       type: string
-                    tlsConfig:
-                      description: TLSConfig represents the TLS configuration for
-                        private registries.
-                      properties:
-                        ca:
-                          description: |-
-                            CASecretRef references a secret containing the TLS CA certificate
-                            key: ca.crt
-                          properties:
-                            name:
-                              description: name is unique within a namespace to reference
-                                a secret resource.
-                              type: string
-                            namespace:
-                              description: namespace defines the space within which
-                                the secret name must be unique.
-                              type: string
-                          type: object
-                          x-kubernetes-map-type: atomic
-                        insecureSkipTLSVerify:
-                          description: InsecureSkipTLSVerify controls server certificate
-                            verification.
-                          type: boolean
-                      type: object
                     values:
                       description: |-
                         Values field allows to define configuration for the Helm release.
@@ -8226,10 +8265,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.38.1
+        - --version=v0.38.2
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:v0.38.1
+        image: docker.io/projectsveltos/addon-controller:v0.38.2
         livenessProbe:
           failureThreshold: 3
           httpGet:

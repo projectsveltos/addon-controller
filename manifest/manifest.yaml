@@ -8265,10 +8265,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.38.2
+        - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:v0.38.2
+        image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:

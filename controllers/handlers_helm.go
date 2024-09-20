@@ -46,9 +46,11 @@ import (
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/dynamic"
@@ -1086,21 +1088,14 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		}
 	}
 
-	hisClient := action.NewHistory(actionConfig)
-	hisClient.Max = 1
-	_, err = hisClient.Run(requestedChart.ReleaseName)
-	if errors.Is(err, driver.ErrReleaseNotFound) {
-		err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
-			values, mgmtResources, logger)
-		if err != nil {
-			return err
-		}
-		return nil
-	} else if err != nil {
+	upgradeClient.DryRun = false
+
+	err = upgradeCRDs(ctx, requestedChart, kubeconfig, chartRequested.CRDObjects(), logger)
+	if err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to upgrade crds: %v", err))
 		return err
 	}
 
-	upgradeClient.DryRun = false
 	_, err = upgradeClient.RunWithContext(ctx, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		return err
@@ -1108,6 +1103,80 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	logger.V(logs.LogDebug).Info("upgrading release done")
 
+	return nil
+}
+
+func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
+	logger logr.Logger) (int, error) {
+
+	crds, err := getUnstructured(chartFile.Data, logger)
+	if err != nil {
+		return 0, err
+	}
+
+	forceConflict := true
+	options := metav1.PatchOptions{
+		FieldManager: "application/apply-patch",
+		Force:        &forceConflict,
+	}
+
+	upgradedCRDs := 0
+
+	for i := range crds {
+		crdData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, crds[i])
+		if err != nil {
+			return upgradedCRDs, err
+		}
+
+		_, err = dr.Patch(ctx, crds[i].GetName(), types.ApplyPatchType, crdData, options)
+		if err != nil {
+			return upgradedCRDs, err
+		}
+
+		upgradedCRDs += 1
+	}
+
+	return upgradedCRDs, nil
+}
+
+// upgradeCRDs upgrades CRDs
+func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
+	crds []chart.CRD, logger logr.Logger) error {
+
+	if !getUpgradeCRDs(requestedChart.Options) {
+		return nil
+	}
+
+	logger.V(logs.LogDebug).Info("upgrade crds")
+
+	destConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return err
+	}
+
+	dr, err := utils.GetDynamicResourceInterface(destConfig, apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"), "")
+	if err != nil {
+		return err
+	}
+
+	upgradedCRDs := 0
+
+	// We do these one file at a time in the order they were read.
+	for _, obj := range crds {
+		tmpUpgradedCRDs, err := upgradeCRDsInFile(ctx, dr, obj.File, logger)
+		if err != nil {
+			return err
+		}
+
+		upgradedCRDs += tmpUpgradedCRDs
+	}
+
+	// Give time for the CRD to be recognized.
+	if upgradedCRDs > 0 {
+		const waitForCRDs = 30
+		time.Sleep(waitForCRDs * time.Second)
+	}
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs upgraded: %d", upgradedCRDs))
 	return nil
 }
 
@@ -1988,6 +2057,13 @@ func getResetValues(options *configv1beta1.HelmOptions) bool {
 func getResetThenReuseValues(options *configv1beta1.HelmOptions) bool {
 	if options != nil {
 		return options.UpgradeOptions.ResetThenReuseValues
+	}
+	return false
+}
+
+func getUpgradeCRDs(options *configv1beta1.HelmOptions) bool {
+	if options != nil {
+		return options.UpgradeOptions.UpgradeCRDs
 	}
 	return false
 }

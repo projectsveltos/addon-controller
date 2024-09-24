@@ -22,6 +22,9 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,9 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
-	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 var (
@@ -507,13 +507,13 @@ func (m *manager) getGVKMapEntryForFeatureID(gvk schema.GroupVersionKind, fID co
 	case configv1beta1.FeatureKustomize:
 		s = m.requestorForMgmtResourcesKustomizeRef[gvk]
 		if s == nil {
-			s := &libsveltosset.Set{}
+			s = &libsveltosset.Set{}
 			m.requestorForMgmtResourcesKustomizeRef[gvk] = s
 		}
 	case configv1beta1.FeatureResources:
-		s := m.requestorForMgmtResourcesPolicyRef[gvk]
+		s = m.requestorForMgmtResourcesPolicyRef[gvk]
 		if s == nil {
-			s := &libsveltosset.Set{}
+			s = &libsveltosset.Set{}
 			m.requestorForMgmtResourcesPolicyRef[gvk] = s
 		}
 	case configv1beta1.FeatureHelm:
@@ -566,13 +566,13 @@ func (m *manager) getResourceMapEntryForFeatureID(resource *corev1.ObjectReferen
 	case configv1beta1.FeatureKustomize:
 		s = m.mgmtResourcesWatchedKustomizeRef[*resource]
 		if s == nil {
-			s := &libsveltosset.Set{}
+			s = &libsveltosset.Set{}
 			m.mgmtResourcesWatchedKustomizeRef[*resource] = s
 		}
 	case configv1beta1.FeatureResources:
-		s := m.mgmtResourcesWatchedPolicyRef[*resource]
+		s = m.mgmtResourcesWatchedPolicyRef[*resource]
 		if s == nil {
-			s := &libsveltosset.Set{}
+			s = &libsveltosset.Set{}
 			m.mgmtResourcesWatchedPolicyRef[*resource] = s
 		}
 	case configv1beta1.FeatureHelm:

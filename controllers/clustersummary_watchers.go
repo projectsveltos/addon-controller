@@ -22,9 +22,6 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
-	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +34,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )

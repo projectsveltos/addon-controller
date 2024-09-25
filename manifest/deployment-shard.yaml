@@ -23,10 +23,10 @@ spec:
         - --report-mode=0
         - --shard-key={{.SHARD}}
         - --v=5
-        - --version=v0.38.2
+        - --version=v0.38.3
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:v0.38.2
+        image: docker.io/projectsveltos/addon-controller:v0.38.3
         livenessProbe:
           failureThreshold: 3
           httpGet:

@@ -1153,6 +1153,7 @@ func autoConvert_v1alpha1_HelmUpgradeOptions_To_v1beta1_HelmUpgradeOptions(in *H
 	out.MaxHistory = in.MaxHistory
 	out.CleanupOnFail = in.CleanupOnFail
 	out.SubNotes = in.SubNotes
+	out.UpgradeCRDs = in.UpgradeCRDs
 	return nil
 }
 
@@ -1170,6 +1171,7 @@ func autoConvert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(in *v
 	out.MaxHistory = in.MaxHistory
 	out.CleanupOnFail = in.CleanupOnFail
 	out.SubNotes = in.SubNotes
+	out.UpgradeCRDs = in.UpgradeCRDs
 	return nil
 }
 

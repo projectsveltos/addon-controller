@@ -315,6 +315,13 @@ type HelmUpgradeOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	SubNotes bool `json:"subNotes,omitempty"`
+
+	// UpgradeCRDs upgrade CRDs from the Helm Chart's crds directory
+	// By default, CRDs are not applied during Helm upgrade action by Helm
+	// https://helm.sh/docs/chart_best_practices/custom_resource_definitions/
+	// +kubebuilder:default:=false
+	// +optional
+	UpgradeCRDs bool `json:"upgradeCRDs,omitempty"`
 }
 
 type HelmUninstallOptions struct {

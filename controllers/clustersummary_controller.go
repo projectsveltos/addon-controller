@@ -234,6 +234,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
+
 	if isPresent && isReady { // if cluster is not ready, do not try to clean up. It would fail.
 		// Cleanup
 		paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
@@ -251,18 +252,21 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 
-		err = r.undeploy(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			// In DryRun mode it is expected to always get an error back
-			if !clusterSummaryScope.IsDryRunSync() {
-				logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+		if !isDeleted { // if cluster is being deleted do not try to undeploy. Helm client gets stuck and never returns
+			// if undeploy starts and cluster apiserver is not reachable anymore while helm undeploy is in process
+			err = r.undeploy(ctx, clusterSummaryScope, logger)
+			if err != nil {
+				// In DryRun mode it is expected to always get an error back
+				if !clusterSummaryScope.IsDryRunSync() {
+					logger.V(logs.LogInfo).Error(err, "failed to undeploy")
+					return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+				}
+			}
+
+			if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
+				logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
 				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 			}
-		}
-
-		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
-			logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 

@@ -8307,10 +8307,10 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=main
+        - --version=v0.38.4
         command:
         - /manager
-        image: docker.io/projectsveltos/addon-controller:main
+        image: docker.io/projectsveltos/addon-controller:v0.38.4
         livenessProbe:
           failureThreshold: 3
           httpGet:

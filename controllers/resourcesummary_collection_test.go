@@ -21,6 +21,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +32,9 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -40,6 +44,8 @@ const (
 var _ = Describe("ResourceSummary Collection", func() {
 	It("collectResourceSummariesFromCluster collects and processes ResourceSummaries from clusters", func() {
 		cluster := prepareCluster()
+
+		deployDriftDetectionManager(testEnv.Client)
 
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -149,7 +155,36 @@ var _ = Describe("ResourceSummary Collection", func() {
 			return err == nil && !currentResourceSummary.Status.HelmResourcesChanged
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
+
+	It("isDriftDtectionDeployed returns true if drift-detection-deployment is present", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		present, err := controllers.IsDriftDetectionDeployed(context.TODO(), c)
+		Expect(err).To(BeNil())
+		Expect(present).To(BeFalse())
+
+		deployDriftDetectionManager(c)
+
+		present, err = controllers.IsDriftDetectionDeployed(context.TODO(), c)
+		Expect(err).To(BeNil())
+		Expect(present).To(BeTrue())
+	})
 })
+
+func deployDriftDetectionManager(c client.Client) {
+	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerYAML())
+	elements, err := controllers.CustomSplit(driftDetectionManagerYAML)
+	Expect(err).To(BeNil())
+
+	for i := range elements {
+		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		Expect(err).To(BeNil())
+		err = c.Create(context.TODO(), policy)
+		if err != nil {
+			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+		}
+	}
+}
 
 func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsveltosv1beta1.ResourceSummary {
 	rs := &libsveltosv1beta1.ResourceSummary{

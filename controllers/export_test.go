@@ -165,6 +165,7 @@ var (
 
 var (
 	CollectResourceSummariesFromCluster = collectResourceSummariesFromCluster
+	IsDriftDetectionDeployed            = isDriftDetectionDeployed
 )
 
 var (

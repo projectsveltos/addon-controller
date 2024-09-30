@@ -6,10 +6,10 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.0
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v27.3.0+incompatible
+	github.com/docker/cli v27.3.1+incompatible
 	github.com/fluxcd/pkg/http/fetch v0.12.1
 	github.com/fluxcd/pkg/tar v0.8.1
-	github.com/fluxcd/source-controller/api v1.3.0
+	github.com/fluxcd/source-controller/api v1.4.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2
 	github.com/google/gofuzz v1.2.0
@@ -30,7 +30,7 @@ require (
 	k8s.io/client-go v0.31.1
 	k8s.io/component-base v0.31.1
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/utils v0.0.0-20240902221715-702e33fdd3c3
+	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6
 	sigs.k8s.io/cluster-api v1.8.3
 	sigs.k8s.io/controller-runtime v0.19.0
 	sigs.k8s.io/kustomize/api v0.17.3
@@ -46,7 +46,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
-	github.com/Microsoft/hcsshim v0.12.6 // indirect
+	github.com/Microsoft/hcsshim v0.12.7 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -62,7 +62,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
-	github.com/docker/docker v27.3.0+incompatible // indirect
+	github.com/docker/docker v27.3.1+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
@@ -83,7 +83,7 @@ require (
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/gobuffalo/flect v1.0.2 // indirect
+	github.com/gobuffalo/flect v1.0.3 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -92,7 +92,7 @@ require (
 	github.com/google/cel-go v0.21.0 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/pprof v0.0.0-20240910150728-a0b0bb1d4134 // indirect
+	github.com/google/pprof v0.0.0-20240929191954-255acd752d31 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
@@ -174,8 +174,8 @@ require (
 	golang.org/x/tools v0.25.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.66.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240924160255-9d4c2d233b61 // indirect
+	google.golang.org/grpc v1.67.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

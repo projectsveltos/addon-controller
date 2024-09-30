@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -95,7 +95,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 	}
 
 	var installed bool
-	installed, err = isResourceSummaryInstalled(ctx, remoteClient)
+	installed, err = isDriftDetectionDeployed(ctx, remoteClient)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
 		return err
@@ -138,11 +138,15 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 	return nil
 }
 
-// isResourceSummaryInstalled returns true if ResourceSummary CRD is installed, false otherwise
-func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, error) {
-	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
+// isDriftDetectionDeployed returns true if Drift-Detection deployment is present, false otherwise
+func isDriftDetectionDeployed(ctx context.Context, c client.Client) (bool, error) {
+	depl := &appsv1.Deployment{}
 
-	err := c.Get(ctx, types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, clusterCRD)
+	err := c.Get(ctx,
+		types.NamespacedName{
+			Namespace: "projectsveltos",
+			Name:      "drift-detection-manager"},
+		depl)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil

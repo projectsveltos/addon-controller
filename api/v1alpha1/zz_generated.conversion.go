@@ -1066,6 +1066,7 @@ func Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(in *v1bet
 
 func autoConvert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(in *HelmOptions, out *v1beta1.HelmOptions, s conversion.Scope) error {
 	out.SkipCRDs = in.SkipCRDs
+	out.SkipSchemaValidation = in.SkipSchemaValidation
 	out.Wait = in.Wait
 	out.WaitForJobs = in.WaitForJobs
 	out.Timeout = (*v1.Duration)(unsafe.Pointer(in.Timeout))
@@ -1095,6 +1096,7 @@ func Convert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(in *HelmOptions, out *v
 
 func autoConvert_v1beta1_HelmOptions_To_v1alpha1_HelmOptions(in *v1beta1.HelmOptions, out *HelmOptions, s conversion.Scope) error {
 	out.SkipCRDs = in.SkipCRDs
+	out.SkipSchemaValidation = in.SkipSchemaValidation
 	out.Wait = in.Wait
 	out.WaitForJobs = in.WaitForJobs
 	out.Timeout = (*v1.Duration)(unsafe.Pointer(in.Timeout))

@@ -989,6 +989,11 @@ spec:
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
                           type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
+                          type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
@@ -2018,6 +2023,11 @@ spec:
                           description: |-
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
+                          type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
                           type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
@@ -3773,6 +3783,11 @@ spec:
                                 SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                                 By default, CRDs are installed if not already present.
                               type: boolean
+                            skipSchemaValidation:
+                              default: false
+                              description: SkipSchemaValidation determines if JSON
+                                schema validation is disabled.
+                              type: boolean
                             timeout:
                               description: time to wait for any individual Kubernetes
                                 operation (like Jobs for hooks) (default 5m0s)
@@ -4808,6 +4823,11 @@ spec:
                               description: |-
                                 SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                                 By default, CRDs are installed if not already present.
+                              type: boolean
+                            skipSchemaValidation:
+                              default: false
+                              description: SkipSchemaValidation determines if JSON
+                                schema validation is disabled.
                               type: boolean
                             timeout:
                               description: time to wait for any individual Kubernetes
@@ -5879,6 +5899,11 @@ spec:
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
                           type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
+                          type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
@@ -6908,6 +6933,11 @@ spec:
                           description: |-
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
+                          type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
                           type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes

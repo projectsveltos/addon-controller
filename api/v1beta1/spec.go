@@ -188,6 +188,11 @@ type HelmOptions struct {
 	// +optional
 	SkipCRDs bool `json:"skipCRDs,omitempty"`
 
+	// SkipSchemaValidation determines if JSON schema validation is disabled.
+	// +kubebuilder:default:=false
+	// +optional
+	SkipSchemaValidation bool `json:"skipSchemaValidation,omitempty"`
+
 	// if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
 	// are in a ready state before marking the release as successful. It will wait for as long as --timeout
 	// Default to false

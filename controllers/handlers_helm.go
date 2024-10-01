@@ -2003,6 +2003,14 @@ func getDisableOpenAPIValidationValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
+func getSkipSchemaValidation(options *configv1beta1.HelmOptions) bool {
+	if options != nil {
+		return options.SkipSchemaValidation
+	}
+
+	return false
+}
+
 func getTimeoutValue(options *configv1beta1.HelmOptions) *metav1.Duration {
 	if options != nil {
 		return options.Timeout
@@ -2151,6 +2159,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 			return nil, err
 		}
 	}
+	installClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	installClient.Replace = getReplaceValue(requestedChart.Options)
 	installClient.Labels = getLabelsValue(requestedChart.Options)
 	installClient.Description = getDescriptionValue(requestedChart.Options)
@@ -2185,6 +2194,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 			return nil, err
 		}
 	}
+	upgradeClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
 	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
 	upgradeClient.ResetThenReuseValues = getResetThenReuseValues(requestedChart.Options)

@@ -8,9 +8,9 @@ spec:
       env: fv
   syncMode: Continuous
   helmCharts:
-  - repositoryURL:    oci://registry-1.docker.io/bitnamicharts/vault
+  - repositoryURL:    oci://registry-1.docker.io/bitnamicharts
     repositoryName:   oci-vault
-    chartName:        oci://registry-1.docker.io/bitnamicharts/vault
+    chartName:        vault
     chartVersion:     0.7.2
     releaseName:      vault
     releaseNamespace: vault

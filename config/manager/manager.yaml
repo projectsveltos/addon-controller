@@ -47,6 +47,8 @@ spec:
           name: healthz
           protocol: TCP
         securityContext:
+          seccompProfile:
+            type: RuntimeDefault
           allowPrivilegeEscalation: false
           capabilities:
             drop:

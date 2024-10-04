@@ -16,3 +16,12 @@ spec:
         - --shard-key=
         - "--v=5"
         - "--version=main"
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu

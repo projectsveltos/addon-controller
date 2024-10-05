@@ -208,9 +208,23 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
+	var cluster client.Object
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace,
+		clusterName, clusterType)
+	if err != nil {
+		return err
+	}
+
+	if !cluster.GetDeletionTimestamp().IsZero() {
+		// If Helm uninstall client encountered an unreachable cluster api-server, the Helm SDK would become stuck.
+		// Since cluster is being deleted, no need to clean up deployed helm charts. Simply returns and error
+		// and wait for cluster to be gone.
+		return errors.New("cluster is marked for deletion.")
+	}
+
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1beta1.ClusterSummary{}
-	err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary)
+	err = c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -238,8 +252,14 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer os.Remove(kubeconfig)
 
+	return undeployHelmChartResources(ctx, c, clusterSummary, kubeconfig, logger)
+}
+
+func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	kubeconfig string, logger logr.Logger) error {
+
 	var releaseReports []configv1beta1.ReleaseReport
-	releaseReports, err = uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
+	releaseReports, err := uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
 		return err
 	}

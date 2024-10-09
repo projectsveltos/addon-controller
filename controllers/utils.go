@@ -236,21 +236,15 @@ func isCluterSummaryProvisioned(clusterSumary *configv1beta1.ClusterSummary) boo
 	hasRawYAMLs := false
 	hasKustomize := false
 
-	if clusterSumary.Spec.ClusterProfileSpec.HelmCharts != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
 		hasHelmCharts = true
 	}
 
-	if clusterSumary.Spec.ClusterProfileSpec.PolicyRefs != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
 		hasRawYAMLs = true
 	}
 
-	if clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
 		hasKustomize = true
 	}
 

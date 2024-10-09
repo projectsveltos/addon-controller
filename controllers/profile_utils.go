@@ -581,7 +581,7 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 		}
 
 		// if maxUpdate is set no more than maxUpdate clusters can be updated in parallel by ClusterProfile
-		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && int32(updatingClusters.Len()) >= maxUpdate {
+		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && updatingClusters.Len() >= int(maxUpdate) {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("Already %d being updating", updatingClusters.Len()))
 			skippedUpdate = true
 			continue

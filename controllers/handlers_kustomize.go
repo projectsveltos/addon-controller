@@ -873,6 +873,7 @@ func extractTarGz(src, dest string) error {
 				return err
 			}
 		case archivetar.TypeReg:
+			//nolint: gosec // OK
 			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err

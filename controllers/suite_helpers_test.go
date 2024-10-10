@@ -42,7 +42,7 @@ import (
 )
 
 const (
-	sveltosKubeconfigPostfix = "-kubeconfig"
+	kubeconfigPostfix = "-kubeconfig"
 )
 
 // addOwnerReference adds owner as OwnerReference of obj
@@ -242,7 +242,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: clusterSummary.Spec.ClusterNamespace,
-			Name:      clusterSummary.Spec.ClusterName + sveltosKubeconfigPostfix,
+			Name:      clusterSummary.Spec.ClusterName + kubeconfigPostfix,
 		},
 		Data: map[string][]byte{
 			"value": testEnv.Kubeconfig,

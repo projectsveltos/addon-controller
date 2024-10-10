@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -72,7 +73,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	}
 
 	// Sveltos resources are deployed using cluster-admin role.
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace,
 		clusterName, "", "", clusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")

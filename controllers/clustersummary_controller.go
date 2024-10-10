@@ -1006,7 +1006,6 @@ func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
 	}
 
 	isClusterReady, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, clusterRef, logger)
-
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil

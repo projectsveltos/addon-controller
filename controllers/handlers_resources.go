@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -284,7 +285,8 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err

@@ -83,6 +83,7 @@ var (
 	healthAddr              string
 	profilerAddress         string
 	driftDetectionConfigMap string
+	disableCaching          bool
 )
 
 const (
@@ -113,6 +114,14 @@ func main() {
 
 	reportMode = controllers.ReportMode(tmpReportMode)
 
+	disableFor := []client.Object{}
+	if disableCaching {
+		disableFor = []client.Object{
+			&corev1.Secret{},
+			&corev1.ConfigMap{},
+		}
+	}
+
 	ctrl.SetLogger(klog.Background())
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
@@ -124,6 +133,11 @@ func main() {
 			}),
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
+		},
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: disableFor,
+			},
 		},
 		PprofBindAddress: profilerAddress,
 	}
@@ -170,6 +184,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
+
+	fs.BoolVar(&disableCaching, "disable-secret-caching", false,
+		"When set, disable caching secrets and configmaps")
 
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
 		"The address the diagnostics endpoint binds to. Per default metrics are served via https and with"+

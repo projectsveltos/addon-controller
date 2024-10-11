@@ -51,6 +51,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -1426,6 +1427,8 @@ func getConfigMap(ctx context.Context, c client.Client, configmapName types.Name
 		return nil, err
 	}
 
+	addTypeInformationToObject(c.Scheme(), configMap)
+
 	return configMap, nil
 }
 
@@ -1443,6 +1446,8 @@ func getSecret(ctx context.Context, c client.Client, secretName types.Namespaced
 	if secret.Type != libsveltosv1beta1.ClusterProfileSecretType {
 		return nil, libsveltosv1beta1.ErrSecretTypeNotSupported
 	}
+
+	addTypeInformationToObject(c.Scheme(), secret)
 
 	return secret, nil
 }
@@ -1561,7 +1566,8 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	logger.V(logs.LogDebug).Info("get remote restConfig")
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, logger, err

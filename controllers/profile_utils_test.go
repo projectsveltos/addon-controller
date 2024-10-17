@@ -887,10 +887,18 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CleanClusterReports(context.TODO(), c, clusterProfile)).To(Succeed())
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.CleanClusterReports(context.TODO(), c, clusterProfileScope)).To(Succeed())
 		// ClusterReport1 is gone
 		currentClusterReport := &configv1beta1.ClusterReport{}
-		err := c.Get(context.TODO(),
+		err = c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterReport1.Namespace, Name: clusterReport1.Name}, currentClusterReport)
 		Expect(err).ToNot(BeNil())
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
@@ -969,10 +977,18 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CleanClusterReports(context.TODO(), c, &profile)).To(Succeed())
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        &profile,
+			ControllerName: "profile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.CleanClusterReports(context.TODO(), c, profileScope)).To(Succeed())
 		// ClusterReport1 is gone
 		currentClusterReport := &configv1beta1.ClusterReport{}
-		err := c.Get(context.TODO(),
+		err = c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterReport1.Namespace, Name: clusterReport1.Name}, currentClusterReport)
 		Expect(err).ToNot(BeNil())
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())

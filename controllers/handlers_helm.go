@@ -210,23 +210,9 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	clusterType libsveltosv1beta1.ClusterType,
 	o deployer.Options, logger logr.Logger) error {
 
-	var cluster client.Object
-	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace,
-		clusterName, clusterType)
-	if err != nil {
-		return err
-	}
-
-	if !cluster.GetDeletionTimestamp().IsZero() {
-		// If Helm uninstall client encountered an unreachable cluster api-server, the Helm SDK would become stuck.
-		// Since cluster is being deleted, no need to clean up deployed helm charts. Simply returns and error
-		// and wait for cluster to be gone.
-		return errors.New("cluster is marked for deletion.")
-	}
-
 	// Get ClusterSummary that requested this
 	clusterSummary := &configv1beta1.ClusterSummary{}
-	err = c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary)
+	err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: applicant}, clusterSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -260,7 +246,6 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kubeconfig string, logger logr.Logger) error {
 
-	var releaseReports []configv1beta1.ReleaseReport
 	releaseReports, err := uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
 		return err
@@ -366,7 +351,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 						return nil, err
 					}
 					if currentRelease != nil && currentRelease.Status != string(release.StatusUninstalled) {
-						err = doUninstallRelease(clusterSummary, currentChart, kubeconfig, registryOptions, logger)
+						err = doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 						if err != nil {
 							if !errors.Is(err, driver.ErrReleaseNotFound) {
 								return nil, err
@@ -750,13 +735,13 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	return report, nil
 }
 
-func handleUninstall(clusterSummary *configv1beta1.ClusterSummary, currentChart *configv1beta1.HelmChart,
-	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger,
-) (*configv1beta1.ReleaseReport, error) {
+func handleUninstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	currentChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
 
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("uninstall helm release")
-	err := doUninstallRelease(clusterSummary, currentChart, kubeconfig, registryOptions, logger)
+	err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -829,7 +814,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 			return nil, nil, err
 		}
 	} else if shouldUninstall(currentRelease, currentChart) {
-		report, err = handleUninstall(clusterSummary, currentChart, kubeconfig, registryOptions, logger)
+		report, err = handleUninstall(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1008,12 +993,27 @@ func checkDependencies(chartRequested *chart.Chart, installClient *action.Instal
 
 // uninstallRelease removes helm release from a CAPI Cluster.
 // No action in DryRun mode.
-func uninstallRelease(clusterSummary *configv1beta1.ClusterSummary,
+func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
 	helmChart *configv1beta1.HelmChart, logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return nil
+	}
+
+	cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if !cluster.GetDeletionTimestamp().IsZero() {
+		// if cluster is marked for deletion, no need to worry about removing helm charts deployed
+		// there.
 		return nil
 	}
 
@@ -1437,8 +1437,9 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 
 // doUninstallRelease uninstalls helm release from the CAPI Cluster.
 // No action in DryRun mode.
-func doUninstallRelease(clusterSummary *configv1beta1.ClusterSummary, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) error {
+func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) error {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -1450,7 +1451,7 @@ func doUninstallRelease(clusterSummary *configv1beta1.ClusterSummary, requestedC
 		requestedChart.RepositoryURL,
 		requestedChart.RepositoryName))
 
-	return uninstallRelease(clusterSummary, requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+	return uninstallRelease(ctx, clusterSummary, requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
 		kubeconfig, registryOptions, requestedChart, logger)
 }
 
@@ -1548,8 +1549,9 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 				return nil, err
 			}
 
-			if err := uninstallRelease(clusterSummary, managedHelmReleases[i].Name, managedHelmReleases[i].Namespace,
-				kubeconfig, &registryClientOptions{}, nil, logger); err != nil {
+			if err := uninstallRelease(ctx, clusterSummary, managedHelmReleases[i].Name,
+				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil,
+				logger); err != nil {
 				return nil, err
 			}
 

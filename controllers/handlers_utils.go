@@ -1044,6 +1044,24 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
+	if !isMgmtCluster {
+		cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		if !cluster.GetDeletionTimestamp().IsZero() {
+			// if cluster is marked for deletion, no need to worry about removing resources deployed
+			// there. This check applies only for managed cluster. Resources deployed in the management
+			// cluster are still removed
+			return nil, nil
+		}
+	}
+
 	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err

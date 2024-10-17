@@ -51,8 +51,6 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	var clusterName string
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig())
-
 		namespace = randomString()
 
 		logger = textlogger.NewLogger(textlogger.NewConfig())

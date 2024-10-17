@@ -245,12 +245,18 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 			return reconcile.Result{}, nil
 		}
 
-		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		if !isDeleted {
+			// if cluster is marked for deletion do not try to remove ResourceSummaries.
+			// those are only deployed in the managed cluster so no need to cleanup on a deleted cluster
+			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			}
 		}
 
+		// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
+		// in the management cluster and those need to be removed.
 		err = r.undeploy(ctx, clusterSummaryScope, logger)
 		if err != nil {
 			// In DryRun mode it is expected to always get an error back

@@ -101,6 +101,10 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), sveltosCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, sveltosCRD)).To(Succeed())
 
+	// Wait for synchronization
+	// Sometimes we otherwise get "no matches for kind "..." in version "lib.projectsveltos.io/v1beta1"
+	time.Sleep(2 * time.Second)
+
 	if synced := testEnv.GetCache().WaitForCacheSync(ctx); !synced {
 		time.Sleep(time.Second)
 	}

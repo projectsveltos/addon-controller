@@ -741,7 +741,7 @@ func updateClusterReports(ctx context.Context, c client.Client, profileScope *sc
 		}
 	} else {
 		// delete all ClusterReports created by this ClusterProfile/Profile instance
-		err := cleanClusterReports(ctx, c, profileScope.Profile)
+		err := cleanClusterReports(ctx, c, profileScope)
 		if err != nil {
 			profileScope.Logger.Error(err, "failed to delete ClusterReports")
 			return err
@@ -756,7 +756,7 @@ func createClusterReports(ctx context.Context, c client.Client, profileScope *sc
 	for i := range profileScope.GetStatus().MatchingClusterRefs {
 		cluster := profileScope.GetStatus().MatchingClusterRefs[i]
 
-		// Create ClusterConfiguration if not already existing.
+		// Create ClusterReport if not already existing.
 		err := createClusterReport(ctx, c, profileScope.Profile, &cluster)
 		if err != nil {
 			return err
@@ -772,15 +772,29 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 
 	clusterType := clusterproxy.GetClusterType(cluster)
 
+	lbls := map[string]string{
+		configv1beta1.ClusterNameLabel: cluster.Name,
+		configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
+	}
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
+		lbls[ClusterProfileLabelName] = profile.GetName()
+	} else {
+		lbls[ProfileLabelName] = profile.GetName()
+	}
+
 	clusterReport := &configv1beta1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
 			Name: getClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
 				cluster.Name, clusterType),
-			Labels: map[string]string{
-				ClusterProfileLabelName:        profile.GetName(),
-				configv1beta1.ClusterNameLabel: cluster.Name,
-				configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
+			Labels: lbls,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Kind:       profile.GetObjectKind().GroupVersionKind().Kind,
+					UID:        profile.GetUID(),
+					APIVersion: configv1beta1.GroupVersion.String(),
+					Name:       profile.GetName(),
+				},
 			},
 		},
 		Spec: configv1beta1.ClusterReportSpec{
@@ -800,15 +814,27 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 }
 
 // cleanClusterReports deletes ClusterReports created by this ClusterProfile/Profile instance.
-func cleanClusterReports(ctx context.Context, c client.Client, profile client.Object) error {
+func cleanClusterReports(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) error {
 	listOptions := []client.ListOption{}
 
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profile.GetName()})
+	if profileScope.GetKind() == configv1beta1.ClusterProfileKind {
+		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profile.GetName()},
-			client.InNamespace(profile.GetNamespace()))
+			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.InNamespace(profileScope.Namespace()))
+	}
+
+	matchingClusterMap := make(map[string]bool)
+
+	info := func(namespace, clusterReportName string) string {
+		return fmt.Sprintf("%s--%s", namespace, clusterReportName)
+	}
+
+	for i := range profileScope.GetStatus().MatchingClusterRefs {
+		ref := &profileScope.GetStatus().MatchingClusterRefs[i]
+		matchingClusterMap[info(ref.Namespace, getClusterReportName(profileScope.GetKind(),
+			profileScope.Name(), ref.Name, clusterproxy.GetClusterType(ref)))] = true
 	}
 
 	clusterReportList := &configv1beta1.ClusterReportList{}
@@ -819,6 +845,11 @@ func cleanClusterReports(ctx context.Context, c client.Client, profile client.Ob
 
 	for i := range clusterReportList.Items {
 		cr := &clusterReportList.Items[i]
+
+		if _, ok := matchingClusterMap[info(cr.Namespace, cr.Name)]; ok {
+			continue
+		}
+
 		err = c.Delete(ctx, cr)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -995,7 +1026,7 @@ func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *s
 	}
 
 	profile := profileScope.Profile
-	if err := cleanClusterReports(ctx, c, profile); err != nil {
+	if err := cleanClusterReports(ctx, c, profileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterReports")
 		return err
 	}
@@ -1041,6 +1072,12 @@ func reconcileNormalCommon(ctx context.Context, c client.Client, profileScope *s
 	// For Sveltos/Cluster not matching, removes ClusterProfile/Profile as OwnerReference
 	// from corresponding ClusterConfiguration
 	if err := cleanClusterConfigurations(ctx, c, profileScope); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
+		return err
+	}
+
+	// For Sveltos/Cluster not matching, remove ClusterReports
+	if err := cleanClusterReports(ctx, c, profileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return err
 	}

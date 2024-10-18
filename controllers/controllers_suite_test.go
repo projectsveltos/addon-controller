@@ -136,7 +136,7 @@ var _ = BeforeSuite(func() {
 	Expect(waitForObject(context.TODO(), testEnv.Client, projectsveltosNs)).To(Succeed())
 
 	// Wait for synchronization
-	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1beta1"
+	// Sometimes we otherwise get "no matches for kind ... in version "lib.projectsveltos.io/v1beta1"
 	time.Sleep(2 * time.Second)
 
 	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig()),

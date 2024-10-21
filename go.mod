@@ -16,8 +16,8 @@ require (
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.40.0
-	github.com/prometheus/client_golang v1.20.4
+	github.com/projectsveltos/libsveltos v0.40.1-0.20241021121909-261d0f1307b6
+	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.19.0
@@ -36,8 +36,6 @@ require (
 	sigs.k8s.io/kustomize/api v0.18.0
 	sigs.k8s.io/kustomize/kyaml v0.18.1
 )
-
-replace github.com/projectsveltos/libsveltos => github.com/gianlucam76/libsveltos v0.0.0-20241009142654-095e04b3cb80
 
 require (
 	dario.cat/mergo v1.0.1 // indirect

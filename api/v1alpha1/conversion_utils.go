@@ -69,3 +69,33 @@ func Convert_v1beta1_HelmChart_To_v1alpha1_HelmChart(src *configv1beta1.HelmChar
 
 	return nil
 }
+
+func Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(
+	src *configv1beta1.HelmInstallOptions, dst *HelmInstallOptions, s conversion.Scope) error {
+
+	if err := autoConvert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(src, dst, s); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Convert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(
+	src *configv1beta1.HelmUninstallOptions, dst *HelmUninstallOptions, s conversion.Scope) error {
+
+	if err := autoConvert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(src, dst, s); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func Convert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(
+	src *configv1beta1.HelmUpgradeOptions, dst *HelmUpgradeOptions, s conversion.Scope) error {
+
+	if err := autoConvert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(src, dst, s); err != nil {
+		return err
+	}
+
+	return nil
+}

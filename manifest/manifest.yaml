@@ -2007,6 +2007,14 @@ spec:
                               description: Create the release namespace if not present.
                                 Defaults to true
                               type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on install
+                                Default to false
+                              type: boolean
                             replace:
                               default: true
                               description: Replaces if set indicates to replace an
@@ -2044,6 +2052,14 @@ spec:
                               - foreground
                               - background
                               type: string
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on uninstall
+                                Default to false
+                              type: boolean
                             keepHistory:
                               description: |-
                                 When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -2060,6 +2076,14 @@ spec:
                               description: CleanupOnFail will, if true, cause the
                                 upgrade to delete newly-created resources on a failed
                                 update.
+                              type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on upgrade
+                                Default to false
                               type: boolean
                             force:
                               default: false
@@ -4807,6 +4831,14 @@ spec:
                                   description: Create the release namespace if not
                                     present. Defaults to true
                                   type: boolean
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on install
+                                    Default to false
+                                  type: boolean
                                 replace:
                                   default: true
                                   description: Replaces if set indicates to replace
@@ -4844,6 +4876,14 @@ spec:
                                   - foreground
                                   - background
                                   type: string
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on uninstall
+                                    Default to false
+                                  type: boolean
                                 keepHistory:
                                   description: |-
                                     When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -4860,6 +4900,14 @@ spec:
                                   description: CleanupOnFail will, if true, cause
                                     the upgrade to delete newly-created resources
                                     on a failed update.
+                                  type: boolean
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on upgrade
+                                    Default to false
                                   type: boolean
                                 force:
                                   default: false
@@ -6917,6 +6965,14 @@ spec:
                               description: Create the release namespace if not present.
                                 Defaults to true
                               type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on install
+                                Default to false
+                              type: boolean
                             replace:
                               default: true
                               description: Replaces if set indicates to replace an
@@ -6954,6 +7010,14 @@ spec:
                               - foreground
                               - background
                               type: string
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on uninstall
+                                Default to false
+                              type: boolean
                             keepHistory:
                               description: |-
                                 When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -6970,6 +7034,14 @@ spec:
                               description: CleanupOnFail will, if true, cause the
                                 upgrade to delete newly-created resources on a failed
                                 update.
+                              type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on upgrade
+                                Default to false
                               type: boolean
                             force:
                               default: false

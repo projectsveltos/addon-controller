@@ -2011,12 +2011,40 @@ func getAtomicHelmValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getDisableHooksHelmValue(options *configv1beta1.HelmOptions) bool {
-	if options != nil {
-		return options.DisableHooks
+func getDisableHooksHelmInstallValue(options *configv1beta1.HelmOptions) bool {
+	if options == nil {
+		return false
 	}
 
-	return false
+	if options.InstallOptions.DisableHooks {
+		return true
+	}
+
+	return options.DisableHooks
+}
+
+func getDisableHooksHelmUninstallValue(options *configv1beta1.HelmOptions) bool {
+	if options == nil {
+		return false
+	}
+
+	if options.UninstallOptions.DisableHooks {
+		return true
+	}
+
+	return options.DisableHooks
+}
+
+func getDisableHooksHelmUpgradeValue(options *configv1beta1.HelmOptions) bool {
+	if options == nil {
+		return false
+	}
+
+	if options.UpgradeOptions.DisableHooks {
+		return true
+	}
+
+	return options.DisableHooks
 }
 
 func getDisableOpenAPIValidationValue(options *configv1beta1.HelmOptions) bool {
@@ -2175,7 +2203,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	installClient.CreateNamespace = getCreateNamespaceHelmValue(requestedChart.Options)
 	installClient.SkipCRDs = getSkipCRDsHelmValue(requestedChart.Options)
 	installClient.Atomic = getAtomicHelmValue(requestedChart.Options)
-	installClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
+	installClient.DisableHooks = getDisableHooksHelmInstallValue(requestedChart.Options)
 	installClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
 		installClient.Timeout, err = time.ParseDuration(timeout.String())
@@ -2209,7 +2237,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.WaitForJobs = getWaitForJobsHelmValue(requestedChart.Options)
 	upgradeClient.SkipCRDs = getSkipCRDsHelmValue(requestedChart.Options)
 	upgradeClient.Atomic = getAtomicHelmValue(requestedChart.Options)
-	upgradeClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
+	upgradeClient.DisableHooks = getDisableHooksHelmUpgradeValue(requestedChart.Options)
 	upgradeClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
 		var err error
@@ -2255,7 +2283,7 @@ func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfi
 
 		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
 		uninstallClient.Wait = getWaitHelmValue(requestedChart.Options)
-		uninstallClient.DisableHooks = getDisableHooksHelmValue(requestedChart.Options)
+		uninstallClient.DisableHooks = getDisableHooksHelmUninstallValue(requestedChart.Options)
 		uninstallClient.KeepHistory = getKeepHistoryValue(requestedChart.Options)
 		uninstallClient.DeletionPropagation = getDeletionPropagation(requestedChart.Options)
 	}

@@ -537,7 +537,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 			return err
 		}
 
-		err = requeueOldOwner(ctx, featureID, ownerClusterSummary, logger)
+		err = requeueClusterSummary(ctx, featureID, ownerClusterSummary, logger)
 		if err != nil {
 			return err
 		}

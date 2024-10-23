@@ -321,10 +321,19 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
 			// Let the other ClusterSummary take it over.
-			if chartManager.GetNumberOfRegisteredClusterSummaries(clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, currentChart) > 1 {
+			otherRegisteredClusterSummaries := chartManager.GetRegisteredClusterSummariesForChart(
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				clusterSummary.Spec.ClusterType, currentChart)
+			if len(otherRegisteredClusterSummaries) > 1 {
 				// Immediately unregister so next inline ClusterSummary can take this over
 				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+				err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
+					otherRegisteredClusterSummaries, logger)
+				if err != nil {
+					// TODO: Handle errors to prevent bad state. ClusterSummary no longer manage the chart,
+					// but no other ClusterSummary instance has been requeued.
+					return nil, err
+				}
 			} else {
 				// If StopMatchingBehavior is LeavePolicies, do not uninstall helm charts
 				if !clusterSummary.DeletionTimestamp.IsZero() &&
@@ -438,7 +447,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
 	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
 	// only after helm release is successfully undeployed.
-	clusterSummary, conflict, err := updateStatusForeferencedHelmReleases(ctx, c, clusterSummary, logger)
+	clusterSummary, _, err := updateStatusForeferencedHelmReleases(ctx, c, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -487,9 +496,6 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	if deployError != nil {
 		return deployError
 	}
-	if conflict {
-		return deployer.NewConflictError("conflict managing one or more helm charts")
-	}
 
 	return nil
 }
@@ -531,8 +537,11 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 				continue
 			}
 
+			// for helm chart a conflict is a non retriable error.
+			// when profile currently managing the helm chart is removed, all
+			// conflicting profiles will be automatically reconciled.
 			return releaseReports, chartDeployed,
-				deployer.NewConflictError(conflictErrorMessage)
+				&NonRetriableError{Message: conflictErrorMessage}
 		}
 
 		var report *configv1beta1.ReleaseReport
@@ -567,7 +576,10 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 	}
 
 	if conflictErrorMessage != "" {
-		return releaseReports, chartDeployed, deployer.NewConflictError(conflictErrorMessage)
+		// for helm chart a conflict is a non retriable error.
+		// when profile currently managing the helm chart is removed, all
+		// conflicting profiles will be automatically reconciled.
+		return releaseReports, chartDeployed, &NonRetriableError{Message: conflictErrorMessage}
 	}
 
 	return releaseReports, chartDeployed, nil
@@ -643,7 +655,7 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			}
 
 			// Reset Status of the ClusterSummary previously managing this resource
-			err = requeueOldOwner(ctx, configv1beta1.FeatureHelm, currentHelmManager, logger)
+			err = requeueClusterSummary(ctx, configv1beta1.FeatureHelm, currentHelmManager, logger)
 			if err != nil {
 				return false, err
 			}
@@ -2659,4 +2671,28 @@ func getUsernameAndPasswordFromSecret(registryURL string, secret *corev1.Secret)
 		return "", "", "", fmt.Errorf("invalid '%s' secret data: required fields 'username' and 'password'", secret.Name)
 	}
 	return username, password, parsedURL.Host, nil
+}
+
+func requeueAllOtherClusterSummaries(ctx context.Context, c client.Client,
+	namespace string, clusterSummaryNames []string, logger logr.Logger) error {
+
+	for i := range clusterSummaryNames {
+		name := &clusterSummaryNames[i]
+
+		cs := &configv1beta1.ClusterSummary{}
+		err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: *name}, cs)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return err
+		}
+
+		err = requeueClusterSummary(ctx, configv1beta1.FeatureHelm, cs, logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

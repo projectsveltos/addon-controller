@@ -235,7 +235,7 @@ func initFlags(fs *pflag.FlagSet) {
 		fmt.Sprintf("The minimum interval at which watched resources are reconciled (e.g. 15m). Default: %d minutes",
 			defaultSyncPeriod))
 
-	const defaultConflictRetryTime = 30
+	const defaultConflictRetryTime = 60
 	fs.DurationVar(&conflictRetryTime, "conflict-retry-time", defaultConflictRetryTime*time.Second,
 		fmt.Sprintf("The minimum interval at which watched ClusterProfile with conflicts are retried. Defaul: %d seconds",
 			defaultConflictRetryTime))

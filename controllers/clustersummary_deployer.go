@@ -122,7 +122,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	}
 
 	if status != nil {
-		logger.V(logs.LogDebug).Info("result is available. updating status.")
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("result is available. updating status: %v", *status))
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
 		if *status == configv1beta1.FeatureStatusProvisioned {
 			return nil

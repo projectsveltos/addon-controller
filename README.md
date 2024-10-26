@@ -23,6 +23,8 @@ Sveltos provides precise control over add-on deployment order. Add-ons within a 
 
 👉 To get updates [⭐️ star](https://github.com/projectsveltos/addon-controller/stargazers) this repository.
 
+[![Sveltos Dashboard](https://img.youtube.com/vi/GspTTGAmQwk/0.jpg)](https://www.youtube.com/watch?v=GspTTGAmQwk)
+
 ## Profiles vs. ClusterProfiles
 
 Projectsveltos offers two powerful tools for managing cluster configurations: **Profiles** and **ClusterProfiles**. Understanding their distinctions is crucial for efficient setup and administration.

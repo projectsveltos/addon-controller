@@ -227,7 +227,7 @@ func getSecretObjectReference(ctx context.Context, mgmtClient client.Client,
 	}
 
 	logger := textlogger.NewLogger(textlogger.NewConfig())
-	secretName, err := clusterproxy.GetSveltosSecretName(ctx, logger, mgmtClient, clusterNamespace, clusterName)
+	secretName, _, err := clusterproxy.GetSveltosSecretNameAndKey(ctx, logger, mgmtClient, clusterNamespace, clusterName)
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ spec:
   - repositoryURL: https://helm.nginx.com/stable
     repositoryName: nginx-stable
     chartName: nginx-stable/nginx-ingress
-    chartVersion: 0.18.1
+    chartVersion: 1.4.0
     releaseName: nginx-latest
     releaseNamespace: nginx
     helmChartAction: Install

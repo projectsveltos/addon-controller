@@ -5,6 +5,6 @@
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
   "sveltos": {
-      "fileMatch": ["^.*/*\\.yaml$"]
+    "fileMatch": ["^.*\\.yaml$"]
   }
 }

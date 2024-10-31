@@ -4,6 +4,7 @@
   "prHourlyLimit": 0,
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
+  "ignorePaths": ["**/test/**"],
   "sveltos": {
     "fileMatch": ["^.*\\.yaml$"]
   }

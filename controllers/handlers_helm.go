@@ -516,8 +516,8 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 	}
 
 	conflictErrorMessage := ""
-	releaseReports := make([]configv1beta1.ReleaseReport, 0)
-	chartDeployed := make([]configv1beta1.Chart, 0)
+	releaseReports := make([]configv1beta1.ReleaseReport, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
+	chartDeployed := make([]configv1beta1.Chart, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		// Eventual conflicts are already resolved before this method is called (in updateStatusForeferencedHelmReleases)
@@ -1703,7 +1703,7 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 		currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
 	}
 
-	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0)
+	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(clusterSummary.Status.HelmReleaseSummaries))
 	for i := range clusterSummary.Status.HelmReleaseSummaries {
 		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
 		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
@@ -1866,7 +1866,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 		return nil, err
 	}
 
-	helmResources := make([]libsveltosv1beta1.HelmResources, 0)
+	helmResources := make([]libsveltosv1beta1.HelmResources, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
@@ -1927,12 +1927,12 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 }
 
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
-	resources := make([]*unstructured.Unstructured, 0)
-
 	elements, err := customSplit(manifest)
 	if err != nil {
 		return nil, err
 	}
+
+	resources := make([]*unstructured.Unstructured, 0, len(elements))
 
 	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
@@ -1948,7 +1948,7 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 }
 
 func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []libsveltosv1beta1.Resource {
-	resources := make([]libsveltosv1beta1.Resource, 0)
+	resources := make([]libsveltosv1beta1.Resource, len(policies))
 
 	for i := range policies {
 		r := libsveltosv1beta1.Resource{
@@ -1960,7 +1960,7 @@ func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []lib
 			IgnoreForConfigurationDrift: hasIgnoreConfigurationDriftAnnotation(policies[i]),
 		}
 
-		resources = append(resources, r)
+		resources[i] = r
 	}
 
 	return resources

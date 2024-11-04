@@ -745,7 +745,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	instantiateTemplate bool, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
-	policies := make([]*unstructured.Unstructured, 0)
+	policies := make([]*unstructured.Unstructured, 0, len(data))
 
 	for k := range data {
 		section := data[k]
@@ -789,12 +789,11 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 }
 
 func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
-	policies := make([]*unstructured.Unstructured, 0)
 	elements, err := customSplit(string(section))
 	if err != nil {
 		return nil, err
 	}
-
+	policies := make([]*unstructured.Unstructured, 0, len(elements))
 	for i := range elements {
 		policy, err := utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
@@ -896,8 +895,8 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 	clusterSummary *configv1beta1.ClusterSummary, references []configv1beta1.PolicyRef,
 	logger logr.Logger) (local, remote []client.Object, err error) {
 
-	local = make([]client.Object, 0)
-	remote = make([]client.Object, 0)
+	local = make([]client.Object, 0, len(references))
+	remote = make([]client.Object, 0, len(references))
 	for i := range references {
 		var object client.Object
 		reference := &references[i]
@@ -999,6 +998,7 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1beta1.ResourceReport, err error) {
 
+	reports = make([]configv1beta1.ResourceReport, 0, len(referencedObjects))
 	for i := range referencedObjects {
 		var tmpResourceReports []configv1beta1.ResourceReport
 		if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {

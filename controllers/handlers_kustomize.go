@@ -135,9 +135,9 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	// If we are here there are no conflicts (and error would have been returned by deployKustomizeRef)
-	remoteDeployed := make([]configv1beta1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, len(remoteResourceReports))
 	for i := range remoteResourceReports {
-		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
+		remoteDeployed[i] = remoteResourceReports[i].Resource
 	}
 
 	// TODO: track resource deployed in the management cluster
@@ -639,6 +639,8 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	}
 
 	resources := resMap.Resources()
+	objectsToDeployLocally = make([]*unstructured.Unstructured, 0, len(resources))
+	objectsToDeployRemotely = make([]*unstructured.Unstructured, 0, len(resources))
 	for i := range resources {
 		resource := resources[i]
 		yaml, err := resource.AsYAML()
@@ -821,6 +823,9 @@ func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestCon
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
 ) (localResourceReports, remoteResourceReports []configv1beta1.ResourceReport, err error) {
 
+	capacity := len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
+	localResourceReports = make([]configv1beta1.ResourceReport, 0, capacity)
+	remoteResourceReports = make([]configv1beta1.ResourceReport, 0, capacity)
 	for i := range clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 		var tmpLocal []configv1beta1.ResourceReport

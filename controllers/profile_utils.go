@@ -884,7 +884,7 @@ func reviseUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope) {
 	}
 
 	updatedClusters := &libsveltosset.Set{}
-	currentUpdatedClusters := make([]corev1.ObjectReference, 0)
+	currentUpdatedClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatedClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatedClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatedClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {
@@ -896,7 +896,7 @@ func reviseUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope) {
 	profileScope.GetStatus().UpdatedClusters.Clusters = currentUpdatedClusters
 
 	updatingClusters := &libsveltosset.Set{}
-	currentUpdatingClusters := make([]corev1.ObjectReference, 0)
+	currentUpdatingClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatingClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatingClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {

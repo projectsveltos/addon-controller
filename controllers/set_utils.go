@@ -53,7 +53,7 @@ func selectClusters(ctx context.Context, c client.Client, setScope *scope.SetSco
 		currentMatchingHealthyCluster[healthyMatchingClusters[i]] = true
 	}
 
-	currentSelectedClusters := make([]corev1.ObjectReference, 0)
+	currentSelectedClusters := make([]corev1.ObjectReference, 0, len(status.SelectedClusterRefs))
 	for i := range status.SelectedClusterRefs {
 		cluster := &status.SelectedClusterRefs[i]
 		if _, ok := currentMatchingHealthyCluster[*cluster]; ok {

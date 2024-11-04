@@ -90,7 +90,7 @@ func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
 	clusterProfileName string, feature configv1beta1.FeatureID, resources []corev1.ObjectReference,
 	logger logr.Logger) error {
 
-	reloaderInfo := make([]libsveltosv1beta1.ReloaderInfo, 0)
+	reloaderInfo := make([]libsveltosv1beta1.ReloaderInfo, 0, len(resources))
 	for i := range resources {
 		resource := &resources[i]
 		if watchForRollingUpgrade(resource) {

@@ -89,9 +89,9 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteDeployed := make([]configv1beta1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, len(remoteResourceReports))
 	for i := range remoteResourceReports {
-		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
+		remoteDeployed[i] = remoteResourceReports[i].Resource
 	}
 
 	// TODO: track resource deployed in the management cluster

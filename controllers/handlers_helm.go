@@ -2837,6 +2837,7 @@ func generateReportForSameVersion(ctx context.Context, currentValues map[string]
 	}
 
 	return report, nil
+}
 
 func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	currentChart *configv1beta1.HelmChart, mgmtResources map[string]*unstructured.Unstructured,

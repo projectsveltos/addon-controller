@@ -21,7 +21,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.19.0
-	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.16.2
 	k8s.io/api v0.31.2
@@ -32,7 +31,7 @@ require (
 	k8s.io/component-base v0.31.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078
-	sigs.k8s.io/cluster-api v1.8.4
+	sigs.k8s.io/cluster-api v1.8.5
 	sigs.k8s.io/controller-runtime v0.19.1
 	sigs.k8s.io/kustomize/api v0.18.0
 	sigs.k8s.io/kustomize/kyaml v0.18.1
@@ -179,6 +178,7 @@ require (
 	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apiserver v0.31.2 // indirect
 	k8s.io/cluster-bootstrap v0.31.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241009091222-67ed5848f094 // indirect

@@ -516,8 +516,9 @@ var _ = Describe("HandlersHelm", func() {
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
 
-		kubeconfig, err := clusterproxy.CreateKubeconfig(textlogger.NewLogger(textlogger.NewConfig()), testEnv.Kubeconfig)
+		kubeconfig, closer, err := clusterproxy.CreateKubeconfig(textlogger.NewLogger(textlogger.NewConfig()), testEnv.Kubeconfig)
 		Expect(err).To(BeNil())
+		defer closer()
 
 		// ClusterSummary in DryRun mode. Nothing registered with chartManager with respect to the two referenced
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as

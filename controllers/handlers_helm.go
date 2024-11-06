@@ -148,12 +148,11 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var kubeconfig string
-	kubeconfig, err = clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
+	kubeconfig, closer, err := clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(kubeconfig)
+	defer closer()
 
 	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, logger)
 	if err != nil {
@@ -233,12 +232,11 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	var kubeconfig string
-	kubeconfig, err = clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
+	kubeconfig, closer, err := clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(kubeconfig)
+	defer closer()
 
 	return undeployHelmChartResources(ctx, c, clusterSummary, kubeconfig, logger)
 }

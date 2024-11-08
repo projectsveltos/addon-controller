@@ -906,7 +906,7 @@ func instantiateResourceWithSubstituteValues(templateName string, resource []byt
 	var buffer bytes.Buffer
 
 	if err := tmpl.Execute(&buffer, substituteValues); err != nil {
-		return nil, errors.Wrapf(err, "error executing template %q", resource)
+		return nil, fmt.Errorf("error executing template %q: %w", resource, err)
 	}
 	instantiatedValues := buffer.String()
 

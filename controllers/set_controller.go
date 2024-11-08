@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -88,8 +89,7 @@ func (r *SetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch Set")
-		return reconcile.Result{}, errors.Wrapf(err, "Failed to fetch Set %s",
-			req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("failed to fetch Set %s: %w", req.NamespacedName, err)
 	}
 
 	// limit all references to be in the namespace
@@ -103,8 +103,7 @@ func (r *SetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create setScope")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"unable to create set scope for %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("unable to create set scope for %s: %w", req.NamespacedName, err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any Set

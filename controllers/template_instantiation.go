@@ -20,7 +20,6 @@ import (
 	"text/template"
 
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -185,7 +184,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	var buffer bytes.Buffer
 
 	if err := tmpl.Execute(&buffer, objects); err != nil {
-		return "", errors.Wrapf(err, "error executing template %q", values)
+		return "", fmt.Errorf("error executing template %q: %w", values, err)
 	}
 	instantiatedValues := buffer.String()
 

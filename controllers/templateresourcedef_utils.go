@@ -19,9 +19,9 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"text/template"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -78,7 +78,7 @@ func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 			Cluster:          u.UnstructuredContent(),
 			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
 			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
-		return "", errors.Wrapf(err, "error executing template")
+		return "", fmt.Errorf("error executing template: %w", err)
 	}
 	return buffer.String(), nil
 }

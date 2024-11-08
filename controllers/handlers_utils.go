@@ -1666,7 +1666,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 					logger.V(logs.LogInfo).Info(msg)
 					return nil, nil, &NonRetriableError{Message: msg}
 				}
-				return nil, nil, errors.Wrapf(err, "%s", msg)
+				return nil, nil, fmt.Errorf("%s: %w", msg, err)
 			}
 
 			if instantiateTemplate(configMap, logger) {
@@ -1697,7 +1697,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 					logger.V(logs.LogInfo).Info(msg)
 					return nil, nil, &NonRetriableError{Message: msg}
 				}
-				return nil, nil, errors.Wrapf(err, "%s", msg)
+				return nil, nil, fmt.Errorf("%s: %w", msg, err)
 			}
 			if instantiateTemplate(secret, logger) {
 				for key, value := range secret.Data {

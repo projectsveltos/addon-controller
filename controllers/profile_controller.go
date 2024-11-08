@@ -124,8 +124,7 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch Profile")
-		return reconcile.Result{}, errors.Wrapf(err, "Failed to fetch Profile %s",
-			req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("failed to fetch Profile %s: %w", req.NamespacedName, err)
 	}
 
 	// limit all references to be in the namespace
@@ -139,8 +138,7 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create profileScope")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"unable to create profile scope for %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("unable to create profile scope for %s: %w", req.NamespacedName, err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any Profile

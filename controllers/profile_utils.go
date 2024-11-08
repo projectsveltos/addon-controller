@@ -27,7 +27,6 @@ import (
 	"github.com/dariubs/percent"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -995,11 +994,7 @@ func addFinalizer(ctx context.Context, profileScope *scope.ProfileScope, finaliz
 	controllerutil.AddFinalizer(profileScope.Profile, finalizer)
 	if err := profileScope.PatchObject(ctx); err != nil {
 		profileScope.Error(err, "Failed to add finalizer")
-		return errors.Wrapf(
-			err,
-			"Failed to add finalizer for %s",
-			profileScope.Name(),
-		)
+		return fmt.Errorf("failed to add finalizer for %s: %w", profileScope.Name(), err)
 	}
 	return nil
 }

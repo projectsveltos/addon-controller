@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"syscall"
@@ -26,7 +27,6 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -128,10 +128,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch clusterSummary")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"Failed to fetch clusterSummary %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"failed to fetch clusterSummary %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -139,10 +138,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"Failed to get owner clusterProfile for %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"failed to get owner clusterProfile for %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 	if profile == nil {
@@ -160,10 +158,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create clusterProfileScope")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"unable to create clusterprofile scope for %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"unable to create clusterprofile scope for %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -416,7 +413,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return fmt.Errorf("error creating controller: %w", err)
 	}
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
@@ -493,10 +490,9 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := clusterSummaryScope.PatchObject(ctx); err != nil {
 		clusterSummaryScope.Error(err, "Failed to add finalizer")
-		return errors.Wrapf(
-			err,
-			"Failed to add finalizer for %s",
-			clusterSummaryScope.Name(),
+		return fmt.Errorf(
+			"failed to add finalizer for %s: %w",
+			clusterSummaryScope.Name(), err,
 		)
 	}
 	return nil
@@ -506,6 +502,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace, "clustername", clusterSummary.Spec.ClusterName)
 
+	var errs []error
+
 	resourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
 	helmErr := r.deployHelm(ctx, clusterSummaryScope, logger)
@@ -513,15 +511,19 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	kustomizeError := r.deployKustomizeRefs(ctx, clusterSummaryScope, logger)
 
 	if resourceErr != nil {
-		return resourceErr
+		errs = append(errs, fmt.Errorf("deploying resources failed: %w", resourceErr))
 	}
 
 	if helmErr != nil {
-		return helmErr
+		errs = append(errs, fmt.Errorf("deploying helm charts failed: %w", helmErr))
 	}
 
 	if kustomizeError != nil {
-		return kustomizeError
+		errs = append(errs, fmt.Errorf("deploying kustomize resources failed: %w", kustomizeError))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 
 	return nil

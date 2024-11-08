@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -86,8 +87,7 @@ func (r *ClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch ClusterSet")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"Failed to fetch ClusterSet %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("failed to fetch ClusterSet %s: %w", req.NamespacedName, err)
 	}
 
 	setScope, err := scope.NewSetScope(scope.SetScopeParams{
@@ -98,8 +98,7 @@ func (r *ClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create setScope")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"unable to create setScope for %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("unable to create setScope for %s: %w", req.NamespacedName, err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterSet

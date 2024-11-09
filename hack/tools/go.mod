@@ -5,10 +5,10 @@ go 1.22.7
 require (
 	github.com/a8m/envsubst v1.4.2
 	github.com/onsi/ginkgo/v2 v2.21.0
-	golang.org/x/oauth2 v0.23.0
+	golang.org/x/oauth2 v0.24.0
 	k8s.io/client-go v0.31.2
 	sigs.k8s.io/controller-tools v0.16.5
-	sigs.k8s.io/kind v0.24.0
+	sigs.k8s.io/kind v0.25.0
 )
 
 require (

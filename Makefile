@@ -62,12 +62,14 @@ CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
 ENVSUBST := $(TOOLS_BIN_DIR)/envsubst
 GOIMPORTS := $(TOOLS_BIN_DIR)/goimports
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
+GOVULNCHECK := $(TOOLS_BIN_DIR)/govulncheck
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
 SETUP_ENVTEST := $(TOOLS_BIN_DIR)/setup_envs
 CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
+GOVULNCHECK_VERSION := "v1.1.3"
 GOLANGCI_LINT_VERSION := "v1.61.0"
 CLUSTERCTL_VERSION := "v1.8.5"
 
@@ -112,8 +114,11 @@ $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 $(ENVSUBST): $(TOOLS_DIR)/go.mod # Build envsubst from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) github.com/a8m/envsubst/cmd/envsubst
 
-$(GOLANGCI_LINT): # Build golangci-lint from tools folder.
+$(GOLANGCI_LINT): 
 	cd $(TOOLS_DIR); ./get-golangci-lint.sh $(GOLANGCI_LINT_VERSION)
+
+$(GOVULNCHECK): 
+	cd $(TOOLS_DIR); ./get-govulncheck.sh $(GOVULNCHECK_VERSION)
 
 $(GOIMPORTS):
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) golang.org/x/tools/cmd/goimports
@@ -179,6 +184,10 @@ vet: ## Run go vet against code.
 .PHONY: lint
 lint: $(GOLANGCI_LINT) generate ## Lint codebase
 	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m	
+
+.PHONY: govulncheck
+govulncheck: $(GOVULNCHECK)
+	$(GOVULNCHECK) ./...
 
 .PHONY: check-manifests
 check-manifests: manifests ## Verify manifests file is up to date

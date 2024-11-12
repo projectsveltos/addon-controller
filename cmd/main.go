@@ -56,6 +56,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/internal/telemetry"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -84,6 +85,7 @@ var (
 	profilerAddress         string
 	driftDetectionConfigMap string
 	disableCaching          bool
+	disableTelemetry        bool
 )
 
 const (
@@ -164,6 +166,13 @@ func main() {
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
+	if !disableTelemetry {
+		err = telemetry.StartCollecting(ctx, mgr.GetClient(), version)
+		if err != nil {
+			setupLog.Error(err, "failed starting telemetry client")
+		}
+	}
+
 	startControllersAndWatchers(ctx, mgr)
 
 	setupChecks(mgr)
@@ -187,6 +196,9 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&disableCaching, "disable-secret-caching", false,
 		"When set, disable caching secrets and configmaps")
+
+	fs.BoolVar(&disableTelemetry, "disable-telemetry", false,
+		"When set, disable telemetry reporting")
 
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
 		"The address the diagnostics endpoint binds to. Per default metrics are served via https and with"+

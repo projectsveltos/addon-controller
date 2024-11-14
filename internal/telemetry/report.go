@@ -50,7 +50,6 @@ var (
 const (
 	contentTypeJSON = "application/json"
 	domain          = "http://telemetry.projectsveltos.io/"
-	path            = "telemetry"
 )
 
 func StartCollecting(ctx context.Context, c client.Client, sveltosVersion string) error {
@@ -152,8 +151,7 @@ func (m *instance) sendData(ctx context.Context, payload *libsveltostelemetry.Cl
 		return
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("%s/%s", domain, path), bytes.NewBuffer(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, domain, bytes.NewBuffer(data))
 	if err != nil {
 		return
 	}
@@ -161,9 +159,15 @@ func (m *instance) sendData(ctx context.Context, payload *libsveltostelemetry.Cl
 	req.Header.Set("Content-Type", contentTypeJSON)
 	req.Header.Set("User-Agent", "projectsveltos/sveltos-telemetry")
 
-	// Create an HTTP client
-	c := &http.Client{}
-
+	// Create an HTTP client with follow redirects enabled
+	c := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Follow redirect and set body
+			newReq, err := http.NewRequestWithContext(ctx, http.MethodGet, domain, bytes.NewBuffer(data))
+			req.Body = newReq.Body
+			return err
+		},
+	}
 	// Send the request
 	resp, err := c.Do(req)
 	if err != nil {

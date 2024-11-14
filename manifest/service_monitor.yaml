@@ -3,17 +3,17 @@ kind: ServiceMonitor
 metadata:
   labels:
     control-plane: addon-controller
-  name: fm-controller-manager-metrics-monitor
+  name: addon-controller
   namespace: projectsveltos
 spec:
   endpoints:
   - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
     path: /metrics
-    port: https
+    port: metrics
     scheme: https
     tlsConfig:
+      caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
       insecureSkipVerify: true
   selector:
     matchLabels:
       control-plane: addon-controller
-

@@ -8384,6 +8384,21 @@ subjects:
   name: addon-controller
   namespace: projectsveltos
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: addon-controller
+  namespace: projectsveltos
+spec:
+  ports:
+  - name: metrics
+    port: 80
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    control-plane: addon-controller
+  type: ClusterIP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

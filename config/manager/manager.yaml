@@ -3,6 +3,20 @@ kind: Namespace
 metadata:
   name: projectsveltos
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: controller
+spec:
+  selector:
+    control-plane: addon-controller
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8443
+    name: metrics
+  type: ClusterIP  
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

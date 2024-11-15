@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostelemetry "github.com/projectsveltos/libsveltos/lib/telemetry"
@@ -69,9 +70,11 @@ func StartCollecting(ctx context.Context, c client.Client, sveltosVersion string
 	return nil
 }
 
-// Every hour collects telemetry data and send to to Sveltos telemetry server
+// Collects telemetry data and send to to Sveltos telemetry server
 func (m *instance) reportData(ctx context.Context) {
-	ticker := time.NewTicker(time.Hour)
+	// Data are collected 4 times a day
+	const six = 6
+	ticker := time.NewTicker(six * time.Hour)
 	defer ticker.Stop()
 
 	for {
@@ -95,8 +98,10 @@ func (m *instance) retrieveUUID(ctx context.Context) (string, error) {
 
 func (m *instance) collectAndSendData(ctx context.Context) {
 	logger := log.FromContext(ctx)
-
 	logger.V(logs.LogInfo).Info("collecting telemetry data")
+
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
 
 	uuid, err := telemetryInstance.retrieveUUID(ctx)
 	if err != nil {
@@ -140,7 +145,43 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 		}
 	}
 
+	clusterProfiles, profiles, clusterSummaries, err := m.collectConfigurationData(ctx)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Sveltos configuration data: %v", err))
+		return nil, err
+	}
+	data.ClusterProfiles = clusterProfiles
+	data.Profiles = profiles
+	data.ClusterSummaries = clusterSummaries
+
 	return &data, nil
+}
+
+func (m *instance) collectConfigurationData(ctx context.Context) (cpInstances, pInstances, csInstances int, err error) {
+	logger := log.FromContext(ctx)
+
+	var clusterProfiles configv1beta1.ClusterProfileList
+	if err = m.Client.List(ctx, &clusterProfiles); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusterProfiles: %v", err))
+		return
+	}
+	cpInstances = len(clusterProfiles.Items)
+
+	var profiles configv1beta1.ProfileList
+	if err = m.Client.List(ctx, &profiles); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Profiles: %v", err))
+		return
+	}
+	pInstances = len(profiles.Items)
+
+	var clusterSummaries configv1beta1.ClusterSummaryList
+	if err = m.Client.List(ctx, &clusterSummaries); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClusterSummaries: %v", err))
+		return
+	}
+	csInstances = len(clusterSummaries.Items)
+
+	return
 }
 
 func (m *instance) sendData(ctx context.Context, payload *libsveltostelemetry.Cluster) {

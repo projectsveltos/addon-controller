@@ -22,7 +22,9 @@ SHELL = /usr/bin/env bash -o pipefail
 REGISTRY ?= projectsveltos
 IMAGE_NAME ?= addon-controller
 ARCH ?= $(shell go env GOARCH)
-OS ?= $(shell uname -s | tr A-Z a-z)
+
+OS ?= $(shell uname -s)
+OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= main

@@ -46,12 +46,21 @@ var (
 			Buckets:   []float64{1, 10, 30, 60, 120, 180, 240},
 		},
 	)
+
+	clusterSummaryStatusGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "projectsveltos",
+			Name:      "cluster_summary_status",
+			Help:      "Status of ClusterSummary for managed clusters (1=Ready, 0=NotReady)",
+		},
+		[]string{"cluster", "status"},
+	)
 )
 
 //nolint:gochecknoinits // forced pattern, can't workaround
 func init() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(programResourceDurationHistogram, programChartDurationHistogram)
+	metrics.Registry.MustRegister(programResourceDurationHistogram, programChartDurationHistogram, clusterSummaryStatusGauge)
 }
 
 func newResourceHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
@@ -86,6 +95,22 @@ func newResourceHistogram(clusterNamespace, clusterName string, clusterType libs
 	return histogram
 }
 
+func updateClusterSummaryStatus(clusterNamespace, clusterName string, status string, logger logr.Logger) {
+	var value float64
+	if status == "Ready" {
+		value = 1
+	} else {
+		value = 0
+	}
+
+	clusterSummaryStatusGauge.With(prometheus.Labels{
+		"cluster": fmt.Sprintf("%s/%s", clusterNamespace, clusterName),
+		"status":  status,
+	}).Set(value)
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Updated ClusterSummary status for %s/%s: %s", clusterNamespace, clusterName, status))
+}
+
 func newChartHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) prometheus.Histogram {
 
@@ -93,7 +118,7 @@ func newChartHistogram(clusterNamespace, clusterName string, clusterType libsvel
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
-			Name:      "program_resources_time_seconds",
+			Name:      "program_charts_time_seconds",
 			Help:      "Program Helm Charts on a workload cluster duration distribution",
 			Buckets:   []float64{1, 10, 30, 60, 120, 180, 240},
 		},
@@ -142,4 +167,13 @@ func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featu
 			clusterHistogram.Observe(elapsed.Seconds())
 		}
 	}
+}
+
+func monitorClusterSummary(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
+	updateClusterSummaryStatus(
+		clusterSummary.Namespace,
+		clusterSummary.Name,
+		string(clusterSummary.Status),
+		logger,
+	)
 }

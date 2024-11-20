@@ -3,7 +3,7 @@ module github.com/projectsveltos/addon-controller
 go 1.22.7
 
 require (
-	github.com/Masterminds/semver/v3 v3.3.0
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v27.3.1+incompatible

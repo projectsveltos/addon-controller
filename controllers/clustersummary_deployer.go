@@ -156,7 +156,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	logger.V(logs.LogDebug).Info("queueing request to deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, false,
-		genericDeploy, programDuration, options); err != nil {
+		genericDeploy, programDeployMetrics, options); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, err, logger)
 		return err
 	}

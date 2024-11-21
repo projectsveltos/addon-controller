@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://charts.jetstack.io
     repositoryName:   jetstack
     chartName:        jetstack/cert-manager
-    chartVersion:     v1.16.1
+    chartVersion:     v1.16.2
     releaseName:      cert-manager
     releaseNamespace: cert-manager
     helmChartAction:  Install

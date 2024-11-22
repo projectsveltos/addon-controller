@@ -166,7 +166,7 @@ func main() {
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
-	if !disableTelemetry {
+	if shardKey == "" && !disableTelemetry {
 		err = telemetry.StartCollecting(ctx, mgr.GetClient(), version)
 		if err != nil {
 			setupLog.Error(err, "failed starting telemetry client")

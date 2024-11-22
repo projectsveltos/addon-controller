@@ -17,9 +17,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/go-logr/logr"
+	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -173,6 +175,26 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	funcMap := funcmap.SveltosFuncMap()
 	funcMap["getResource"] = func(id string) map[string]interface{} {
 		return objects.MgmtResources[id]
+	}
+	funcMap["copy"] = func(id string) string {
+		u, ok := objects.MgmtResources[id]
+		if !ok {
+			return ""
+		}
+
+		var uObject unstructured.Unstructured
+		uObject.SetUnstructuredContent(u)
+		uObject.SetManagedFields(nil)
+		uObject.SetResourceVersion("")
+		uObject.SetUID("")
+
+		data, err := yaml.Marshal(uObject.UnstructuredContent())
+		if err != nil {
+			// Swallow errors inside of a template.
+			return ""
+		}
+
+		return strings.TrimSuffix(string(data), "\n")
 	}
 
 	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)

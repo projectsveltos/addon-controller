@@ -326,6 +326,8 @@ github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
 github.com/projectsveltos/libsveltos v0.42.0 h1:U+mFYi2K4IPY1rvpg4jAPBqG4PaznUK4huo/xnFk7jc=
 github.com/projectsveltos/libsveltos v0.42.0/go.mod h1:DvifWRZuPtGKi4oGzQzcGe8XBKlzIlx2DcaoukAio+M=
+github.com/projectsveltos/libsveltos v0.42.1 h1:B7c8cF+vhR5AZJT8D4h19PSJfZqWUCR3CKEDUf032JI=
+github.com/projectsveltos/libsveltos v0.42.1/go.mod h1:XPev2TKsMxVG5LwhbbMkcCs/U0730ZMmOXIvu2HEtWo=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v1.0.0/go.mod h1:db9x61etRT2tGnBNRi70OPL5FsnadC4Ky3P0J6CfImo=
 github.com/prometheus/client_golang v1.1.0/go.mod h1:I1FGZT9+L76gKKOs5djB6ezCbFQP1xR9D75/vuwEF3g=
@@ -561,6 +563,8 @@ k8s.io/kube-openapi v0.0.0-20241009091222-67ed5848f094 h1:MErs8YA0abvOqJ8gIupA1T
 k8s.io/kube-openapi v0.0.0-20241009091222-67ed5848f094/go.mod h1:7ioBJr1A6igWjsR2fxq2EZ0mlMwYLejazSIc2bzMp2U=
 k8s.io/kubectl v0.31.2 h1:gTxbvRkMBwvTSAlobiTVqsH6S8Aa1aGyBcu5xYLsn8M=
 k8s.io/kubectl v0.31.2/go.mod h1:EyASYVU6PY+032RrTh5ahtSOMgoDRIux9V1JLKtG5xM=
+k8s.io/kubectl v0.31.3 h1:3r111pCjPsvnR98oLLxDMwAeM6OPGmPty6gSKaLTQes=
+k8s.io/kubectl v0.31.3/go.mod h1:lhMECDCbJN8He12qcKqs2QfmVo9Pue30geovBVpH5fs=
 k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078 h1:jGnCPejIetjiy2gqaJ5V0NLwTpF4wbQ6cZIItJCSHno=
 k8s.io/utils v0.0.0-20241104163129-6fe5fd82f078/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
 oras.land/oras-go v1.2.6 h1:z8cmxQXBU8yZ4mkytWqXfo6tZcamPwjsuxYU81xJ8Lk=

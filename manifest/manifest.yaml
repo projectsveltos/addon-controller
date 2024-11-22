@@ -8424,7 +8424,7 @@ spec:
         - --report-mode=0
         - --shard-key=
         - --v=5
-        - --version=v0.42.0
+        - --version=v0.42.1
         command:
         - /manager
         env:
@@ -8436,7 +8436,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/addon-controller:v0.42.0
+        image: docker.io/projectsveltos/addon-controller:v0.42.1
         livenessProbe:
           failureThreshold: 3
           httpGet:

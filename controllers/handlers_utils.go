@@ -358,6 +358,21 @@ func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config)
 	return nil
 }
 
+// isResourceNamespaceValid validates the resource namespace.
+// A Profile, when deploying resources locally, i.e, to the management cluster, can
+// only deploy resources in the same namespace
+func isResourceNamespaceValid(profile client.Object, policy *unstructured.Unstructured,
+	deployingToMgmtCluster bool) bool {
+
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
+		if deployingToMgmtCluster && policy.GetNamespace() != profile.GetNamespace() {
+			return false
+		}
+	}
+
+	return true
+}
+
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
@@ -372,9 +387,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
-	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
-		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
@@ -398,6 +410,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		err := adjustNamespace(policy, destConfig)
 		if err != nil {
 			return nil, err
+		}
+
+		if !isResourceNamespaceValid(profile, policy, deployingToMgmtCluster) {
+			return nil, fmt.Errorf("profile can only deploy resource in same namespace in the management cluster")
 		}
 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
@@ -517,7 +533,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 			profileName = types.NamespacedName{Name: profileOwners[i].Name}
 		case configv1beta1.ProfileKind:
 			profileKind = configv1beta1.ProfileKind
-			profileName = *getProfileNameFromOwnerReferenceName(profileOwners[i].Name)
+			profileName = types.NamespacedName{Namespace: clusterSummary.Namespace, Name: profileOwners[i].Name}
 		default:
 			continue
 		}
@@ -1065,9 +1081,6 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
-	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
-		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	undeployed := make([]configv1beta1.ResourceReport, 0)

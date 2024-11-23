@@ -55,12 +55,21 @@ var (
 		},
 		[]string{"cluster_type", "cluster_namespace", "cluster_name", "feature"},
 	)
+
+	driftCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "projectsveltos",
+			Name:      "total_drifts",
+			Help:      "Total number of drifts for a given cluster indexed via type, namespace/name and feature id",
+		},
+		[]string{"cluster_type", "cluster_namespace", "cluster_name", "feature"},
+	)
 )
 
 //nolint:gochecknoinits // forced pattern, can't workaround
 func init() {
 	// Register custom metrics with the global prometheus registry
-	metrics.Registry.MustRegister(programResourceDurationHistogram, programChartDurationHistogram, reconciliationCounter)
+	metrics.Registry.MustRegister(programResourceDurationHistogram, programChartDurationHistogram, reconciliationCounter, driftCounter)
 }
 
 func newResourceHistogram(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
@@ -169,5 +178,17 @@ func trackReconciliation(clusterNamespace, clusterName, featureID string, cluste
 	}).Inc()
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking reconciliation for %s %s/%s %s",
+		clusterType, clusterNamespace, clusterName, featureID))
+}
+
+func trackDrifts(clusterNamespace, clusterName, featureID, clusterType string, logger logr.Logger) {
+	driftCounter.With(prometheus.Labels{
+		"cluster_type":      clusterType,
+		"cluster_namespace": clusterNamespace,
+		"cluster_name":      clusterName,
+		"feature":           featureID,
+	}).Inc()
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking drifts for %s %s/%s %s",
 		clusterType, clusterNamespace, clusterName, featureID))
 }

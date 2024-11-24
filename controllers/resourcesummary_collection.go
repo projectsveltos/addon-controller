@@ -199,18 +199,24 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy helm")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					trackDrifts(clusterSummaryNamespace, clusterSummaryName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
+						string(clusterSummary.Spec.ClusterType), logger)
 				}
 			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
 				if rs.Status.ResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					trackDrifts(clusterSummaryNamespace, clusterSummaryName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
+						string(clusterSummary.Spec.ClusterType), logger)
 				}
 			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
 				if rs.Status.KustomizeResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					trackDrifts(clusterSummaryNamespace, clusterSummaryName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
+						string(clusterSummary.Spec.ClusterType), logger)
 				}
 			}
 		}

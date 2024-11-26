@@ -27,7 +27,7 @@ spec:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/gateway
-    chartVersion:     1.24.0
+    chartVersion:     1.24.1
     releaseName:      istio-ingress
     releaseNamespace: istio-system
     helmChartAction:  Install

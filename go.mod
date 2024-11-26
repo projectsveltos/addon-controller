@@ -14,7 +14,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/gofuzz v1.2.0
 	github.com/onsi/ginkgo/v2 v2.22.0
-	github.com/onsi/gomega v1.35.1
+	github.com/onsi/gomega v1.36.0
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.42.1
 	github.com/prometheus/client_golang v1.20.5

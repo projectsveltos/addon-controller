@@ -154,7 +154,7 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	return result, nil
 }
 
-func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client, //nolint: funlen // adding few closures
+func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client, //nolint: funlen,maintidx // adding few closures
 	clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
@@ -174,11 +174,20 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 
 	funcMap := funcmap.SveltosFuncMap()
 	funcMap["getResource"] = func(id string) map[string]interface{} {
-		return objects.MgmtResources[id]
+		u, ok := objects.MgmtResources[id]
+		if !ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("resource %s does not exist", id))
+			return nil
+		}
+
+		uObject := resetFields(u)
+
+		return uObject.Object
 	}
 	funcMap["copy"] = func(id string) string {
 		u, ok := objects.MgmtResources[id]
 		if !ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("resource %s does not exist", id))
 			return ""
 		}
 
@@ -196,12 +205,19 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	funcMap["getField"] = func(id string, fields string) interface{} {
 		u, ok := objects.MgmtResources[id]
 		if !ok {
-			// Swallow errors inside of a template.
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("resource %s does not exist", id))
 			return ""
 		}
 
 		v, isPresent, err := unstructured.NestedFieldCopy(u, strings.Split(fields, ".")...)
-		if err != nil || !isPresent {
+		if err != nil {
+			// Swallow errors inside of a template.
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed with err %v", err))
+			return ""
+		}
+
+		if !isPresent {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("field %s does not exist", fields))
 			return ""
 		}
 
@@ -210,14 +226,14 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	funcMap["removeField"] = func(id, fields string) string {
 		u, ok := objects.MgmtResources[id]
 		if !ok {
-			// Swallow errors inside of a template.
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("resource %s does not exist", id))
 			return ""
 		}
 
 		unstructured.RemoveNestedField(u, strings.Split(fields, ".")...)
 		uObject := resetFields(u)
 
-		data, err := yaml.Marshal(uObject)
+		data, err := yaml.Marshal(uObject.UnstructuredContent())
 		if err != nil {
 			// Swallow errors inside of a template.
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed with err %v", err))
@@ -229,7 +245,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 	funcMap["setField"] = func(id, fields string, value any) string {
 		u, ok := objects.MgmtResources[id]
 		if !ok {
-			// Swallow errors inside of a template.
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("resource %s does not exist", id))
 			return ""
 		}
 

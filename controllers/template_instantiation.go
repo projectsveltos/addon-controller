@@ -34,8 +34,8 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 type currentClusterObjects struct {
@@ -59,7 +59,7 @@ func fetchResource(ctx context.Context, config *rest.Config, namespace, name, ap
 		Kind:    kind,
 	}
 	var dr dynamic.ResourceInterface
-	dr, err = utils.GetDynamicResourceInterface(config, gvk, namespace)
+	dr, err = k8s_utils.GetDynamicResourceInterface(config, gvk, namespace)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch %s: %v", kind, err))
 		return nil, err

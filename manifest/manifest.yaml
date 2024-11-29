@@ -4518,6 +4518,10 @@ spec:
     subresources:
       status: {}
   - additionalPrinterColumns:
+    - description: Time duration since creation of ClusterSummary
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - description: Indicates whether HelmCharts are all provisioned
       jsonPath: .status.featureSummaries[?(@.featureID=="Helm")].status
       name: HelmCharts

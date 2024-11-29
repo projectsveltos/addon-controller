@@ -35,7 +35,7 @@ import (
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 var _ = Describe("Template instantiation", func() {
@@ -181,7 +181,7 @@ var _ = Describe("Template instantiation", func() {
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("namespace: %s", namespace)))
 
-		policy, err := utils.GetUnstructured([]byte(result))
+		policy, err := k8s_utils.GetUnstructured([]byte(result))
 		Expect(err).To(BeNil())
 		Expect(policy.GetNamespace()).To(Equal(namespace))
 	})
@@ -370,7 +370,7 @@ var _ = Describe("Template instantiation", func() {
 		Expect(*modifiedDepl.Spec.Replicas).To(Equal(int32(5)))
 		Expect(modifiedDepl.Spec.Paused).To(BeTrue())
 
-		policy, err := utils.GetUnstructured([]byte(result))
+		policy, err := k8s_utils.GetUnstructured([]byte(result))
 		Expect(err).To(BeNil())
 		Expect(policy.GetNamespace()).To(Equal(namespace))
 	})

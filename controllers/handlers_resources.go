@@ -453,7 +453,6 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		} else if featureID == configv1beta1.FeatureKustomize {
 			clusterReport.Status.KustomizeResourceReports = resourceReports
 		}
-
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err

@@ -816,24 +816,16 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 func cleanClusterReports(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) error {
 	listOptions := []client.ListOption{}
 
+	if profileScope.IsDryRunSync() {
+		return nil
+	}
+
 	if profileScope.GetKind() == configv1beta1.ClusterProfileKind {
 		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
 			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
 			client.InNamespace(profileScope.Namespace()))
-	}
-
-	matchingClusterMap := make(map[string]bool)
-
-	info := func(namespace, clusterReportName string) string {
-		return fmt.Sprintf("%s--%s", namespace, clusterReportName)
-	}
-
-	for i := range profileScope.GetStatus().MatchingClusterRefs {
-		ref := &profileScope.GetStatus().MatchingClusterRefs[i]
-		matchingClusterMap[info(ref.Namespace, getClusterReportName(profileScope.GetKind(),
-			profileScope.Name(), ref.Name, clusterproxy.GetClusterType(ref)))] = true
 	}
 
 	clusterReportList := &configv1beta1.ClusterReportList{}
@@ -844,10 +836,6 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 
 	for i := range clusterReportList.Items {
 		cr := &clusterReportList.Items[i]
-
-		if _, ok := matchingClusterMap[info(cr.Namespace, cr.Name)]; ok {
-			continue
-		}
 
 		err = c.Delete(ctx, cr)
 		if err != nil {
@@ -1067,12 +1055,6 @@ func reconcileNormalCommon(ctx context.Context, c client.Client, profileScope *s
 	// For Sveltos/Cluster not matching, removes ClusterProfile/Profile as OwnerReference
 	// from corresponding ClusterConfiguration
 	if err := cleanClusterConfigurations(ctx, c, profileScope); err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
-		return err
-	}
-
-	// For Sveltos/Cluster not matching, remove ClusterReports
-	if err := cleanClusterReports(ctx, c, profileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterConfigurations")
 		return err
 	}

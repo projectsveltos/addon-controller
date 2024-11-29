@@ -67,10 +67,10 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 var (
@@ -1186,7 +1186,7 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(destConfig, apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(destConfig, apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"), "")
 	if err != nil {
 		return err
 	}
@@ -1933,7 +1933,7 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 	resources := make([]*unstructured.Unstructured, 0, len(elements))
 
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 			return nil, err
@@ -2350,7 +2350,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		}
 
 		var dr dynamic.ResourceInterface
-		dr, err = utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), namespace)
+		dr, err = k8s_utils.GetDynamicResourceInterface(config, r.GroupVersionKind(), namespace)
 		if err != nil {
 			return err
 		}
@@ -2358,7 +2358,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		addExtraLabels(r, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
 		addExtraAnnotations(r, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
-		err = updateResource(ctx, dr, clusterSummary, r, []string{}, logger)
+		_, err = updateResource(ctx, dr, clusterSummary, r, []string{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
 				r.GetKind(), r.GetNamespace(), r.GetName(), err))

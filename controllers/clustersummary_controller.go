@@ -64,6 +64,9 @@ const (
 	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
 	// to ready after or workload features (for instance ingress or reporter) have failed
 	normalRequeueAfter = 10 * time.Second
+
+	// dryRunRequeueAfter is how long to wait before reconciling a ClusterSummary in DryRun mode
+	dryRunRequeueAfter = 20 * time.Second
 )
 
 type ReportMode int
@@ -383,6 +386,13 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	}
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary success")
+
+	if clusterSummaryScope.IsDryRunSync() {
+		r.resetFeatureStatusToProvisioning(clusterSummaryScope)
+		// we need to keep retrying in DryRun ClusterSummaries
+		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -1317,4 +1327,15 @@ func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *
 
 	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(configv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
+}
+
+// resetFeatureStatusToProvisioning reset status from Provisioned to Provisioning
+func (r *ClusterSummaryReconciler) resetFeatureStatusToProvisioning(clusterSummaryScope *scope.ClusterSummaryScope) {
+	status := configv1beta1.FeatureStatusProvisioning
+	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
+		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
+		if fs.Status == configv1beta1.FeatureStatusProvisioned {
+			fs.Status = status
+		}
+	}
 }

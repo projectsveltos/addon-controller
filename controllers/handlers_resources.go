@@ -124,10 +124,6 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return &configv1beta1.DryRunReconciliationError{}
-	}
-
 	if deployError != nil {
 		return deployError
 	}

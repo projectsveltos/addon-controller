@@ -45,7 +45,7 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 const (
@@ -615,15 +615,16 @@ var _ = Describe("HandlersUtils", func() {
 
 	It("updateResource does not reset paths in DriftExclusions", func() {
 		depl := fmt.Sprintf(deplTemplate, namespace)
-		u, err := utils.GetUnstructured([]byte(depl))
+		u, err := k8s_utils.GetUnstructured([]byte(depl))
 		Expect(err).To(BeNil())
 
-		dr, err := utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
 		Expect(err).To(BeNil())
 
 		// following will successfully create deployment
-		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
 
 		currentDeployment := &appsv1.Deployment{}
 		Eventually(func() bool {
@@ -663,8 +664,9 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		// New deploy will not override replicas
-		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
 
 		Consistently(func() bool {
 			err := testEnv.Get(context.TODO(),
@@ -677,15 +679,16 @@ var _ = Describe("HandlersUtils", func() {
 
 	It("updateResource: subresources and driftExclusions", func() {
 		depl := fmt.Sprintf(deplTemplate, namespace)
-		u, err := utils.GetUnstructured([]byte(depl))
+		u, err := k8s_utils.GetUnstructured([]byte(depl))
 		Expect(err).To(BeNil())
 
-		dr, err := utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
 		Expect(err).To(BeNil())
 
 		// following will successfully create deployment
-		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
 
 		currentDeployment := &appsv1.Deployment{}
 		Eventually(func() bool {
@@ -729,12 +732,13 @@ var _ = Describe("HandlersUtils", func() {
 		unavailableReplicas := 2
 		depl = fmt.Sprintf(deplTemplateWithStatus, namespace, newReplicas,
 			unavailableReplicas, readyReplicas, availableReplicas)
-		u, err = utils.GetUnstructured([]byte(depl))
+		u, err = k8s_utils.GetUnstructured([]byte(depl))
 		Expect(err).To(BeNil())
 
 		// New deploy will not override replicas
-		Expect(controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, []string{"status"},
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, []string{"status"},
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
 
 		Consistently(func() bool {
 			err := testEnv.Get(context.TODO(),
@@ -809,7 +813,7 @@ var _ = Describe("HandlersUtils", func() {
 		elements := strings.Split(services, "---")
 		for i := range elements {
 			var policy *unstructured.Unstructured
-			policy, err = utils.GetUnstructured([]byte(elements[i]))
+			policy, err = k8s_utils.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
 			var policyHash string
 			policyHash, err = controllers.ComputePolicyHash(policy)
@@ -839,7 +843,7 @@ var _ = Describe("HandlersUtils", func() {
 		newContent := ""
 		for i := range elements {
 			var policy *unstructured.Unstructured
-			policy, err = utils.GetUnstructured([]byte(elements[i]))
+			policy, err = k8s_utils.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
 			Expect(addTypeInformationToObject(scheme, policy)).To(Succeed())
 			labels := policy.GetLabels()
@@ -969,7 +973,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Create ClusterRole policy in the cluster, pretending it was created because of this ConfigMap and because
 		// of this ClusterSummary (owner is ClusterProfile owning the ClusterSummary)
-		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
+		clusterRole, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
 			deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
@@ -1291,7 +1295,7 @@ kind: Deployment
 metadata:
   name: test`
 
-		u, err := utils.GetUnstructured([]byte(deployment))
+		u, err := k8s_utils.GetUnstructured([]byte(deployment))
 		Expect(err).To(BeNil())
 
 		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())
@@ -1304,7 +1308,7 @@ metadata:
   name: view
   namespace: cert-manager`
 
-		u, err = utils.GetUnstructured([]byte(clusterIssuer))
+		u, err = k8s_utils.GetUnstructured([]byte(clusterIssuer))
 		Expect(err).To(BeNil())
 
 		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())

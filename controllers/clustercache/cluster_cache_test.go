@@ -86,7 +86,6 @@ var _ = Describe("Clustercache", func() {
 			Expect(cacheMgr.GetConfigFromMap(clusterObj)).To(BeNil())
 			Expect(cacheMgr.GetSecretForCluster(clusterObj)).To(BeNil())
 			Expect(cacheMgr.GetClusterFromSecret(secretObj)).To(BeNil())
-
 		})
 
 	It("RemoveSecret removes entries for all clusters using the modified secret", func() {
@@ -136,9 +135,12 @@ func createClusterResources(cluster *libsveltosv1beta1.SveltosCluster) *corev1.S
 	}
 
 	Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
 	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 
+	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 	return secret
 }

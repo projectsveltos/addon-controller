@@ -124,10 +124,6 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return &configv1beta1.DryRunReconciliationError{}
-	}
-
 	if deployError != nil {
 		return deployError
 	}
@@ -453,7 +449,6 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		} else if featureID == configv1beta1.FeatureKustomize {
 			clusterReport.Status.KustomizeResourceReports = resourceReports
 		}
-
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err

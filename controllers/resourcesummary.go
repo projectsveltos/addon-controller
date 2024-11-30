@@ -37,10 +37,10 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -149,14 +149,14 @@ func deployDriftDetectionCRDs(ctx context.Context, remoteRestConfig *rest.Config
 func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	u, err := utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
+	u, err := k8s_utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get DebuggingConfiguration CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, u.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, u.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -178,14 +178,14 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 func deployResourceSummaryCRD(ctx context.Context, remoteRestConfig *rest.Config,
 	logger logr.Logger) error {
 
-	rsCRD, err := utils.GetUnstructured(crd.GetResourceSummaryCRDYAML())
+	rsCRD, err := k8s_utils.GetUnstructured(crd.GetResourceSummaryCRDYAML())
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to get ResourceSummary CRD unstructured: %v", err))
 		return err
 	}
 
-	dr, err := utils.GetDynamicResourceInterface(remoteRestConfig, rsCRD.GroupVersionKind(), "")
+	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, rsCRD.GroupVersionKind(), "")
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 		return err
@@ -272,7 +272,7 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 		return err
 	}
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse drift detection manager yaml: %v", err))
 			return err
@@ -318,7 +318,7 @@ func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig
 
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
-		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err
@@ -586,13 +586,13 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 		return err
 	}
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse drift detection manager yaml: %v", err))
 			return err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err

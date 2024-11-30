@@ -53,9 +53,9 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -663,7 +663,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		}
 
 		var u *unstructured.Unstructured
-		u, err = utils.GetUnstructured(yaml)
+		u, err = k8s_utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, nil, err

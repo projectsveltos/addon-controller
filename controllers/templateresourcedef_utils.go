@@ -19,16 +19,16 @@ package controllers
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"text/template"
 
-	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 // The TemplateResource namespace can be specified or it will inherit the cluster namespace
@@ -78,7 +78,7 @@ func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 			Cluster:          u.UnstructuredContent(),
 			ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
 			ClusterName:      clusterSummary.Spec.ClusterName}); err != nil {
-		return "", errors.Wrapf(err, "error executing template")
+		return "", fmt.Errorf("error executing template: %w", err)
 	}
 	return buffer.String(), nil
 }
@@ -104,7 +104,7 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 			return nil, err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(restConfig, ref.Resource.GroupVersionKind(), ref.Resource.Namespace)
+		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, ref.Resource.GroupVersionKind(), ref.Resource.Namespace)
 		if err != nil {
 			return nil, err
 		}

@@ -7,7 +7,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: clusterconfigurations.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -774,7 +774,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: clusterprofiles.config.projectsveltos.io
 spec:
   conversion:
@@ -988,6 +988,11 @@ spec:
                           description: |-
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
+                          type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
                           type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
@@ -2002,6 +2007,14 @@ spec:
                               description: Create the release namespace if not present.
                                 Defaults to true
                               type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on install
+                                Default to false
+                              type: boolean
                             replace:
                               default: true
                               description: Replaces if set indicates to replace an
@@ -2019,6 +2032,11 @@ spec:
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
                           type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
+                          type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
@@ -2034,6 +2052,14 @@ spec:
                               - foreground
                               - background
                               type: string
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on uninstall
+                                Default to false
+                              type: boolean
                             keepHistory:
                               description: |-
                                 When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -2050,6 +2076,14 @@ spec:
                               description: CleanupOnFail will, if true, cause the
                                 upgrade to delete newly-created resources on a failed
                                 update.
+                              type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on upgrade
+                                Default to false
                               type: boolean
                             force:
                               default: false
@@ -2900,7 +2934,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: clusterreports.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -3541,7 +3575,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: clustersummaries.config.projectsveltos.io
 spec:
   conversion:
@@ -3772,6 +3806,11 @@ spec:
                               description: |-
                                 SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                                 By default, CRDs are installed if not already present.
+                              type: boolean
+                            skipSchemaValidation:
+                              default: false
+                              description: SkipSchemaValidation determines if JSON
+                                schema validation is disabled.
                               type: boolean
                             timeout:
                               description: time to wait for any individual Kubernetes
@@ -4479,6 +4518,10 @@ spec:
     subresources:
       status: {}
   - additionalPrinterColumns:
+    - description: Time duration since creation of ClusterSummary
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
     - description: Indicates whether HelmCharts are all provisioned
       jsonPath: .status.featureSummaries[?(@.featureID=="Helm")].status
       name: HelmCharts
@@ -4792,6 +4835,14 @@ spec:
                                   description: Create the release namespace if not
                                     present. Defaults to true
                                   type: boolean
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on install
+                                    Default to false
+                                  type: boolean
                                 replace:
                                   default: true
                                   description: Replaces if set indicates to replace
@@ -4809,6 +4860,11 @@ spec:
                                 SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                                 By default, CRDs are installed if not already present.
                               type: boolean
+                            skipSchemaValidation:
+                              default: false
+                              description: SkipSchemaValidation determines if JSON
+                                schema validation is disabled.
+                              type: boolean
                             timeout:
                               description: time to wait for any individual Kubernetes
                                 operation (like Jobs for hooks) (default 5m0s)
@@ -4824,6 +4880,14 @@ spec:
                                   - foreground
                                   - background
                                   type: string
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on uninstall
+                                    Default to false
+                                  type: boolean
                                 keepHistory:
                                   description: |-
                                     When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -4840,6 +4904,14 @@ spec:
                                   description: CleanupOnFail will, if true, cause
                                     the upgrade to delete newly-created resources
                                     on a failed update.
+                                  type: boolean
+                                disableHooks:
+                                  default: false
+                                  description: |-
+                                    prevent hooks from running during install. If set to true, overrides
+                                    DisableHooks in HelmOptions. Use this one when you want to selective
+                                    disable hooks on upgrade
+                                    Default to false
                                   type: boolean
                                 force:
                                   default: false
@@ -5664,7 +5736,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     cert-manager.io/inject-ca-from: projectsveltos/projectsveltos-serving-cert
-    controller-gen.kubebuilder.io/version: v0.16.3
+    controller-gen.kubebuilder.io/version: v0.16.5
   name: profiles.config.projectsveltos.io
 spec:
   conversion:
@@ -5878,6 +5950,11 @@ spec:
                           description: |-
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
+                          type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
                           type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
@@ -6892,6 +6969,14 @@ spec:
                               description: Create the release namespace if not present.
                                 Defaults to true
                               type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on install
+                                Default to false
+                              type: boolean
                             replace:
                               default: true
                               description: Replaces if set indicates to replace an
@@ -6909,6 +6994,11 @@ spec:
                             SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
                             By default, CRDs are installed if not already present.
                           type: boolean
+                        skipSchemaValidation:
+                          default: false
+                          description: SkipSchemaValidation determines if JSON schema
+                            validation is disabled.
+                          type: boolean
                         timeout:
                           description: time to wait for any individual Kubernetes
                             operation (like Jobs for hooks) (default 5m0s)
@@ -6924,6 +7014,14 @@ spec:
                               - foreground
                               - background
                               type: string
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on uninstall
+                                Default to false
+                              type: boolean
                             keepHistory:
                               description: |-
                                 When uninstall a chart with this flag, Helm removes the resources associated with the chart,
@@ -6940,6 +7038,14 @@ spec:
                               description: CleanupOnFail will, if true, cause the
                                 upgrade to delete newly-created resources on a failed
                                 update.
+                              type: boolean
+                            disableHooks:
+                              default: false
+                              description: |-
+                                prevent hooks from running during install. If set to true, overrides
+                                DisableHooks in HelmOptions. Use this one when you want to selective
+                                disable hooks on upgrade
+                                Default to false
                               type: boolean
                             force:
                               default: false
@@ -8282,6 +8388,21 @@ subjects:
   name: addon-controller
   namespace: projectsveltos
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: addon-controller
+  namespace: projectsveltos
+spec:
+  ports:
+  - name: metrics
+    port: 80
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    control-plane: addon-controller
+  type: ClusterIP
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8310,6 +8431,15 @@ spec:
         - --version=main
         command:
         - /manager
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
         image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
@@ -8343,6 +8473,8 @@ spec:
           capabilities:
             drop:
             - ALL
+          seccompProfile:
+            type: RuntimeDefault
         volumeMounts:
         - mountPath: /tmp
           name: tmp

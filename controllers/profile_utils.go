@@ -27,7 +27,6 @@ import (
 	"github.com/dariubs/percent"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -581,7 +580,7 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 		}
 
 		// if maxUpdate is set no more than maxUpdate clusters can be updated in parallel by ClusterProfile
-		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && int32(updatingClusters.Len()) >= maxUpdate {
+		if maxUpdate != 0 && !updatingClusters.Has(&cluster) && updatingClusters.Len() >= int(maxUpdate) {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("Already %d being updating", updatingClusters.Len()))
 			skippedUpdate = true
 			continue
@@ -741,7 +740,7 @@ func updateClusterReports(ctx context.Context, c client.Client, profileScope *sc
 		}
 	} else {
 		// delete all ClusterReports created by this ClusterProfile/Profile instance
-		err := cleanClusterReports(ctx, c, profileScope.Profile)
+		err := cleanClusterReports(ctx, c, profileScope)
 		if err != nil {
 			profileScope.Logger.Error(err, "failed to delete ClusterReports")
 			return err
@@ -756,7 +755,7 @@ func createClusterReports(ctx context.Context, c client.Client, profileScope *sc
 	for i := range profileScope.GetStatus().MatchingClusterRefs {
 		cluster := profileScope.GetStatus().MatchingClusterRefs[i]
 
-		// Create ClusterConfiguration if not already existing.
+		// Create ClusterReport if not already existing.
 		err := createClusterReport(ctx, c, profileScope.Profile, &cluster)
 		if err != nil {
 			return err
@@ -772,15 +771,29 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 
 	clusterType := clusterproxy.GetClusterType(cluster)
 
+	lbls := map[string]string{
+		configv1beta1.ClusterNameLabel: cluster.Name,
+		configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
+	}
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
+		lbls[ClusterProfileLabelName] = profile.GetName()
+	} else {
+		lbls[ProfileLabelName] = profile.GetName()
+	}
+
 	clusterReport := &configv1beta1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
 			Name: getClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
 				cluster.Name, clusterType),
-			Labels: map[string]string{
-				ClusterProfileLabelName:        profile.GetName(),
-				configv1beta1.ClusterNameLabel: cluster.Name,
-				configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
+			Labels: lbls,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Kind:       profile.GetObjectKind().GroupVersionKind().Kind,
+					UID:        profile.GetUID(),
+					APIVersion: configv1beta1.GroupVersion.String(),
+					Name:       profile.GetName(),
+				},
 			},
 		},
 		Spec: configv1beta1.ClusterReportSpec{
@@ -800,15 +813,19 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 }
 
 // cleanClusterReports deletes ClusterReports created by this ClusterProfile/Profile instance.
-func cleanClusterReports(ctx context.Context, c client.Client, profile client.Object) error {
+func cleanClusterReports(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) error {
 	listOptions := []client.ListOption{}
 
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profile.GetName()})
+	if profileScope.IsDryRunSync() {
+		return nil
+	}
+
+	if profileScope.GetKind() == configv1beta1.ClusterProfileKind {
+		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profile.GetName()},
-			client.InNamespace(profile.GetNamespace()))
+			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.InNamespace(profileScope.Namespace()))
 	}
 
 	clusterReportList := &configv1beta1.ClusterReportList{}
@@ -819,6 +836,7 @@ func cleanClusterReports(ctx context.Context, c client.Client, profile client.Ob
 
 	for i := range clusterReportList.Items {
 		cr := &clusterReportList.Items[i]
+
 		err = c.Delete(ctx, cr)
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -853,7 +871,7 @@ func reviseUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope) {
 	}
 
 	updatedClusters := &libsveltosset.Set{}
-	currentUpdatedClusters := make([]corev1.ObjectReference, 0)
+	currentUpdatedClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatedClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatedClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatedClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {
@@ -865,7 +883,7 @@ func reviseUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope) {
 	profileScope.GetStatus().UpdatedClusters.Clusters = currentUpdatedClusters
 
 	updatingClusters := &libsveltosset.Set{}
-	currentUpdatingClusters := make([]corev1.ObjectReference, 0)
+	currentUpdatingClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatingClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatingClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {
@@ -964,11 +982,7 @@ func addFinalizer(ctx context.Context, profileScope *scope.ProfileScope, finaliz
 	controllerutil.AddFinalizer(profileScope.Profile, finalizer)
 	if err := profileScope.PatchObject(ctx); err != nil {
 		profileScope.Error(err, "Failed to add finalizer")
-		return errors.Wrapf(
-			err,
-			"Failed to add finalizer for %s",
-			profileScope.Name(),
-		)
+		return fmt.Errorf("failed to add finalizer for %s: %w", profileScope.Name(), err)
 	}
 	return nil
 }
@@ -995,7 +1009,7 @@ func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *s
 	}
 
 	profile := profileScope.Profile
-	if err := cleanClusterReports(ctx, c, profile); err != nil {
+	if err := cleanClusterReports(ctx, c, profileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterReports")
 		return err
 	}

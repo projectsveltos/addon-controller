@@ -261,11 +261,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.HelmInstallOptions)(nil), (*HelmInstallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(a.(*v1beta1.HelmInstallOptions), b.(*HelmInstallOptions), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*HelmOptions)(nil), (*v1beta1.HelmOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(a.(*HelmOptions), b.(*v1beta1.HelmOptions), scope)
 	}); err != nil {
@@ -281,18 +276,8 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.HelmUninstallOptions)(nil), (*HelmUninstallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(a.(*v1beta1.HelmUninstallOptions), b.(*HelmUninstallOptions), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*HelmUpgradeOptions)(nil), (*v1beta1.HelmUpgradeOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_HelmUpgradeOptions_To_v1beta1_HelmUpgradeOptions(a.(*HelmUpgradeOptions), b.(*v1beta1.HelmUpgradeOptions), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*v1beta1.HelmUpgradeOptions)(nil), (*HelmUpgradeOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(a.(*v1beta1.HelmUpgradeOptions), b.(*HelmUpgradeOptions), scope)
 	}); err != nil {
 		return err
 	}
@@ -423,6 +408,21 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*v1beta1.HelmChart)(nil), (*HelmChart)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta1_HelmChart_To_v1alpha1_HelmChart(a.(*v1beta1.HelmChart), b.(*HelmChart), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.HelmInstallOptions)(nil), (*HelmInstallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(a.(*v1beta1.HelmInstallOptions), b.(*HelmInstallOptions), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.HelmUninstallOptions)(nil), (*HelmUninstallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(a.(*v1beta1.HelmUninstallOptions), b.(*HelmUninstallOptions), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1beta1.HelmUpgradeOptions)(nil), (*HelmUpgradeOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(a.(*v1beta1.HelmUpgradeOptions), b.(*HelmUpgradeOptions), scope)
 	}); err != nil {
 		return err
 	}
@@ -990,7 +990,15 @@ func autoConvert_v1alpha1_HelmChart_To_v1beta1_HelmChart(in *HelmChart, out *v1b
 	out.Values = in.Values
 	out.ValuesFrom = *(*[]v1beta1.ValueFrom)(unsafe.Pointer(&in.ValuesFrom))
 	out.HelmChartAction = v1beta1.HelmChartAction(in.HelmChartAction)
-	out.Options = (*v1beta1.HelmOptions)(unsafe.Pointer(in.Options))
+	if in.Options != nil {
+		in, out := &in.Options, &out.Options
+		*out = new(v1beta1.HelmOptions)
+		if err := Convert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.Options = nil
+	}
 	return nil
 }
 
@@ -1009,7 +1017,15 @@ func autoConvert_v1beta1_HelmChart_To_v1alpha1_HelmChart(in *v1beta1.HelmChart, 
 	out.Values = in.Values
 	out.ValuesFrom = *(*[]ValueFrom)(unsafe.Pointer(&in.ValuesFrom))
 	out.HelmChartAction = HelmChartAction(in.HelmChartAction)
-	out.Options = (*HelmOptions)(unsafe.Pointer(in.Options))
+	if in.Options != nil {
+		in, out := &in.Options, &out.Options
+		*out = new(HelmOptions)
+		if err := Convert_v1beta1_HelmOptions_To_v1alpha1_HelmOptions(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.Options = nil
+	}
 	// WARNING: in.RegistryCredentialsConfig requires manual conversion: does not exist in peer-type
 	return nil
 }
@@ -1056,16 +1072,13 @@ func Convert_v1alpha1_HelmInstallOptions_To_v1beta1_HelmInstallOptions(in *HelmI
 func autoConvert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(in *v1beta1.HelmInstallOptions, out *HelmInstallOptions, s conversion.Scope) error {
 	out.CreateNamespace = in.CreateNamespace
 	out.Replace = in.Replace
+	// WARNING: in.DisableHooks requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions is an autogenerated conversion function.
-func Convert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(in *v1beta1.HelmInstallOptions, out *HelmInstallOptions, s conversion.Scope) error {
-	return autoConvert_v1beta1_HelmInstallOptions_To_v1alpha1_HelmInstallOptions(in, out, s)
 }
 
 func autoConvert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(in *HelmOptions, out *v1beta1.HelmOptions, s conversion.Scope) error {
 	out.SkipCRDs = in.SkipCRDs
+	out.SkipSchemaValidation = in.SkipSchemaValidation
 	out.Wait = in.Wait
 	out.WaitForJobs = in.WaitForJobs
 	out.Timeout = (*v1.Duration)(unsafe.Pointer(in.Timeout))
@@ -1095,6 +1108,7 @@ func Convert_v1alpha1_HelmOptions_To_v1beta1_HelmOptions(in *HelmOptions, out *v
 
 func autoConvert_v1beta1_HelmOptions_To_v1alpha1_HelmOptions(in *v1beta1.HelmOptions, out *HelmOptions, s conversion.Scope) error {
 	out.SkipCRDs = in.SkipCRDs
+	out.SkipSchemaValidation = in.SkipSchemaValidation
 	out.Wait = in.Wait
 	out.WaitForJobs = in.WaitForJobs
 	out.Timeout = (*v1.Duration)(unsafe.Pointer(in.Timeout))
@@ -1136,12 +1150,8 @@ func Convert_v1alpha1_HelmUninstallOptions_To_v1beta1_HelmUninstallOptions(in *H
 func autoConvert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(in *v1beta1.HelmUninstallOptions, out *HelmUninstallOptions, s conversion.Scope) error {
 	out.KeepHistory = in.KeepHistory
 	out.DeletionPropagation = in.DeletionPropagation
+	// WARNING: in.DisableHooks requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions is an autogenerated conversion function.
-func Convert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(in *v1beta1.HelmUninstallOptions, out *HelmUninstallOptions, s conversion.Scope) error {
-	return autoConvert_v1beta1_HelmUninstallOptions_To_v1alpha1_HelmUninstallOptions(in, out, s)
 }
 
 func autoConvert_v1alpha1_HelmUpgradeOptions_To_v1beta1_HelmUpgradeOptions(in *HelmUpgradeOptions, out *v1beta1.HelmUpgradeOptions, s conversion.Scope) error {
@@ -1172,12 +1182,8 @@ func autoConvert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(in *v
 	out.CleanupOnFail = in.CleanupOnFail
 	out.SubNotes = in.SubNotes
 	out.UpgradeCRDs = in.UpgradeCRDs
+	// WARNING: in.DisableHooks requires manual conversion: does not exist in peer-type
 	return nil
-}
-
-// Convert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions is an autogenerated conversion function.
-func Convert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(in *v1beta1.HelmUpgradeOptions, out *HelmUpgradeOptions, s conversion.Scope) error {
-	return autoConvert_v1beta1_HelmUpgradeOptions_To_v1alpha1_HelmUpgradeOptions(in, out, s)
 }
 
 func autoConvert_v1alpha1_KustomizationRef_To_v1beta1_KustomizationRef(in *KustomizationRef, out *v1beta1.KustomizationRef, s conversion.Scope) error {

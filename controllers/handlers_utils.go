@@ -31,8 +31,11 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -51,13 +54,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -207,6 +211,7 @@ func applySubresources(ctx context.Context, dr dynamic.ResourceInterface,
 		return nil
 	}
 
+	object.SetManagedFields(nil)
 	object.SetResourceVersion("")
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
 	if err != nil {
@@ -217,20 +222,47 @@ func applySubresources(ctx context.Context, dr dynamic.ResourceInterface,
 	return err
 }
 
+func removeDriftExclusionsFields(ctx context.Context, dr dynamic.ResourceInterface,
+	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured) (bool, error) {
+
+	// When operating in SyncModeContinuousWithDriftDetection mode and DriftExclusions are specified,
+	// avoid resetting certain object fields if the object is being redeployed (i.e, object already exists)
+	// For example, consider a Deployment with an Autoscaler. Since the Autoscaler manages the spec.replicas
+	// field, Sveltos is requested to deploy the Deployment and spec.replicas is specified as a field to ignore during
+	// configuration drift evaluation.
+	// If Sveltos is redeploying the deployment (for instance deployment image tag was changed), Sveltos must not
+	// override spec.replicas.
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		if clusterSummary.Spec.ClusterProfileSpec.DriftExclusions != nil {
+			_, err := dr.Get(ctx, object.GetName(), metav1.GetOptions{})
+			if err == nil {
+				// Resource exist. We are in drift detection mode and with driftExclusions.
+				// Remove fields in driftExclusions before applying an update
+				return true, nil
+			} else if apierrors.IsNotFound(err) {
+				// Object does not exist. We can apply it as it is. Since the object does
+				// not exist, nothing will be overridden
+				return false, nil
+			} else {
+				return false, err
+			}
+		}
+	}
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun &&
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions != nil {
+		// When evaluating diff in DryRun mode, exclude fields
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // updateResource creates or updates a resource in a Cluster.
 // No action in DryRun mode.
 func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 	clusterSummary *configv1beta1.ClusterSummary, object *unstructured.Unstructured, subresources []string,
-	logger logr.Logger) error {
-
-	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return nil
-	}
-
-	l := logger.WithValues("resourceNamespace", object.GetNamespace(), "resourceName", object.GetName(),
-		"resourceGVK", object.GetObjectKind().GroupVersionKind(), "subresources", subresources)
-	l.V(logs.LogDebug).Info("deploying policy")
+	logger logr.Logger) (*unstructured.Unstructured, error) {
 
 	forceConflict := true
 	options := metav1.PatchOptions{
@@ -238,48 +270,50 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 		Force:        &forceConflict,
 	}
 
-	// When operating in SyncModeContinuousWithDriftDetection mode and DriftExclusions are specified,
-	// avoid resetting certain object fields if the object is being redeployed.
-	// For example, consider a Deployment with an Autoscaler. Since the Autoscaler manages the spec.replicas
-	// field, Sveltos is requested to deploy the Deployment and spec.replicas is specified as a field to ignore during
-	// configuration drift evaluation.
-	// If Sveltos is redeploying the deployment (for instance deployment image tag was changed), Sveltos must not
-	// override spec.replicas. So code first tries to create resource and if already existing, before applying a patch
-	// the spec.replicas is removed.
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-		if clusterSummary.Spec.ClusterProfileSpec.DriftExclusions != nil {
-			_, err := dr.Create(ctx, object, metav1.CreateOptions{})
-			if err != nil {
-				if !apierrors.IsAlreadyExists(err) {
-					return err
-				}
-				// The resource already exist. Apply Patches to avoid resetting fields that should be ignored for
-				// drift evaluation
-				patches := transformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
-				p := &patcher.CustomPatchPostRenderer{Patches: patches}
-				var patchedObjects []*unstructured.Unstructured
-				patchedObjects, err = p.RunUnstructured([]*unstructured.Unstructured{object})
-				if err != nil {
-					return err
-				}
-				object = patchedObjects[0]
-			} else {
-				return applySubresources(ctx, dr, object, subresources, &options)
-			}
+	// No-op in DryRun mode
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		// Set dryRun option. Still proceed further so diff can be properly evaluated
+		options.DryRun = []string{metav1.DryRunAll}
+	}
+
+	l := logger.WithValues("resourceNamespace", object.GetNamespace(), "resourceName", object.GetName(),
+		"resourceGVK", object.GetObjectKind().GroupVersionKind(), "subresources", subresources)
+	l.V(logs.LogDebug).Info("deploying policy")
+
+	removeFields, err := removeDriftExclusionsFields(ctx, dr, clusterSummary, object)
+	if err != nil {
+		return nil, err
+	}
+
+	if removeFields {
+		patches := transformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
+		p := &patcher.CustomPatchPostRenderer{Patches: patches}
+		var patchedObjects []*unstructured.Unstructured
+		patchedObjects, err = p.RunUnstructured([]*unstructured.Unstructured{object})
+		if err != nil {
+			return nil, err
 		}
+		object = patchedObjects[0]
 	}
 
 	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, object)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options)
+	updatedObject, err := dr.Patch(ctx, object.GetName(), types.ApplyPatchType, data, options)
 	if err != nil {
-		return err
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun &&
+			apierrors.IsNotFound(err) {
+			// In DryRun mode, if resource is namespaced and namespace is not present,
+			// patch will fail with namespace not found. Treat this error as resoruce
+			// would be created
+			return object, nil
+		}
+		return nil, err
 	}
 
-	return applySubresources(ctx, dr, object, subresources, &options)
+	return updatedObject, applySubresources(ctx, dr, object, subresources, &options)
 }
 
 func instantiateTemplate(referencedObject client.Object, logger logr.Logger) bool {
@@ -357,6 +391,21 @@ func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config)
 	return nil
 }
 
+// isResourceNamespaceValid validates the resource namespace.
+// A Profile, when deploying resources locally, i.e, to the management cluster, can
+// only deploy resources in the same namespace
+func isResourceNamespaceValid(profile client.Object, policy *unstructured.Unstructured,
+	deployingToMgmtCluster bool) bool {
+
+	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
+		if deployingToMgmtCluster && policy.GetNamespace() != profile.GetNamespace() {
+			return false
+		}
+	}
+
+	return true
+}
+
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
@@ -371,9 +420,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
-	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
-		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
@@ -399,6 +445,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, err
 		}
 
+		if !isResourceNamespaceValid(profile, policy, deployingToMgmtCluster) {
+			return nil, fmt.Errorf("profile can only deploy resource in same namespace in the management cluster")
+		}
+
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
@@ -410,7 +460,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, err
 		}
 
-		dr, err := utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
+		dr, err := k8s_utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -437,7 +487,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return reports, err
 		}
 
-		addMetadata(policy, resourceInfo.ResourceVersion, profile,
+		addMetadata(policy, resourceInfo.GetResourceVersion(), profile,
 			clusterSummary.Spec.ClusterProfileSpec.ExtraLabels, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
 		if deployingToMgmtCluster {
@@ -451,19 +501,19 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		}
 
 		if requeue {
-			err = requeueAllOldOwners(ctx, resourceInfo.OwnerReferences, featureID, clusterSummary, logger)
+			err = requeueAllOldOwners(ctx, resourceInfo.GetOwnerReferences(), featureID, clusterSummary, logger)
 			if err != nil {
 				return reports, err
 			}
 		}
 
-		err = updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
+		policy, err = updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
 		if err != nil {
 			return reports, err
 		}
 
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
-		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, resource))
+		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, policy, resource))
 	}
 
 	if conflictErrorMsg != "" {
@@ -489,7 +539,7 @@ func addMetadata(policy *unstructured.Unstructured, resourceVersion string, prof
 	// This approach ensures that conflict resolution decisions made by canDeployResource remain valid during the policy update.
 	policy.SetResourceVersion(resourceVersion)
 
-	deployer.AddOwnerReference(policy, profile)
+	k8s_utils.AddOwnerReference(policy, profile)
 
 	addExtraLabels(policy, extraLabels)
 	addExtraAnnotations(policy, extraAnnotations)
@@ -516,7 +566,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 			profileName = types.NamespacedName{Name: profileOwners[i].Name}
 		case configv1beta1.ProfileKind:
 			profileKind = configv1beta1.ProfileKind
-			profileName = *getProfileNameFromOwnerReferenceName(profileOwners[i].Name)
+			profileName = types.NamespacedName{Namespace: clusterSummary.Namespace, Name: profileOwners[i].Name}
 		default:
 			continue
 		}
@@ -536,7 +586,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 			return err
 		}
 
-		err = requeueOldOwner(ctx, featureID, ownerClusterSummary, logger)
+		err = requeueClusterSummary(ctx, featureID, ownerClusterSummary, logger)
 		if err != nil {
 			return err
 		}
@@ -588,19 +638,129 @@ func canDeployResource(ctx context.Context, dr dynamic.ResourceInterface, policy
 }
 
 func generateResourceReport(policyHash string, resourceInfo *deployer.ResourceInfo,
-	resource *configv1beta1.Resource) *configv1beta1.ResourceReport {
+	policy *unstructured.Unstructured, resource *configv1beta1.Resource) *configv1beta1.ResourceReport {
 
 	resourceReport := &configv1beta1.ResourceReport{Resource: *resource}
-	if resourceInfo.ResourceVersion == "" {
+	if resourceInfo == nil {
 		resourceReport.Action = string(configv1beta1.CreateResourceAction)
 	} else if policyHash != resourceInfo.Hash {
 		resourceReport.Action = string(configv1beta1.UpdateResourceAction)
+		diff, err := evaluateResourceDiff(resourceInfo.CurrentResource, policy)
+		if err == nil {
+			resourceReport.Message = diff
+		}
 	} else {
 		resourceReport.Action = string(configv1beta1.NoResourceAction)
 		resourceReport.Message = "Object already deployed. And policy referenced by ClusterProfile has not changed since last deployment."
 	}
 
 	return resourceReport
+}
+
+// evaluateResourceDiff evaluates and returns diff
+func evaluateResourceDiff(from, to *unstructured.Unstructured) (string, error) {
+	objectInfo := fmt.Sprintf("%s %s", from.GroupVersionKind().Kind, from.GetName())
+
+	// Remove managedFields, status and the hash annotation added by Sveltos.
+	from = omitManagedFields(from)
+	from = omitGeneratation(from)
+	from = omitStatus(from)
+	from = omitHashAnnotation(from)
+
+	to = omitManagedFields(to)
+	to = omitGeneratation(to)
+	to = omitStatus(to)
+	to = omitHashAnnotation(to)
+
+	fromTempFile, err := os.CreateTemp("", "from-temp-file-")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(fromTempFile.Name()) // Clean up the file after use
+	fromWriter := io.Writer(fromTempFile)
+	err = printUnstructured(from, fromWriter)
+	if err != nil {
+		return "", err
+	}
+
+	toTempFile, err := os.CreateTemp("", "to-temp-file-")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(toTempFile.Name()) // Clean up the file after use
+	toWriter := io.Writer(toTempFile)
+	err = printUnstructured(to, toWriter)
+	if err != nil {
+		return "", err
+	}
+
+	fromContent, err := os.ReadFile(fromTempFile.Name())
+	if err != nil {
+		return "", err
+	}
+
+	toContent, err := os.ReadFile(toTempFile.Name())
+	if err != nil {
+		return "", err
+	}
+
+	edits := myers.ComputeEdits(span.URIFromPath(objectInfo), string(fromContent), string(toContent))
+
+	diff := fmt.Sprint(gotextdiff.ToUnified(fmt.Sprintf("deployed: %s", objectInfo),
+		fmt.Sprintf("proposed: %s", objectInfo), string(fromContent), edits))
+
+	return diff, nil
+}
+
+func omitManagedFields(u *unstructured.Unstructured) *unstructured.Unstructured {
+	a, err := meta.Accessor(u)
+	if err != nil {
+		// The object is not a `metav1.Object`, ignore it.
+		return u
+	}
+	a.SetManagedFields(nil)
+	return u
+}
+
+func omitGeneratation(u *unstructured.Unstructured) *unstructured.Unstructured {
+	a, err := meta.Accessor(u)
+	if err != nil {
+		// The object is not a `metav1.Object`, ignore it.
+		return u
+	}
+	a.SetGeneration(0)
+	return u
+}
+
+func omitStatus(u *unstructured.Unstructured) *unstructured.Unstructured {
+	content := u.UnstructuredContent()
+	if _, ok := content["status"]; ok {
+		content["status"] = ""
+	}
+	u.SetUnstructuredContent(content)
+	return u
+}
+
+func omitHashAnnotation(u *unstructured.Unstructured) *unstructured.Unstructured {
+	annotations := u.GetAnnotations()
+	if annotations != nil {
+		delete(annotations, deployer.PolicyHash)
+	}
+	u.SetAnnotations(annotations)
+	return u
+}
+
+// Print the object inside the writer w.
+func printUnstructured(obj runtime.Object, w io.Writer) error {
+	if obj == nil {
+		return nil
+	}
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
 }
 
 // addExtraLabels adds ExtraLabels to policy.
@@ -744,7 +904,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	instantiateTemplate bool, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
-	policies := make([]*unstructured.Unstructured, 0)
+	policies := make([]*unstructured.Unstructured, 0, len(data))
 
 	for k := range data {
 		section := data[k]
@@ -788,14 +948,13 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 }
 
 func getUnstructured(section []byte, logger logr.Logger) ([]*unstructured.Unstructured, error) {
-	policies := make([]*unstructured.Unstructured, 0)
 	elements, err := customSplit(string(section))
 	if err != nil {
 		return nil, err
 	}
-
+	policies := make([]*unstructured.Unstructured, 0, len(elements))
 	for i := range elements {
-		policy, err := utils.GetUnstructured([]byte(elements[i]))
+		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
 			return nil, err
@@ -895,8 +1054,8 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 	clusterSummary *configv1beta1.ClusterSummary, references []configv1beta1.PolicyRef,
 	logger logr.Logger) (local, remote []client.Object, err error) {
 
-	local = make([]client.Object, 0)
-	remote = make([]client.Object, 0)
+	local = make([]client.Object, 0, len(references))
+	remote = make([]client.Object, 0, len(references))
 	for i := range references {
 		var object client.Object
 		reference := &references[i]
@@ -998,6 +1157,7 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []configv1beta1.ResourceReport, err error) {
 
+	reports = make([]configv1beta1.ResourceReport, 0, len(referencedObjects))
 	for i := range referencedObjects {
 		var tmpResourceReports []configv1beta1.ResourceReport
 		if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
@@ -1043,12 +1203,27 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 	logger.V(logs.LogDebug).Info("removing stale resources")
 
+	if !isMgmtCluster {
+		cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil, nil
+			}
+			return nil, err
+		}
+
+		if !cluster.GetDeletionTimestamp().IsZero() {
+			// if cluster is marked for deletion, no need to worry about removing resources deployed
+			// there. This check applies only for managed cluster. Resources deployed in the management
+			// cluster are still removed
+			return nil, nil
+		}
+	}
+
 	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
 	if err != nil {
 		return nil, err
-	}
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
-		profile.SetName(profileNameToOwnerReferenceName(profile))
 	}
 
 	undeployed := make([]configv1beta1.ResourceReport, 0)
@@ -1141,7 +1316,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 	// policy would be withdrawn
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		if canDelete(&r, currentPolicies) && deployer.IsOnlyOwnerReference(&r, profile) &&
+		if canDelete(&r, currentPolicies) && k8s_utils.IsOnlyOwnerReference(&r, profile) &&
 			!isLeavePolicies(clusterSummary, logger) {
 
 			resourceReport = &configv1beta1.ResourceReport{
@@ -1155,7 +1330,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	} else if canDelete(&r, currentPolicies) {
 		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
 
-		deployer.RemoveOwnerReference(&r, profile)
+		k8s_utils.RemoveOwnerReference(&r, profile)
 
 		if len(r.GetOwnerReferences()) != 0 {
 			// Other ClusterSummary are still deploying this very same policy
@@ -1426,6 +1601,8 @@ func getConfigMap(ctx context.Context, c client.Client, configmapName types.Name
 		return nil, err
 	}
 
+	addTypeInformationToObject(c.Scheme(), configMap)
+
 	return configMap, nil
 }
 
@@ -1443,6 +1620,8 @@ func getSecret(ctx context.Context, c client.Client, secretName types.Namespaced
 	if secret.Type != libsveltosv1beta1.ClusterProfileSecretType {
 		return nil, libsveltosv1beta1.ErrSecretTypeNotSupported
 	}
+
+	addTypeInformationToObject(c.Scheme(), secret)
 
 	return secret, nil
 }
@@ -1561,7 +1740,8 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	logger.V(logs.LogDebug).Info("get remote restConfig")
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, logger, err
@@ -1642,7 +1822,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 					logger.V(logs.LogInfo).Info(msg)
 					return nil, nil, &NonRetriableError{Message: msg}
 				}
-				return nil, nil, errors.Wrapf(err, msg)
+				return nil, nil, fmt.Errorf("%s: %w", msg, err)
 			}
 
 			if instantiateTemplate(configMap, logger) {
@@ -1673,7 +1853,7 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 					logger.V(logs.LogInfo).Info(msg)
 					return nil, nil, &NonRetriableError{Message: msg}
 				}
-				return nil, nil, errors.Wrapf(err, msg)
+				return nil, nil, fmt.Errorf("%s: %w", msg, err)
 			}
 			if instantiateTemplate(secret, logger) {
 				for key, value := range secret.Data {

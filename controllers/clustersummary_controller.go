@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"syscall"
@@ -26,7 +27,6 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -64,6 +64,9 @@ const (
 	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
 	// to ready after or workload features (for instance ingress or reporter) have failed
 	normalRequeueAfter = 10 * time.Second
+
+	// dryRunRequeueAfter is how long to wait before reconciling a ClusterSummary in DryRun mode
+	dryRunRequeueAfter = 20 * time.Second
 )
 
 type ReportMode int
@@ -128,10 +131,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch clusterSummary")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"Failed to fetch clusterSummary %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"failed to fetch clusterSummary %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -139,10 +141,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
 	if err != nil {
 		logger.Error(err, "Failed to get owner clusterProfile")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"Failed to get owner clusterProfile for %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"failed to get owner clusterProfile for %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 	if profile == nil {
@@ -160,10 +161,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create clusterProfileScope")
-		return reconcile.Result{}, errors.Wrapf(
-			err,
-			"unable to create clusterprofile scope for %s",
-			req.NamespacedName,
+		return reconcile.Result{}, fmt.Errorf(
+			"unable to create clusterprofile scope for %s: %w",
+			req.NamespacedName, err,
 		)
 	}
 
@@ -245,12 +245,18 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 			return reconcile.Result{}, nil
 		}
 
-		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		if !isDeleted {
+			// if cluster is marked for deletion do not try to remove ResourceSummaries.
+			// those are only deployed in the managed cluster so no need to cleanup on a deleted cluster
+			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			}
 		}
 
+		// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
+		// in the management cluster and those need to be removed.
 		err = r.undeploy(ctx, clusterSummaryScope, logger)
 		if err != nil {
 			// In DryRun mode it is expected to always get an error back
@@ -363,7 +369,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 		}
 	}
 
@@ -380,6 +386,13 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 	}
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary success")
+
+	if clusterSummaryScope.IsDryRunSync() {
+		r.resetFeatureStatusToProvisioning(clusterSummaryScope)
+		// we need to keep retrying in DryRun ClusterSummaries
+		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -410,7 +423,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		).
 		Build(r)
 	if err != nil {
-		return errors.Wrap(err, "error creating controller")
+		return fmt.Errorf("error creating controller: %w", err)
 	}
 
 	// At this point we don't know yet whether CAPI is present in the cluster.
@@ -487,10 +500,9 @@ func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSumm
 	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
 	if err := clusterSummaryScope.PatchObject(ctx); err != nil {
 		clusterSummaryScope.Error(err, "Failed to add finalizer")
-		return errors.Wrapf(
-			err,
-			"Failed to add finalizer for %s",
-			clusterSummaryScope.Name(),
+		return fmt.Errorf(
+			"failed to add finalizer for %s: %w",
+			clusterSummaryScope.Name(), err,
 		)
 	}
 	return nil
@@ -500,6 +512,8 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	clusterSummary := clusterSummaryScope.ClusterSummary
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace, "clustername", clusterSummary.Spec.ClusterName)
 
+	var errs []error
+
 	resourceErr := r.deployResources(ctx, clusterSummaryScope, logger)
 
 	helmErr := r.deployHelm(ctx, clusterSummaryScope, logger)
@@ -507,15 +521,19 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 	kustomizeError := r.deployKustomizeRefs(ctx, clusterSummaryScope, logger)
 
 	if resourceErr != nil {
-		return resourceErr
+		errs = append(errs, fmt.Errorf("deploying resources failed: %w", resourceErr))
 	}
 
 	if helmErr != nil {
-		return helmErr
+		errs = append(errs, fmt.Errorf("deploying helm charts failed: %w", helmErr))
 	}
 
 	if kustomizeError != nil {
-		return kustomizeError
+		errs = append(errs, fmt.Errorf("deploying kustomize resources failed: %w", kustomizeError))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
 	}
 
 	return nil
@@ -1006,7 +1024,6 @@ func (r *ClusterSummaryReconciler) isReady(ctx context.Context,
 	}
 
 	isClusterReady, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, r.Client, clusterRef, logger)
-
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil
@@ -1063,7 +1080,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 	}
 
 	if clusterSummaryScope.IsDryRunSync() {
-		logger.V(logs.LogInfo).Info("DryRun mode. Can only be deleted if ClusterProfile is marked for deletion.")
+		logger.V(logs.LogInfo).Info("DryRun mode. Can only be deleted if Profile/ClusterProfile is marked for deletion.")
 		// A ClusterSummary in DryRun mode can only be removed if also ClusterProfile is marked
 		// for deletion. Otherwise ClusterSummary has to stay and list what would happen if owning
 		// ClusterProfile is moved away from DryRun mode.
@@ -1310,4 +1327,15 @@ func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *
 
 	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
 		string(configv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
+}
+
+// resetFeatureStatusToProvisioning reset status from Provisioned to Provisioning
+func (r *ClusterSummaryReconciler) resetFeatureStatusToProvisioning(clusterSummaryScope *scope.ClusterSummaryScope) {
+	status := configv1beta1.FeatureStatusProvisioning
+	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
+		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
+		if fs.Status == configv1beta1.FeatureStatusProvisioned {
+			fs.Status = status
+		}
+	}
 }

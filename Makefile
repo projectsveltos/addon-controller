@@ -22,7 +22,9 @@ SHELL = /usr/bin/env bash -o pipefail
 REGISTRY ?= projectsveltos
 IMAGE_NAME ?= addon-controller
 ARCH ?= $(shell go env GOARCH)
-OS ?= $(shell uname -s | tr A-Z a-z)
+
+OS ?= $(shell uname -s)
+OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= main
@@ -62,14 +64,16 @@ CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
 ENVSUBST := $(TOOLS_BIN_DIR)/envsubst
 GOIMPORTS := $(TOOLS_BIN_DIR)/goimports
 GOLANGCI_LINT := $(TOOLS_BIN_DIR)/golangci-lint
+GOVULNCHECK := $(TOOLS_BIN_DIR)/govulncheck
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
 SETUP_ENVTEST := $(TOOLS_BIN_DIR)/setup_envs
 CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
-GOLANGCI_LINT_VERSION := "v1.59.0"
-CLUSTERCTL_VERSION := "v1.8.3"
+GOVULNCHECK_VERSION := "v1.1.3"
+GOLANGCI_LINT_VERSION := "v1.61.0"
+CLUSTERCTL_VERSION := "v1.8.5"
 
 KUSTOMIZE_VER := v5.3.0
 KUSTOMIZE_BIN := kustomize
@@ -94,7 +98,7 @@ $(CONVERSION_GEN_BIN): $(CONVERSION_GEN) ## Build a local copy of conversion-gen
 $(CONVERSION_GEN): # Build conversion-gen from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONVERSION_GEN_PKG) $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
 
-SETUP_ENVTEST_VER := v0.0.0-20240522175850-2e9781e9fc60
+SETUP_ENVTEST_VER := release-0.19
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -112,8 +116,11 @@ $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 $(ENVSUBST): $(TOOLS_DIR)/go.mod # Build envsubst from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) github.com/a8m/envsubst/cmd/envsubst
 
-$(GOLANGCI_LINT): # Build golangci-lint from tools folder.
+$(GOLANGCI_LINT): 
 	cd $(TOOLS_DIR); ./get-golangci-lint.sh $(GOLANGCI_LINT_VERSION)
+
+$(GOVULNCHECK): 
+	cd $(TOOLS_DIR); ./get-govulncheck.sh $(GOVULNCHECK_VERSION)
 
 $(GOIMPORTS):
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) golang.org/x/tools/cmd/goimports
@@ -180,6 +187,10 @@ vet: ## Run go vet against code.
 lint: $(GOLANGCI_LINT) generate ## Lint codebase
 	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m	
 
+.PHONY: govulncheck
+govulncheck: $(GOVULNCHECK)
+	$(GOVULNCHECK) ./...
+
 .PHONY: check-manifests
 check-manifests: manifests ## Verify manifests file is up to date
 	test `git status --porcelain $(GENERATED_FILES) | grep -cE '(^\?)|(^ M)'` -eq 0 || (echo "The manifest file changed, please 'make manifests' and commit the results"; exit 1)
@@ -196,7 +207,7 @@ endif
 # K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
 # this default value is used
 ifndef K8S_VERSION
-K8S_VERSION := v1.31.0
+K8S_VERSION := v1.31.2
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
@@ -323,7 +334,7 @@ create-workload-cluster: $(KIND) $(KUBECTL)
 	$(KIND) get kubeconfig --name $(WORKLOAD_CLUSTER_NAME) > test/fv/workload_kubeconfig
 
 	@echo "install calico on workload cluster"
-	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.0/manifests/calico.yaml
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.0/manifests/calico.yaml
 
 	@echo wait for calico pod
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)

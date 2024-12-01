@@ -97,8 +97,7 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch ClusterProfile")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"Failed to fetch ClusterProfile %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("failed to fetch ClusterProfile %s: %w", req.NamespacedName, err)
 	}
 
 	profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
@@ -109,8 +108,7 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	})
 	if err != nil {
 		logger.Error(err, "Failed to create profileScope")
-		return reconcile.Result{}, errors.Wrapf(err,
-			"unable to create profileScope for %s", req.NamespacedName)
+		return reconcile.Result{}, fmt.Errorf("unable to create profileScope for %s: %w", req.NamespacedName, err)
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterProfile

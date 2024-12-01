@@ -38,7 +38,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 const (
@@ -304,13 +304,13 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	})
 
 	It("isNamespaced returns true for namespaced resources", func() {
-		clusterRole, err := utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
+		clusterRole, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
 		isNamespaced, err := controllers.IsNamespaced(clusterRole, testEnv.Config)
 		Expect(err).To(BeNil())
 		Expect(isNamespaced).To(BeFalse())
 
-		deployment, err := utils.GetUnstructured([]byte(fmt.Sprintf(deplTemplate, randomString())))
+		deployment, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(deplTemplate, randomString())))
 		Expect(err).To(BeNil())
 		isNamespaced, err = controllers.IsNamespaced(deployment, testEnv.Config)
 		Expect(err).To(BeNil())

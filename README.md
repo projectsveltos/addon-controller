@@ -1,5 +1,6 @@
 [![CI](https://github.com/projectsveltos/addon-controller/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/addon-controller/actions)
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/addon-controller)](https://goreportcard.com/report/github.com/projectsveltos/addon-controller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/projectsveltos/addon-controller.svg)](https://store.docker.com/community/images/projectsveltos/addon-controller)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/addon-controller)](https://github.com/projectsveltos/addon-controller/releases)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
@@ -21,6 +22,8 @@ Sveltos allows you to represent add-ons and applications as templates. Before de
 Sveltos provides precise control over add-on deployment order. Add-ons within a Profile/ClusterProfile are deployed in the exact order they appear, ensuring a predictable and controlled rollout. Furthermore, ClusterProfiles can depend on others, guaranteeing that dependent add-ons only deploy after their dependencies are fully operational. Finally Sveltos' event-driven framework offers additional flexibility. This framework allows for deploying add-ons and applications in response to specific events, enabling dynamic and adaptable deployments based on your needs.
 
 👉 To get updates [⭐️ star](https://github.com/projectsveltos/addon-controller/stargazers) this repository.
+
+[![Sveltos Dashboard](https://img.youtube.com/vi/GspTTGAmQwk/0.jpg)](https://www.youtube.com/watch?v=GspTTGAmQwk)
 
 ## Profiles vs. ClusterProfiles
 

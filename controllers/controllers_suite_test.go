@@ -26,6 +26,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -42,8 +43,8 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 var (
@@ -91,37 +92,37 @@ var _ = BeforeSuite(func() {
 	}()
 
 	var sveltosCRD *unstructured.Unstructured
-	sveltosCRD, err = utils.GetUnstructured(libsveltoscrd.GetSveltosClusterCRDYAML())
+	sveltosCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetSveltosClusterCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), sveltosCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, sveltosCRD)).To(Succeed())
 
 	var resourceSummaryCRD *unstructured.Unstructured
-	resourceSummaryCRD, err = utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
+	resourceSummaryCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), resourceSummaryCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, resourceSummaryCRD)).To(Succeed())
 
 	var dcCRD *unstructured.Unstructured
-	dcCRD, err = utils.GetUnstructured(libsveltoscrd.GetDebuggingConfigurationCRDYAML())
+	dcCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetDebuggingConfigurationCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), dcCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, dcCRD)).To(Succeed())
 
 	var reloaderCRD *unstructured.Unstructured
-	reloaderCRD, err = utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
+	reloaderCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), reloaderCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, reloaderCRD)).To(Succeed())
 
 	var setCRD *unstructured.Unstructured
-	setCRD, err = utils.GetUnstructured(libsveltoscrd.GetSetCRDYAML())
+	setCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetSetCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), setCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, setCRD)).To(Succeed())
 
 	var clusterSetCRD *unstructured.Unstructured
-	clusterSetCRD, err = utils.GetUnstructured(libsveltoscrd.GetClusterSetCRDYAML())
+	clusterSetCRD, err = k8s_utils.GetUnstructured(libsveltoscrd.GetClusterSetCRDYAML())
 	Expect(err).To(BeNil())
 	Expect(testEnv.Create(context.TODO(), clusterSetCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, clusterSetCRD)).To(Succeed())
@@ -135,7 +136,7 @@ var _ = BeforeSuite(func() {
 	Expect(waitForObject(context.TODO(), testEnv.Client, projectsveltosNs)).To(Succeed())
 
 	// Wait for synchronization
-	// Sometimes we otherwise get "no matches for kind "AddonCompliance" in version "lib.projectsveltos.io/v1beta1"
+	// Sometimes we otherwise get "no matches for kind ... in version "lib.projectsveltos.io/v1beta1"
 	time.Sleep(2 * time.Second)
 
 	controllers.InitializeManager(textlogger.NewLogger(textlogger.NewConfig()),

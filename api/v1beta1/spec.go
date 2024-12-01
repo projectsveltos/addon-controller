@@ -188,6 +188,11 @@ type HelmOptions struct {
 	// +optional
 	SkipCRDs bool `json:"skipCRDs,omitempty"`
 
+	// SkipSchemaValidation determines if JSON schema validation is disabled.
+	// +kubebuilder:default:=false
+	// +optional
+	SkipSchemaValidation bool `json:"skipSchemaValidation,omitempty"`
+
 	// if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet
 	// are in a ready state before marking the release as successful. It will wait for as long as --timeout
 	// Default to false
@@ -267,6 +272,14 @@ type HelmInstallOptions struct {
 	// +kubebuilder:default:=true
 	// +optional
 	Replace bool `json:"replace,omitempty"`
+
+	// prevent hooks from running during install. If set to true, overrides
+	// DisableHooks in HelmOptions. Use this one when you want to selective
+	// disable hooks on install
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DisableHooks bool `json:"disableHooks,omitempty"`
 }
 
 type HelmUpgradeOptions struct {
@@ -322,6 +335,14 @@ type HelmUpgradeOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	UpgradeCRDs bool `json:"upgradeCRDs,omitempty"`
+
+	// prevent hooks from running during install. If set to true, overrides
+	// DisableHooks in HelmOptions. Use this one when you want to selective
+	// disable hooks on upgrade
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DisableHooks bool `json:"disableHooks,omitempty"`
 }
 
 type HelmUninstallOptions struct {
@@ -335,6 +356,14 @@ type HelmUninstallOptions struct {
 	// +kubebuilder:validation:Enum:=orphan;foreground;background
 	// +optional
 	DeletionPropagation string `json:"deletionPropagation,omitempty"`
+
+	// prevent hooks from running during install. If set to true, overrides
+	// DisableHooks in HelmOptions. Use this one when you want to selective
+	// disable hooks on uninstall
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	DisableHooks bool `json:"disableHooks,omitempty"`
 }
 
 type HelmChart struct {

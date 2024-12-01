@@ -35,7 +35,7 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
-	"github.com/projectsveltos/libsveltos/lib/utils"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 var _ = Describe("Reloader utils", func() {
@@ -162,7 +162,7 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		var reloaderCRD *unstructured.Unstructured
-		reloaderCRD, err := utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
+		reloaderCRD, err := k8s_utils.GetUnstructured(libsveltoscrd.GetReloaderCRDYAML())
 		Expect(err).To(BeNil())
 		Expect(c.Create(context.TODO(), reloaderCRD)).To(Succeed())
 

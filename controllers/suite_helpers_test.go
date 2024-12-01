@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +41,7 @@ import (
 )
 
 const (
-	sveltosKubeconfigPostfix = "-kubeconfig"
+	kubeconfigPostfix = "-kubeconfig"
 )
 
 // addOwnerReference adds owner as OwnerReference of obj
@@ -83,7 +82,8 @@ func waitForObject(ctx context.Context, c client.Client, obj client.Object) erro
 			}
 			return true, nil
 		}); err != nil {
-		return errors.Wrapf(err, "object %s, %s is not being added to the testenv client cache", obj.GetObjectKind().GroupVersionKind().String(), key)
+		return fmt.Errorf("object %s, %s is not being added to the testenv client cache: %w",
+			obj.GetObjectKind().GroupVersionKind().String(), key, err)
 	}
 	return nil
 }
@@ -242,7 +242,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: clusterSummary.Spec.ClusterNamespace,
-			Name:      clusterSummary.Spec.ClusterName + sveltosKubeconfigPostfix,
+			Name:      clusterSummary.Spec.ClusterName + kubeconfigPostfix,
 		},
 		Data: map[string][]byte{
 			"value": testEnv.Kubeconfig,

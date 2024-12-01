@@ -271,9 +271,9 @@ func (m *instance) GetManagedHelmReleases(clusterSummary *configv1beta1.ClusterS
 	return info
 }
 
-// GetNumberOfRegisteredClusterSummaries returns number of ClusterSummaries currently registered
+// GetNumberOfRegisteredClusterSummariesForChart returns number of ClusterSummaries currently registered
 // for managing a chart in a given cluster
-func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clusterName string,
+func (m *instance) GetNumberOfRegisteredClusterSummariesForChart(clusterNamespace, clusterName string,
 	clusterType libsveltosv1beta1.ClusterType, chart *configv1beta1.HelmChart) int {
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
@@ -283,6 +283,20 @@ func (m *instance) GetNumberOfRegisteredClusterSummaries(clusterNamespace, clust
 	defer m.chartMux.Unlock()
 
 	return len(m.perClusterChartMap[clusterKey][releaseKey])
+}
+
+// GetRegisteredClusterSummariesForChart returns ClusterSummaries currently registered
+// for managing a chart in a given cluster
+func (m *instance) GetRegisteredClusterSummariesForChart(clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, chart *configv1beta1.HelmChart) []string {
+
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	return m.perClusterChartMap[clusterKey][releaseKey]
 }
 
 // CanManageChart returns true if a ClusterSummary can manage the helm chart.

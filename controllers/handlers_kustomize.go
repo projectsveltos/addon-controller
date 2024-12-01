@@ -47,14 +47,15 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
-	"github.com/projectsveltos/libsveltos/lib/utils"
 )
 
 const (
@@ -134,9 +135,9 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	// If we are here there are no conflicts (and error would have been returned by deployKustomizeRef)
-	remoteDeployed := make([]configv1beta1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, len(remoteResourceReports))
 	for i := range remoteResourceReports {
-		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
+		remoteDeployed[i] = remoteResourceReports[i].Resource
 	}
 
 	// TODO: track resource deployed in the management cluster
@@ -230,7 +231,8 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
@@ -637,6 +639,8 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	}
 
 	resources := resMap.Resources()
+	objectsToDeployLocally = make([]*unstructured.Unstructured, 0, len(resources))
+	objectsToDeployRemotely = make([]*unstructured.Unstructured, 0, len(resources))
 	for i := range resources {
 		resource := resources[i]
 		yaml, err := resource.AsYAML()
@@ -659,7 +663,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		}
 
 		var u *unstructured.Unstructured
-		u, err = utils.GetUnstructured(yaml)
+		u, err = k8s_utils.GetUnstructured(yaml)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, nil, err
@@ -819,6 +823,9 @@ func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestCon
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
 ) (localResourceReports, remoteResourceReports []configv1beta1.ResourceReport, err error) {
 
+	capacity := len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
+	localResourceReports = make([]configv1beta1.ResourceReport, 0, capacity)
+	remoteResourceReports = make([]configv1beta1.ResourceReport, 0, capacity)
 	for i := range clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kustomizationRef := &clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 		var tmpLocal []configv1beta1.ResourceReport
@@ -873,6 +880,7 @@ func extractTarGz(src, dest string) error {
 				return err
 			}
 		case archivetar.TypeReg:
+			//nolint: gosec // OK
 			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err
@@ -898,7 +906,7 @@ func instantiateResourceWithSubstituteValues(templateName string, resource []byt
 	var buffer bytes.Buffer
 
 	if err := tmpl.Execute(&buffer, substituteValues); err != nil {
-		return nil, errors.Wrapf(err, "error executing template %q", resource)
+		return nil, fmt.Errorf("error executing template %q: %w", resource, err)
 	}
 	instantiatedValues := buffer.String()
 

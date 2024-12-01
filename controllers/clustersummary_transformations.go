@@ -29,7 +29,9 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -154,6 +156,8 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
+		cacheMgr := clustercache.GetManager()
+		cacheMgr.RemoveSecret(&key)
 	default:
 		key = corev1.ObjectReference{
 			APIVersion: o.GetObjectKind().GroupVersionKind().GroupVersion().String(),
@@ -214,10 +218,16 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForACluster(
 
 	logger.V(logs.LogDebug).Info("reacting to Cluster change")
 
+	clusterInfo := getKeyFromObject(r.Scheme, cluster)
+	if !cluster.GetDeletionTimestamp().IsZero() {
+		cacheMgr := clustercache.GetManager()
+		cacheMgr.RemoveCluster(cluster.GetNamespace(), cluster.GetName(),
+			clusterproxy.GetClusterType(clusterInfo))
+	}
+
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
 
-	clusterInfo := getKeyFromObject(r.Scheme, cluster)
 	// Get all ClusterSummaries for this cluster and reconcile those
 	requests := make([]ctrl.Request, r.getClusterMapForEntry(clusterInfo).Len())
 	consumers := r.getClusterMapForEntry(clusterInfo).Items()

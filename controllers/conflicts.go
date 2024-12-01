@@ -74,9 +74,9 @@ func getTier(tierData string) int32 {
 	return int32(value)
 }
 
-// Resource Ownership change. Queue old owner for reconciliation
-func requeueOldOwner(ctx context.Context, featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary,
-	logger logr.Logger) error {
+// Requeue a ClusterSummary for reconciliation. This method resets status causing reconciliation to happen
+func requeueClusterSummary(ctx context.Context, featureID configv1beta1.FeatureID,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 

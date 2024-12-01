@@ -25,7 +25,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/gdexlab/go-render/render"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -236,21 +236,15 @@ func isCluterSummaryProvisioned(clusterSumary *configv1beta1.ClusterSummary) boo
 	hasRawYAMLs := false
 	hasKustomize := false
 
-	if clusterSumary.Spec.ClusterProfileSpec.HelmCharts != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
 		hasHelmCharts = true
 	}
 
-	if clusterSumary.Spec.ClusterProfileSpec.PolicyRefs != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
 		hasRawYAMLs = true
 	}
 
-	if clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs != nil &&
-		len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
-
+	if len(clusterSumary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
 		hasKustomize = true
 	}
 
@@ -397,28 +391,6 @@ func parseMapFromString(data string) (map[string]string, error) {
 	}
 	// Return the parsed map
 	return result, nil
-}
-
-// Sveltos deployment in managed clusters relies on OwnerReferences to track the responsible profile.
-// However, a limitation arises with namespaced Profiles.
-// Kubernetes OwnerReferences lack a namespace field, assuming owners reside in the same namespace.
-// For Profile resources (namespaced), Sveltos dynamically modifies the owner name to incorporate both
-// namespace and name for proper identification.
-func profileNameToOwnerReferenceName(profile client.Object) string {
-	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ProfileKind {
-		return fmt.Sprintf("%s/%s", profile.GetNamespace(), profile.GetName())
-	}
-
-	return profile.GetName()
-}
-
-func getProfileNameFromOwnerReferenceName(profileName string) *types.NamespacedName {
-	result := strings.Split(profileName, "/")
-	if len(result) == 1 {
-		// resources deployed by Sveltos before release v0.30.0 did not have profile namespace/name
-		return &types.NamespacedName{Name: profileName}
-	}
-	return &types.NamespacedName{Namespace: result[0], Name: result[1]}
 }
 
 // Function to remove duplicates from a slice

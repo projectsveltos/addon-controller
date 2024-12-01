@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -88,9 +89,9 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteDeployed := make([]configv1beta1.Resource, 0)
+	remoteDeployed := make([]configv1beta1.Resource, len(remoteResourceReports))
 	for i := range remoteResourceReports {
-		remoteDeployed = append(remoteDeployed, remoteResourceReports[i].Resource)
+		remoteDeployed[i] = remoteResourceReports[i].Resource
 	}
 
 	// TODO: track resource deployed in the management cluster
@@ -121,10 +122,6 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterType, remoteDeployed, logger)
 	if err != nil {
 		return err
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	if deployError != nil {
@@ -284,7 +281,8 @@ func undeployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteRestConfig, err := clusterproxy.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
@@ -451,7 +449,6 @@ func updateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		} else if featureID == configv1beta1.FeatureKustomize {
 			clusterReport.Status.KustomizeResourceReports = resourceReports
 		}
-
 		return c.Status().Update(ctx, clusterReport)
 	})
 	return err

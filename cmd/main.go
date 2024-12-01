@@ -56,6 +56,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/internal/telemetry"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -83,6 +84,8 @@ var (
 	healthAddr              string
 	profilerAddress         string
 	driftDetectionConfigMap string
+	disableCaching          bool
+	disableTelemetry        bool
 )
 
 const (
@@ -113,6 +116,14 @@ func main() {
 
 	reportMode = controllers.ReportMode(tmpReportMode)
 
+	disableFor := []client.Object{}
+	if disableCaching {
+		disableFor = []client.Object{
+			&corev1.Secret{},
+			&corev1.ConfigMap{},
+		}
+	}
+
 	ctrl.SetLogger(klog.Background())
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
@@ -124,6 +135,11 @@ func main() {
 			}),
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
+		},
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: disableFor,
+			},
 		},
 		PprofBindAddress: profilerAddress,
 	}
@@ -150,6 +166,13 @@ func main() {
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
 
+	if shardKey == "" && !disableTelemetry {
+		err = telemetry.StartCollecting(ctx, mgr.GetClient(), version)
+		if err != nil {
+			setupLog.Error(err, "failed starting telemetry client")
+		}
+	}
+
 	startControllersAndWatchers(ctx, mgr)
 
 	setupChecks(mgr)
@@ -170,6 +193,12 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
+
+	fs.BoolVar(&disableCaching, "disable-secret-caching", false,
+		"When set, disable caching secrets and configmaps")
+
+	fs.BoolVar(&disableTelemetry, "disable-telemetry", false,
+		"When set, disable telemetry reporting")
 
 	fs.StringVar(&diagnosticsAddress, "diagnostics-address", ":8443",
 		"The address the diagnostics endpoint binds to. Per default metrics are served via https and with"+
@@ -218,7 +247,7 @@ func initFlags(fs *pflag.FlagSet) {
 		fmt.Sprintf("The minimum interval at which watched resources are reconciled (e.g. 15m). Default: %d minutes",
 			defaultSyncPeriod))
 
-	const defaultConflictRetryTime = 30
+	const defaultConflictRetryTime = 60
 	fs.DurationVar(&conflictRetryTime, "conflict-retry-time", defaultConflictRetryTime*time.Second,
 		fmt.Sprintf("The minimum interval at which watched ClusterProfile with conflicts are retried. Defaul: %d seconds",
 			defaultConflictRetryTime))

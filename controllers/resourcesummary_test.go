@@ -323,7 +323,7 @@ func prepareCluster() *clusterv1.Cluster {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      cluster.Name + sveltosKubeconfigPostfix,
+			Name:      cluster.Name + kubeconfigPostfix,
 		},
 		Data: map[string][]byte{
 			"value": testEnv.Kubeconfig,

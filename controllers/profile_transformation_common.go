@@ -41,7 +41,7 @@ func requeueForCluster(cluster client.Object,
 	kindType string, logger logr.Logger) []reconcile.Request {
 
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.GetNamespace(), cluster.GetName()))
-	logger.V(logs.LogDebug).Info("reacting to Cluster change")
+	logger.V(logs.LogVerbose).Info("reacting to Cluster change")
 
 	apiVersion, kind := cluster.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
 	clusterInfo := corev1.ObjectReference{APIVersion: apiVersion, Kind: kind,
@@ -100,7 +100,7 @@ func requeueForMachine(machine client.Object,
 
 	logger = logger.WithValues("machine", fmt.Sprintf("%s/%s", machine.GetNamespace(), machine.GetName()))
 
-	logger.V(logs.LogDebug).Info("reacting to CAPI Machine change")
+	logger.V(logs.LogVerbose).Info("reacting to CAPI Machine change")
 
 	machineLabels := machine.GetLabels()
 	if machineLabels == nil {

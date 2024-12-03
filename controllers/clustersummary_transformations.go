@@ -67,7 +67,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 		o.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to flux source change")
+	logger.V(logs.LogVerbose).Info("reacting to flux source change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
@@ -105,7 +105,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 		}
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("referenced key: %s", key))
+	logger = logger.WithValues("key", fmt.Sprintf("%s", key))
 
 	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).Len())
 
@@ -134,7 +134,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 		o.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to configMap/secret change")
+	logger.V(logs.LogVerbose).Info("reacting to configMap/secret change")
 
 	r.PolicyMux.Lock()
 	defer r.PolicyMux.Unlock()
@@ -167,7 +167,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForReference(
 		}
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("referenced key: %s", key))
+	logger = logger.WithValues("key", fmt.Sprintf("%s", key))
 
 	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).Len())
 
@@ -216,7 +216,7 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForACluster(
 		cluster.GetName(),
 	)
 
-	logger.V(logs.LogDebug).Info("reacting to Cluster change")
+	logger.V(logs.LogVerbose).Info("reacting to Cluster change")
 
 	clusterInfo := getKeyFromObject(r.Scheme, cluster)
 	if !cluster.GetDeletionTimestamp().IsZero() {

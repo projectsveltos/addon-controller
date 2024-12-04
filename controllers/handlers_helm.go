@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -33,7 +34,11 @@ import (
 	"github.com/docker/cli/cli/config/credentials"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -94,16 +99,17 @@ type registryClientOptions struct {
 }
 
 type releaseInfo struct {
-	ReleaseName      string            `json:"releaseName"`
-	ReleaseNamespace string            `json:"releaseNamespace"`
-	Revision         string            `json:"revision"`
-	Updated          metav1.Time       `json:"updated"`
-	Status           string            `json:"status"`
-	Chart            string            `json:"chart"`
-	ChartVersion     string            `json:"chart_version"`
-	AppVersion       string            `json:"app_version"`
-	ReleaseLabels    map[string]string `json:"release_labels"`
-	Icon             string            `json:"icon"`
+	ReleaseName      string                 `json:"releaseName"`
+	ReleaseNamespace string                 `json:"releaseNamespace"`
+	Revision         string                 `json:"revision"`
+	Updated          metav1.Time            `json:"updated"`
+	Status           string                 `json:"status"`
+	Chart            string                 `json:"chart"`
+	ChartVersion     string                 `json:"chart_version"`
+	AppVersion       string                 `json:"app_version"`
+	ReleaseLabels    map[string]string      `json:"release_labels"`
+	Icon             string                 `json:"icon"`
+	Values           map[string]interface{} `json:"values"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -795,10 +801,6 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName",
 		currentChart.ReleaseName, "version", currentChart.ChartVersion)
 
-	if currentRelease != nil {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("current installed version %s", currentChart.ChartVersion))
-	}
-
 	if registryOptions.credentialsPath != "" {
 		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
 			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
@@ -838,12 +840,12 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		report.Message = notInstalledMessage
 	} else {
 		logger.V(logs.LogDebug).Info("no action for helm release")
-		report = &configv1beta1.ReleaseReport{
-			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
-			ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.NoHelmAction),
-		}
 
-		report.Message = "Already managing this helm release and specified version already installed"
+		report, err = generateReportForSameVersion(ctx, currentRelease.Values, clusterSummary, mgmtResources, currentChart,
+			kubeconfig, registryOptions, logger)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if currentRelease != nil {
@@ -901,15 +903,11 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, logger log
 // No action in DryRun mode.
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, settings *cli.EnvSettings,
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
-	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
-
-	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return nil
-	}
+	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (map[string]interface{}, error) {
 
 	if requestedChart.ChartName == "" {
-		return fmt.Errorf("chart name can not be empty")
+		return nil, fmt.Errorf("chart name can not be empty")
 	}
 
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace",
@@ -917,7 +915,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	chartName, repoURL, err := getHelmChartAndRepoName(requestedChart.ChartName, requestedChart.RepositoryURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
 	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
@@ -926,53 +924,56 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	installClient, err := getHelmInstallClient(requestedChart, kubeconfig, registryOptions, patches)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm install client: %v", err))
-		return err
+		return nil, err
 	}
 
 	cp, err := installClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("LocateChart failed")
-		return err
+		return nil, err
 	}
 
 	chartRequested, err := loader.Load(cp)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("Load failed")
-		return err
+		return nil, err
 	}
 
 	validInstallableChart := isChartInstallable(chartRequested)
 	if !validInstallableChart {
-		return fmt.Errorf("chart is not installable")
+		return nil, fmt.Errorf("chart is not installable")
 	}
 
 	if getDependenciesUpdateValue(requestedChart.Options) {
 		err = checkDependencies(chartRequested, installClient, cp, settings)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// Reload the chart with the updated Chart.lock file.
 	if chartRequested, err = loader.Load(cp); err != nil {
-		return fmt.Errorf("%w: failed reloading chart after repo update", err)
+		return nil, fmt.Errorf("%w: failed reloading chart after repo update", err)
 	}
 
 	installClient.DryRun = false
-	_, err = installClient.RunWithContext(ctx, chartRequested, values)
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		installClient.DryRun = true
+	}
+	r, err := installClient.RunWithContext(ctx, chartRequested, values)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.V(logs.LogDebug).Info("installing release done")
 
-	return nil
+	return r.Config, nil
 }
 
 func checkDependencies(chartRequested *chart.Chart, installClient *action.Install, cp string, settings *cli.EnvSettings) error {
@@ -1299,6 +1300,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOp
 		AppVersion:       results.Chart.AppVersion(),
 		ReleaseLabels:    results.Labels,
 		Icon:             results.Chart.Metadata.Icon,
+		Values:           results.Config,
 	}
 
 	var t metav1.Time
@@ -1436,7 +1438,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		return err
 	}
 
-	err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+	_, err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
 		values, mgmtResources, logger)
 	if err != nil {
 		return err
@@ -2693,4 +2695,132 @@ func requeueAllOtherClusterSummaries(ctx context.Context, c client.Client,
 	}
 
 	return nil
+}
+
+// evaluateValuesDiff evaluates and returns diff between Helm values
+func evaluateValuesDiff(ctx context.Context, currentValues map[string]interface{},
+	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
+	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) (string, error) {
+
+	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
+
+	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
+		requestedChart.RepositoryURL, logger)
+	if err != nil {
+		return "", err
+	}
+
+	var values chartutil.Values
+	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
+	if err != nil {
+		return "", err
+	}
+
+	proposedValues, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+		values, mgmtResources, logger)
+	if err != nil {
+		return "", err
+	}
+
+	return valuesDiff(currentValues, proposedValues)
+}
+
+// valuesDiff evaluates and returns values diff
+func valuesDiff(from, to map[string]interface{}) (string, error) {
+	if from == nil {
+		from = map[string]interface{}{}
+	}
+	if to == nil {
+		to = map[string]interface{}{}
+	}
+
+	fromTempFile, err := os.CreateTemp("", "from-temp-file-")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(fromTempFile.Name()) // Clean up the file after use
+	fromWriter := io.Writer(fromTempFile)
+	err = printMap(from, fromWriter)
+	if err != nil {
+		return "", err
+	}
+
+	toTempFile, err := os.CreateTemp("", "to-temp-file-")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(toTempFile.Name()) // Clean up the file after use
+	toWriter := io.Writer(toTempFile)
+	err = printMap(to, toWriter)
+	if err != nil {
+		return "", err
+	}
+
+	fromContent, err := os.ReadFile(fromTempFile.Name())
+	if err != nil {
+		return "", err
+	}
+
+	toContent, err := os.ReadFile(toTempFile.Name())
+	if err != nil {
+		return "", err
+	}
+
+	edits := myers.ComputeEdits(span.URIFromPath("helm values"), string(fromContent), string(toContent))
+
+	diff := fmt.Sprint(gotextdiff.ToUnified("deployed values", "proposed values", string(fromContent), edits))
+
+	return diff, nil
+}
+
+// Print the object inside the writer w.
+func printMap(obj map[string]interface{}, w io.Writer) error {
+	if obj == nil {
+		return nil
+	}
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// generateReportForSameVersion considers values used when helm chart was deployed and current
+// proposed values, generates a report considering this diff and return.
+func generateReportForSameVersion(ctx context.Context, currentValues map[string]interface{},
+	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
+	currentChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
+
+	defaultMessage := "Already managing this helm release and specified version already installed"
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+		// Only evaluate helm value diffs for DryRun mode
+		report := &configv1beta1.ReleaseReport{
+			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+			ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.NoHelmAction),
+		}
+
+		report.Message = defaultMessage
+		return report, nil
+	}
+
+	diff, err := evaluateValuesDiff(ctx, currentValues, clusterSummary, mgmtResources, currentChart,
+		kubeconfig, registryOptions, logger)
+	if err != nil {
+		return nil, err
+	}
+	helmAction := string(configv1beta1.NoHelmAction)
+	message := defaultMessage
+	if diff != "" {
+		helmAction = string(configv1beta1.UpdateHelmValuesAction)
+		message = diff
+	}
+	report := &configv1beta1.ReleaseReport{
+		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+		ChartVersion: currentChart.ChartVersion, Action: helmAction, Message: message,
+	}
+
+	return report, nil
 }

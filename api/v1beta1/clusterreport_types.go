@@ -25,11 +25,12 @@ type HelmAction string
 
 // Define the HelmAction constants.
 const (
-	NoHelmAction        HelmAction = "No Action"
-	InstallHelmAction   HelmAction = "Install"
-	UpgradeHelmAction   HelmAction = "Upgrade"
-	UninstallHelmAction HelmAction = "Delete"
-	ConflictHelmAction  HelmAction = "Conflict"
+	NoHelmAction           HelmAction = "No Action"
+	UpdateHelmValuesAction HelmAction = "Update Values"
+	InstallHelmAction      HelmAction = "Install"
+	UpgradeHelmAction      HelmAction = "Upgrade"
+	UninstallHelmAction    HelmAction = "Delete"
+	ConflictHelmAction     HelmAction = "Conflict"
 )
 
 type ResourceAction string
@@ -57,7 +58,7 @@ type ReleaseReport struct {
 	ChartVersion string `json:"chartVersion"`
 
 	// Action represent the type of operation on the Helm Chart
-	// +kubebuilder:validation:Enum=No Action;Install;Upgrade;Delete;Conflict
+	// +kubebuilder:validation:Enum=No Action;Install;Upgrade;Delete;Conflict;Update Values
 	// +optional
 	Action string `json:"action,omitempty"`
 

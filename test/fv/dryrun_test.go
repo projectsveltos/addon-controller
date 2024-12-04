@@ -120,7 +120,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "11.1.9",
+				ChartVersion:     "12.1.0",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -141,7 +141,7 @@ var _ = Describe("DryRun", func() {
 		verifyDeployedGroupVersionKind(clusterProfile.Name)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "mysql", ChartVersion: "11.1.9", Namespace: "mysql"},
+			{ReleaseName: "mysql", ChartVersion: "12.1.0", Namespace: "mysql"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -195,7 +195,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "11.1.9",
+				ChartVersion:     "12.1.0",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -204,7 +204,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/redis",
-				ChartVersion:     "19.6.1",
+				ChartVersion:     "20.4.0",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -213,7 +213,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "15.5.16",
+				ChartVersion:     "16.2.3",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
 				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -303,7 +303,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "11.1.9",
+				ChartVersion:     "12.1.0",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -312,7 +312,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/redis",
-				ChartVersion:     "19.6.1",
+				ChartVersion:     "20.4.0",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -321,7 +321,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "15.5.16",
+				ChartVersion:     "16.2.3",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -358,16 +358,18 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/mysql",
-				ChartVersion:     "11.1.9",
+				ChartVersion:     "12.1.0",
 				ReleaseName:      "mysql",
 				ReleaseNamespace: "mysql",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values: `rbac:
+  create: false`,
 			},
 			{
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/redis",
-				ChartVersion:     "19.6.1",
+				ChartVersion:     "20.4.0",
 				ReleaseName:      "redis",
 				ReleaseNamespace: "redis",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -376,7 +378,7 @@ var _ = Describe("DryRun", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "15.5.16",
+				ChartVersion:     "16.2.3",
 				ReleaseName:      "postgresql",
 				ReleaseNamespace: "postgresql",
 				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -396,13 +398,13 @@ var _ = Describe("DryRun", func() {
 			if err != nil {
 				return err
 			}
-			// ClusterProfile is managing mysql release
+			// ClusterProfile is managing mysql release but values changed
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[0].ReleaseNamespace,
-				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1beta1.NoHelmAction))
+				currentClusterProfile.Spec.HelmCharts[0].ReleaseName, string(configv1beta1.UpdateHelmValuesAction))
 			if err != nil {
 				return err
 			}
-			// ClusterProfile is managing mysql release
+			// ClusterProfile is managing redis release
 			err = verifyReleaseReport(currentClusterReport, currentClusterProfile.Spec.HelmCharts[1].ReleaseNamespace,
 				currentClusterProfile.Spec.HelmCharts[1].ReleaseName, string(configv1beta1.NoHelmAction))
 			if err != nil {

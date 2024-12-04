@@ -37,6 +37,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -117,10 +118,19 @@ func main() {
 	reportMode = controllers.ReportMode(tmpReportMode)
 
 	disableFor := []client.Object{}
+	byObject := map[client.Object]cache.ByObject{}
 	if disableCaching {
+		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
+		// The default client of the manager won't use the cache for secrets at all.
 		disableFor = []client.Object{
 			&corev1.Secret{},
 			&corev1.ConfigMap{},
+		}
+
+		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
+
+		byObject[&corev1.Secret{}] = cache.ByObject{
+			Field: fieldSelector,
 		}
 	}
 
@@ -135,6 +145,7 @@ func main() {
 			}),
 		Cache: cache.Options{
 			SyncPeriod: &syncPeriod,
+			ByObject:   byObject,
 		},
 		Client: client.Options{
 			Cache: &client.CacheOptions{

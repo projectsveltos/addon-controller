@@ -28,7 +28,7 @@ spec:
   - repositoryURL: https://charts.bitnami.com/bitnami
     repositoryName: bitnami
     chartName: bitnami/contour
-    chartVersion: 19.3.1
+    chartVersion: 19.3.2
     releaseName: contour
     releaseNamespace: projectcontour
     helmChartAction: Install

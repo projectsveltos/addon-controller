@@ -118,11 +118,43 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 			},
 		}
 
-		value := controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		value, err := controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		Expect(err).To(BeNil())
 		Expect(value).To(Equal(cluster.Namespace))
 
 		ref.Resource.Namespace = randomString()
-		value = controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		value, err = controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		Expect(err).To(BeNil())
+		Expect(value).To(Equal(ref.Resource.Namespace))
+	})
+
+	It("GetTemplateResourceNamespace returns the correct namespace (template version)", func() {
+		ref := &configv1beta1.TemplateResourceRef{
+			Resource: corev1.ObjectReference{
+				Name:      randomString(),
+				Namespace: "{{ .Cluster.metadata.namespace }}-foo",
+			},
+			Identifier: randomString(),
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+
+		value, err := controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		Expect(err).To(BeNil())
+		Expect(value).To(Equal(cluster.Namespace + "-foo"))
+
+		ref.Resource.Namespace = randomString()
+		value, err = controllers.GetTemplateResourceNamespace(clusterSummary, ref)
+		Expect(err).To(BeNil())
 		Expect(value).To(Equal(ref.Resource.Namespace))
 	})
 

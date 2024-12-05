@@ -153,10 +153,13 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 
 	resource := ref.Resource
 
-	// If namespace is not defined, default to cluster namespace
-	resource.Namespace = getTemplateResourceNamespace(clusterSummary, ref)
-
 	var err error
+	// If namespace is not defined, default to cluster namespace
+	resource.Namespace, err = getTemplateResourceNamespace(clusterSummary, ref)
+	if err != nil {
+		return err
+	}
+
 	resource.Name, err = getTemplateResourceName(clusterSummary, ref)
 	if err != nil {
 		return err
@@ -269,8 +272,12 @@ func (m *manager) stopStaleWatchForTemplateResourceRef(clusterSummary *configv1b
 	if !removeAll {
 		for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
 			resource := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i].Resource
-			resource.Namespace = getTemplateResourceNamespace(clusterSummary,
+			var err error
+			resource.Namespace, err = getTemplateResourceNamespace(clusterSummary,
 				&clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i])
+			if err != nil {
+				continue
+			}
 			resource.Name, _ = getTemplateResourceName(clusterSummary,
 				&clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i])
 

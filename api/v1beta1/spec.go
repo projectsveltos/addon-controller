@@ -518,7 +518,7 @@ type TemplateResourceRef struct {
 	// cluster to fetch and use during template instantiation.
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
-	// Name can be expressed as a template and instantiate using
+	// Name and namespace can be expressed as a template and instantiate using
 	// - cluster namespace: .Cluster.metadata.namespace
 	// - cluster name: .Cluster.metadata.name
 	// - cluster type: .Cluster.kind

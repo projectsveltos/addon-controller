@@ -129,6 +129,7 @@ var (
 	GetHelmReferenceResourceHash             = getHelmReferenceResourceHash
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
+	GetInstantiatedChart                     = getInstantiatedChart
 
 	InstantiateTemplateValues = instantiateTemplateValues
 

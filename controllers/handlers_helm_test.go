@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -48,6 +49,8 @@ import (
 var _ = Describe("HandlersHelm", func() {
 	var clusterProfile *configv1beta1.ClusterProfile
 	var clusterSummary *configv1beta1.ClusterSummary
+
+	const defaulNamespace = "default"
 
 	BeforeEach(func() {
 		clusterNamespace := randomString()
@@ -76,6 +79,7 @@ var _ = Describe("HandlersHelm", func() {
 						Kind:       configv1beta1.ClusterProfileKind,
 						Name:       clusterProfile.Name,
 						APIVersion: "config.projectsveltos.io/v1beta1",
+						UID:        types.UID(randomString()),
 					},
 				},
 			},
@@ -182,44 +186,67 @@ var _ = Describe("HandlersHelm", func() {
 			HelmCharts: []configv1beta1.HelmChart{*calicoChart},
 		}
 
+		clusterSummary.Namespace = defaulNamespace
+		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
 		// List a helm chart non referenced anymore as managed
 		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
 			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
 				kyvernoSummary,
 			},
 		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
-		initObjects := []client.Object{
-			clusterSummary,
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
 		Expect(err).To(BeNil())
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(),
+			testEnv.Client, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
 
-		currentClusterSummary := &configv1beta1.ClusterSummary{}
-		Expect(c.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-			currentClusterSummary)).To(Succeed())
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
-		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(2))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1beta1.HelmChartStatusManaging))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(calicoChart.ReleaseName))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(calicoChart.ReleaseNamespace))
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			if currentClusterSummary.Status.HelmReleaseSummaries == nil {
+				return false
+			}
+			if len(currentClusterSummary.Status.HelmReleaseSummaries) != 2 {
+				return false
+			}
+			if currentClusterSummary.Status.HelmReleaseSummaries[0].Status != configv1beta1.HelmChartStatusManaging ||
+				currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName != calicoChart.ReleaseName ||
+				currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace != calicoChart.ReleaseNamespace {
+				return false
+			}
 
-		// UpdateStatusForeferencedHelmReleases adds status for referenced releases and does not remove any
-		// existing entry for non existing releases.
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].Status).To(Equal(kyvernoSummary.Status))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseName).To(Equal(kyvernoSummary.ReleaseName))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace).To(Equal(kyvernoSummary.ReleaseNamespace))
+			// UpdateStatusForeferencedHelmReleases adds status for referenced releases and does not remove any
+			// existing entry for non existing releases.
+			return currentClusterSummary.Status.HelmReleaseSummaries[1].Status == kyvernoSummary.Status &&
+				currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseName == kyvernoSummary.ReleaseName &&
+				currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace == kyvernoSummary.ReleaseNamespace
+		}, timeout, pollingInterval).Should(BeTrue())
+
 	})
 
 	It("updateStatusForeferencedHelmReleases is no-op in DryRun mode", func() {
@@ -244,7 +271,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary,
+		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
@@ -406,6 +433,87 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(report.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
 	})
 
+	It("getInstantiatedChart returns instantiated HelmChart matching passed in chart", func() {
+		helmChart := &configv1beta1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Namespace = defaulNamespace
+		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(), clusterSummary, helmChart, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(instaniatedChart.ReleaseName).To(Equal(helmChart.ReleaseName))
+		Expect(instaniatedChart.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
+		Expect(instaniatedChart.ChartName).To(Equal(helmChart.ChartName))
+		Expect(instaniatedChart.RepositoryURL).To(Equal(helmChart.RepositoryURL))
+		Expect(instaniatedChart.RepositoryName).To(Equal(helmChart.RepositoryName))
+		Expect(instaniatedChart.HelmChartAction).To(Equal(helmChart.HelmChartAction))
+		Expect(instaniatedChart.ChartVersion).To(Equal(helmChart.ChartVersion))
+	})
+
+	It("getInstantiatedChart returns instantiated HelmChart", func() {
+		helmChart := &configv1beta1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), RepositoryURL: randomString(),
+			RepositoryName: randomString(), HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		helmChart.ChartVersion = `{{$version := index .Cluster.metadata.labels "k8s-version" }}{{if eq $version "1.20"}}23.4.0
+{{else if eq $version "1.22"}}24.1.0
+{{else if eq $version "1.25"}}25.0.2
+{{ else }}23.4.0
+{{end}}`
+
+		clusterSummary.Namespace = defaulNamespace
+		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+		clusterSummary.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
+
+		cluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Labels: map[string]string{
+					"k8s-version": "1.25",
+				},
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(), clusterSummary, helmChart, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(instaniatedChart.ReleaseName).To(Equal(helmChart.ReleaseName))
+		Expect(instaniatedChart.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
+		Expect(instaniatedChart.ChartName).To(Equal(helmChart.ChartName))
+		Expect(instaniatedChart.RepositoryURL).To(Equal(helmChart.RepositoryURL))
+		Expect(instaniatedChart.RepositoryName).To(Equal(helmChart.RepositoryName))
+		Expect(instaniatedChart.HelmChartAction).To(Equal(helmChart.HelmChartAction))
+		Expect(instaniatedChart.ChartVersion).To(Equal("25.0.2"))
+	})
+
 	It("updateClusterReportWithHelmReports updates ClusterReports with HelmReports", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
@@ -501,6 +609,16 @@ var _ = Describe("HandlersHelm", func() {
 		}
 		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
 		clusterSummary.OwnerReferences = []metav1.OwnerReference{

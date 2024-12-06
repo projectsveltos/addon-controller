@@ -8,7 +8,7 @@ require (
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v27.3.1+incompatible
 	github.com/fluxcd/pkg/http/fetch v0.12.1
-	github.com/fluxcd/pkg/tar v0.8.1
+	github.com/fluxcd/pkg/tar v0.9.0
 	github.com/fluxcd/source-controller/api v1.4.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2

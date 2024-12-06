@@ -121,6 +121,8 @@ github.com/fluxcd/pkg/http/fetch v0.12.1 h1:Iap/cdKols3fW39/MyTGqNXHglaA1FJsWtFg
 github.com/fluxcd/pkg/http/fetch v0.12.1/go.mod h1:t3JL+uqJ46Wm0CwVRn6Pf/3kOqh45tMoR0pMxLhextQ=
 github.com/fluxcd/pkg/tar v0.8.1 h1:K9RWV+E/+Qbz6Mzcg+S9DkVvZrWwJq4957Kqms183RQ=
 github.com/fluxcd/pkg/tar v0.8.1/go.mod h1:vuGrnXQPcdi3M4DoVtwvAyvLnSeFgXRJckTGYuZOy2Q=
+github.com/fluxcd/pkg/tar v0.9.0 h1:HWlLaJ+K7cK3qPPOd6D6skDY127nN/JuOuUyf2Xx3ro=
+github.com/fluxcd/pkg/tar v0.9.0/go.mod h1:LbZPWvILEf9WHE3kiQ9IPgwC9pgz5HRQ/1ywiebx98w=
 github.com/fluxcd/pkg/testserver v0.7.0 h1:kNVAn+3bAF2rfR9cT6SxzgEz2o84i+o7zKY3XRKTXmk=
 github.com/fluxcd/pkg/testserver v0.7.0/go.mod h1:Ih5IK3Y5G3+a6c77BTqFkdPDCY1Yj1A1W5cXQqkCs9s=
 github.com/fluxcd/source-controller/api v1.4.1 h1:zV01D7xzHOXWbYXr36lXHWWYS7POARsjLt61Nbh3kVY=

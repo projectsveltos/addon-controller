@@ -436,6 +436,7 @@ type KustomizationRef struct {
 // a ClusterProfile. By default, withdrawpolicies, deployed Helm charts and Kubernetes
 // resources will be removed from Cluster. LeavePolicy instead leaves Helm charts
 // and Kubernetes policies in the Cluster.
+// +kubebuilder:validation:Enum:=WithdrawPolicies;LeavePolicies
 type StopMatchingBehavior string
 
 // Define the StopMatchingBehavior constants.

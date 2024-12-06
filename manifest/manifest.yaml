@@ -1364,6 +1364,9 @@ spec:
                   the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                   be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                   leave ClusterProfile deployed policies in the Cluster.
+                enum:
+                - WithdrawPolicies
+                - LeavePolicies
                 type: string
               syncMode:
                 default: Continuous
@@ -2562,6 +2565,9 @@ spec:
                   the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                   be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                   leave ClusterProfile deployed policies in the Cluster.
+                enum:
+                - WithdrawPolicies
+                - LeavePolicies
                 type: string
               syncMode:
                 default: Continuous
@@ -4184,6 +4190,9 @@ spec:
                       the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                       be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                       leave ClusterProfile deployed policies in the Cluster.
+                    enum:
+                    - WithdrawPolicies
+                    - LeavePolicies
                     type: string
                   syncMode:
                     default: Continuous
@@ -5392,6 +5401,9 @@ spec:
                       the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                       be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                       leave ClusterProfile deployed policies in the Cluster.
+                    enum:
+                    - WithdrawPolicies
+                    - LeavePolicies
                     type: string
                   syncMode:
                     default: Continuous
@@ -6327,6 +6339,9 @@ spec:
                   the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                   be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                   leave ClusterProfile deployed policies in the Cluster.
+                enum:
+                - WithdrawPolicies
+                - LeavePolicies
                 type: string
               syncMode:
                 default: Continuous
@@ -7525,6 +7540,9 @@ spec:
                   the ClusterProfile. By default all deployed Helm charts and Kubernetes resources will
                   be withdrawn from Cluster. Setting StopMatchingBehavior to LeavePolicies will instead
                   leave ClusterProfile deployed policies in the Cluster.
+                enum:
+                - WithdrawPolicies
+                - LeavePolicies
                 type: string
               syncMode:
                 default: Continuous

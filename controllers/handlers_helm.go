@@ -1361,17 +1361,20 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, requestedCh
 	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
-		oldValueHash := getValueHashFromHelmChartSummary(requestedChart, clusterSummary)
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+			// In DryRun mode, if values are different, report will be generated
+			oldValueHash := getValueHashFromHelmChartSummary(requestedChart, clusterSummary)
 
-		// If Values configuration has changed, trigger an upgrade
-		c := getManagementClusterClient()
-		currentValueHash, err := getHelmChartValuesHash(ctx, c, requestedChart, clusterSummary, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
-			currentValueHash = []byte("") // force upgrade
-		}
-		if !reflect.DeepEqual(oldValueHash, currentValueHash) {
-			return true
+			// If Values configuration has changed, trigger an upgrade
+			c := getManagementClusterClient()
+			currentValueHash, err := getHelmChartValuesHash(ctx, c, requestedChart, clusterSummary, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
+				currentValueHash = []byte("") // force upgrade
+			}
+			if !reflect.DeepEqual(oldValueHash, currentValueHash) {
+				return true
+			}
 		}
 
 		// With drift detection mode, there is reconciliation due to configuration drift even

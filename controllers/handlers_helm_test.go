@@ -215,7 +215,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(),
+		clusterSummary, conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(),
 			testEnv.Client, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())
@@ -271,7 +271,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummary, conflict, err := controllers.UpdateStatusForeferencedHelmReleases(context.TODO(), c, clusterSummary, nil,
+		clusterSummary, conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(), c, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(conflict).To(BeFalse())

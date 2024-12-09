@@ -456,7 +456,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	// Here only currently referenced helm releases are considered. If ClusterSummary was managing
 	// an helm release and it is not referencing it anymore, such entry will be removed from ClusterSummary.Status
 	// only after helm release is successfully undeployed.
-	clusterSummary, _, err = updateStatusForeferencedHelmReleases(ctx, c, clusterSummary, mgmtResources, logger)
+	clusterSummary, _, err = updateStatusForReferencedHelmReleases(ctx, c, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		return err
 	}
@@ -515,11 +515,6 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1beta1.ReleaseReport, []configv1beta1.Chart, error) {
 
-	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	conflictErrorMessage := ""
 	releaseReports := make([]configv1beta1.ReleaseReport, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
 	chartDeployed := make([]configv1beta1.Chart, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
@@ -533,15 +528,21 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 
 		// Eventual conflicts are already resolved before this method is called (in updateStatusForeferencedHelmReleases)
 		// So it is safe to call CanManageChart here
-		if !chartManager.CanManageChart(clusterSummary, instantiatedChart) {
+		canManage, err := canManageChart(ctx, c, clusterSummary, instantiatedChart, logger)
+		if err != nil {
+			return releaseReports, chartDeployed, err
+		}
+
+		if !canManage {
 			var report *configv1beta1.ReleaseReport
 			report, err = createReportForUnmanagedHelmRelease(ctx, c, clusterSummary, instantiatedChart, logger)
 			if err != nil {
 				return releaseReports, chartDeployed, err
 			}
+
 			releaseReports = append(releaseReports, *report)
 			conflictErrorMessage += generateConflictForHelmChart(ctx, clusterSummary, instantiatedChart)
-			// error is reported above, in updateHelmChartStatus.
+			// error is reported above, in updateStatusForReferencedHelmReleases.
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict ||
 				clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 
@@ -561,6 +562,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		if err != nil {
 			return releaseReports, chartDeployed, err
 		}
+
 		err = updateValueHashOnHelmChartSummary(ctx, instantiatedChart, clusterSummary, logger)
 		if err != nil {
 			return releaseReports, chartDeployed, err
@@ -657,6 +659,11 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 		}
 
 		if hasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) {
+			if claimingHelmManager.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+				// Since we are in DryRun mode do not reset the other ClusterSummary. It will still be managing
+				// the helm chart
+				return true, nil
+			}
 			// New ClusterSummary is taking over managing this chart. So reset helmReleaseSummaries for this chart
 			// This needs to happen immediately. helmReleaseSummaries are used by Sveltos to rebuild list of which
 			// clusterSummary is managing an helm chart if pod restarts
@@ -675,7 +682,6 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			chartManager.SetManagerForChart(claimingHelmManager, currentChart)
 			return true, nil
 		}
-
 		return false, nil
 	}
 
@@ -1595,7 +1601,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 // - whether there is at least one helm release ClusterSummary is referencing, but currently not
 // allowed to manage.
 // No action in DryRun mode.
-func updateStatusForeferencedHelmReleases(ctx context.Context, c client.Client,
+func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
 	logger logr.Logger) (*configv1beta1.ClusterSummary, bool, error) {
 
@@ -2866,4 +2872,19 @@ func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.Clu
 	}
 
 	return &instantiatedChart, nil
+}
+
+func canManageChart(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	instantiatedChart *configv1beta1.HelmChart, logger logr.Logger) (bool, error) {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return false, err
+	}
+
+	if chartManager.CanManageChart(clusterSummary, instantiatedChart) {
+		return true, nil
+	}
+
+	return determineChartOwnership(ctx, c, clusterSummary, instantiatedChart, logger)
 }

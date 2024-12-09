@@ -406,6 +406,26 @@ func isResourceNamespaceValid(profile client.Object, policy *unstructured.Unstru
 	return true
 }
 
+func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	referencedUnstructured []*unstructured.Unstructured, mgmtResources map[string]*unstructured.Unstructured,
+	logger logr.Logger) ([]*unstructured.Unstructured, error) {
+
+	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(patches) > 0 {
+		p := &patcher.CustomPatchPostRenderer{Patches: patches}
+		referencedUnstructured, err = p.RunUnstructured(referencedUnstructured)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return referencedUnstructured, nil
+}
+
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
@@ -422,17 +442,9 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		return nil, err
 	}
 
-	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
+	referencedUnstructured, err = applyPatches(ctx, clusterSummary, referencedUnstructured, mgmtResources, logger)
 	if err != nil {
 		return nil, err
-	}
-
-	if len(patches) > 0 {
-		p := &patcher.CustomPatchPostRenderer{Patches: patches}
-		referencedUnstructured, err = p.RunUnstructured(referencedUnstructured)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	conflictErrorMsg := ""
@@ -501,9 +513,13 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		}
 
 		if requeue {
-			err = requeueAllOldOwners(ctx, resourceInfo.GetOwnerReferences(), featureID, clusterSummary, logger)
-			if err != nil {
-				return reports, err
+			if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+				// No action required. Even though ClusterProfile has higher priority, it is in DryRun
+				// mode. So what's already deployed stays as it is.
+				err = requeueAllOldOwners(ctx, resourceInfo.GetOwnerReferences(), featureID, clusterSummary, logger)
+				if err != nil {
+					return reports, err
+				}
 			}
 		}
 
@@ -517,7 +533,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	if conflictErrorMsg != "" {
-		return reports, deployer.NewConflictError(conflictErrorMsg)
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+			// if in DryRun mode, ignore conflicts
+			return reports, deployer.NewConflictError(conflictErrorMsg)
+		}
 	}
 
 	return reports, nil

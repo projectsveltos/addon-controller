@@ -138,14 +138,9 @@ Sveltos can automatically detect drift between the desired state, defined in the
 [![Projectsveltos intro](https://img.youtube.com/vi/FRYYHAWr0MQ/0.jpg)](https://www.youtube.com/watch?v=FRYYHAWr0MQ)
 [![Projectsveltos intro](https://img.youtube.com/vi/A5Y0XTnoS7k/0.jpg)](https://www.youtube.com/watch?v=A5Y0XTnoS7k)
 
-## Give projectsveltos a try
+## Quick Start
 
-If you want to try projectsveltos with a test cluster:
-
-1. git clone https://github.com/projectsveltos/addon-controller
-2. make quickstart
-
-will create a management cluster using Kind, deploy clusterAPI and projectsveltos, create a workload cluster powered by clusterAPI.
+💡 🏃‍♂️ To try projectsveltos on a test cluster, follow these [instructions](https://projectsveltos.github.io/sveltos/getting_started/install/quick_start/)
 
 ## Sveltos in action
 

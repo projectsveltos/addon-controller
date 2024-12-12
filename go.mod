@@ -1,6 +1,8 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.22.7
+go 1.23.0
+
+toolchain go1.23.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
@@ -8,7 +10,7 @@ require (
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v27.4.0+incompatible
 	github.com/fluxcd/pkg/http/fetch v0.13.0
-	github.com/fluxcd/pkg/tar v0.9.0
+	github.com/fluxcd/pkg/tar v0.10.0
 	github.com/fluxcd/source-controller/api v1.4.1
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2

@@ -515,6 +515,19 @@ func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *res
 		return "", err
 	}
 
+	if len(deployments.Items) > 1 {
+		// while rare this can happen. Multiple ClusterProfiles matching same cluster may concurrently query for
+		// the same drift-detection-manager deployment, leading to redundant creation attempts if the deployment
+		// doesn't exist.
+		for i := range deployments.Items {
+			// Ignore eventual error, since we are returning an error anyway
+			_ = clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster()).Delete(ctx,
+				deployments.Items[i].Name, metav1.DeleteOptions{})
+		}
+		err = fmt.Errorf("more than one drift-detection deployment found")
+		return name, err
+	}
+
 	objects := make([]client.Object, len(deployments.Items))
 	for i := range deployments.Items {
 		objects[i] = &deployments.Items[i]
@@ -524,13 +537,13 @@ func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *res
 }
 
 func getInstantiatedObjectName(objects []client.Object) (name string, err error) {
-	prefix := "drift-detection-"
 	switch len(objects) {
 	case 0:
 		// no cluster exist yet. Return random name.
 		// If one clusterProfile with this name already exists,
 		// a conflict will happen. On retry different name will
 		// be picked
+		prefix := "drift-detection-"
 		const nameLength = 20
 		name = prefix + util.RandomString(nameLength)
 		err = nil
@@ -538,7 +551,7 @@ func getInstantiatedObjectName(objects []client.Object) (name string, err error)
 		name = objects[0].GetName()
 		err = nil
 	default:
-		err = fmt.Errorf("more than one resource")
+		err = fmt.Errorf("more than one drift-detection deployment found")
 	}
 	return name, err
 }

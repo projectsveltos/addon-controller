@@ -135,6 +135,8 @@ Sveltos can automatically detect drift between the desired state, defined in the
   <img alt="Configuration drift recovery" src="https://github.com/projectsveltos/demos/blob/main/configuration_drift/reconcile_configuration_drift.gif" width="600"/>
 </p>
 
+
+[![Projectsveltos intro](https://img.youtube.com/vi/bsWEo79w09c/0.jpg)](https://www.youtube.com/watch?v=bsWEo79w09c)
 [![Projectsveltos intro](https://img.youtube.com/vi/FRYYHAWr0MQ/0.jpg)](https://www.youtube.com/watch?v=FRYYHAWr0MQ)
 [![Projectsveltos intro](https://img.youtube.com/vi/A5Y0XTnoS7k/0.jpg)](https://www.youtube.com/watch?v=A5Y0XTnoS7k)
 

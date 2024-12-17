@@ -33,7 +33,9 @@ import (
 )
 
 const (
-	minio = "minio"
+	minioReleaseName = "minio"
+	minioNamespace   = "minio"
+	minioDeployment  = "minio-operator"
 )
 
 var _ = Describe("Helm", func() {
@@ -59,12 +61,12 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/minio",
-				ChartVersion:     "14.6.20",
-				ReleaseName:      minio,
-				ReleaseNamespace: minio,
+				RepositoryURL:    "https://operator.min.io",
+				RepositoryName:   "minio-operator",
+				ChartName:        "minio-operator/minio-operator",
+				ChartVersion:     "4.3.7",
+				ReleaseName:      minioReleaseName,
+				ReleaseNamespace: minioNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -83,14 +85,14 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "minio", Name: "minio"}, depl)
+				types.NamespacedName{Namespace: minioNamespace, Name: minioDeployment}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: minio, ChartVersion: "14.6.20", Namespace: minio},
+			{ReleaseName: minioReleaseName, ChartVersion: "4.3.7", Namespace: minioNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -119,7 +121,7 @@ var _ = Describe("Helm", func() {
 		Byf("Verifying Minio deployment is still present in the workload cluster")
 		depl := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: minio, Name: minio}, depl)).To(Succeed())
+			types.NamespacedName{Namespace: minioNamespace, Name: minioDeployment}, depl)).To(Succeed())
 
 		deleteClusterProfile(clusterProfile)
 	})

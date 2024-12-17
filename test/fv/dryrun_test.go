@@ -117,12 +117,12 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/mysql",
-				ChartVersion:     "12.0.0",
-				ReleaseName:      "mysql",
-				ReleaseNamespace: "mysql",
+				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+				RepositoryName:   "mariadb-operator",
+				ChartName:        "mariadb-operator/mariadb-operator",
+				ChartVersion:     "0.35.1",
+				ReleaseName:      "mariadb",
+				ReleaseNamespace: "mariadb",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -141,7 +141,7 @@ var _ = Describe("DryRun", func() {
 		verifyDeployedGroupVersionKind(clusterProfile.Name)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "mysql", ChartVersion: "12.0.0", Namespace: "mysql"},
+			{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -192,30 +192,32 @@ var _ = Describe("DryRun", func() {
 			currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/mysql",
-				ChartVersion:     "12.1.0",
-				ReleaseName:      "mysql",
-				ReleaseNamespace: "mysql",
+				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+				RepositoryName:   "mariadb-operator",
+				ChartName:        "mariadb-operator/mariadb-operator",
+				ChartVersion:     "0.36.0",
+				ReleaseName:      "mariadb",
+				ReleaseNamespace: "mariadb",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/redis",
-				ChartVersion:     "20.4.0",
-				ReleaseName:      "redis",
-				ReleaseNamespace: "redis",
+				RepositoryURL:    "https://charts.jetstack.io",
+				RepositoryName:   "jetstack",
+				ChartName:        "jetstack/cert-manager",
+				ChartVersion:     "v1.16.2",
+				ReleaseName:      "cert-manager",
+				ReleaseNamespace: "cert-manager",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values: `crds:
+  enabled: true`,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "16.2.3",
-				ReleaseName:      "postgresql",
-				ReleaseNamespace: "postgresql",
+				RepositoryURL:    "https://cloudnative-pg.github.io/charts",
+				RepositoryName:   "cloudnative-pg",
+				ChartName:        "cloudnative-pg/cloudnative-pg",
+				ChartVersion:     "0.22.1",
+				ReleaseName:      "cnpg",
+				ReleaseNamespace: "cnpg-system",
 				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 			},
 		}
@@ -360,30 +362,32 @@ var _ = Describe("DryRun", func() {
 		currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/mysql",
-				ChartVersion:     "12.1.0",
-				ReleaseName:      "mysql",
-				ReleaseNamespace: "mysql",
+				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+				RepositoryName:   "mariadb-operator",
+				ChartName:        "mariadb-operator/mariadb-operator",
+				ChartVersion:     "0.36.0",
+				ReleaseName:      "mariadb",
+				ReleaseNamespace: "mariadb",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/redis",
-				ChartVersion:     "20.4.0",
-				ReleaseName:      "redis",
-				ReleaseNamespace: "redis",
+				RepositoryURL:    "https://charts.jetstack.io",
+				RepositoryName:   "jetstack",
+				ChartName:        "jetstack/cert-manager",
+				ChartVersion:     "v1.16.2",
+				ReleaseName:      "cert-manager",
+				ReleaseNamespace: "cert-manager",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values: `crds:
+  enabled: true`,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "16.2.3",
-				ReleaseName:      "postgresql",
-				ReleaseNamespace: "postgresql",
+				RepositoryURL:    "https://cloudnative-pg.github.io/charts",
+				RepositoryName:   "cloudnative-pg",
+				ChartName:        "cloudnative-pg/cloudnative-pg",
+				ChartVersion:     "0.22.1",
+				ReleaseName:      "cnpg",
+				ReleaseNamespace: "cnpg-system",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -415,32 +419,34 @@ var _ = Describe("DryRun", func() {
 		}
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/mysql",
-				ChartVersion:     "12.1.0",
-				ReleaseName:      "mysql",
-				ReleaseNamespace: "mysql",
+				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+				RepositoryName:   "mariadb-operator",
+				ChartName:        "mariadb-operator/mariadb-operator",
+				ChartVersion:     "0.36.0",
+				ReleaseName:      "mariadb",
+				ReleaseNamespace: "mariadb",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Values: `rbac:
-  create: false`,
+				Values: `crds:
+  enabled: true`,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/redis",
-				ChartVersion:     "20.4.0",
-				ReleaseName:      "redis",
-				ReleaseNamespace: "redis",
+				RepositoryURL:    "https://charts.jetstack.io",
+				RepositoryName:   "jetstack",
+				ChartName:        "jetstack/cert-manager",
+				ChartVersion:     "v1.16.2",
+				ReleaseName:      "cert-manager",
+				ReleaseNamespace: "cert-manager",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values: `crds:
+  enabled: true`,
 			},
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/postgresql",
-				ChartVersion:     "16.2.3",
-				ReleaseName:      "postgresql",
-				ReleaseNamespace: "postgresql",
+				RepositoryURL:    "https://cloudnative-pg.github.io/charts",
+				RepositoryName:   "cloudnative-pg",
+				ChartName:        "cloudnative-pg/cloudnative-pg",
+				ChartVersion:     "0.22.1",
+				ReleaseName:      "cnpg",
+				ReleaseNamespace: "cnpg-system",
 				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 			},
 		}

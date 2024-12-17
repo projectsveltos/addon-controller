@@ -60,7 +60,7 @@ var _ = Describe("Helm with conflicts", func() {
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
-		sparkVersion := "9.2.5"
+		sparkVersion := "9.3.0"
 		addSparkHelmChart(clusterProfile.Name, sparkVersion)
 
 		currentClusterProfile := &configv1beta1.ClusterProfile{}

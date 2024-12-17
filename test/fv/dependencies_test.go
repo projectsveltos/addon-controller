@@ -56,13 +56,19 @@ var _ = Describe("Dependencies", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "airflow",
-				ChartName:        "bitnami/airflow",
-				ChartVersion:     "18.3.8",
+				RepositoryURL:    "https://airflow.apache.org",
+				RepositoryName:   "apache-airflow",
+				ChartName:        "apache-airflow/airflow",
+				ChartVersion:     "1.15.0",
 				ReleaseName:      "airflow",
 				ReleaseNamespace: "airflow",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values: `createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false`,
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -78,7 +84,7 @@ var _ = Describe("Dependencies", func() {
 				RepositoryURL:    "https://charts.bitnami.com/bitnami",
 				RepositoryName:   "bitnami",
 				ChartName:        "bitnami/flink",
-				ChartVersion:     "1.3.7",
+				ChartVersion:     "1.4.0",
 				ReleaseName:      "flink",
 				ReleaseNamespace: "flink",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

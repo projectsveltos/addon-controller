@@ -4,7 +4,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    control-plane: addon-controller
+    release: prometheus-operator
   name: controller-metrics-monitor
   namespace: projectsveltos
 spec:

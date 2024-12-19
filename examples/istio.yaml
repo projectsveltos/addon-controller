@@ -20,7 +20,7 @@ spec:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/istiod
-    chartVersion:     1.24.1
+    chartVersion:     1.24.2
     releaseName:      istiod
     releaseNamespace: istio-system
     helmChartAction:  Install

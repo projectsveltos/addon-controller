@@ -137,6 +137,7 @@ Sveltos can automatically detect drift between the desired state, defined in the
 
 
 [![Projectsveltos intro](https://img.youtube.com/vi/bsWEo79w09c/0.jpg)](https://www.youtube.com/watch?v=bsWEo79w09c)
+[![Projectsveltos event driven framework](https://img.youtube.com/vi/4mOWuOF0gWY/0.jpg)](https://www.youtube.com/watch?v=4mOWuOF0gWY)
 [![Projectsveltos intro](https://img.youtube.com/vi/FRYYHAWr0MQ/0.jpg)](https://www.youtube.com/watch?v=FRYYHAWr0MQ)
 [![Projectsveltos intro](https://img.youtube.com/vi/A5Y0XTnoS7k/0.jpg)](https://www.youtube.com/watch?v=A5Y0XTnoS7k)
 

@@ -5,6 +5,14 @@ metadata:
   namespace: default
 spec:
   controlPlane:
+    machineHealthCheck:
+      unhealthyConditions:
+      - status: Unknown
+        timeout: 300s
+        type: Ready
+      - status: "False"
+        timeout: 300s
+        type: Ready
     machineInfrastructure:
       ref:
         apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -205,6 +213,14 @@ spec:
   workers:
     machineDeployments:
     - class: default-worker
+      machineHealthCheck:
+        unhealthyConditions:
+        - status: Unknown
+          timeout: 300s
+          type: Ready
+        - status: "False"
+          timeout: 300s
+          type: Ready
       template:
         bootstrap:
           ref:
@@ -339,7 +355,7 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.30.0
+    version: v1.32.0
     workers:
       machineDeployments:
       - class: default-worker

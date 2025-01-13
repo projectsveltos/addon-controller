@@ -638,6 +638,14 @@ type Spec struct {
 	// +optional
 	ContinueOnConflict bool `json:"continueOnConflict,omitempty"`
 
+	// By default (when ContinueOnError is unset or set to false), Sveltos stops deployment after
+	// encountering the first error.
+	// If set to true, Sveltos will attempt to deploy remaining resources in the ClusterProfile even
+	// if errors are detected for previous resources.
+	// +kubebuilder:default:=false
+	// +optional
+	ContinueOnError bool `json:"continueOnError,omitempty"`
+
 	// The maximum number of clusters that can be updated concurrently.
 	// Value can be an absolute number (ex: 5) or a percentage of desired cluster (ex: 10%).
 	// Defaults to 100%.

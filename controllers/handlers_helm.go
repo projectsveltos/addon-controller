@@ -515,6 +515,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1beta1.ReleaseReport, []configv1beta1.Chart, error) {
 
+	errorMsg := ""
 	conflictErrorMessage := ""
 	releaseReports := make([]configv1beta1.ReleaseReport, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
 	chartDeployed := make([]configv1beta1.Chart, 0, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
@@ -560,6 +561,11 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		var currentRelease *releaseInfo
 		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig, logger)
 		if err != nil {
+			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
+				errorMsg += fmt.Sprintf("chart: %s, release: %s, %v\n",
+					instantiatedChart.ChartName, instantiatedChart.ReleaseName, err)
+				continue
+			}
 			return releaseReports, chartDeployed, err
 		}
 
@@ -586,6 +592,12 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 				})
 			}
 		}
+	}
+
+	// This has to come before conflictErrorMessage as conflictErrorMessage is not retriable
+	// while any other generic error is
+	if errorMsg != "" {
+		return releaseReports, chartDeployed, fmt.Errorf("%s", errorMsg)
 	}
 
 	if conflictErrorMessage != "" {
@@ -1054,10 +1066,7 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		return err
 	}
 
-	uninstallClient, err := getHelmUninstallClient(helmChart, actionConfig)
-	if err != nil {
-		return err
-	}
+	uninstallClient := getHelmUninstallClient(helmChart, actionConfig)
 
 	_, err = uninstallClient.Run(releaseName)
 	if err != nil {
@@ -1112,11 +1121,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	patches = append(patches, driftExclusionPatches...)
 
-	upgradeClient, err := getHelmUpgradeClient(requestedChart, actionConfig, patches)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm upgrade client: %v", err))
-		return err
-	}
+	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, patches)
 
 	cp, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
@@ -2241,10 +2246,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	installClient.DisableHooks = getDisableHooksHelmInstallValue(requestedChart.Options)
 	installClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-		installClient.Timeout, err = time.ParseDuration(timeout.String())
-		if err != nil {
-			return nil, err
-		}
+		installClient.Timeout = timeout.Duration
 	}
 	installClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	installClient.Replace = getReplaceValue(requestedChart.Options)
@@ -2262,7 +2264,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 }
 
 func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration,
-	patches []libsveltosv1beta1.Patch) (*action.Upgrade, error) {
+	patches []libsveltosv1beta1.Patch) *action.Upgrade {
 
 	upgradeClient := action.NewUpgrade(actionConfig)
 	upgradeClient.Install = true
@@ -2275,11 +2277,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.DisableHooks = getDisableHooksHelmUpgradeValue(requestedChart.Options)
 	upgradeClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-		var err error
-		upgradeClient.Timeout, err = time.ParseDuration(timeout.String())
-		if err != nil {
-			return nil, err
-		}
+		upgradeClient.Timeout = timeout.Duration
 	}
 	upgradeClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
@@ -2301,19 +2299,17 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 		upgradeClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
 	}
 
-	return upgradeClient, nil
+	return upgradeClient
 }
 
-func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration) (*action.Uninstall, error) {
+func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration,
+) *action.Uninstall {
+
 	uninstallClient := action.NewUninstall(actionConfig)
 	uninstallClient.DryRun = false
 	if requestedChart != nil {
 		if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-			var err error
-			uninstallClient.Timeout, err = time.ParseDuration(timeout.String())
-			if err != nil {
-				return nil, err
-			}
+			uninstallClient.Timeout = timeout.Duration
 		}
 
 		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
@@ -2322,7 +2318,7 @@ func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfi
 		uninstallClient.KeepHistory = getKeepHistoryValue(requestedChart.Options)
 		uninstallClient.DeletionPropagation = getDeletionPropagation(requestedChart.Options)
 	}
-	return uninstallClient, nil
+	return uninstallClient
 }
 
 func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmChart,

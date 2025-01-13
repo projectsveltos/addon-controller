@@ -448,12 +448,17 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	conflictErrorMsg := ""
+	errorMsg := ""
 	reports = make([]configv1beta1.ResourceReport, 0)
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
 
 		err := adjustNamespace(policy, destConfig)
 		if err != nil {
+			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
+				errorMsg += fmt.Sprintf("%v", err)
+				continue
+			}
 			return nil, err
 		}
 
@@ -524,22 +529,38 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		}
 
 		policy, err = updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
-		if err != nil {
-			return reports, err
-		}
-
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
 		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, policy, resource))
+		if err != nil {
+			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
+				errorMsg += fmt.Sprintf("%v", err)
+				continue
+			}
+			return reports, err
+		}
 	}
+
+	return reports, handleDeployUnstructuredErrors(conflictErrorMsg, errorMsg, clusterSummary)
+}
+
+func handleDeployUnstructuredErrors(conflictErrorMsg, errorMsg string, clusterSummary *configv1beta1.ClusterSummary,
+) error {
 
 	if conflictErrorMsg != "" {
 		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
 			// if in DryRun mode, ignore conflicts
-			return reports, deployer.NewConflictError(conflictErrorMsg)
+			return deployer.NewConflictError(conflictErrorMsg)
 		}
 	}
 
-	return reports, nil
+	if errorMsg != "" {
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+			// if in DryRun mode, ignore errors
+			return fmt.Errorf("%s", errorMsg)
+		}
+	}
+
+	return nil
 }
 
 func addMetadata(policy *unstructured.Unstructured, resourceVersion string, profile client.Object,

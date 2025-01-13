@@ -247,6 +247,10 @@ kind-test: test create-cluster fv ## Build docker image; start kind cluster; loa
 fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
+.PHONY: new-fv
+new-fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
+	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='NEW-FV' --v --trace --randomize-all
+
 .PHONY: fv-sharding
 fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) patch cluster clusterapi-workload  -n default --type json -p '[{ "op": "add", "path": "/metadata/annotations/sharding.projectsveltos.io~1key", "value": "shard1" }]'

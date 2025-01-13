@@ -85,6 +85,7 @@ var (
 	healthAddr              string
 	profilerAddress         string
 	driftDetectionConfigMap string
+	luaConfigMap            string
 	disableCaching          bool
 	disableTelemetry        bool
 )
@@ -169,6 +170,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
+	controllers.SetLuaConfigMap(luaConfigMap)
 
 	logsettings.RegisterForLogSettings(ctx,
 		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
@@ -238,6 +240,10 @@ func initFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&driftDetectionConfigMap, "drift-detection-config", "",
 		"The name of the ConfigMap in the projectsveltos namespace containing the drift-detection-manager configuration")
+
+	fs.StringVar(&luaConfigMap, "lua-methods", "",
+		"The name of the ConfigMap in the projectsveltos namespace containing lua utilities to be loaded."+
+			"Changing the content of the ConfigMap does not cause Sveltos to redeploy.")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,

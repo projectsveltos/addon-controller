@@ -182,7 +182,7 @@ var _ = Describe("Feature", Serial, func() {
 			{kind: "Namespace", name: resourceNamespace, namespace: "", group: ""},
 			{kind: "Deployment", name: "nginx-deployment", namespace: resourceNamespace, group: "apps"},
 		}
-		By("MGIANLUC")
+
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)

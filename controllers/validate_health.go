@@ -35,6 +35,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	sveltoslua "github.com/projectsveltos/libsveltos/lib/lua"
 )
 
 type healthStatus struct {
@@ -173,7 +174,9 @@ func isHealthy(resource *unstructured.Unstructured, script string, logger logr.L
 	l := lua.NewState()
 	defer l.Close()
 
-	obj := mapToTable(resource.UnstructuredContent())
+	sveltoslua.LoadModulesAndRegisterMethods(l)
+
+	obj := sveltoslua.MapToTable(resource.UnstructuredContent())
 
 	err = l.DoString(script)
 	if err != nil {
@@ -196,11 +199,11 @@ func isHealthy(resource *unstructured.Unstructured, script string, logger logr.L
 	lv := l.Get(-1)
 	tbl, ok := lv.(*lua.LTable)
 	if !ok {
-		logger.V(logs.LogInfo).Info(luaTableError)
-		return false, "", fmt.Errorf("%s", luaTableError)
+		logger.V(logs.LogInfo).Info(sveltoslua.LuaTableError)
+		return false, "", fmt.Errorf("%s", sveltoslua.LuaTableError)
 	}
 
-	goResult := toGoValue(tbl)
+	goResult := sveltoslua.ToGoValue(tbl)
 	resultJson, err := json.Marshal(goResult)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to marshal result: %v", err))

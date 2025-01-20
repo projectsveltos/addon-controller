@@ -29,6 +29,7 @@ var (
 	managementClusterClient client.Client
 	managementClusterConfig *rest.Config
 	driftdetectionConfigMap string
+	luaConfigMap            string
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config) {
@@ -38,6 +39,10 @@ func SetManagementClusterAccess(c client.Client, config *rest.Config) {
 
 func SetDriftdetectionConfigMap(name string) {
 	driftdetectionConfigMap = name
+}
+
+func SetLuaConfigMap(name string) {
+	luaConfigMap = name
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -52,11 +57,29 @@ func getDriftDetectionConfigMap() string {
 	return driftdetectionConfigMap
 }
 
-func collectDriftDetectionConfigMap(ctx context.Context, name string) (*corev1.ConfigMap, error) {
+func getLuaConfigMap() string {
+	return luaConfigMap
+}
+
+func collectDriftDetectionConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {
 	c := getManagementClusterClient()
 	configMap := &corev1.ConfigMap{}
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: name}, configMap)
+	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: getDriftDetectionConfigMap()},
+		configMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return configMap, nil
+}
+
+func collectLuaConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {
+	c := getManagementClusterClient()
+	configMap := &corev1.ConfigMap{}
+
+	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: getLuaConfigMap()},
+		configMap)
 	if err != nil {
 		return nil, err
 	}

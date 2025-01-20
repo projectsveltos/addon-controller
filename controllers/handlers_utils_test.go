@@ -1419,7 +1419,7 @@ subjects:
 `
 		data := map[string]string{"policy.yaml": content}
 		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(1))
 		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
@@ -1480,7 +1480,7 @@ stringData:
 		policies := []string{service, deployment, secret}
 		configMap := createConfigMapWithPolicy(randomString(), randomString(), policies...)
 		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, configMap.Data, false,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))
 	})

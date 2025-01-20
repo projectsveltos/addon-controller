@@ -329,6 +329,19 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 	return false
 }
 
+func instantiateWithLua(referencedObject client.Object, logger logr.Logger) bool {
+	annotations := referencedObject.GetAnnotations()
+	if annotations != nil {
+		if _, ok := annotations[libsveltosv1beta1.PolicyLuaAnnotation]; ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("referencedObject %s %s/%s contains a lua script",
+				referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName()))
+			return true
+		}
+	}
+
+	return false
+}
+
 func getSubresources(referencedObject client.Object) []string {
 	annotations := referencedObject.GetAnnotations()
 	if annotations != nil {
@@ -354,7 +367,8 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 
 	subresources := getSubresources(referencedObject)
 	instantiateTemplate := instantiateTemplate(referencedObject, logger)
-	resources, err := collectContent(ctx, clusterSummary, mgmtResources, data, instantiateTemplate, logger)
+	instantiateLua := instantiateWithLua(referencedObject, logger)
+	resources, err := collectContent(ctx, clusterSummary, mgmtResources, data, instantiateTemplate, instantiateLua, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -941,7 +955,7 @@ func customSplit(text string) ([]string, error) {
 // Returns an error if one occurred. Otherwise it returns a slice of *unstructured.Unstructured.
 func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, data map[string]string,
-	instantiateTemplate bool, logger logr.Logger,
+	instantiateTemplate, instantiateLua bool, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	policies := make([]*unstructured.Unstructured, 0, len(data))
@@ -958,6 +972,16 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 				return nil, err
 			}
 
+			section = instance
+		} else if instantiateLua {
+			instance, err := instantiateWithLuaScript(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				section, mgmtResources, logger)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
+				return nil, err
+			}
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("lua output %q", instance))
 			section = instance
 		}
 
@@ -1993,7 +2017,7 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 	// If drift-detectionmanager configuration is in a ConfigMap. fetch ConfigMap and use its Data
 	// section in the hash evaluation.
 	if driftDetectionConfigMap := getDriftDetectionConfigMap(); driftDetectionConfigMap != "" {
-		configMap, err := collectDriftDetectionConfigMap(ctx, driftDetectionConfigMap)
+		configMap, err := collectDriftDetectionConfigMap(ctx)
 		if err != nil {
 			return nil, err
 		}

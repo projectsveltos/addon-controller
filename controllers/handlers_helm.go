@@ -363,6 +363,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 					if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 						return nil, err
 					}
+
 					if currentRelease != nil && currentRelease.Status != string(release.StatusUninstalled) {
 						err = doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 						if err != nil {
@@ -1253,7 +1254,6 @@ func getRegistryClient(namespace string, registryOptions *registryClientOptions,
 		}
 		return registry.NewClient(options...)
 	}
-
 	return registry.NewRegistryClientWithTLS(os.Stderr, "", "", registryOptions.caPath,
 		registryOptions.skipTLSVerify, registryOptions.credentialsPath, settings.Debug)
 }
@@ -2511,6 +2511,10 @@ func createFileWithCredentials(ctx context.Context, c client.Client, clusterName
 		return "", err
 	}
 
+	if secret.Type != corev1.SecretTypeDockerConfigJson {
+		return "", nil
+	}
+
 	if secret.Data == nil {
 		return "", errors.New(fmt.Sprintf("secret %s/%s referenced in HelmChart section contains no data",
 			namespace, credSecretRef.Name))
@@ -2636,7 +2640,7 @@ func doLogin(ctx context.Context, c client.Client, registryOptions *registryClie
 		return err
 	}
 
-	username, password, host, err := getUsernameAndPasswordFromSecret(registryURL, secret)
+	username, password, hostname, err := getUsernameAndPasswordFromSecret(registryURL, secret)
 	if err != nil {
 		return err
 	}
@@ -2646,8 +2650,15 @@ func doLogin(ctx context.Context, c client.Client, registryOptions *registryClie
 		return err
 	}
 
-	options := []registry.LoginOption{registry.LoginOptBasicAuth(username, password)}
-	return registryClient.Login(host, options...)
+	cfg := &action.Configuration{
+		RegistryClient: registryClient,
+	}
+
+	return action.NewRegistryLogin(cfg).Run(os.Stderr, hostname, username, password,
+		action.WithCertFile(""),
+		action.WithKeyFile(""),
+		action.WithCAFile(registryOptions.caPath),
+		action.WithInsecure(registryOptions.skipTLSVerify))
 }
 
 // usernameAndPasswordFromSecret derives authentication data from a Secret to login to an OCI registry. This Secret

@@ -929,6 +929,7 @@ var _ = Describe("Hash methods", func() {
 			Data: map[string][]byte{
 				"config.json": credentialsBytes,
 			},
+			Type: corev1.SecretTypeDockerConfigJson,
 		}
 
 		caByte := []byte(randomString())

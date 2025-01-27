@@ -95,8 +95,9 @@ const (
 	// SyncModeContinuous indicates feature sync should continuously happen
 	SyncModeContinuous = SyncMode("Continuous")
 
-	// SyncModeContinuousWithDriftDetection indicates feature sync should continuously happen
-	// if configuration drift is detected in the managed cluster, it will be overrid
+	// SyncModeContinuousWithDriftDetection indicates that feature synchronization
+	// should occur continuously. If configuration drift is detected in the managed
+	// cluster, it will be overridden.
 	SyncModeContinuousWithDriftDetection = SyncMode("ContinuousWithDriftDetection")
 
 	// SyncModeDryRun indicates feature sync should continuously happen
@@ -606,9 +607,12 @@ type Spec struct {
 	// - OneTime means, first time a workload cluster matches the ClusterProfile,
 	// features will be deployed in such cluster. Any subsequent feature configuration
 	// change won't be applied into the matching workload clusters;
-	// - Continuous means first time a workload cluster matches the ClusterProfile,
-	// features will be deployed in such a cluster. Any subsequent feature configuration
-	// change will be applied into the matching workload clusters.
+	// - Continuous mode ensures that the first time a workload cluster matches a ClusterProfile,
+	// the specified features are deployed. Subsequent changes to the feature configuration are also
+	// automatically applied to all matching workload clusters.
+	// _ SyncModeContinuousWithDriftDetection operates similarly to Continuous mode, but also monitors
+	// matching managed clusters for configuration drift. If drift is detected, a reconciliation is
+	// triggered to ensure the managed cluster's configuration aligns with the ClusterProfile.
 	// - DryRun means no change will be propagated to any matching cluster. A report
 	// instead will be generated summarizing what would happen in any matching cluster
 	// because of the changes made to ClusterProfile while in DryRun mode.

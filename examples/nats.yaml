@@ -10,7 +10,7 @@ spec:
   - repositoryURL:    https://nats-io.github.io/k8s/helm/charts/
     repositoryName:   nats
     chartName:        nats/nats
-    chartVersion:     1.2.9
+    chartVersion:     1.2.10
     releaseName:      nats
     releaseNamespace: nats
     helmChartAction:  Install

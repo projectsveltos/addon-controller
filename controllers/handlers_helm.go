@@ -96,6 +96,9 @@ type registryClientOptions struct {
 	caPath          string
 	skipTLSVerify   bool
 	plainHTTP       bool
+	username        string
+	password        string
+	hostname        string
 }
 
 type releaseInfo struct {
@@ -794,27 +797,70 @@ func handleUninstall(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 	return report, nil
 }
 
-func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
-	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	currentChart *configv1beta1.HelmChart, logger logr.Logger) (*registryClientOptions, error) {
+
+	registryOptions := &registryClientOptions{}
+	if currentChart.RegistryCredentialsConfig == nil {
+		return registryOptions, nil
+	}
 
 	credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, currentChart)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process credentials %v", err))
-		return nil, nil, err
-	}
-	if credentialsPath != "" {
-		defer os.Remove(credentialsPath)
-	}
-	if caPath != "" {
-		defer os.Remove(caPath)
+		return registryOptions, err
 	}
 
-	registryOptions := &registryClientOptions{
-		credentialsPath: credentialsPath, caPath: caPath,
-		skipTLSVerify: getInsecureSkipTLSVerify(currentChart),
-		plainHTTP:     getPlainHTTP(currentChart),
+	registryOptions.credentialsPath = credentialsPath
+	registryOptions.caPath = caPath
+
+	if currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
+		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
+			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
+
+		secret := &corev1.Secret{}
+		err = getManagementClusterClient().Get(ctx,
+			types.NamespacedName{
+				Namespace: credentialSecretNamespace,
+				Name:      currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Name,
+			},
+			secret)
+		if err != nil {
+			return registryOptions, err
+		}
+
+		username, password, hostname, err := getUsernameAndPasswordFromSecret(currentChart.RepositoryURL, secret)
+		if err != nil {
+			return registryOptions, err
+		}
+
+		registryOptions.username = username
+		registryOptions.password = password
+		registryOptions.hostname = hostname
+
+		registryOptions.plainHTTP = getPlainHTTP(currentChart)
+		registryOptions.skipTLSVerify = getInsecureSkipTLSVerify(currentChart)
+	}
+
+	return registryOptions, nil
+}
+
+func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
+	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+
+	registryOptions, err := createRegistryClientOptions(ctx, clusterSummary, currentChart, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse credentials info: %v", err))
+		return nil, nil, err
+	}
+
+	if registryOptions.credentialsPath != "" {
+		defer os.Remove(registryOptions.credentialsPath)
+	}
+	if registryOptions.caPath != "" {
+		defer os.Remove(registryOptions.caPath)
 	}
 
 	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
@@ -827,12 +873,8 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName",
 		currentChart.ReleaseName, "version", currentChart.ChartVersion)
 
-	if registryOptions.credentialsPath != "" {
-		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
-			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
-		err = doLogin(ctx, getManagementClusterClient(), registryOptions, currentChart.ReleaseNamespace,
-			credentialSecretNamespace, currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Name,
-			currentChart.RepositoryURL)
+	if currentChart.RegistryCredentialsConfig != nil {
+		err = doLogin(registryOptions, currentChart.ReleaseNamespace, currentChart.RepositoryURL)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to login %v", err))
 			return nil, nil, err
@@ -891,10 +933,13 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 }
 
 // repoAddOrUpdate adds/updates repo with given name and url
-func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, logger logr.Logger) error {
+func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOptions *registryClientOptions,
+	logger logr.Logger) error {
+
 	logger = logger.WithValues("repoURL", repoURL, "repoName", name)
 
-	entry := &repo.Entry{Name: name, URL: repoURL}
+	entry := &repo.Entry{Name: name, URL: repoURL, Username: registryOptions.username, Password: registryOptions.password,
+		InsecureSkipTLSverify: registryOptions.skipTLSVerify}
 	chartRepo, err := repo.NewChartRepository(entry, getter.All(settings))
 	if err != nil {
 		return err
@@ -908,6 +953,7 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, logger log
 	}
 
 	if !registry.IsOCI(entry.URL) {
+		logger.V(logs.LogInfo).Info("non OCI. Download index file.")
 		_, err = chartRepo.DownloadIndexFile()
 		if err != nil {
 			return err
@@ -1122,7 +1168,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	patches = append(patches, driftExclusionPatches...)
 
-	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, patches)
+	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, registryOptions, patches)
 
 	cp, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
@@ -1240,22 +1286,54 @@ func getRegistryClient(namespace string, registryOptions *registryClientOptions,
 ) (*registry.Client, error) {
 
 	settings := getSettings(namespace, registryOptions)
-	if registryOptions.caPath == "" && !registryOptions.skipTLSVerify {
-		options := []registry.ClientOption{
-			registry.ClientOptDebug(settings.Debug),
-			registry.ClientOptEnableCache(enableClientCache),
-			registry.ClientOptWriter(os.Stderr),
+
+	if registryOptions.caPath != "" || registryOptions.skipTLSVerify {
+		registryClient, err :=
+			newRegistryClientWithTLS("", "", registryOptions.caPath, registryOptions.skipTLSVerify, settings)
+		if err != nil {
+			return nil, err
 		}
-		if registryOptions.credentialsPath != "" {
-			options = append(options, registry.ClientOptCredentialsFile(registryOptions.credentialsPath))
-		}
-		if registryOptions.plainHTTP {
-			options = append(options, registry.ClientOptPlainHTTP())
-		}
-		return registry.NewClient(options...)
+		return registryClient, nil
 	}
-	return registry.NewRegistryClientWithTLS(os.Stderr, "", "", registryOptions.caPath,
-		registryOptions.skipTLSVerify, registryOptions.credentialsPath, settings.Debug)
+
+	registryClient, err := newDefaultRegistryClient(registryOptions.plainHTTP, settings, enableClientCache)
+	if err != nil {
+		return nil, err
+	}
+	return registryClient, nil
+}
+
+func newDefaultRegistryClient(plainHTTP bool, settings *cli.EnvSettings,
+	enableClientCache bool) (*registry.Client, error) {
+
+	opts := []registry.ClientOption{
+		registry.ClientOptDebug(settings.Debug),
+		registry.ClientOptEnableCache(enableClientCache),
+		registry.ClientOptWriter(os.Stderr),
+		registry.ClientOptCredentialsFile(settings.RegistryConfig),
+	}
+	if plainHTTP {
+		opts = append(opts, registry.ClientOptPlainHTTP())
+	}
+
+	// Create a new registry client
+	registryClient, err := registry.NewClient(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return registryClient, nil
+}
+
+func newRegistryClientWithTLS(certFile, keyFile, caFile string, insecureSkipTLSverify bool,
+	settings *cli.EnvSettings) (*registry.Client, error) {
+
+	// Create a new registry client
+	registryClient, err := registry.NewRegistryClientWithTLS(os.Stderr, certFile, keyFile, caFile, insecureSkipTLSverify,
+		settings.RegistryConfig, settings.Debug)
+	if err != nil {
+		return nil, err
+	}
+	return registryClient, nil
 }
 
 func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions, enableClientCache bool,
@@ -1448,7 +1526,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
-		requestedChart.RepositoryURL, logger)
+		requestedChart.RepositoryURL, registryOptions, logger)
 	if err != nil {
 		return err
 	}
@@ -1507,7 +1585,7 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
-		requestedChart.RepositoryURL, logger)
+		requestedChart.RepositoryURL, registryOptions, logger)
 	if err != nil {
 		return err
 	}
@@ -2255,6 +2333,9 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	if actionConfig.RegistryClient != nil {
 		installClient.SetRegistryClient(actionConfig.RegistryClient)
 	}
+	installClient.InsecureSkipTLSverify = registryOptions.skipTLSVerify
+	installClient.PlainHTTP = registryOptions.plainHTTP
+	installClient.CaFile = registryOptions.caPath
 
 	if len(patches) > 0 {
 		installClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
@@ -2264,7 +2345,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 }
 
 func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig *action.Configuration,
-	patches []libsveltosv1beta1.Patch) *action.Upgrade {
+	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch) *action.Upgrade {
 
 	upgradeClient := action.NewUpgrade(actionConfig)
 	upgradeClient.Install = true
@@ -2290,6 +2371,9 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.CleanupOnFail = getCleanupOnFailValue(requestedChart.Options)
 	upgradeClient.SubNotes = getSubNotesValue(requestedChart.Options)
 	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
+	upgradeClient.InsecureSkipTLSverify = registryOptions.skipTLSVerify
+	upgradeClient.PlainHTTP = registryOptions.plainHTTP
+	upgradeClient.CaFile = registryOptions.caPath
 
 	if actionConfig.RegistryClient != nil {
 		upgradeClient.SetRegistryClient(actionConfig.RegistryClient)
@@ -2626,39 +2710,28 @@ func getHelmChartAndRepoName(chartName, repoURL string) (string, string, error) 
 	return chartName, repoURL, nil
 }
 
-func doLogin(ctx context.Context, c client.Client, registryOptions *registryClientOptions,
-	releaseNamespace, secretNamespace, secretName, registryURL string) error {
+func doLogin(registryOptions *registryClientOptions, releaseNamespace, registryURL string) error {
+	if registry.IsOCI(registryURL) {
+		registryClient, err := getRegistryClient(releaseNamespace, registryOptions, true)
+		if err != nil {
+			return err
+		}
 
-	secret := &corev1.Secret{}
-	err := c.Get(ctx,
-		types.NamespacedName{
-			Namespace: secretNamespace,
-			Name:      secretName,
-		},
-		secret)
-	if err != nil {
-		return err
+		cfg := &action.Configuration{
+			RegistryClient: registryClient,
+		}
+
+		return action.NewRegistryLogin(cfg).Run(os.Stderr,
+			registryOptions.hostname,
+			registryOptions.username,
+			registryOptions.password,
+			action.WithCertFile(""),
+			action.WithKeyFile(""),
+			action.WithCAFile(registryOptions.caPath),
+			action.WithInsecure(registryOptions.skipTLSVerify))
 	}
 
-	username, password, hostname, err := getUsernameAndPasswordFromSecret(registryURL, secret)
-	if err != nil {
-		return err
-	}
-
-	registryClient, err := getRegistryClient(releaseNamespace, registryOptions, true)
-	if err != nil {
-		return err
-	}
-
-	cfg := &action.Configuration{
-		RegistryClient: registryClient,
-	}
-
-	return action.NewRegistryLogin(cfg).Run(os.Stderr, hostname, username, password,
-		action.WithCertFile(""),
-		action.WithKeyFile(""),
-		action.WithCAFile(registryOptions.caPath),
-		action.WithInsecure(registryOptions.skipTLSVerify))
+	return nil
 }
 
 // usernameAndPasswordFromSecret derives authentication data from a Secret to login to an OCI registry. This Secret
@@ -2736,7 +2809,7 @@ func evaluateValuesDiff(ctx context.Context, currentValues map[string]interface{
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
-		requestedChart.RepositoryURL, logger)
+		requestedChart.RepositoryURL, registryOptions, logger)
 	if err != nil {
 		return "", err
 	}

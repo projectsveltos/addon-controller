@@ -1472,6 +1472,7 @@ func autoConvert_v1beta1_Spec_To_v1alpha1_Spec(in *v1beta1.Spec, out *Spec, s co
 	out.SyncMode = SyncMode(in.SyncMode)
 	out.Tier = in.Tier
 	out.ContinueOnConflict = in.ContinueOnConflict
+	// WARNING: in.ContinueOnError requires manual conversion: does not exist in peer-type
 	out.MaxUpdate = (*intstr.IntOrString)(unsafe.Pointer(in.MaxUpdate))
 	out.StopMatchingBehavior = StopMatchingBehavior(in.StopMatchingBehavior)
 	out.Reloader = in.Reloader

@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.23.4
+go 1.23.5
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
@@ -17,9 +17,9 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.45.1-0.20250120082144-a4e0a95406a3
+	github.com/projectsveltos/libsveltos v0.46.0
 	github.com/prometheus/client_golang v1.20.5
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/pflag v1.0.6
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.21.0
 	gopkg.in/yaml.v3 v3.0.1

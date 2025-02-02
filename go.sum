@@ -83,6 +83,8 @@ github.com/creack/pty v1.1.18 h1:n56/Zwd5o6whRC5PMGretI4IdRLlmBXYNjScPaBgsbY=
 github.com/creack/pty v1.1.18/go.mod h1:MOBLtS5ELjhRRrroQr9kyvTxUAFNvYEK993ew/Vr4O4=
 github.com/cyphar/filepath-securejoin v0.4.0 h1:PioTG9TBRSApBpYGnDU8HC+miIsX8vitBH9LGNNMoLQ=
 github.com/cyphar/filepath-securejoin v0.4.0/go.mod h1:Sdj7gXlvMcPZsbhwhQ33GguGLDGQL7h7bg04C/+u9jI=
+github.com/cyphar/filepath-securejoin v0.4.1 h1:JyxxyPEaktOD+GAnqIqTf9A8tHyAG22rowi7HkoSU1s=
+github.com/cyphar/filepath-securejoin v0.4.1/go.mod h1:Sdj7gXlvMcPZsbhwhQ33GguGLDGQL7h7bg04C/+u9jI=
 github.com/dariubs/percent v1.0.0 h1:fY8q40FRYaCiFZ0gTOa73Cmp21hS32w+tSSmqbGnUzc=
 github.com/dariubs/percent v1.0.0/go.mod h1:NDZpkezJ8QqyIW/510MywB5T2KdC8v/0oTlEoPcMsRM=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -129,6 +131,8 @@ github.com/fluxcd/pkg/http/fetch v0.14.0 h1:65iI38Vrl21v0YxT8IFCj/63I9/l43b7dPLa
 github.com/fluxcd/pkg/http/fetch v0.14.0/go.mod h1:/Ir27MZbgG11yN/npQwF32+oIETeJ+QdceoaxvvkLzQ=
 github.com/fluxcd/pkg/tar v0.10.0 h1:QWT/wou50jTrNp2YIMsT1MY/wbkT2OULbfFxAB9Ieao=
 github.com/fluxcd/pkg/tar v0.10.0/go.mod h1:5DSdnavY6AvCdKLk6UHUcYBaTJHaEHlytSzrOECqKhI=
+github.com/fluxcd/pkg/tar v0.11.0 h1:pjf/rzr6HNAPiuxT59mtba9tfBtdNiSQ/UqduG8vZ2I=
+github.com/fluxcd/pkg/tar v0.11.0/go.mod h1:+kiP25NqibWMpFWgizyPEMqnMJIux7bCgEy+4pfxyI4=
 github.com/fluxcd/pkg/testserver v0.9.0 h1:UD6gyT1KXXbl5BbuE7o+UdxKeuYd7/CePAUdULokJbc=
 github.com/fluxcd/pkg/testserver v0.9.0/go.mod h1:dqpWALgSYdcmPS9OXq165s4OjUexVysl++EZJ8uZVkw=
 github.com/fluxcd/source-controller/api v1.4.1 h1:zV01D7xzHOXWbYXr36lXHWWYS7POARsjLt61Nbh3kVY=
@@ -487,6 +491,8 @@ golang.org/x/sys v0.0.0-20220811171246-fbc7d0a398ab/go.mod h1:oPkhp1MJrh7nUepCBc
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.28.0 h1:Fksou7UEQUWlKvIdsqzJmUmCX3cZuD2+P3XyyzwMhlA=
 golang.org/x/sys v0.28.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+golang.org/x/sys v0.29.0 h1:TPYlXGxvx1MGTn2GiZDhnjPA9wZzZeGKHHmKhHYvgaU=
+golang.org/x/sys v0.29.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
 golang.org/x/term v0.27.0 h1:WP60Sv1nlK1T6SupCHbXzSaN0b9wUmsPoRS9b61A23Q=
 golang.org/x/term v0.27.0/go.mod h1:iMsnZpn0cago0GOrHO2+Y7u7JPn5AylBrcoWkElMTSM=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=

@@ -15,7 +15,7 @@ spec:
         - "--report-mode=0"
         - --shard-key=
         - "--v=5"
-        - "--version=v0.46.0"
+        - "--version=v0.46.1"
         env:
         - name: GOMEMLIMIT
           valueFrom:

@@ -1038,7 +1038,11 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		installClient.DryRun = true
 	}
-	r, err := installClient.RunWithContext(ctx, chartRequested, values)
+
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
+	defer cancel()
+
+	r, err := installClient.RunWithContext(ctxWithTimeout, chartRequested, values)
 	if err != nil {
 		return nil, err
 	}
@@ -1194,7 +1198,10 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return err
 	}
 
-	_, err = upgradeClient.RunWithContext(ctx, requestedChart.ReleaseName, chartRequested, values)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
+	defer cancel()
+
+	_, err = upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		return err
 	}
@@ -2181,12 +2188,13 @@ func getSkipSchemaValidation(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getTimeoutValue(options *configv1beta1.HelmOptions) *metav1.Duration {
-	if options != nil {
-		return options.Timeout
+func getTimeoutValue(options *configv1beta1.HelmOptions) metav1.Duration {
+	if options != nil && options.Timeout != nil {
+		return *options.Timeout
 	}
 
-	return nil
+	const helmTimeout = 5
+	return metav1.Duration{Duration: helmTimeout * time.Minute}
 }
 
 func getDependenciesUpdateValue(options *configv1beta1.HelmOptions) bool {
@@ -2323,9 +2331,7 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 	installClient.Atomic = getAtomicHelmValue(requestedChart.Options)
 	installClient.DisableHooks = getDisableHooksHelmInstallValue(requestedChart.Options)
 	installClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
-	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-		installClient.Timeout = timeout.Duration
-	}
+	installClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
 	installClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	installClient.Replace = getReplaceValue(requestedChart.Options)
 	installClient.Labels = getLabelsValue(requestedChart.Options)
@@ -2357,9 +2363,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.Atomic = getAtomicHelmValue(requestedChart.Options)
 	upgradeClient.DisableHooks = getDisableHooksHelmUpgradeValue(requestedChart.Options)
 	upgradeClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
-	if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-		upgradeClient.Timeout = timeout.Duration
-	}
+	upgradeClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
 	upgradeClient.SkipSchemaValidation = getSkipSchemaValidation(requestedChart.Options)
 	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
 	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
@@ -2392,10 +2396,7 @@ func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfi
 	uninstallClient := action.NewUninstall(actionConfig)
 	uninstallClient.DryRun = false
 	if requestedChart != nil {
-		if timeout := getTimeoutValue(requestedChart.Options); timeout != nil {
-			uninstallClient.Timeout = timeout.Duration
-		}
-
+		uninstallClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
 		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
 		uninstallClient.Wait = getWaitHelmValue(requestedChart.Options)
 		uninstallClient.DisableHooks = getDisableHooksHelmUninstallValue(requestedChart.Options)

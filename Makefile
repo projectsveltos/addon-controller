@@ -387,12 +387,6 @@ set-manifest-pull-policy:
 
 ##@ Build
 
-drift-detection-manager:
-	@echo "Downloading drift detection manager yaml"
-	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
-	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
-	cd pkg/drift-detection; go generate
-
 .PHONY: build
 build: drift-detection-manager generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
@@ -443,3 +437,14 @@ deploy: manifests $(KUSTOMIZE) ## Deploy controller to the K8s cluster specified
 .PHONY: undeploy
 undeploy: s $(KUSTOMIZE) ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+
+
+digest := $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/drift-detection-manager:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+drift-detection-manager:
+	@echo "Downloading drift detection manager yaml"
+	@echo "image digest is $(digest)"
+	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
+	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager.yaml
+	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
+	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
+	cd pkg/drift-detection; go generate

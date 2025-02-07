@@ -31,6 +31,7 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
@@ -898,7 +899,8 @@ func extractTarGz(src, dest string) error {
 func instantiateResourceWithSubstituteValues(templateName string, resource []byte,
 	substituteValues map[string]string, logger logr.Logger) ([]byte, error) {
 
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).Parse(string(resource))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).
+		Funcs(sprig.TxtFuncMap()).Parse(string(resource))
 	if err != nil {
 		return nil, err
 	}

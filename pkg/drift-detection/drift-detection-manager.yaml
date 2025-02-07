@@ -123,7 +123,7 @@ spec:
         - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager:main
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:1829deea95e034cb734b8218186d6528c5385505168a898d16ec3ac2deb6677b
         livenessProbe:
           failureThreshold: 3
           httpGet:

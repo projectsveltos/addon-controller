@@ -1,0 +1,25 @@
+# This shows how to deploy Harbor on any cluster having label env:production
+# and expose it via LoadBalancer service
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: deploy-harbor
+spec:
+  clusterSelector:
+    matchLabels:
+      env: production
+  syncMode: Continuous
+  helmCharts:
+  - repositoryURL:    https://helm.goharbor.io
+    repositoryName:   harbor
+    chartName:        harbor/harbor
+    chartVersion:     1.16.2 
+    releaseName:      harbor
+    releaseNamespace: harbor
+    helmChartAction:  Install
+    values: |
+      expose:
+        type: loadBalancer
+        tls:
+          auto:
+            commonName: "harbor-test"

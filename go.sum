@@ -329,8 +329,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v0.46.2-0.20250210085510-7226d544370f h1:j36emS+Lt1g4pPhKCqccYy2hr2cDBlu+pBu5WegNjRc=
-github.com/projectsveltos/libsveltos v0.46.2-0.20250210085510-7226d544370f/go.mod h1:vWM0iJACIE49RSSGNVa6VY18LKlsh6b/8dubxdgYwzo=
+github.com/projectsveltos/libsveltos v0.47.0 h1:DP5dpqjJE++SEAhbSgK0JaLziVpD2jPNus3LyDUzuV8=
+github.com/projectsveltos/libsveltos v0.47.0/go.mod h1:vWM0iJACIE49RSSGNVa6VY18LKlsh6b/8dubxdgYwzo=
 github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20250208125623-8a0f9e2ba46b h1:jqMq/LPJvTsZRAmkIqwPRbfUqfVZtGrn0+kuHDUutQ4=
 github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20250208125623-8a0f9e2ba46b/go.mod h1:L5waR6GvgOHVQ/YnDxHW4p53DDQ/sF3ACZhtSpDARMw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=

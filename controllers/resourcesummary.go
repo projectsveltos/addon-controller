@@ -216,6 +216,8 @@ func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespac
 		strings.ReplaceAll(driftDetectionManagerYAML, "cluster-name=", fmt.Sprintf("cluster-name=%s", clusterName))
 	driftDetectionManagerYAML =
 		strings.ReplaceAll(driftDetectionManagerYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
+	driftDetectionManagerYAML =
+		strings.ReplaceAll(driftDetectionManagerYAML, "v=5", "v=0")
 
 	return driftDetectionManagerYAML
 }

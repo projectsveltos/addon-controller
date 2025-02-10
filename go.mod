@@ -17,7 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.46.2-0.20250206075732-1af724f2ac3b
+	github.com/projectsveltos/libsveltos v0.46.2-0.20250210085510-7226d544370f
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/pflag v1.0.6
 	github.com/yuin/gopher-lua v1.1.1
@@ -55,8 +55,6 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
-	github.com/chai2010/glua-helper v0.0.0-20171228064744-0e9a290dbcdf // indirect
-	github.com/chai2010/glua-strings v0.0.0-20200705094630-a37fb1f4ddeb // indirect
 	github.com/containerd/containerd v1.7.25 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -137,6 +135,7 @@ require (
 	github.com/opencontainers/go-digest/blake3 v0.0.0-20240426182413-22b78e47854a // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
+	github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20250208125623-8a0f9e2ba46b // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect

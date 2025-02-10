@@ -31,6 +31,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
@@ -155,10 +156,11 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 }
 
 func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client, //nolint: funlen,maintidx // adding few closures
-	clusterType libsveltosv1beta1.ClusterType, clusterNamespace, clusterName, requestorName, values string,
+	clusterSummary *configv1beta1.ClusterSummary, requestorName, values string,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
-	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
+	objects, err := fecthClusterObjects(ctx, config, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +174,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		}
 	}
 
-	funcMap := funcmap.SveltosFuncMap()
+	funcMap := funcmap.SveltosFuncMap(funcmap.HasTextTemplateAnnotation(clusterSummary.Annotations))
 	funcMap["getResource"] = func(id string) map[string]interface{} {
 		u, ok := objects.MgmtResources[id]
 		if !ok {
@@ -283,7 +285,7 @@ func instantiateTemplateValues(ctx context.Context, config *rest.Config, c clien
 		return u
 	}
 
-	templateName := getTemplateName(clusterNamespace, clusterName, requestorName)
+	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, requestorName)
 	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcMap).Parse(values)
 	if err != nil {
 		return "", err

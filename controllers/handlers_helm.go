@@ -1928,8 +1928,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 	logger logr.Logger) (chartutil.Values, error) {
 
 	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
+		clusterSummary, requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1942,8 +1941,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 
 	for k := range templatedValuesFrom {
 		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			requestedChart.ChartName, templatedValuesFrom[k], mgmtResources, logger)
+			clusterSummary, requestedChart.ChartName, templatedValuesFrom[k], mgmtResources, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -2940,8 +2938,7 @@ func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.Clu
 	}
 
 	instantiatedChartString, err := instantiateTemplateValues(ctx, getManagementClusterConfig(),
-		getManagementClusterClient(), clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, currentChart.ChartName, string(jsonData), mgmtResources, logger)
+		getManagementClusterClient(), clusterSummary, currentChart.ChartName, string(jsonData), mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}

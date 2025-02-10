@@ -44,7 +44,8 @@ func getTemplateResourceNamespace(clusterSummary *configv1beta1.ClusterSummary,
 	// Accept namespaces that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).Parse(ref.Resource.Namespace)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(
+		funcmap.SveltosFuncMap(funcmap.HasTextTemplateAnnotation(clusterSummary.Annotations))).Parse(ref.Resource.Namespace)
 	if err != nil {
 		return "", err
 	}
@@ -83,7 +84,8 @@ func getTemplateResourceName(clusterSummary *configv1beta1.ClusterSummary,
 	// Accept name that are templates
 	templateName := getTemplateName(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		string(clusterSummary.Spec.ClusterType))
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap()).Parse(ref.Resource.Name)
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(
+		funcmap.SveltosFuncMap(funcmap.HasTextTemplateAnnotation(clusterSummary.Annotations))).Parse(ref.Resource.Name)
 	if err != nil {
 		return "", err
 	}

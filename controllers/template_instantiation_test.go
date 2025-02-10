@@ -33,6 +33,7 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
@@ -40,6 +41,7 @@ import (
 
 var _ = Describe("Template instantiation", func() {
 	var cluster *clusterv1.Cluster
+	var clusterSummary *configv1beta1.ClusterSummary
 	var namespace string
 
 	BeforeEach(func() {
@@ -81,6 +83,18 @@ var _ = Describe("Template instantiation", func() {
 
 		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      randomString(), // for those test name does not really matter
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
 	})
 
 	It("instantiateTemplateValues returns correct values (metadata section)", func() {
@@ -89,8 +103,7 @@ var _ = Describe("Template instantiation", func() {
       name: "{{ .Cluster.metadata.name }}-test"`
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			nil, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -120,8 +133,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		value, err := strconv.Atoi(strings.ReplaceAll(result, "\n", ""))
 		Expect(err).To(BeNil())
@@ -153,8 +165,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("replicas: 7"))
 
@@ -164,8 +175,7 @@ var _ = Describe("Template instantiation", func() {
 
 		values = `{{ setField "Deployment" "spec.paused" false }}`
 		result, err = controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("paused: false"))
 
@@ -176,8 +186,7 @@ var _ = Describe("Template instantiation", func() {
 		values = fmt.Sprintf(`{{ setField "Deployment" "metadata.namespace" %q }}`, namespace)
 
 		result, err = controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("namespace: %s", namespace)))
 
@@ -231,8 +240,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		modifiedDepl := &appsv1.Deployment{}
@@ -268,8 +276,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).ToNot(ContainSubstring("replicas"))
 
@@ -305,8 +312,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).ToNot(ContainSubstring("replicas"))
 
@@ -357,8 +363,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("replicas: 5"))
 		Expect(result).To(ContainSubstring(fmt.Sprintf("namespace: %s", cluster.Namespace)))
@@ -383,8 +388,7 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			nil, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
@@ -431,8 +435,7 @@ valuesTemplate: |
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})
@@ -480,8 +483,7 @@ valuesTemplate: |
 		}
 
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			libsveltosv1beta1.ClusterTypeCapi, cluster.Namespace, cluster.Name, randomString(), values,
-			mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})

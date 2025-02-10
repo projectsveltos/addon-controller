@@ -158,8 +158,7 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 
 	// Path can be expressed as a template and instantiate using Cluster fields.
 	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.GetName(), path, nil, logger)
+		clusterSummary, clusterSummary.GetName(), path, nil, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -965,8 +964,7 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 		if instantiateTemplate {
 			instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				clusterSummary.GetName(), section, mgmtResources, logger)
+				clusterSummary, clusterSummary.GetName(), section, mgmtResources, logger)
 			if err != nil {
 				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
 				return nil, err
@@ -1966,8 +1964,7 @@ func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 
 	for k := range instantiatedPatches {
 		instantiatedPatch, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			requestor, instantiatedPatches[k].Patch, mgmtResources, logger)
+			clusterSummary, requestor, instantiatedPatches[k].Patch, mgmtResources, logger)
 		if err != nil {
 			return nil, err
 		}

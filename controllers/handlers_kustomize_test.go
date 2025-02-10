@@ -655,7 +655,7 @@ var _ = Describe("Hash methods", func() {
 			"Region":           "",
 		}
 		data, err := controllers.InstantiateResourceWithSubstituteValues(randomString(), []byte(deployment), substituteValues,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		Expect(string(data)).To(ContainSubstring(fmt.Sprintf("namespace: %s", clusterNamespace)))

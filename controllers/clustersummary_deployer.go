@@ -102,12 +102,21 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if !isConfigSame {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("configuration has changed. Current hash %x. Previous hash %x",
 			currentHash, hash))
+		clusterSummaryScope.ResetConsecutiveFailures(f.id)
 	}
 
 	if !r.shouldRedeploy(clusterSummaryScope, f, isConfigSame, logger) {
 		logger.V(logs.LogDebug).Info("no need to redeploy")
 		return nil
 	}
+
+	return r.proceedDeployingFeature(ctx, clusterSummaryScope, f, isConfigSame, currentHash, logger)
+}
+
+func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	f feature, isConfigSame bool, currentHash []byte, logger logr.Logger) error {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	var status *configv1beta1.FeatureStatus
 	var resultError error
@@ -132,6 +141,12 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 			var nonRetriableError *NonRetriableError
 			if errors.As(resultError, &nonRetriableError) {
 				nonRetriableStatus := configv1beta1.FeatureStatusFailedNonRetriable
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
+				return nil
+			}
+			if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
+				nonRetriableStatus := configv1beta1.FeatureStatusFailedNonRetriable
+				resultError := errors.New("the maximum number of consecutive errors has been reached")
 				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
 				return nil
 			}
@@ -355,6 +370,20 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 	return nil
 }
 
+// getConsecutiveFailures returns, if available, the number of consecutive failures corresponding to the
+// featureID
+func (r *ClusterSummaryReconciler) getConsecutiveFailures(clusterSummaryScope *scope.ClusterSummaryScope,
+	featureID configv1beta1.FeatureID) uint {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	if fs := getFeatureSummaryForFeatureID(clusterSummary, featureID); fs != nil {
+		return fs.ConsecutiveFailures
+	}
+
+	return 0
+}
+
 func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope,
 	featureID configv1beta1.FeatureID, status *configv1beta1.FeatureStatus, hash []byte, statusError error,
 	logger logr.Logger) {
@@ -368,17 +397,20 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 
 	switch *status {
 	case configv1beta1.FeatureStatusProvisioned:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioned, hash)
+		failed := false
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioned, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
 	case configv1beta1.FeatureStatusRemoved:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoved, hash)
+		failed := false
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoved, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
 	case configv1beta1.FeatureStatusProvisioning:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, hash)
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, hash, nil)
 	case configv1beta1.FeatureStatusRemoving:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoving, hash)
+		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoving, hash, nil)
 	case configv1beta1.FeatureStatusFailed, configv1beta1.FeatureStatusFailedNonRetriable:
-		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash)
+		failed := true
+		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash, &failed)
 		err := statusError.Error()
 		clusterSummaryScope.SetFailureMessage(featureID, &err)
 	}
@@ -435,4 +467,20 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.Clu
 	}
 
 	return true
+}
+
+// maxNumberOfConsecutiveFailureReached returns true if max number of consecutive failures has been reached.
+func (r *ClusterSummaryReconciler) maxNumberOfConsecutiveFailureReached(clusterSummaryScope *scope.ClusterSummaryScope, f feature,
+	logger logr.Logger) bool {
+
+	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.MaxConsecutiveFailures != nil {
+		consecutiveFailures := r.getConsecutiveFailures(clusterSummaryScope, f.id)
+		if consecutiveFailures >= *clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.MaxConsecutiveFailures {
+			msg := fmt.Sprintf("max number of consecutive failures reached %d", consecutiveFailures)
+			logger.V(logs.LogDebug).Info(msg)
+			return true
+		}
+	}
+
+	return false
 }

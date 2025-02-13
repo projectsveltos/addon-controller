@@ -1343,8 +1343,8 @@ func newRegistryClientWithTLS(certFile, keyFile, caFile string, insecureSkipTLSv
 	return registryClient, nil
 }
 
-func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions, enableClientCache bool,
-) (*action.Configuration, error) {
+func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions,
+	enableClientCache bool) (*action.Configuration, error) {
 
 	actionConfig := new(action.Configuration)
 

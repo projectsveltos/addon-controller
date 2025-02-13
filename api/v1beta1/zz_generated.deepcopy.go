@@ -986,6 +986,11 @@ func (in *Spec) DeepCopyInto(out *Spec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.MaxConsecutiveFailures != nil {
+		in, out := &in.MaxConsecutiveFailures, &out.MaxConsecutiveFailures
+		*out = new(uint)
+		**out = **in
+	}
 	if in.ExtraLabels != nil {
 		in, out := &in.ExtraLabels, &out.ExtraLabels
 		*out = make(map[string]string, len(*in))

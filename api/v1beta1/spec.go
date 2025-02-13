@@ -724,6 +724,13 @@ type Spec struct {
 	// +optional
 	DriftExclusions []DriftExclusion `json:"driftExclusions,omitempty"`
 
+	// The maximum number of consecutive deployment failures that Sveltos will permit.
+	// After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
+	// This setting applies only to feature deployments, not resource removal.
+	// This field is optional. If not set, Sveltos default behavior is to keep retrying.
+	// +optional
+	MaxConsecutiveFailures *uint `json:"maxConsecutiveFailures,omitempty"`
+
 	// ExtraLabels: These labels will be added by Sveltos to all Kubernetes resources deployed in
 	// a managed cluster based on this ClusterProfile/Profile instance.
 	// **Important:** If a resource deployed by Sveltos already has a label with a key present in

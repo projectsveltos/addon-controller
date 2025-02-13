@@ -102,26 +102,49 @@ func (s *ClusterSummaryScope) initializeFeatureStatusSummary() {
 
 // SetFeatureStatus sets the feature status.
 func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1beta1.FeatureID,
-	status configv1beta1.FeatureStatus, hash []byte) {
+	status configv1beta1.FeatureStatus, hash []byte, failed *bool) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].Status = status
 			s.ClusterSummary.Status.FeatureSummaries[i].Hash = hash
+			if failed != nil {
+				if *failed {
+					s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures++
+				} else {
+					s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures = 0
+				}
+			}
 			return
 		}
 	}
 
 	s.initializeFeatureStatusSummary()
 
+	consecutiveFailures := uint(0)
+	if failed != nil && *failed {
+		consecutiveFailures = 1
+	}
+
 	s.ClusterSummary.Status.FeatureSummaries = append(
 		s.ClusterSummary.Status.FeatureSummaries,
 		configv1beta1.FeatureSummary{
-			FeatureID: featureID,
-			Status:    status,
-			Hash:      hash,
+			FeatureID:           featureID,
+			Status:              status,
+			Hash:                hash,
+			ConsecutiveFailures: consecutiveFailures,
 		},
 	)
+}
+
+// ResetConsecutiveFailures reset status consecutiveFailures
+func (s *ClusterSummaryScope) ResetConsecutiveFailures(featureID configv1beta1.FeatureID) {
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures = 0
+			return
+		}
+	}
 }
 
 // SetDependenciesMessage sets the dependencies status.

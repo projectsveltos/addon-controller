@@ -2419,6 +2419,13 @@ spec:
                   - namespace
                   type: object
                 type: array
+              maxConsecutiveFailures:
+                description: |-
+                  The maximum number of consecutive deployment failures that Sveltos will permit.
+                  After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
+                  This setting applies only to feature deployments, not resource removal.
+                  This field is optional. If not set, Sveltos default behavior is to keep retrying.
+                type: integer
               maxUpdate:
                 anyOf:
                 - type: integer
@@ -5269,6 +5276,13 @@ spec:
                       - namespace
                       type: object
                     type: array
+                  maxConsecutiveFailures:
+                    description: |-
+                      The maximum number of consecutive deployment failures that Sveltos will permit.
+                      After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
+                      This setting applies only to feature deployments, not resource removal.
+                      This field is optional. If not set, Sveltos default behavior is to keep retrying.
+                    type: integer
                   maxUpdate:
                     anyOf:
                     - type: integer
@@ -5672,6 +5686,12 @@ spec:
                     FeatureSummary contains a summary of the state of a workload
                     cluster feature.
                   properties:
+                    consecutiveFailures:
+                      description: |-
+                        The maximum number of consecutive deployment failures that Sveltos will permit.
+                        After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
+                        This field is optional. If not set, Sveltos default behavior is to keep retrying.
+                      type: integer
                     deployedGroupVersionKind:
                       description: |-
                         DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
@@ -5719,6 +5739,7 @@ spec:
                       - Removed
                       type: string
                   required:
+                  - consecutiveFailures
                   - featureID
                   type: object
                 type: array
@@ -7422,6 +7443,13 @@ spec:
                   - namespace
                   type: object
                 type: array
+              maxConsecutiveFailures:
+                description: |-
+                  The maximum number of consecutive deployment failures that Sveltos will permit.
+                  After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
+                  This setting applies only to feature deployments, not resource removal.
+                  This field is optional. If not set, Sveltos default behavior is to keep retrying.
+                type: integer
               maxUpdate:
                 anyOf:
                 - type: integer

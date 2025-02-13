@@ -1044,6 +1044,17 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	r, err := installClient.RunWithContext(ctxWithTimeout, chartRequested, values)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to install: %v", err))
+		// This condition should never occur.  A previous check ensures that only one
+		// ClusterProfile/Profile can manage a Helm Chart with a given name in a
+		// specific namespace within a managed cluster.  If this code is reached,
+		// that check has already passed.  Therefore, the "cannot re-use a name that
+		// is still in use" error should be impossible.
+		// There is no constant defined in the helm library but this is an error seen more than once.
+		if err.Error() == "cannot re-use a name that is still in use" {
+			return nil, upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+				values, mgmtResources, logger)
+		}
 		return nil, err
 	}
 
@@ -1203,6 +1214,18 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	_, err = upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
+		currentRelease, err := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+			kubeconfig, registryOptions, getEnableClientCacheValue(requestedChart.Options))
+		if err == nil && currentRelease.Info.Status.IsPending() {
+			// This error: "another operation (install/upgrade/rollback) is in progress"
+			// With Sveltos this error should never happen. A previous check ensures that only one
+			// ClusterProfile/Profile can manage a Helm Chart with a given name in a specific namespace within
+			// a managed cluster.
+			// Ignore the recoverRelease result. Always return an error as we must install this release back
+			_ = recoverRelease(ctx, clusterSummary, requestedChart, kubeconfig, registryOptions, logger)
+			return fmt.Errorf("tried recovering by uininstalling first")
+		}
 		return err
 	}
 
@@ -1343,16 +1366,19 @@ func newRegistryClientWithTLS(certFile, keyFile, caFile string, insecureSkipTLSv
 	return registryClient, nil
 }
 
-func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions, enableClientCache bool,
-) (*action.Configuration, error) {
+func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions,
+	enableClientCache bool) (*action.Configuration, error) {
 
 	actionConfig := new(action.Configuration)
 
 	configFlags := genericclioptions.NewConfigFlags(false)
 	configFlags.KubeConfig = &kubeconfig
 	configFlags.Namespace = &namespace
-	insecure := true
+	insecure := registryOptions.skipTLSVerify
 	configFlags.Insecure = &insecure
+	// Use a 5m timeout
+	timeout := "5m"
+	configFlags.Timeout = &timeout
 
 	err := actionConfig.Init(configFlags, namespace, "secret", debugf)
 	if err != nil {
@@ -1378,8 +1404,8 @@ func isChartInstallable(ch *chart.Chart) bool {
 	return false
 }
 
-func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
-	enableClientCache bool) (*releaseInfo, error) {
+func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
+	enableClientCache bool) (*release.Release, error) {
 
 	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 
@@ -1388,31 +1414,60 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOp
 	}
 
 	statusObject := action.NewStatus(actionConfig)
-	results, err := statusObject.Run(releaseName)
+	return statusObject.Run(releaseName)
+}
+
+func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
+	enableClientCache bool) (*releaseInfo, error) {
+
+	currentRelease, err := getCurrentRelease(releaseName, releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 	if err != nil {
 		return nil, err
 	}
 
 	element := &releaseInfo{
-		ReleaseName:      results.Name,
-		ReleaseNamespace: results.Namespace,
-		Revision:         strconv.Itoa(results.Version),
-		Status:           results.Info.Status.String(),
-		Chart:            results.Chart.Metadata.Name,
-		ChartVersion:     results.Chart.Metadata.Version,
-		AppVersion:       results.Chart.AppVersion(),
-		ReleaseLabels:    results.Labels,
-		Icon:             results.Chart.Metadata.Icon,
-		Values:           results.Config,
+		ReleaseName:      currentRelease.Name,
+		ReleaseNamespace: currentRelease.Namespace,
+		Revision:         strconv.Itoa(currentRelease.Version),
+		Status:           currentRelease.Info.Status.String(),
+		Chart:            currentRelease.Chart.Metadata.Name,
+		ChartVersion:     currentRelease.Chart.Metadata.Version,
+		AppVersion:       currentRelease.Chart.AppVersion(),
+		ReleaseLabels:    currentRelease.Labels,
+		Icon:             currentRelease.Chart.Metadata.Icon,
+		Values:           currentRelease.Config,
 	}
 
 	var t metav1.Time
-	if lastDeployed := results.Info.LastDeployed; !lastDeployed.IsZero() {
+	if lastDeployed := currentRelease.Info.LastDeployed; !lastDeployed.IsZero() {
 		t = metav1.Time{Time: lastDeployed.Time}
 	}
 	element.Updated = t
 
 	return element, nil
+}
+
+func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) error {
+
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions, true)
+	if err != nil {
+		return err
+	}
+
+	statusObject := action.NewStatus(actionConfig)
+	lastRelease, err := statusObject.Run(requestedChart.ReleaseName)
+	if err != nil {
+		return err
+	}
+
+	if !lastRelease.Info.Status.IsPending() {
+		return fmt.Errorf("not in the expected status to unlock")
+	}
+
+	return uninstallRelease(ctx, clusterSummary, requestedChart.ReleaseName,
+		requestedChart.ReleaseNamespace, kubeconfig, registryOptions, requestedChart, logger)
 }
 
 // shouldInstall returns true if action is not uninstall and either there

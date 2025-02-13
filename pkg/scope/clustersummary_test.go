@@ -114,11 +114,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioned, hash)
+		failed := false
+		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioned, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
+		Expect(clusterSummary.Status.FeatureSummaries[0].ConsecutiveFailures).To(BeZero())
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioned))
 	})
 
@@ -183,17 +185,35 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
+		consecutiveFailures := uint(3)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{
+				FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned,
+				Hash: []byte(randomString()), ConsecutiveFailures: consecutiveFailures},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(scope).ToNot(BeNil())
 
-		found := false
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash)
+		failed := true
+		found := false
+		scope.SetFeatureStatus(configv1beta1.FeatureHelm, configv1beta1.FeatureStatusProvisioning, hash, &failed)
+		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
+		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
+		for i := range clusterSummary.Status.FeatureSummaries {
+			fs := clusterSummary.Status.FeatureSummaries[i]
+			if fs.FeatureID == configv1beta1.FeatureHelm {
+				found = true
+				Expect(fs.Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+				Expect(fs.ConsecutiveFailures).To(Equal(consecutiveFailures + 1))
+			}
+		}
+		Expect(found).To(Equal(true))
+
+		found = false
+		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
@@ -201,6 +221,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 			if fs.FeatureID == configv1beta1.FeatureResources {
 				found = true
 				Expect(fs.Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+				Expect(fs.ConsecutiveFailures).To(Equal(uint(1)))
 			}
 		}
 		Expect(found).To(Equal(true))
@@ -214,8 +235,11 @@ var _ = Describe("ClusterSummaryScope", func() {
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 		}
 
+		consecutiveFailures := uint(2)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{
+				FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned,
+				Hash: []byte(randomString()), ConsecutiveFailures: consecutiveFailures},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -223,11 +247,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash)
+		failed := false
+		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
+		Expect(clusterSummary.Status.FeatureSummaries[0].ConsecutiveFailures).To(BeZero())
 	})
 
 	It("SetFeatureStatus updates ClusterSummary Status FeatureSummary when nil", func() {
@@ -243,7 +269,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1beta1.FeatureHelm, configv1beta1.FeatureStatusProvisioning, hash)
+		scope.SetFeatureStatus(configv1beta1.FeatureHelm, configv1beta1.FeatureStatusProvisioning, hash, nil)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureHelm))

@@ -94,6 +94,8 @@ var _ = Describe("Feature", Serial, func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		maxConsecutiveFailures := uint(3)
+		clusterProfile.Spec.MaxConsecutiveFailures = &maxConsecutiveFailures
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -110,7 +112,7 @@ var _ = Describe("Feature", Serial, func() {
 		// Cert-manager installation will fails as CRDs are not present and we are not deploying those
 		// ALso sets timeout otherwise helm takes too long before giving up on cert-manager failures (due to CRDs not being installed)
 		const two = 2
-		timeout := metav1.Duration{Duration: two * time.Minute}
+		helmTimeout := metav1.Duration{Duration: two * time.Minute}
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://charts.konghq.com",
@@ -130,7 +132,7 @@ var _ = Describe("Feature", Serial, func() {
 				ReleaseNamespace: "cert-manager",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				Options: &configv1beta1.HelmOptions{
-					Timeout: &timeout,
+					Timeout: &helmTimeout,
 				},
 			},
 			{
@@ -186,6 +188,25 @@ var _ = Describe("Feature", Serial, func() {
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
 			policies, nil)
+
+		const six = 6
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			for i := range currentClusterSummary.Status.FeatureSummaries {
+				fs := &currentClusterSummary.Status.FeatureSummaries[i]
+				if fs.FeatureID == configv1beta1.FeatureHelm {
+					return fs.FailureMessage != nil &&
+						*fs.FailureMessage == "the maximum number of consecutive errors has been reached"
+				}
+			}
+			return false
+		}, six*time.Minute, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
 	})

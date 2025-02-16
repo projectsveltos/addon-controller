@@ -119,8 +119,12 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fluxcd/pkg/apis/acl v0.5.0 h1:+ykKezgerKUlZwSYFUy03lPMOIAyWlqvMNNLIWWqOhk=
 github.com/fluxcd/pkg/apis/acl v0.5.0/go.mod h1:IVDZx3MAoDWjlLrJHMF9Z27huFuXAEQlnbWw0M6EcTs=
+github.com/fluxcd/pkg/apis/acl v0.6.0 h1:rllf5uQLzTow81ZCslkQ6LPpDNqVQr6/fWaNksdUEtc=
+github.com/fluxcd/pkg/apis/acl v0.6.0/go.mod h1:IVDZx3MAoDWjlLrJHMF9Z27huFuXAEQlnbWw0M6EcTs=
 github.com/fluxcd/pkg/apis/meta v1.9.0 h1:wPgm7bWNJZ/ImS5GqikOxt362IgLPFBG73dZ27uWRiQ=
 github.com/fluxcd/pkg/apis/meta v1.9.0/go.mod h1:pMea8eEZcsFSI7ngRnTHFtDZk2CEZGgtrueNgI6Iu70=
+github.com/fluxcd/pkg/apis/meta v1.10.0 h1:rqbAuyl5ug7A5jjRf/rNwBXmNl6tJ9wG2iIsriwnQUk=
+github.com/fluxcd/pkg/apis/meta v1.10.0/go.mod h1:n7NstXHDaleAUMajcXTVkhz0MYkvEXy1C/eLI/t1xoI=
 github.com/fluxcd/pkg/http/fetch v0.15.0 h1:AJ1JuE2asuK4QMfbHjxctFURke5FvZtyljjI1Qv4ArQ=
 github.com/fluxcd/pkg/http/fetch v0.15.0/go.mod h1:feTESfETKU14jq+e/Ce8QnMBTCh9O79bLMSMe5t55fQ=
 github.com/fluxcd/pkg/tar v0.11.0 h1:pjf/rzr6HNAPiuxT59mtba9tfBtdNiSQ/UqduG8vZ2I=
@@ -129,6 +133,8 @@ github.com/fluxcd/pkg/testserver v0.9.0 h1:UD6gyT1KXXbl5BbuE7o+UdxKeuYd7/CePAUdU
 github.com/fluxcd/pkg/testserver v0.9.0/go.mod h1:dqpWALgSYdcmPS9OXq165s4OjUexVysl++EZJ8uZVkw=
 github.com/fluxcd/source-controller/api v1.4.1 h1:zV01D7xzHOXWbYXr36lXHWWYS7POARsjLt61Nbh3kVY=
 github.com/fluxcd/source-controller/api v1.4.1/go.mod h1:gSjg57T+IG66SsBR0aquv+DFrm4YyBNpKIJVDnu3Ya8=
+github.com/fluxcd/source-controller/api v1.5.0 h1:caSR+u/r2Vh0jq/0pNR0r1zLxyvgatWuGSV2mxgTB/I=
+github.com/fluxcd/source-controller/api v1.5.0/go.mod h1:OZPuHMlLH2E2mnj6Q5DLkWfUOmJ20zA1LIvUVfNsYl8=
 github.com/foxcpp/go-mockdns v1.1.0 h1:jI0rD8M0wuYAxL7r/ynTrCQQq0BVqfB99Vgk7DlmewI=
 github.com/foxcpp/go-mockdns v1.1.0/go.mod h1:IhLeSFGed3mJIAXPH2aiRQB+kqz7oqu8ld2qVbOu7Wk=
 github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHkI4W8=

@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.31.0
+KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.32.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -98,7 +98,7 @@ $(CONVERSION_GEN_BIN): $(CONVERSION_GEN) ## Build a local copy of conversion-gen
 $(CONVERSION_GEN): # Build conversion-gen from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONVERSION_GEN_PKG) $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
 
-SETUP_ENVTEST_VER := release-0.19
+SETUP_ENVTEST_VER := release-0.20
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -207,7 +207,7 @@ endif
 # K8S_VERSION for the Kind cluster can be set as environment variable. If not defined,
 # this default value is used
 ifndef K8S_VERSION
-K8S_VERSION := v1.32.0
+K8S_VERSION := v1.32.2
 endif
 
 KIND_CONFIG ?= kind-cluster.yaml
@@ -441,9 +441,13 @@ undeploy: s $(KUSTOMIZE) ## Undeploy controller from the K8s cluster specified i
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 
-digest := $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/drift-detection-manager:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+define get-digest
+$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/drift-detection-manager:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+endef
+
 drift-detection-manager:
 	@echo "Downloading drift detection manager yaml"
+	$(eval digest :=$(call get-digest))
 	@echo "image digest is $(digest)"
 	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager.yaml

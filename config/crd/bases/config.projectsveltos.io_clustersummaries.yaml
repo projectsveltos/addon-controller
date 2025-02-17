@@ -2077,10 +2077,7 @@ spec:
                     cluster feature.
                   properties:
                     consecutiveFailures:
-                      description: |-
-                        The maximum number of consecutive deployment failures that Sveltos will permit.
-                        After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
-                        This field is optional. If not set, Sveltos default behavior is to keep retrying.
+                      description: The number of consecutive deployment failures.
                       type: integer
                     deployedGroupVersionKind:
                       description: |-
@@ -2129,7 +2126,6 @@ spec:
                       - Removed
                       type: string
                   required:
-                  - consecutiveFailures
                   - featureID
                   type: object
                 type: array

@@ -91,10 +91,9 @@ type FeatureSummary struct {
 	// +optional
 	Hash []byte `json:"hash,omitempty"`
 
-	// The maximum number of consecutive deployment failures that Sveltos will permit.
-	// After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.
-	// This field is optional. If not set, Sveltos default behavior is to keep retrying.
-	ConsecutiveFailures uint `json:"consecutiveFailures"`
+	// The number of consecutive deployment failures.
+	// +optional
+	ConsecutiveFailures uint `json:"consecutiveFailures,omitempty"`
 
 	// Status represents the state of the feature in the workload cluster
 	// +optional

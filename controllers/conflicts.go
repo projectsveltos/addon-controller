@@ -125,7 +125,7 @@ func requeueClusterSummary(ctx context.Context, featureID configv1beta1.FeatureI
 	// Reset the hash a deployment happens again
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("reset status of ClusterSummary %s/%s",
 		clusterSummary.Namespace, clusterSummary.Name))
-	clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, nil)
+	clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, nil, nil)
 
 	return c.Status().Update(ctx, clusterSummaryScope.ClusterSummary)
 }

@@ -1285,13 +1285,13 @@ func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.
 
 func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status configv1beta1.FeatureStatus) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureHelm, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureHelm, status, nil, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureResources, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureResources, status, nil, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureKustomize, status, nil)
+		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureKustomize, status, nil, nil)
 	}
 }
 

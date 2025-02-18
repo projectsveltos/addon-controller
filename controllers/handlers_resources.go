@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"sort"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
@@ -352,6 +353,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	config += string(clusterProfileSpecHash)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
+	referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		namespace := libsveltostemplate.GetReferenceResourceNamespace(
@@ -365,21 +367,32 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 			return nil, err
 		}
 
+		referencedObjects[i] = corev1.ObjectReference{
+			Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+			Namespace: namespace,
+			Name:      name,
+		}
+	}
+
+	sort.Sort(SortedCorev1ObjectReference(referencedObjects))
+
+	for i := range referencedObjects {
+		reference := &referencedObjects[i]
 		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configmap := &corev1.ConfigMap{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, configmap)
+			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
 			if err == nil {
 				config += getConfigMapHash(configmap)
 			}
 		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
-			err = c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, secret)
+			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
 			if err == nil {
 				config += getSecretHash(secret)
 			}
 		} else {
 			var source client.Object
-			source, err = getSource(ctx, c, namespace, name, reference.Kind)
+			source, err = getSource(ctx, c, reference.Namespace, reference.Name, reference.Kind)
 			if err == nil && source == nil {
 				s := source.(sourcev1.Source)
 				if s.GetArtifact() != nil {
@@ -393,11 +406,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s %s/%s does not exist yet",
-					reference.Kind, reference.Namespace, name))
+					reference.Kind, reference.Namespace, reference.Name))
 				continue
 			}
 			logger.Error(err, fmt.Sprintf("failed to get %s %s/%s",
-				reference.Kind, reference.Namespace, name))
+				reference.Kind, reference.Namespace, reference.Name))
 			return nil, err
 		}
 	}

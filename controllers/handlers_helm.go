@@ -409,9 +409,11 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		return h.Sum(nil), nil
 	}
-	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
+	sortedHelmCharts := getSortedHelmCharts(clusterSummary)
+
+	for i := range sortedHelmCharts {
+		currentChart := &sortedHelmCharts[i]
 		config += render.AsCode(*currentChart)
 
 		valueFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,

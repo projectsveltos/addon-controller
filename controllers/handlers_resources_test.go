@@ -21,11 +21,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/gdexlab/go-render/render"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -393,8 +395,23 @@ var _ = Describe("Hash methods", func() {
 		tmpHash := h.Sum(nil)
 
 		config = string(tmpHash)
-		config += controllers.GetStringDataSectionHash(configMap1.Data)
-		config += controllers.GetStringDataSectionHash(configMap2.Data)
+
+		referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+		for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
+			referencedObjects[i] = corev1.ObjectReference{
+				Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+				Namespace: clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace,
+				Name:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name,
+			}
+		}
+		sort.Sort(controllers.SortedCorev1ObjectReference(referencedObjects))
+		for i := range referencedObjects {
+			if referencedObjects[i].Name == configMap1.Name {
+				config += controllers.GetStringDataSectionHash(configMap1.Data)
+			} else if referencedObjects[i].Name == configMap2.Name {
+				config += controllers.GetStringDataSectionHash(configMap2.Data)
+			}
+		}
 
 		h = sha256.New()
 		h.Write([]byte(config))

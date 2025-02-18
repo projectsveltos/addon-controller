@@ -214,7 +214,7 @@ KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TIMEOUT ?= 10m
-KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
+WORKLOAD_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 6
 
 .PHONY: quickstart
@@ -308,7 +308,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL)
 	CLUSTER_TOPOLOGY=true ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
+		--worker-machine-count=2 > $(WORKLOAD_CLUSTER_YAML)
 
 create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
@@ -326,7 +326,7 @@ create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 
 create-workload-cluster: $(KIND) $(KUBECTL)
 	@echo "Create a workload cluster"
-	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
+	$(KUBECTL) apply -f $(WORKLOAD_CLUSTER_YAML)
 
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)

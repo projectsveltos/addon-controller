@@ -116,10 +116,10 @@ $(CONTROLLER_GEN): $(TOOLS_DIR)/go.mod # Build controller-gen from tools folder.
 $(ENVSUBST): $(TOOLS_DIR)/go.mod # Build envsubst from tools folder.
 	cd $(TOOLS_DIR); $(GOBUILD) -tags=tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) github.com/a8m/envsubst/cmd/envsubst
 
-$(GOLANGCI_LINT): 
+$(GOLANGCI_LINT):
 	cd $(TOOLS_DIR); ./get-golangci-lint.sh $(GOLANGCI_LINT_VERSION)
 
-$(GOVULNCHECK): 
+$(GOVULNCHECK):
 	cd $(TOOLS_DIR); ./get-govulncheck.sh $(GOVULNCHECK_VERSION)
 
 $(GOIMPORTS):
@@ -185,7 +185,7 @@ vet: ## Run go vet against code.
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) generate ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m	
+	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m
 
 .PHONY: govulncheck
 govulncheck: $(GOVULNCHECK)
@@ -214,7 +214,7 @@ KIND_CONFIG ?= kind-cluster.yaml
 CONTROL_CLUSTER_NAME ?= sveltos-management
 WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TIMEOUT ?= 10m
-KIND_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
+WORKLOAD_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 6
 
 .PHONY: quickstart
@@ -238,7 +238,7 @@ quickstart:  ## start kind cluster; install all cluster api components; create a
 
 .PHONY: test
 test: | check-manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.
-	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out 
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test $(shell go list ./... |grep -v test/fv |grep -v test/helpers) $(TEST_ARGS) -coverprofile cover.out
 
 .PHONY: kind-test
 kind-test: test create-cluster fv ## Build docker image; start kind cluster; load docker image; install all cluster api components and run fv
@@ -262,7 +262,7 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 .PHONY: fv-agentless
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml
-	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml 
+	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml
 	cp manifest/deployment-agentless.yaml test/addon-controller-deployment-agentless.yaml
 	$(KUBECTL) apply -f test/addon-controller-deployment-agentless.yaml
 	rm -f test/addon-controller-deployment-agentless.yaml
@@ -296,7 +296,7 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 ### fv helpers
 
 # In order to avoid this error
-# Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached. 
+# Error: failed to read "cluster-template-development.yaml" from provider's repository "infrastructure-docker": failed to get GitHub release v1.2.0: rate limit for github api has been reached.
 # Please wait one hour or get a personal API token and assign it to the GITHUB_TOKEN environment variable
 #
 # add this target. It needs to be run only when changing cluster-api version. create-cluster target uses the output of this command which is stored within repo
@@ -305,16 +305,16 @@ delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 # Once generated, remove
 #      enforce: "{{ .podSecurityStandard.enforce }}"
 #      enforce-version: "latest"
-create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL) 
+create-clusterapi-kind-cluster-yaml: $(CLUSTERCTL)
 	CLUSTER_TOPOLOGY=true ENABLE_POD_SECURITY_STANDARD="true" KUBERNETES_VERSION=$(K8S_VERSION) SERVICE_CIDR=["10.225.0.0/16"] POD_CIDR=["10.220.0.0/16"] $(CLUSTERCTL) generate cluster $(WORKLOAD_CLUSTER_NAME) --flavor development \
 		--control-plane-machine-count=1 \
-		--worker-machine-count=2 > $(KIND_CLUSTER_YAML)
+		--worker-machine-count=2 > $(WORKLOAD_CLUSTER_YAML)
 
 create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 	sed -e "s/K8S_VERSION/$(K8S_VERSION)/g"  test/$(KIND_CONFIG) > test/$(KIND_CONFIG).tmp
 	$(KIND) create cluster --name=$(CONTROL_CLUSTER_NAME) --config test/$(KIND_CONFIG).tmp
 	@echo "Create control cluster with docker as infrastructure provider"
-	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --core cluster-api --bootstrap kubeadm --control-plane kubeadm --infrastructure docker 
+	CLUSTER_TOPOLOGY=true $(CLUSTERCTL) init --core cluster-api --bootstrap kubeadm --control-plane kubeadm --infrastructure docker
 
 	@echo wait for capd-system pod
 	$(KUBECTL) wait --for=condition=Available deployment/capd-controller-manager -n capd-system --timeout=$(TIMEOUT)
@@ -326,7 +326,7 @@ create-control-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL)
 
 create-workload-cluster: $(KIND) $(KUBECTL)
 	@echo "Create a workload cluster"
-	$(KUBECTL) apply -f $(KIND_CLUSTER_YAML)
+	$(KUBECTL) apply -f $(WORKLOAD_CLUSTER_YAML)
 
 	@echo "wait for cluster to be provisioned"
 	$(KUBECTL) wait cluster $(WORKLOAD_CLUSTER_NAME) -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
@@ -360,7 +360,7 @@ deploy-projectsveltos: $(KUSTOMIZE)
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) | $(KUBECTL) apply -f-
 
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/configuration/default-debuggingconfiguration.yaml
-	
+
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
 

@@ -298,9 +298,12 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummaryScope
 	config += string(clusterProfileSpecHash)
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
-	config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
-	for i := range clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
-		kustomizationRef := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
+
+	sortedKustomizationRefs := getSortedKustomizationRefs(clusterSummary)
+
+	config += render.AsCode(sortedKustomizationRefs)
+	for i := range sortedKustomizationRefs {
+		kustomizationRef := &sortedKustomizationRefs[i]
 
 		result, err := getHashFromKustomizationRef(ctx, c, clusterSummary,
 			kustomizationRef, logger)

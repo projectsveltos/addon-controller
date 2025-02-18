@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -1999,13 +2000,12 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		config += getVersion()
 	}
 
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	mgmtResourceHash, err := getTemplateResourceRefHash(ctx, clusterSummary)
 	if err != nil {
 		return nil, err
 	}
-	for i := range mgmtResources {
-		config += render.AsCode(mgmtResources[i])
-	}
+
+	config += string(mgmtResourceHash)
 
 	if clusterProfileSpec.Patches != nil {
 		config += render.AsCode(clusterProfileSpec.Patches)
@@ -2021,6 +2021,35 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		config += render.AsCode(configMap.Data)
 	}
 
+	h.Write([]byte(config))
+	return h.Sum(nil), nil
+}
+
+func getTemplateResourceRefHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+) ([]byte, error) {
+
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mgmtResources) == 0 {
+		return []byte(""), nil
+	}
+
+	var keys []string
+	for k := range mgmtResources {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var config string
+	for i := range keys {
+		config += render.AsCode(mgmtResources[keys[i]])
+	}
+
+	h := sha256.New()
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

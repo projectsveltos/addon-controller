@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1558,6 +1559,85 @@ status:
 		// verify spec has been updated
 		Expect(serviceOut.Spec.Selector).To(Not(BeNil()))
 		Expect(serviceOut.Spec.Selector[key]).To(Equal(value))
+	})
+
+	It("getTemplateResourceRefHash sorts the resources referenced in TemplateResourceRefs", func() {
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{}
+		for i := 0; i < 50; i++ {
+			name := "trs-" + randomString()
+			namespace := "trs-" + randomString()
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+			key := randomString()
+			value := randomString()
+			var replicas int32 = 3
+			depl := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: namespace,
+					Labels: map[string]string{
+						key: value,
+					},
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							key: value,
+						},
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								key: value,
+							},
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:            randomString(),
+									Image:           randomString(),
+									ImagePullPolicy: corev1.PullAlways,
+								},
+							},
+							ServiceAccountName: randomString(),
+						},
+					},
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), depl)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, depl)).To(Succeed())
+
+			templateResourceRef := configv1beta1.TemplateResourceRef{
+				Resource: corev1.ObjectReference{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Namespace:  namespace,
+					Name:       name,
+				},
+				Identifier: randomString(),
+			}
+
+			clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = append(
+				clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs,
+				templateResourceRef)
+		}
+		hash, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(hash).ToNot(BeEmpty())
+
+		for i := 0; i < 10; i++ {
+			tmpHash, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+			Expect(err).To(BeNil())
+			Expect(reflect.DeepEqual(tmpHash, hash))
+		}
 	})
 })
 

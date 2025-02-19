@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -100,6 +101,8 @@ type ClusterSummaryReconciler struct {
 
 	ConflictRetryTime time.Duration
 	ctrl              controller.Controller
+
+	provisioningDryRun map[types.NamespacedName]time.Time
 }
 
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
@@ -167,6 +170,11 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
+	if r.skipReconciliation(clusterSummaryScope, req) {
+		logger.V(logs.LogInfo).Info("ignore update")
+		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
+	}
+
 	var isMatch bool
 	isMatch, err = r.isClusterAShardMatch(ctx, clusterSummary, logger)
 	if err != nil {
@@ -187,6 +195,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
 	// changes.
 	defer func() {
+		if clusterSummaryScope.IsDryRunSync() {
+			r.provisioningDryRun[req.NamespacedName] = time.Now()
+		}
 		if err = clusterSummaryScope.Close(ctx); err != nil {
 			reterr = err
 		}
@@ -212,7 +223,6 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return reconcile.Result{}, nil
 	}
 
-	// Handle non-deleted clusterSummary
 	return r.reconcileNormal(ctx, clusterSummaryScope, logger)
 }
 
@@ -435,6 +445,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
+	r.provisioningDryRun = make(map[types.NamespacedName]time.Time)
 	r.ctrl = c
 
 	return err
@@ -492,6 +503,20 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 	}
 
 	return nil
+}
+
+func (r *ClusterSummaryReconciler) skipReconciliation(clusterSummaryScope *scope.ClusterSummaryScope,
+	req ctrl.Request) bool {
+
+	if clusterSummaryScope.IsDryRunSync() {
+		// Skip and requeue ClusterSummary DryRun if too soon.
+		v := r.provisioningDryRun[req.NamespacedName]
+		thresholdTime := v.Add(normalRequeueAfter)
+		if !time.Now().After(thresholdTime) {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {

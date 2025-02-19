@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -328,9 +329,10 @@ var _ = Describe("Hash methods", func() {
 
 		config = string(tmpHash)
 
+		sort.Sort(controllers.SortedKustomizationRefs(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs))
 		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 		for i := 0; i < repoNum; i++ {
-			config += gitRepositories[i].Status.Artifact.Revision
+			config += getRevision(&clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i], gitRepositories)
 		}
 
 		h = sha256.New()
@@ -709,4 +711,15 @@ func createTarGz(dest string) {
 		return err
 	})
 	Expect(err).To(BeNil())
+}
+
+func getRevision(kustomizationRefs *configv1beta1.KustomizationRef, gitRepositories []sourcev1.GitRepository) string {
+	for i := range gitRepositories {
+		if kustomizationRefs.Namespace == gitRepositories[i].Namespace &&
+			kustomizationRefs.Name == gitRepositories[i].Name {
+
+			return gitRepositories[i].Status.Artifact.Revision
+		}
+	}
+	return ""
 }

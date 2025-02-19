@@ -439,8 +439,8 @@ func (m *manager) react(obj client.Object, logger logr.Logger) {
 func (m *manager) notify(consumers *libsveltosset.Set, logger logr.Logger) {
 	requestors := consumers.Items()
 	for i := range requestors {
-		logger.V(logsettings.LogDebug).Info("got change notification. Notifying %s/%s",
-			requestors[i].Namespace, requestors[i].Name)
+		logger.V(logsettings.LogDebug).Info(fmt.Sprintf("got change notification. Notifying %s/%s",
+			requestors[i].Namespace, requestors[i].Name))
 		m.notifyConsumer(&requestors[i])
 	}
 }

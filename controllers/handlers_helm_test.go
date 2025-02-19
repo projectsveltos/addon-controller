@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -759,8 +760,10 @@ var _ = Describe("Hash methods", func() {
 		tmpHash := h.Sum(nil)
 
 		config = string(tmpHash)
-		config += render.AsCode(kyvernoChart)
-		config += render.AsCode(nginxChart)
+		sort.Sort(controllers.SortedHelmCharts(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts))
+		for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			config += render.AsCode(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i])
+		}
 
 		h = sha256.New()
 		h.Write([]byte(config))

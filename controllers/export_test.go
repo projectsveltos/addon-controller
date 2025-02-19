@@ -137,6 +137,8 @@ var (
 	IsNamespaced               = isNamespaced
 	StringifyMap               = stringifyMap
 	ParseMapFromString         = parseMapFromString
+
+	GetTemplateResourceRefHash = getTemplateResourceRefHash
 )
 
 type (

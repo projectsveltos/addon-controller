@@ -147,7 +147,7 @@ var _ = BeforeSuite(func() {
 	}
 
 	// Do this read so library is initialized with CAPI present
-	_, err = clusterproxy.GetListOfClusters(context.TODO(), testEnv.Client, "",
+	_, err = clusterproxy.GetListOfClusters(context.TODO(), testEnv.Client, "", "",
 		textlogger.NewLogger(textlogger.NewConfig()))
 	Expect(err).To(BeNil())
 })

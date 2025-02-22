@@ -86,6 +86,7 @@ var (
 	profilerAddress         string
 	driftDetectionConfigMap string
 	luaConfigMap            string
+	capiOnboardAnnotation   string
 	disableCaching          bool
 	disableTelemetry        bool
 )
@@ -171,6 +172,7 @@ func main() {
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 	controllers.SetLuaConfigMap(luaConfigMap)
+	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 
 	logsettings.RegisterForLogSettings(ctx,
 		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
@@ -222,7 +224,10 @@ func initFlags(fs *pflag.FlagSet) {
 		"Enable insecure diagnostics serving. For more details see the description of --diagnostics-address.")
 
 	fs.StringVar(&shardKey, "shard-key", "",
-		"If set, only clusters will annotation matching this shard key will be reconciled by this deployment")
+		"If set, only clusters will annotation matching this shard key will be reconciled by this deployment.")
+
+	fs.StringVar(&capiOnboardAnnotation, "capi-onboard-annotation", "",
+		"If provided, Sveltos will only manage CAPI clusters that have this exact annotation.")
 
 	fs.IntVar(&workers, "worker-number", defaultWorkers,
 		"Number of worker. Workers are used to deploy features in CAPI clusters")

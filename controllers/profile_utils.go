@@ -51,7 +51,8 @@ func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
 	var matchingCluster []corev1.ObjectReference
 	if clusterSelector != nil {
 		var err error
-		matchingCluster, err = clusterproxy.GetMatchingClusters(ctx, c, clusterSelector, namespace, logger)
+		matchingCluster, err = clusterproxy.GetMatchingClusters(ctx, c, clusterSelector, namespace,
+			getCAPIOnboardAnnotation(), logger)
 		if err != nil {
 			return nil, err
 		}

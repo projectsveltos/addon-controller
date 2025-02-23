@@ -22,6 +22,7 @@ spec:
         - --diagnostics-address=:8443
         - --report-mode=0
         - --shard-key={{.SHARD}}
+        - --capi-onboard-annotation=
         - --v=5
         - --version=main
         command:

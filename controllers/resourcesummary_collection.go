@@ -46,7 +46,8 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 
 	for {
 		logger.V(logs.LogVerbose).Info("collecting ResourceSummaries")
-		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", shardkey, logger)
+		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", getCAPIOnboardAnnotation(),
+			shardkey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 		}

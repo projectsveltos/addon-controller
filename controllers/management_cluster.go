@@ -30,6 +30,7 @@ var (
 	managementClusterConfig *rest.Config
 	driftdetectionConfigMap string
 	luaConfigMap            string
+	capiOnboardAnnotation   string
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config) {
@@ -43,6 +44,10 @@ func SetDriftdetectionConfigMap(name string) {
 
 func SetLuaConfigMap(name string) {
 	luaConfigMap = name
+}
+
+func SetCAPIOnboardAnnotation(key string) {
+	capiOnboardAnnotation = key
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -59,6 +64,10 @@ func getDriftDetectionConfigMap() string {
 
 func getLuaConfigMap() string {
 	return luaConfigMap
+}
+
+func getCAPIOnboardAnnotation() string {
+	return capiOnboardAnnotation
 }
 
 func collectDriftDetectionConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {

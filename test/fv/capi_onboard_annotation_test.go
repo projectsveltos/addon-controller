@@ -98,10 +98,12 @@ var _ = Describe("Helm", Serial, func() {
 		Byf("Verifying Cluster %s/%s is NOT a match for ClusterProfile %s",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterProfile.Name)
 		Consistently(func() bool {
-			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 			if err != nil {
-				return false
+				// Ignore error getting clusterProfile. We know it exists. Any error
+				// would cause this test to fail.
+				Byf("error getting clusterProfile %v (ignoring it)", err)
+				return true
 			}
 			for i := range currentClusterProfile.Status.MatchingClusterRefs {
 				if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
@@ -113,6 +115,10 @@ var _ = Describe("Helm", Serial, func() {
 			}
 			return true
 		}, time.Minute, pollingInterval).Should(BeTrue())
+
+		time.Sleep(pollingInterval)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		Expect(len(currentClusterProfile.Status.MatchingClusterRefs)).To(BeZero())
 
 		Byf("Add onboard annotation on CAPI cluster")
 		currentCluster := &clusterv1.Cluster{}
@@ -169,7 +175,7 @@ func updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, value string)
 
 	Expect(k8sClient.Update(context.TODO(), depl)).To(Succeed())
 
-	time.Sleep(pollingInterval)
+	time.Sleep(time.Minute)
 
 	Eventually(func() bool {
 		err := k8sClient.Get(context.TODO(),
@@ -188,8 +194,10 @@ func removeAnnotationFromCluster(onboardAnnotation string) {
 	Expect(k8sClient.Get(context.TODO(),
 		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
 		currentCluster)).To(Succeed())
-	if currentCluster.Annotations != nil {
-		delete(currentCluster.Annotations, onboardAnnotation)
+	annotations := currentCluster.Annotations
+	if annotations != nil {
+		delete(annotations, onboardAnnotation)
 	}
+	currentCluster.Annotations = annotations
 	Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
 }

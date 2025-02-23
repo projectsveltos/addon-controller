@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -45,13 +46,17 @@ var _ = Describe("Helm", Serial, func() {
 	)
 
 	BeforeEach(func() {
-		Byf("Set capi-onboard-annotation for addon-controller")
+		Byf("Set capi-onboard-annotation for deployment %s/%s", addonDeplNamespace, addonDeplName)
 		updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, onboardAnnotation)
+
+		removeAnnotationFromCluster(onboardAnnotation)
 	})
 
 	AfterEach(func() {
-		Byf("Reset capi-onboard-annotation for addon-controller")
+		Byf("Reset capi-onboard-annotation for deployment %s/%s", addonDeplNamespace, addonDeplName)
 		updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, "")
+
+		removeAnnotationFromCluster(onboardAnnotation)
 	})
 
 	It("Onboards CAPI Cluster with onboard annotation", Label("NEW-FV", "EXTENDED"), func() {
@@ -150,16 +155,17 @@ func updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, value string)
 		types.NamespacedName{Namespace: addonDeplNamespace, Name: addonDeplName},
 		depl)).To(Succeed())
 
+	found := false
 	for i := range depl.Spec.Template.Spec.Containers {
 		container := depl.Spec.Template.Spec.Containers[i]
 		for j := range container.Args {
-			Byf("MGIANLUC %s", container.Args[j])
-			if container.Args[j] == "--capi-onboard-annotation=" {
-				Byf("MGIANLUC found")
+			if strings.Contains(container.Args[j], "--capi-onboard-annotation=") {
+				found = true
 				container.Args[j] = fmt.Sprintf("--capi-onboard-annotation=%s", value)
 			}
 		}
 	}
+	Expect(found).To(BeTrue())
 
 	Expect(k8sClient.Update(context.TODO(), depl)).To(Succeed())
 
@@ -174,4 +180,16 @@ func updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, value string)
 		}
 		return depl.Status.AvailableReplicas == *depl.Spec.Replicas
 	}, timeout, pollingInterval).Should(BeTrue())
+}
+
+func removeAnnotationFromCluster(onboardAnnotation string) {
+	Byf("Remove %s annotation from capi cluster", onboardAnnotation)
+	currentCluster := &clusterv1.Cluster{}
+	Expect(k8sClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+		currentCluster)).To(Succeed())
+	if currentCluster.Annotations != nil {
+		delete(currentCluster.Annotations, onboardAnnotation)
+	}
+	Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
 }

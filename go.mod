@@ -12,12 +12,11 @@ require (
 	github.com/fluxcd/source-controller/api v1.5.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2
-	github.com/google/gofuzz v1.2.0
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.48.2-0.20250223075846-d9184ce7344f
+	github.com/projectsveltos/libsveltos v0.48.2-0.20250224110739-f8a50667ac1f
 	github.com/prometheus/client_golang v1.21.0
 	github.com/spf13/pflag v1.0.6
 	github.com/yuin/gopher-lua v1.1.1
@@ -92,6 +91,7 @@ require (
 	github.com/google/cel-go v0.22.1 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect

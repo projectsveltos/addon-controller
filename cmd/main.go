@@ -44,6 +44,8 @@ import (
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/controllers/remote"
+	"sigs.k8s.io/cluster-api/util/apiwarnings"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -160,6 +162,8 @@ func main() {
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.QPS = restConfigQPS
 	restConfig.Burst = restConfigBurst
+	restConfig.UserAgent = remote.DefaultClusterAPIUserAgent("addon-controller")
+	restConfig.WarningHandler = apiwarnings.DefaultHandler(klog.Background().WithName("API Server Warning"))
 
 	mgr, err := ctrl.NewManager(restConfig, ctrlOptions)
 	if err != nil {
@@ -255,7 +259,7 @@ func initFlags(fs *pflag.FlagSet) {
 		fmt.Sprintf("Maximum queries per second from the controller client to the Kubernetes API server. Defaults to %d",
 			defautlRestConfigQPS))
 
-	const defaultRestConfigBurst = 30
+	const defaultRestConfigBurst = 60
 	fs.IntVar(&restConfigBurst, "kube-api-burst", defaultRestConfigBurst,
 		fmt.Sprintf("Maximum number of queries that should be allowed in one burst from the controller client to the Kubernetes API server. Default %d",
 			defaultRestConfigBurst))

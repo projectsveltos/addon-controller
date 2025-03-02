@@ -30,4 +30,4 @@ spec:
     helmChartAction:  Install
     values: |
       admissionController:
-        replicas: 3"
+        replicas: 3

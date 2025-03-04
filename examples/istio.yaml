@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/base
-    chartVersion:     1.24.3
+    chartVersion:     1.25.0
     releaseName:      istio-base
     releaseNamespace: istio-system
     helmChartAction:  Install

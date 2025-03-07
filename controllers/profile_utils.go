@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -993,6 +994,13 @@ func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *s
 
 	profileScope.SetMatchingClusterRefs(nil)
 
+	depManager, err := dependencymanager.GetManagerInstance()
+	if err != nil {
+		return err
+	}
+	profileRef := getKeyFromObject(c.Scheme(), profileScope.Profile)
+	depManager.UpdateDependencies(profileRef, nil, nil, logger)
+
 	if err := cleanClusterSummaries(ctx, c, profileScope); err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
 		return err
@@ -1060,6 +1068,14 @@ func reconcileNormalCommon(ctx context.Context, c client.Client, profileScope *s
 		return err
 	}
 
+	depManager, err := dependencymanager.GetManagerInstance()
+	if err != nil {
+		return err
+	}
+	profileRef := getKeyFromObject(c.Scheme(), profileScope.Profile)
+	depManager.UpdateDependencies(profileRef, profileScope.GetStatus().MatchingClusterRefs,
+		getPrerequesites(profileScope), logger)
+
 	return nil
 }
 
@@ -1087,4 +1103,20 @@ func getConsumersForEntry(currentMap map[corev1.ObjectReference]*libsveltosset.S
 		currentMap[*entry] = s
 	}
 	return s
+}
+
+func getPrerequesites(profileScope *scope.ProfileScope) []corev1.ObjectReference {
+	spec := profileScope.GetSpec()
+
+	prerequesites := make([]corev1.ObjectReference, len(spec.DependsOn))
+	for i := range spec.DependsOn {
+		prerequesites[i] = corev1.ObjectReference{
+			Namespace:  profileScope.Namespace(),
+			Name:       spec.DependsOn[i],
+			Kind:       profileScope.GetKind(),
+			APIVersion: configv1beta1.GroupVersion.String(),
+		}
+	}
+
+	return prerequesites
 }

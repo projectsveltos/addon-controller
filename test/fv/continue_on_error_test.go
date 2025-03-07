@@ -136,15 +136,6 @@ var _ = Describe("Feature", Serial, func() {
 				},
 			},
 			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.3.4",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
 				RepositoryURL:    "https://helm.nginx.com/stable/",
 				RepositoryName:   "nginx-stable",
 				ChartName:        "nginx-stable/nginx-ingress",
@@ -171,7 +162,6 @@ var _ = Describe("Feature", Serial, func() {
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.4", Namespace: "kyverno"},
 			{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
 			{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
 		}

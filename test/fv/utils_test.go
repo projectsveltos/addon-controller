@@ -306,13 +306,13 @@ func verifyClusterSummary(profileLabelKey, profileName string,
 	Expect(err).To(BeNil())
 	Expect(clusterSummary).ToNot(BeNil())
 
-	Byf("Verifying ClusterSummary ownerReference")
+	Byf("Verifying ClusterSummary %s/%s ownerReference", clusterSummary.Namespace, clusterSummary.Name)
 	ref, err := getClusterSummaryOwnerReference(clusterSummary)
 	Expect(err).To(BeNil())
 	Expect(ref).ToNot(BeNil())
 	Expect(ref.GetName()).To(Equal(profileName))
 
-	Byf("Verifying ClusterSummary configuration")
+	Byf("Verifying ClusterSummary %s/%s configuration", clusterSummary.Namespace, clusterSummary.Name)
 	Eventually(func() error {
 		var currentClusterSummary *configv1beta1.ClusterSummary
 		currentClusterSummary, err = getClusterSummary(context.TODO(),

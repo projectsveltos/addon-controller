@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -171,6 +172,15 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 	matchingCluster = append(matchingCluster, clusterSetClusters...)
+
+	// Get all clusters where deployment is required based on dependent ClusterProfile instances
+	depManager, err := dependencymanager.GetManagerInstance()
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+	}
+	profileRef := getKeyFromObject(r.Scheme, profileScope.Profile)
+	depClusters := depManager.GetClusterDeployments(profileRef)
+	matchingCluster = append(matchingCluster, depClusters...)
 
 	profileScope.SetMatchingClusterRefs(removeDuplicates(matchingCluster))
 

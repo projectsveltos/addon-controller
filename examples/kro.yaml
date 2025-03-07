@@ -1,0 +1,17 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: deploy-kro
+spec:
+  clusterSelector:
+    matchLabels:
+      env: fv
+  syncMode: Continuous
+  helmCharts:
+  - repositoryURL:    oci://ghcr.io/kro-run/kro
+    repositoryName:   kro
+    chartName:        vault
+    chartVersion:     0.2.1
+    releaseName:      kro
+    releaseNamespace: kro
+    helmChartAction:  Install

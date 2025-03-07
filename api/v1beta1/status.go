@@ -37,4 +37,8 @@ type Status struct {
 	// Spec
 	// +optional
 	UpdatedClusters Clusters `json:"updatedClusters,omitempty"`
+
+	// DependenciesHash is a hash representing the set of clusters where this ClusterProfile
+	// must be deployed, based on the combined configuration of its dependencies.
+	DependenciesHash []byte `json:"dependenciesHash,omitempty"`
 }

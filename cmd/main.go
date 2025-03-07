@@ -59,6 +59,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/internal/telemetry"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
@@ -91,6 +92,7 @@ var (
 	capiOnboardAnnotation   string
 	disableCaching          bool
 	disableTelemetry        bool
+	autoDeployDependencies  bool
 )
 
 const (
@@ -177,6 +179,8 @@ func main() {
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 	controllers.SetLuaConfigMap(luaConfigMap)
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
+	// Start dependency manager
+	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
 	logsettings.RegisterForLogSettings(ctx,
 		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
@@ -277,6 +281,27 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&conflictRetryTime, "conflict-retry-time", defaultConflictRetryTime*time.Second,
 		fmt.Sprintf("The minimum interval at which watched ClusterProfile with conflicts are retried. Defaul: %d seconds",
 			defaultConflictRetryTime))
+
+	// AutoDeployDependencies enables automatic deployment of prerequisite profiles.
+	//
+	// Profile instances can specify dependencies on other profiles using the
+	// DependsOn field, forming a directed acyclic graph (DAG) of dependencies.
+	//
+	// When AutoDeployDependencies is set to true, Sveltos automatically resolves and deploys
+	// the prerequisite profiles listed in the DependsOn field. This automation
+	// ensures that all required dependencies are deployed to the same managed clusters
+	// as the dependent profile. Sveltos analyzes the dependency graph to identify
+	// and deploy prerequisites in the correct order.
+	//
+	// By default, AutoDeployDependencies is enabled (true). When disabled, administrators
+	// are responsible for ensuring that both the dependent and prerequisite profiles
+	// target the same set of managed clusters through matching cluster selectors.
+	//
+	// Enabling AutoDeployDependencies simplifies multi-cluster management by automating
+	// dependency resolution, reducing manual effort, and minimizing the risk of
+	// configuration inconsistencies.
+	fs.BoolVar(&autoDeployDependencies, "auto-deploy-dependencies", true,
+		" When AutoDeployDependencies is set to true, Sveltos will automatically resolve and deploy the prerequisite profiles specified in the DependsOn field")
 }
 
 func setupIndexes(ctx context.Context, mgr ctrl.Manager) {

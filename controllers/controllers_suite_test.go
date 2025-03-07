@@ -38,6 +38,7 @@ import (
 
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -150,6 +151,8 @@ var _ = BeforeSuite(func() {
 	_, err = clusterproxy.GetListOfClusters(context.TODO(), testEnv.Client, "", "",
 		textlogger.NewLogger(textlogger.NewConfig()))
 	Expect(err).To(BeNil())
+
+	dependencymanager.InitializeManagerInstance(context.TODO(), testEnv.Client, false, ctrl.Log.WithName("controller_test_suite"))
 })
 
 var _ = AfterSuite(func() {

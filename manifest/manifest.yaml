@@ -1453,6 +1453,12 @@ spec:
           status:
             description: Status defines the observed state of ClusterProfile/Profile
             properties:
+              dependenciesHash:
+                description: |-
+                  DependenciesHash is a hash representing the set of clusters where this ClusterProfile
+                  must be deployed, based on the combined configuration of its dependencies.
+                format: byte
+                type: string
               matchingClusters:
                 description: |-
                   MatchingClusterRefs reference all the clusters currently matching
@@ -4275,6 +4281,12 @@ spec:
           status:
             description: Status defines the observed state of ClusterProfile/Profile
             properties:
+              dependenciesHash:
+                description: |-
+                  DependenciesHash is a hash representing the set of clusters where this ClusterProfile
+                  must be deployed, based on the combined configuration of its dependencies.
+                format: byte
+                type: string
               matchingClusters:
                 description: |-
                   MatchingClusterRefs reference all the clusters currently matching

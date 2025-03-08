@@ -17,7 +17,7 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.49.1-0.20250303073002-4c0a2c045db8
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/pflag v1.0.6
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.22.0

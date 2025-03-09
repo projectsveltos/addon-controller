@@ -219,7 +219,17 @@ func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespac
 	driftDetectionManagerYAML =
 		strings.ReplaceAll(driftDetectionManagerYAML, "v=5", "v=0")
 
+	registry := getDriftDetectionRegistry()
+	if registry != "" {
+		driftDetectionManagerYAML = replaceRegistry(driftDetectionManagerYAML, registry)
+	}
+
 	return driftDetectionManagerYAML
+}
+
+func replaceRegistry(agentYAML, registry string) string {
+	oldRegistry := "docker.io"
+	return strings.Replace(agentYAML, oldRegistry, registry, 1)
 }
 
 // deployDriftDetectionManager deploys drift-detection-manager in the managed cluster

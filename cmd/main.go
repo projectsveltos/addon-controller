@@ -93,6 +93,7 @@ var (
 	disableCaching          bool
 	disableTelemetry        bool
 	autoDeployDependencies  bool
+	registry                string
 )
 
 const (
@@ -179,6 +180,7 @@ func main() {
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 	controllers.SetLuaConfigMap(luaConfigMap)
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
+	controllers.SetDriftDetectionRegistry(registry)
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
@@ -257,6 +259,9 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&luaConfigMap, "lua-methods", "",
 		"The name of the ConfigMap in the projectsveltos namespace containing lua utilities to be loaded."+
 			"Changing the content of the ConfigMap does not cause Sveltos to redeploy.")
+
+	fs.StringVar(&registry, "registry", "",
+		"Container registry for drift-detection images. Defaults to docker.io/ if empty.")
 
 	const defautlRestConfigQPS = 20
 	fs.Float32Var(&restConfigQPS, "kube-api-qps", defautlRestConfigQPS,

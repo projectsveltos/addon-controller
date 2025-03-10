@@ -19,12 +19,14 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -45,6 +47,7 @@ import (
 
 const (
 	projectsveltos = "projectsveltos"
+	deploymentKind = "Deployment"
 )
 
 func getResourceSummaryNamespace() string {
@@ -300,6 +303,14 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 				currentLabels[k] = lbls[k]
 			}
 			policy.SetLabels(currentLabels)
+
+			if policy.GetKind() == deploymentKind {
+				policy, err = addTemplateSpecLabels(policy, lbls)
+				if err != nil {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to set deployment spec.template.labels: %v", err))
+					return err
+				}
+			}
 		}
 
 		var referencedUnstructured []*unstructured.Unstructured
@@ -655,7 +666,7 @@ func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 		patch := libsveltosv1beta1.Patch{
 			Patch: configMap.Data[k],
 			Target: &libsveltosv1beta1.PatchSelector{
-				Kind:  "Deployment",
+				Kind:  deploymentKind,
 				Group: "apps",
 			},
 		}
@@ -663,4 +674,28 @@ func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 	}
 
 	return patches, nil
+}
+
+func addTemplateSpecLabels(u *unstructured.Unstructured, lbls map[string]string) (*unstructured.Unstructured, error) {
+	var deployment appsv1.Deployment
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	if deployment.Spec.Template.Labels == nil {
+		deployment.Spec.Template.Labels = map[string]string{}
+	}
+	for k := range lbls {
+		deployment.Spec.Template.Labels[k] = lbls[k]
+	}
+
+	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&deployment)
+	if err != nil {
+		return nil, err
+	}
+
+	var uDeployment unstructured.Unstructured
+	uDeployment.SetUnstructuredContent(content)
+	return &uDeployment, nil
 }

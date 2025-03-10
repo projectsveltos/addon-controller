@@ -16,7 +16,7 @@ spec:
         - --shard-key=
         - --capi-onboard-annotation=
         - "--v=5"
-        - "--version=main"
+        - "--version=v0.50.0"
         env:
         - name: GOMEMLIMIT
           valueFrom:

@@ -42,6 +42,7 @@ import (
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -210,7 +211,7 @@ func (r *ClusterProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterProfileForSveltosCluster),
 			builder.WithPredicates(
-				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+				predicates.SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 			),
 		).
 		Build(r)
@@ -231,7 +232,7 @@ func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 		mgr.GetCache(),
 		&clusterv1.Cluster{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterProfileForCluster),
-		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+		predicates.ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 
 	// When cluster-api cluster changes, according to ClusterPredicates,
@@ -244,7 +245,7 @@ func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 		mgr.GetCache(),
 		&clusterv1.Machine{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
-		MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "machinepredicate")},
+		predicates.MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "machinepredicate")},
 	)
 
 	// When cluster-api machine changes, according to ClusterPredicates,

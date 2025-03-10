@@ -51,6 +51,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/sharding"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
@@ -406,7 +407,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForSveltosCluster),
 			builder.WithPredicates(
-				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+				predicates.SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 			),
 		).
 		Watches(&corev1.ConfigMap{},
@@ -445,7 +446,7 @@ func (r *ClusterSummaryReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 		mgr.GetCache(),
 		&clusterv1.Cluster{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForCluster),
-		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+		predicates.ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 
 	// When cluster-api cluster changes, according to ClusterPredicates,

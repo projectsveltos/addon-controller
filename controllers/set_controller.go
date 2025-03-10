@@ -39,6 +39,7 @@ import (
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -172,7 +173,7 @@ func (r *SetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueSetForSveltosCluster),
 			builder.WithPredicates(
-				SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
+				predicates.SveltosClusterPredicates(mgr.GetLogger().WithValues("predicate", "sveltosclusterpredicate")),
 			),
 		).
 		Build(r)
@@ -193,7 +194,7 @@ func (r *SetReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.Controller) 
 		mgr.GetCache(),
 		&clusterv1.Cluster{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueSetForCluster),
-		ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
+		predicates.ClusterPredicate{Logger: mgr.GetLogger().WithValues("predicate", "clusterpredicate")},
 	)
 
 	// When cluster-api cluster changes, according to ClusterPredicates,

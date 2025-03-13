@@ -241,12 +241,17 @@ spec:
                 items:
                   properties:
                     chartName:
-                      description: ChartName is the chart name
-                      minLength: 1
+                      description: |-
+                        ChartName is the chart name
+                        This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+                        Must be defined otherwise.
                       type: string
                     chartVersion:
-                      description: ChartVersion is the chart version
-                      minLength: 1
+                      description: |-
+                        ChartVersion is the chart version
+                        This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+                        It is ignored if RepositoryURL references a Flux Source.
+                        Must be defined otherwise.
                       type: string
                     helmChartAction:
                       default: Install
@@ -508,11 +513,36 @@ spec:
                       minLength: 1
                       type: string
                     repositoryName:
-                      description: RepositoryName is the name helm chart repository
-                      minLength: 1
+                      description: |-
+                        RepositoryName is the name helm chart repository
+                        This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+                        It is ignored if RepositoryURL references a Flux Source.
+                        Must be defined otherwise.
                       type: string
                     repositoryURL:
-                      description: RepositoryURL is the URL helm chart repository
+                      description: |-
+                        RepositoryURL is the URL helm chart repository
+                        It can point to a traditional HTTP-based repository or an OCI registry.
+                        Examples:
+                          - HTTP Repository: https://charts.example.com/stable
+                          - OCI Registry: oci://registry.example.com/namespace/charts
+                          - GitHub Pages: https://<username>.github.io/<repository>/
+                          - Any other valid URL where Helm charts are hosted.
+
+                        Alternatively, it can be a Flux source reference:
+                          <flux source kind>://<flux source namespace>/<flux source name>/<path>
+
+                        Where:
+                          - <flux source kind> is the type of Flux source (gitrepository, ocirepository, bucket).
+                          - <flux source namespace> and <flux source name> are the namespace and name of the Flux Source in the management cluster.
+                          - <path> is the path within the source repository where the Helm charts are located.
+
+                        For instance:
+                          gitrepository://flux-system/flux-system/charts/projectsveltos
+
+                        Assuming there is a Flux GitRepository named 'flux-system' in the 'flux-system' namespace
+                        syncing 'https://github.com/projectsveltos/helm-charts.git/', and the Helm charts are
+                        located in the 'charts/projectsveltos' directory of that repository.
                       minLength: 1
                       type: string
                     values:
@@ -561,13 +591,29 @@ spec:
                         type: object
                       type: array
                   required:
-                  - chartName
-                  - chartVersion
                   - releaseName
                   - releaseNamespace
-                  - repositoryName
                   - repositoryURL
                   type: object
+                  x-kubernetes-validations:
+                  - message: ChartName must be defined
+                    rule: 'self.repositoryURL.startsWith(''http'') ? size(self.chartName)
+                      >= 1 : true'
+                  - message: ChartName must be defined
+                    rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.chartName)
+                      >= 1 : true'
+                  - message: ChartVersion must be defined
+                    rule: 'self.repositoryURL.startsWith(''http'') ? size(self.chartVersion)
+                      >= 1 : true'
+                  - message: ChartVersion must be defined
+                    rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.chartVersion)
+                      >= 1 : true'
+                  - message: RepositoryName must be defined
+                    rule: 'self.repositoryURL.startsWith(''http'') ? size(self.repositoryName)
+                      >= 1 : true'
+                  - message: RepositoryName must be defined
+                    rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.repositoryName)
+                      >= 1 : true'
                 type: array
               kustomizationRefs:
                 description: |-

@@ -367,22 +367,59 @@ type HelmUninstallOptions struct {
 	DisableHooks bool `json:"disableHooks,omitempty"`
 }
 
+//nolint: lll // marker
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('http') ? size(self.chartName) >= 1 : true",message="ChartName must be defined"
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('oci') ? size(self.chartName) >= 1 : true",message="ChartName must be defined"
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('http') ? size(self.chartVersion) >= 1 : true",message="ChartVersion must be defined"
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('oci') ? size(self.chartVersion) >= 1 : true",message="ChartVersion must be defined"
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('http') ? size(self.repositoryName) >= 1 : true",message="RepositoryName must be defined"
+// +kubebuilder:validation:XValidation:rule="self.repositoryURL.startsWith('oci') ? size(self.repositoryName) >= 1 : true",message="RepositoryName must be defined"
+
 type HelmChart struct {
 	// RepositoryURL is the URL helm chart repository
+	// It can point to a traditional HTTP-based repository or an OCI registry.
+	// Examples:
+	//   - HTTP Repository: https://charts.example.com/stable
+	//   - OCI Registry: oci://registry.example.com/namespace/charts
+	//   - GitHub Pages: https://<username>.github.io/<repository>/
+	//   - Any other valid URL where Helm charts are hosted.
+	//
+	// Alternatively, it can be a Flux source reference:
+	//   <flux source kind>://<flux source namespace>/<flux source name>/<path>
+	//
+	// Where:
+	//   - <flux source kind> is the type of Flux source (gitrepository, ocirepository, bucket).
+	//   - <flux source namespace> and <flux source name> are the namespace and name of the Flux Source in the management cluster.
+	//   - <path> is the path within the source repository where the Helm charts are located.
+	//
+	// For instance:
+	//   gitrepository://flux-system/flux-system/charts/projectsveltos
+	//
+	// Assuming there is a Flux GitRepository named 'flux-system' in the 'flux-system' namespace
+	// syncing 'https://github.com/projectsveltos/helm-charts.git/', and the Helm charts are
+	// located in the 'charts/projectsveltos' directory of that repository.
 	// +kubebuilder:validation:MinLength=1
 	RepositoryURL string `json:"repositoryURL"`
 
 	// RepositoryName is the name helm chart repository
-	// +kubebuilder:validation:MinLength=1
-	RepositoryName string `json:"repositoryName"`
+	// This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+	// It is ignored if RepositoryURL references a Flux Source.
+	// Must be defined otherwise.
+	// +optional
+	RepositoryName string `json:"repositoryName,omitempty"`
 
 	// ChartName is the chart name
-	// +kubebuilder:validation:MinLength=1
-	ChartName string `json:"chartName"`
+	// This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+	// Must be defined otherwise.
+	// +optional
+	ChartName string `json:"chartName,omitempty"`
 
 	// ChartVersion is the chart version
-	// +kubebuilder:validation:MinLength=1
-	ChartVersion string `json:"chartVersion"`
+	// This field is used only when RepositoryURL points to a traditional HTTP or OCI repository.
+	// It is ignored if RepositoryURL references a Flux Source.
+	// Must be defined otherwise.
+	// +optional
+	ChartVersion string `json:"chartVersion,omitempty"`
 
 	// ReleaseName is the chart release
 	// +kubebuilder:validation:MinLength=1

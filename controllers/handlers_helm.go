@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/credentials"
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/hexops/gotextdiff"
@@ -415,6 +417,25 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	for i := range sortedHelmCharts {
 		currentChart := &sortedHelmCharts[i]
 		config += render.AsCode(*currentChart)
+
+		if isReferencingFluxSource(currentChart) {
+			sourceRef, repoPath, err := getReferencedFluxSourceFromURL(currentChart)
+			if err != nil {
+				return nil, err
+			}
+			source, err := getSource(ctx, c, sourceRef.Namespace, sourceRef.Name, sourceRef.Kind)
+			if err != nil {
+				return nil, err
+			}
+			if source == nil {
+				continue
+			}
+			s := source.(sourcev1.Source)
+			if s.GetArtifact() != nil {
+				config += s.GetArtifact().Revision
+				config += repoPath
+			}
+		}
 
 		valueFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
 			currentChart, logger)
@@ -980,17 +1001,23 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (map[string]interface{}, error) {
 
-	if requestedChart.ChartName == "" {
+	if !isReferencingFluxSource(requestedChart) && requestedChart.ChartName == "" {
 		return nil, fmt.Errorf("chart name can not be empty")
 	}
 
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace",
 		requestedChart.ReleaseNamespace, "chart", requestedChart.ChartName, "chartVersion", requestedChart.ChartVersion)
 
-	chartName, repoURL, err := getHelmChartAndRepoName(requestedChart.ChartName, requestedChart.RepositoryURL)
+	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, requestedChart, logger)
 	if err != nil {
 		return nil, err
 	}
+
+	if tmpDir != "" {
+		defer os.RemoveAll(tmpDir)
+		chartName = filepath.Join(tmpDir, chartName)
+	}
+
 	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
 	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
@@ -1154,17 +1181,22 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil
 	}
 
-	if requestedChart.ChartName == "" {
+	if !isReferencingFluxSource(requestedChart) && requestedChart.ChartName == "" {
 		return fmt.Errorf("chart name can not be empty")
 	}
 
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace", requestedChart.ReleaseNamespace,
 		"chartVersion", requestedChart.ChartVersion)
 
-	chartName, repoURL, err := getHelmChartAndRepoName(requestedChart.ChartName, requestedChart.RepositoryURL)
+	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, requestedChart, logger)
 	if err != nil {
 		return err
 	}
+	if tmpDir != "" {
+		defer os.RemoveAll(tmpDir)
+		chartName = filepath.Join(tmpDir, chartName)
+	}
+
 	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
 	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
@@ -1589,14 +1621,16 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
-	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
-		requestedChart.RepositoryURL, registryOptions, logger)
-	if err != nil {
-		return err
+	if !isReferencingFluxSource(requestedChart) {
+		err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
+			requestedChart.RepositoryURL, registryOptions, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
+	values, err := getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -1648,14 +1682,16 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
-	err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
-		requestedChart.RepositoryURL, registryOptions, logger)
-	if err != nil {
-		return err
+	if !isReferencingFluxSource(requestedChart) {
+		err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
+			requestedChart.RepositoryURL, registryOptions, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	var values chartutil.Values
-	values, err = getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
+	values, err := getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return err
 	}
@@ -2751,11 +2787,16 @@ func getPlainHTTP(currentChart *configv1beta1.HelmChart) bool {
 }
 
 // getHelmChartAndRepoName returns helm repo URL and chart name
-func getHelmChartAndRepoName(chartName, repoURL string) (string, string, error) { //nolint: gocritic // ignore
+func getHelmChartAndRepoName(ctx context.Context, requestedChart *configv1beta1.HelmChart, //nolint: gocritic // ignore
+	logger logr.Logger) (string, string, string, error) {
+
+	tmpDir := ""
+	chartName := requestedChart.ChartName
+	repoURL := requestedChart.RepositoryURL
 	if registry.IsOCI(repoURL) {
 		u, err := url.Parse(repoURL)
 		if err != nil {
-			return "", "", err
+			return "", "", "", err
 		}
 
 		u.Path = path.Join(u.Path, chartName)
@@ -2763,7 +2804,32 @@ func getHelmChartAndRepoName(chartName, repoURL string) (string, string, error) 
 		repoURL = ""
 	}
 
-	return chartName, repoURL, nil
+	if isReferencingFluxSource(requestedChart) {
+		sourceRef, repoPath, err := getReferencedFluxSourceFromURL(requestedChart)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		if sourceRef == nil {
+			return "", "", "", fmt.Errorf("Flux Source %v not found", sourceRef)
+		}
+
+		source, err := getSource(ctx, getManagementClusterClient(), sourceRef.Namespace, sourceRef.Name, sourceRef.Kind)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		s := source.(sourcev1.Source)
+		tmpDir, err = prepareFileSystemWithFluxSource(s, logger)
+		if err != nil {
+			return "", "", "", err
+		}
+
+		chartName = repoPath
+		repoURL = ""
+	}
+
+	return tmpDir, chartName, repoURL, nil
 }
 
 func doLogin(registryOptions *registryClientOptions, releaseNamespace, registryURL string) error {

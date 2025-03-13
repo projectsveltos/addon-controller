@@ -960,6 +960,15 @@ func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		hc := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+
+		if isReferencingFluxSource(hc) {
+			sourceRef, _, err := getReferencedFluxSourceFromURL(hc)
+			if err != nil {
+				return nil, err
+			}
+			currentReferences.Insert(sourceRef)
+		}
+
 		valuesFromReferences, err := getHelmChartValueFrom(clusterSummaryScope, hc)
 		if err != nil {
 			return nil, err

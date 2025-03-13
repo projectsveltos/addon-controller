@@ -275,6 +275,7 @@ func fluxGenericPredicate(obj client.Object, logger logr.Logger) bool {
 }
 
 func hasArtifactChanged(objNew, objOld client.Object) bool {
+	addTypeInformationToObject(getManagementClusterClient().Scheme(), objNew)
 	switch objNew.GetObjectKind().GroupVersionKind().Kind {
 	case sourcev1.GitRepositoryKind:
 		newGitRepo := objNew.(*sourcev1.GitRepository)
@@ -312,5 +313,5 @@ func isArtifactSame(oldArtifact, newArtifact *sourcev1.Artifact) bool {
 	if oldArtifact != nil && newArtifact == nil {
 		return false
 	}
-	return reflect.DeepEqual(oldArtifact, newArtifact)
+	return reflect.DeepEqual(oldArtifact.Digest, newArtifact.Digest)
 }

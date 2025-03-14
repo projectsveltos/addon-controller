@@ -20,24 +20,33 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fluxcd/pkg/http/fetch"
 	"github.com/fluxcd/pkg/tar"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+)
+
+const (
+	gitRepositoryScheme = "gitrepository"
+	ociRepositoryScheme = "ocirepository"
+	bucketScheme        = "bucket"
 )
 
 func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger) (string, error) {
 	if source.GetArtifact() == nil {
 		msg := "Source is not ready, artifact not found"
 		logger.V(logs.LogInfo).Info(msg)
-		return "", fmt.Errorf("%s", msg)
+		return "", fmt.Errorf("prepareFileSystemWithFluxSource: %s", msg)
 	}
 
 	// Update status with the reconciliation progress.
@@ -46,7 +55,7 @@ func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger)
 	// Create tmp dir.
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s", source.GetArtifact().Revision))
 	if err != nil {
-		err = fmt.Errorf("tmp dir error: %w", err)
+		err = fmt.Errorf("prepareFileSystemWithFluxSource: tmp dir error: %w", err)
 		return "", err
 	}
 
@@ -108,4 +117,47 @@ func getSource(ctx context.Context, c client.Client, namespace, sourceName, sour
 		return nil, fmt.Errorf("source `%s` kind '%s' not supported",
 			sourceName, sourceKind)
 	}
+}
+
+func isReferencingFluxSource(hc *configv1beta1.HelmChart) bool {
+	lowerRepoURL := strings.ToLower(hc.RepositoryURL)
+	return strings.HasPrefix(lowerRepoURL, fmt.Sprintf("%s://", gitRepositoryScheme)) ||
+		strings.HasPrefix(lowerRepoURL, fmt.Sprintf("%s://", ociRepositoryScheme)) ||
+		strings.HasPrefix(lowerRepoURL, fmt.Sprintf("%s://", bucketScheme))
+}
+
+func getReferencedFluxSourceFromURL(hc *configv1beta1.HelmChart) (*corev1.ObjectReference, string, error) {
+	const repoURLParts = 2
+	parts := strings.SplitN(hc.RepositoryURL, "://", repoURLParts)
+	if len(parts) != repoURLParts {
+		return nil, "", fmt.Errorf("incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath", hc.RepositoryURL)
+	}
+
+	sourceKind := parts[0]
+	remainingParts := strings.Split(parts[1], "/")
+	if len(remainingParts) < 3 { //nolint: mnd // expected namespace, name and path
+		return nil, "", fmt.Errorf("incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath", hc.RepositoryURL)
+	}
+
+	sourceNamespace := remainingParts[0]
+	sourceName := remainingParts[1]
+	sourcePath := strings.Join(remainingParts[2:], "/")
+
+	sourceRef := &corev1.ObjectReference{
+		Namespace: sourceNamespace,
+		Name:      sourceName,
+	}
+
+	switch strings.ToLower(sourceKind) {
+	case strings.ToLower(sourcev1.GitRepositoryKind):
+		sourceRef.Kind = sourcev1.GitRepositoryKind
+		sourceRef.APIVersion = sourcev1.GroupVersion.String()
+	case strings.ToLower(sourcev1b2.OCIRepositoryKind):
+		sourceRef.Kind = sourcev1b2.OCIRepositoryKind
+		sourceRef.APIVersion = sourcev1b2.GroupVersion.String()
+	case strings.ToLower(sourcev1b2.BucketKind):
+		sourceRef.Kind = sourcev1b2.BucketKind
+		sourceRef.APIVersion = sourcev1b2.GroupVersion.String()
+	}
+	return sourceRef, sourcePath, nil
 }

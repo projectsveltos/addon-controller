@@ -106,7 +106,6 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 	}
 
 	logger = logger.WithValues("key", fmt.Sprintf("%s", key))
-
 	requests := make([]ctrl.Request, r.getReferenceMapForEntry(&key).Len())
 
 	consumers := r.getReferenceMapForEntry(&key).Items()

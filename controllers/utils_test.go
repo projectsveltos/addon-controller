@@ -25,12 +25,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -424,6 +427,65 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			Expect(v).To(Equal(myMap[k]))
 		}
 	})
+
+	It("associatedClusterExist returns false when associated cluster does not exist",
+		func() {
+			clusterNamespace := randomString()
+			clusterName := randomString()
+			clusterType := libsveltosv1beta1.ClusterTypeSveltos
+
+			logger := textlogger.NewLogger(textlogger.NewConfig())
+
+			depl := fmt.Sprintf(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    cluster-namespace: %s
+    cluster-name: %s
+    cluster-type: %s
+    control-plane: drift-detection-9cfuselt9ltff9mkcg18
+    feature: drift-detection
+  name: drift-detection-manager
+  namespace: projectsveltos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: drift-detection-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: drift-detection-manager
+    spec:
+      containers:
+      - command:
+        - /manager
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:82525fa56bd985fb9842407262b5afce6720c4d78214a8ff69d44fa549395f4e
+        `, clusterNamespace, clusterName, clusterType)
+
+			u, err := k8s_utils.GetUnstructured([]byte(depl))
+			Expect(err).To(BeNil())
+			c := fake.NewClientBuilder().WithScheme(scheme).Build()
+			Expect(c.Create(context.TODO(), u)).To(Succeed())
+
+			currentDepl := &appsv1.Deployment{}
+			Expect(c.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, currentDepl)).To(Succeed())
+
+			Expect(controllers.AssociatedClusterExist(context.TODO(), c, currentDepl, logger)).To(BeFalse())
+
+			sveltosCluster := libsveltosv1beta1.SveltosCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: clusterNamespace,
+					Name:      clusterName,
+				},
+			}
+			Expect(c.Create(context.TODO(), &sveltosCluster)).To(Succeed())
+			Expect(controllers.AssociatedClusterExist(context.TODO(), c, currentDepl, logger)).To(BeTrue())
+
+		})
 })
 
 func getClusterRef(cluster client.Object) *corev1.ObjectReference {

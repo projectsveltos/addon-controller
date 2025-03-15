@@ -48,6 +48,12 @@ import (
 const (
 	projectsveltos = "projectsveltos"
 	deploymentKind = "Deployment"
+
+	driftDetectionClusterNamespaceLabel = "cluster-namespace"
+	driftDetectionClusterNameLabel      = "cluster-name"
+	driftDetectionClusterTypeLabel      = "cluster-type"
+	driftDetectionFeatureLabelKey       = "feature"
+	driftDetectionFeatureLabelValue     = "drift-detection"
 )
 
 func getResourceSummaryNamespace() string {
@@ -585,10 +591,10 @@ func getDriftDetectionManagerLabels(clusterNamespace, clusterName string,
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
 	lbls := make(map[string]string)
-	lbls["cluster-namespace"] = clusterNamespace
-	lbls["cluster-name"] = clusterName
-	lbls["cluster-type"] = strings.ToLower(string(clusterType))
-	lbls["feature"] = "drift-detection"
+	lbls[driftDetectionClusterNamespaceLabel] = clusterNamespace
+	lbls[driftDetectionClusterNameLabel] = clusterName
+	lbls[driftDetectionClusterTypeLabel] = strings.ToLower(string(clusterType))
+	lbls[driftDetectionFeatureLabelKey] = driftDetectionFeatureLabelValue
 	return lbls
 }
 

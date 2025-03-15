@@ -434,6 +434,10 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, r.Version, mgr.GetLogger())
 	}
 
+	if r.AgentInMgmtCluster {
+		go removeStaleDriftDetectionManager(ctx, r.Logger)
+	}
+
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
 	r.ctrl = c

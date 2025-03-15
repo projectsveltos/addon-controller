@@ -206,5 +206,6 @@ var (
 )
 
 var (
-	RemoveDuplicates = removeDuplicates
+	AssociatedClusterExist = associatedClusterExist
+	RemoveDuplicates       = removeDuplicates
 )

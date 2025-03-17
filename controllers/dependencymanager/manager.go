@@ -470,8 +470,8 @@ func (m *instance) updateClusterProfile(ctx context.Context, c client.Client, cl
 		return nil
 	}
 
-	currentClusterProfile.Spec.ClusterRefs = clusterRef
-	return c.Update(ctx, currentClusterProfile)
+	currentClusterProfile.Status.DependenciesHash = calculateHash(clusters.Clusters)
+	return c.Status().Update(ctx, currentClusterProfile)
 }
 
 func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger logr.Logger) {

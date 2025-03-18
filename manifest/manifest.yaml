@@ -610,6 +610,7 @@ spec:
                   - paths
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               extraAnnotations:
                 additionalProperties:
                   type: string
@@ -1010,6 +1011,7 @@ spec:
                     rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.repositoryName)
                       >= 1 : true'
                 type: array
+                x-kubernetes-list-type: atomic
               kustomizationRefs:
                 description: |-
                   Kustomization refs is a list of kustomization paths. Kustomization will
@@ -1142,6 +1144,7 @@ spec:
                   - namespace
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               maxConsecutiveFailures:
                 description: |-
                   The maximum number of consecutive deployment failures that Sveltos will permit.
@@ -1225,6 +1228,7 @@ spec:
                   - patch
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               policyRefs:
                 description: |-
                   PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
@@ -1282,6 +1286,7 @@ spec:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               reloader:
                 default: false
                 description: |-
@@ -1495,6 +1500,7 @@ spec:
                   - version
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
             type: object
           status:
             description: Status defines the observed state of ClusterProfile/Profile
@@ -2267,6 +2273,7 @@ spec:
                       - paths
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   extraAnnotations:
                     additionalProperties:
                       type: string
@@ -2669,6 +2676,7 @@ spec:
                         rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.repositoryName)
                           >= 1 : true'
                     type: array
+                    x-kubernetes-list-type: atomic
                   kustomizationRefs:
                     description: |-
                       Kustomization refs is a list of kustomization paths. Kustomization will
@@ -2801,6 +2809,7 @@ spec:
                       - namespace
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   maxConsecutiveFailures:
                     description: |-
                       The maximum number of consecutive deployment failures that Sveltos will permit.
@@ -2884,6 +2893,7 @@ spec:
                       - patch
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   policyRefs:
                     description: |-
                       PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
@@ -2941,6 +2951,7 @@ spec:
                       - name
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                   reloader:
                     default: false
                     description: |-
@@ -3156,6 +3167,7 @@ spec:
                       - version
                       type: object
                     type: array
+                    x-kubernetes-list-type: atomic
                 type: object
               clusterType:
                 description: ClusterType is the type of Cluster
@@ -3530,6 +3542,7 @@ spec:
                   - paths
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               extraAnnotations:
                 additionalProperties:
                   type: string
@@ -3930,6 +3943,7 @@ spec:
                     rule: 'self.repositoryURL.startsWith(''oci'') ? size(self.repositoryName)
                       >= 1 : true'
                 type: array
+                x-kubernetes-list-type: atomic
               kustomizationRefs:
                 description: |-
                   Kustomization refs is a list of kustomization paths. Kustomization will
@@ -4062,6 +4076,7 @@ spec:
                   - namespace
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               maxConsecutiveFailures:
                 description: |-
                   The maximum number of consecutive deployment failures that Sveltos will permit.
@@ -4145,6 +4160,7 @@ spec:
                   - patch
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               policyRefs:
                 description: |-
                   PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
@@ -4202,6 +4218,7 @@ spec:
                   - name
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
               reloader:
                 default: false
                 description: |-
@@ -4415,6 +4432,7 @@ spec:
                   - version
                   type: object
                 type: array
+                x-kubernetes-list-type: atomic
             type: object
           status:
             description: Status defines the observed state of ClusterProfile/Profile

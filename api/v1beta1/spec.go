@@ -735,29 +735,38 @@ type Spec struct {
 	// The values contained in those resources can be static or leverage Go templates for dynamic customization.
 	// When expressed as templates, the values are filled in using information from
 	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+	// +listType=atomic
 	// +optional
 	PolicyRefs []PolicyRef `json:"policyRefs,omitempty"`
 
 	// Helm charts is a list of helm charts that need to be deployed
+	// +listType=atomic
+	// +optional
 	HelmCharts []HelmChart `json:"helmCharts,omitempty"`
 
 	// Kustomization refs is a list of kustomization paths. Kustomization will
 	// be run on those paths and the outcome will be deployed.
+	// +listType=atomic
+	// +optional
 	KustomizationRefs []KustomizationRef `json:"kustomizationRefs,omitempty"`
 
 	// ValidateHealths is a slice of Lua functions to run against
 	// the managed cluster to validate the state of those add-ons/applications
 	// is healthy
+	// +listType=atomic
+	// +optional
 	ValidateHealths []ValidateHealth `json:"validateHealths,omitempty"`
 
 	// Define additional Kustomize inline Patches applied for all resources on this profile
 	// Within the Patch Spec you can use templating
+	// +listType=atomic
 	// +optional
 	Patches []libsveltosv1beta1.Patch `json:"patches,omitempty"`
 
 	// DriftExclusions is a list of configuration drift exclusions to be applied when syncMode is
 	// set to ContinuousWithDriftDetection. Each exclusion specifies JSON6902 paths to ignore
 	// when evaluating drift, optionally targeting specific resources and features.
+	// +listType=atomic
 	// +optional
 	DriftExclusions []DriftExclusion `json:"driftExclusions,omitempty"`
 

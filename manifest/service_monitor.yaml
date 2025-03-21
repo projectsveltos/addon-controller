@@ -12,8 +12,10 @@ spec:
     port: metrics
     scheme: https
     tlsConfig:
-      caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
       insecureSkipVerify: true
+  namespaceSelector:
+    matchNames:
+    - projectsveltos      
   selector:
     matchLabels:
       control-plane: addon-controller

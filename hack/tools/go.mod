@@ -3,8 +3,8 @@ module github.com/projectsveltos/addon-controller/hack/tools
 go 1.24.1
 
 require (
-	github.com/a8m/envsubst v1.4.2
-	github.com/onsi/ginkgo/v2 v2.23.0
+	github.com/a8m/envsubst v1.4.3
+	github.com/onsi/ginkgo/v2 v2.23.3
 	golang.org/x/oauth2 v0.28.0
 	k8s.io/client-go v0.32.3
 	sigs.k8s.io/controller-tools v0.17.2

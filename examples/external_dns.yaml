@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://kubernetes-sigs.github.io/external-dns/
     repositoryName:   external-dns
     chartName:        external-dns/external-dns
-    chartVersion:     1.15.2
+    chartVersion:     1.16.0
     releaseName:      external-dns
     releaseNamespace: external-dns
     helmChartAction:  Install

@@ -837,6 +837,8 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 
 	registryOptions.credentialsPath = credentialsPath
 	registryOptions.caPath = caPath
+	registryOptions.plainHTTP = getPlainHTTP(currentChart)
+	registryOptions.skipTLSVerify = getInsecureSkipTLSVerify(currentChart)
 
 	if currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
 		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
@@ -861,9 +863,6 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 		registryOptions.username = username
 		registryOptions.password = password
 		registryOptions.hostname = hostname
-
-		registryOptions.plainHTTP = getPlainHTTP(currentChart)
-		registryOptions.skipTLSVerify = getInsecureSkipTLSVerify(currentChart)
 	}
 
 	return registryOptions, nil

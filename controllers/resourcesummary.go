@@ -35,15 +35,17 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
-	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
+	pullmode "github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 const (
@@ -57,25 +59,13 @@ const (
 	driftDetectionFeatureLabelValue     = "drift-detection"
 )
 
-func getResourceSummaryNamespaceInManagedCluster() string {
-	return projectsveltos
-}
-
 func getDriftDetectionNamespaceInMgmtCluster() string {
 	return projectsveltos
 }
 
-func getResourceSummaryNameInManagedCluster(clusterSummaryNamespace, clusterSummaryName string) string {
-	return fmt.Sprintf("%s--%s", clusterSummaryNamespace, clusterSummaryName)
-}
-
-func getResourceSummaryNameInManagemntCluster(clusterSummaryName string) string {
-	return clusterSummaryName
-}
-
 func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1beta1.ClusterType,
-	startInMgmtCluster bool, logger logr.Logger) error {
+	clusterNamespace, clusterName, applicant, featureID string, clusterType libsveltosv1beta1.ClusterType,
+	isPullMode, startInMgmtCluster bool, logger logr.Logger) error {
 
 	logger = logger.WithValues("clustersummary", applicant)
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
@@ -86,8 +76,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	err = deployDriftDetectionCRDs(ctx, clusterNamespace, clusterName, clusterType,
-		startInMgmtCluster, logger)
+	err = deployDriftDetectionCRDs(ctx, clusterNamespace, clusterName, applicant, featureID, clusterType,
+		isPullMode, startInMgmtCluster, logger)
 	if err != nil {
 		return err
 	}
@@ -100,49 +90,12 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 			clusterName, "do-not-send-updates", clusterType, patches, logger)
 	}
 
-	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace,
-		clusterName, "do-not-send-updates", clusterType, patches, logger)
+	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace, clusterName,
+		applicant, featureID, "do-not-send-updates", clusterType, patches, logger)
 }
 
-func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant string, clusterType libsveltosv1beta1.ClusterType,
-	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
-	helmResources []libsveltosv1beta1.HelmResources, driftExclusions []configv1beta1.DriftExclusion,
-	logger logr.Logger) error {
-
-	logger = logger.WithValues("clustersummary", applicant)
-	logger.V(logs.LogDebug).Info("deploy resourcesummary")
-
-	clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, applicant)
-
-	lbls := map[string]string{
-		sveltos_upgrade.ClusterNameLabel: clusterName,
-		sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(clusterType)),
-	}
-
-	annotations := map[string]string{
-		libsveltosv1beta1.ClusterSummaryNameAnnotation:      applicant,
-		libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterNamespace,
-	}
-
-	// Deploy ResourceSummary instance
-	err = deployResourceSummaryInstance(ctx, clusterClient, resources, kustomizeResources, helmResources,
-		resourceSummaryNameInfo.Namespace, resourceSummaryNameInfo.Name, lbls, annotations, driftExclusions, logger)
-	if err != nil {
-		return err
-	}
-
-	logger.V(logs.LogDebug).Info("successuflly deployed resourceSummary CRD and instance")
-	return nil
-}
-
-func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType, startInMgmtCluster bool, logger logr.Logger) error {
+func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName, applicant, featureID string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode, startInMgmtCluster bool, logger logr.Logger) error {
 
 	// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
 	// this operation is a no-op if the agent is deployed there.
@@ -160,15 +113,18 @@ func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName
 	}
 
 	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
+
 	// Deploy DebuggingConfiguration CRD
-	err = deployDebuggingConfigurationCRD(ctx, remoteConfig, logger)
+	err = deployDebuggingConfigurationCRD(ctx, remoteConfig, clusterNamespace, clusterName, applicant,
+		featureID, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary CRD")
 	// Deploy ResourceSummary CRD
-	err = deployResourceSummaryCRD(ctx, remoteConfig, logger)
+	err = deployResourceSummaryCRD(ctx, remoteConfig, clusterNamespace, clusterName, applicant,
+		featureID, isPullMode, logger)
 	if err != nil {
 		return err
 	}
@@ -178,7 +134,7 @@ func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName
 
 // deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD in remote cluster
 func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+	clusterNamespace, clusterName, applicant, featureID string, isPullMode bool, logger logr.Logger) error {
 
 	u, err := k8s_utils.GetUnstructured(crd.GetDebuggingConfigurationCRDYAML())
 	if err != nil {
@@ -187,27 +143,26 @@ func deployDebuggingConfigurationCRD(ctx context.Context, remoteRestConfig *rest
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, u.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		resources := map[string][]unstructured.Unstructured{}
+		resources["debugging-configuration-crd"] = []unstructured.Unstructured{*u}
+
+		err = pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+			configv1beta1.ClusterSummaryKind, applicant, featureID, resources, true, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to stage DebuggingConfiguration CRD: %v", err))
+			return err
+		}
+		return nil
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-	}
-	_, err = dr.Apply(ctx, u.GetName(), u, options)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to apply DebuggingConfiguration CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return deployUnstructuredResources(ctx, remoteRestConfig, []*unstructured.Unstructured{u}, logger)
 }
 
 // deployResourceSummaryCRD deploys ResourceSummary CRD in remote cluster
 func deployResourceSummaryCRD(ctx context.Context, remoteRestConfig *rest.Config,
-	logger logr.Logger) error {
+	clusterNamespace, clusterName, applicant, featureID string, isPullMode bool, logger logr.Logger) error {
 
 	rsCRD, err := k8s_utils.GetUnstructured(crd.GetResourceSummaryCRDYAML())
 	if err != nil {
@@ -216,22 +171,20 @@ func deployResourceSummaryCRD(ctx context.Context, remoteRestConfig *rest.Config
 		return err
 	}
 
-	dr, err := k8s_utils.GetDynamicResourceInterface(remoteRestConfig, rsCRD.GroupVersionKind(), "")
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
-		return err
+	if isPullMode {
+		resources := map[string][]unstructured.Unstructured{}
+		resources["resource-summary-crd"] = []unstructured.Unstructured{*rsCRD}
+		err = pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+			configv1beta1.ClusterSummaryKind, applicant, featureID, resources, true, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to stage DebuggingConfiguration CRD: %v", err))
+			return err
+		}
+		return nil
 	}
 
-	options := metav1.ApplyOptions{
-		FieldManager: "application/apply-patch",
-	}
-	_, err = dr.Apply(ctx, rsCRD.GetName(), rsCRD, options)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to apply ResourceSummary CRD: %v", err))
-		return err
-	}
-
-	return nil
+	return deployUnstructuredResources(ctx, remoteRestConfig, []*unstructured.Unstructured{rsCRD}, logger)
 }
 
 func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace, clusterName, mode string,
@@ -264,7 +217,8 @@ func replaceRegistry(agentYAML, registry string) string {
 }
 
 // deployDriftDetectionManagerInManagedCluster deploys the drift-detection-manager component within the managed cluster.
-func deployDriftDetectionManagerInManagedCluster(ctx context.Context, clusterNamespace, clusterName, mode string,
+func deployDriftDetectionManagerInManagedCluster(ctx context.Context,
+	clusterNamespace, clusterName, applicant, featureID, mode string,
 	clusterType libsveltosv1beta1.ClusterType, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	// Sveltos resources are deployed using cluster-admin role.
@@ -282,7 +236,8 @@ func deployDriftDetectionManagerInManagedCluster(ctx context.Context, clusterNam
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
 		clusterName, mode, clusterType)
 
-	return deployDriftDetectionManagerResources(ctx, remoteRestConfig, driftDetectionManagerYAML, nil, patches, logger)
+	return deployDriftDetectionManagerResources(ctx, remoteRestConfig, clusterNamespace, clusterName,
+		applicant, featureID, driftDetectionManagerYAML, nil, patches, logger)
 }
 
 // deployDriftDetectionManagerInManagementCluster deploys drift-detection-manager in the management cluster
@@ -311,16 +266,21 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 	}
 
 	driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "$NAME", name)
-	return deployDriftDetectionManagerResources(ctx, restConfig, driftDetectionManagerYAML, lbls, patches, logger)
+	return deployDriftDetectionManagerResources(ctx, restConfig, clusterNamespace, clusterName, "", "",
+		driftDetectionManagerYAML, lbls, patches, logger)
 }
 
 // deployDriftDetectionManagerResources handles drift-detection-component deployment.
 // The restConfig parameter indicates whether to deploy to the management or managed cluster.
 func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.Config,
-	driftDetectionManagerYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
-	logger logr.Logger) error {
+	clusterNamespace, clusterName, applicant, featureID, driftDetectionManagerYAML string,
+	lbls map[string]string, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
-	elements, err := customSplit(driftDetectionManagerYAML)
+	resources := make(map[string][]unstructured.Unstructured)
+	index := "drift-detection-manager"
+	resources[index] = []unstructured.Unstructured{}
+
+	elements, err := deployer.CustomSplit(driftDetectionManagerYAML)
 	if err != nil {
 		return err
 	}
@@ -365,7 +325,21 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 			referencedUnstructured = append(referencedUnstructured, policy)
 		}
 
-		err = deployDriftDetectionManagerPatchedResources(ctx, restConfig, referencedUnstructured, logger)
+		// This means SveltosCluster is in pull mode
+		if restConfig == nil {
+			resources[index] = append(resources[index], convertPointerSliceToValueSlice(referencedUnstructured)...)
+		} else {
+			err = deployUnstructuredResources(ctx, restConfig, referencedUnstructured, logger)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// This means SveltosCluster is in pull mode
+	if restConfig == nil {
+		err = pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
+			configv1beta1.ClusterSummaryKind, applicant, featureID, resources, true, logger)
 		if err != nil {
 			return err
 		}
@@ -374,11 +348,12 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 	return nil
 }
 
-func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig *rest.Config,
+func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 	referencedUnstructured []*unstructured.Unstructured, logger logr.Logger) error {
 
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
+
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
@@ -403,12 +378,12 @@ func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig
 func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Client,
 	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
 	helmResources []libsveltosv1beta1.HelmResources, namespace, name string,
-	lbls, annotations map[string]string, driftExclusions []configv1beta1.DriftExclusion, logger logr.Logger,
+	lbls, annotations map[string]string, driftExclusions []libsveltosv1beta1.DriftExclusion, logger logr.Logger,
 ) error {
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
 
-	patches := transformDriftExclusionsToPatches(driftExclusions)
+	patches := deployer.TransformDriftExclusionsToPatches(driftExclusions)
 
 	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 	err := clusterClient.Get(ctx,
@@ -461,45 +436,6 @@ func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Cli
 	return clusterClient.Update(ctx, currentResourceSummary)
 }
 
-// transformDriftExclusionPathsToPatches transforms a DriftExclusion instance to a Patch instance.
-// Operation is always set to remove (the goal of a DriftExclusion is to not consider, so to remove, a path
-// during configuration drift evaluation).
-func transformDriftExclusionPathsToPatches(driftExclusion *configv1beta1.DriftExclusion) []libsveltosv1beta1.Patch {
-	if len(driftExclusion.Paths) == 0 {
-		return nil
-	}
-
-	patches := make([]libsveltosv1beta1.Patch, len(driftExclusion.Paths))
-	for i := range driftExclusion.Paths {
-		path := driftExclusion.Paths[i]
-		// This patch is exclusively used for removing fields. The drift-detection-manager applies it upon detecting
-		// changes to Sveltos-deployed resources. By removing the specified field, it prevents the field from being
-		// considered during configuration drift evaluation.
-		patches[i] = libsveltosv1beta1.Patch{
-			Target: driftExclusion.Target,
-			Patch: fmt.Sprintf(`- op: remove
-  path: %s`, path),
-		}
-	}
-
-	return patches
-}
-
-// transformDriftExclusionsToPatches transforms a slice of driftExclusion to a slice of Patch
-// Operation on each Patch is always set to remove (the goal of a DriftExclusion is to not consider, so to remove,
-// a path during configuration drift evaluation).
-func transformDriftExclusionsToPatches(driftExclusions []configv1beta1.DriftExclusion) []libsveltosv1beta1.Patch {
-	patches := []libsveltosv1beta1.Patch{}
-
-	for i := range driftExclusions {
-		item := &driftExclusions[i]
-		tmpPatches := transformDriftExclusionPathsToPatches(item)
-		patches = append(patches, tmpPatches...)
-	}
-
-	return patches
-}
-
 func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clusterName, applicant string,
 	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 
@@ -511,6 +447,11 @@ func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clus
 	clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return err
+	}
+
+	// This is no op for SveltosCluster in pull mode. Agent takes care of managing ResourceSummaries
+	if clusterClient == nil {
+		return nil
 	}
 
 	resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
@@ -649,7 +590,7 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 
 	restConfig := getManagementClusterConfig()
 
-	elements, err := customSplit(driftDetectionManagerYAML)
+	elements, err := deployer.CustomSplit(driftDetectionManagerYAML)
 	if err != nil {
 		return err
 	}
@@ -758,10 +699,10 @@ func getResourceSummaryNameInfo(clusterNamespace, clusterSummaryName string) typ
 
 	if getAgentInMgmtCluster() {
 		resourceSummaryNamespace = clusterNamespace
-		resourceSummaryName = getResourceSummaryNameInManagemntCluster(clusterSummaryName)
+		resourceSummaryName = clusterops.GetResourceSummaryNameInManagemntCluster(clusterSummaryName)
 	} else {
-		resourceSummaryNamespace = getResourceSummaryNamespaceInManagedCluster()
-		resourceSummaryName = getResourceSummaryNameInManagedCluster(clusterNamespace, clusterSummaryName)
+		resourceSummaryNamespace = clusterops.GetResourceSummaryNamespaceInManagedCluster()
+		resourceSummaryName = clusterops.GetResourceSummaryNameInManagedCluster(clusterNamespace, clusterSummaryName)
 	}
 
 	return types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummaryName}

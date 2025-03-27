@@ -23,7 +23,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -143,7 +142,7 @@ func logCollectorError(err error, logger logr.Logger) {
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
 	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) {
 
-	if featureID == string(configv1beta1.FeatureResources) {
+	if featureID == string(libsveltosv1beta1.FeatureResources) {
 		programResourceDurationHistogram.Observe(elapsed.Seconds())
 		clusterHistogram := newResourceHistogram(clusterNamespace, clusterName, clusterType, logger)
 		if clusterHistogram != nil {

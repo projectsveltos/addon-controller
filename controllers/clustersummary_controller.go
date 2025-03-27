@@ -47,6 +47,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -68,7 +69,7 @@ const (
 	normalRequeueAfter = 10 * time.Second
 
 	// dryRunRequeueAfter is how long to wait before reconciling a ClusterSummary in DryRun mode
-	dryRunRequeueAfter = 20 * time.Second
+	dryRunRequeueAfter = 60 * time.Second
 )
 
 type ReportMode int
@@ -119,6 +120,10 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=resourcesummaries/status,verbs=get;list;update
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=reloaders,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;update
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=configurationgroups,verbs=get;list;watch;create;delete;update;patch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=configurationgroups/status,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=configurationbundles,verbs=get;list;watch;create;delete;update;patch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=configurationbundles/status,verbs=get;list;watch;update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
@@ -214,7 +219,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if !isReady {
 		logger.V(logs.LogInfo).Info("cluster is not ready.")
 		r.setFailureMessage(clusterSummaryScope, "cluster is not ready")
-		r.resetFeatureStatus(clusterSummaryScope, configv1beta1.FeatureStatusFailed)
+		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
 		_ = r.updateMaps(ctx, clusterSummaryScope, logger)
@@ -565,13 +570,13 @@ func (r *ClusterSummaryReconciler) deploy(ctx context.Context, clusterSummarySco
 func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs == nil {
 		logger.V(logs.LogDebug).Info("no kustomize policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureKustomize) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1beta1.FeatureKustomize)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureKustomize)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -579,13 +584,13 @@ func (r *ClusterSummaryReconciler) deployKustomizeRefs(ctx context.Context, clus
 func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs == nil {
 		logger.V(logs.LogDebug).Info("no policy configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureResources) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("no policy status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1beta1.FeatureResources)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -593,13 +598,13 @@ func (r *ClusterSummaryReconciler) deployResources(ctx context.Context, clusterS
 func (r *ClusterSummaryReconciler) deployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		logger.V(logs.LogDebug).Info("no helm configuration")
-		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureHelm) {
+		if !r.isFeatureStatusPresent(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("no helm status. Do not reconcile this")
 			return nil
 		}
 	}
 
-	f := getHandlersForFeature(configv1beta1.FeatureHelm)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureHelm)
 
 	return r.deployFeature(ctx, clusterSummaryScope, f, logger)
 }
@@ -645,17 +650,17 @@ func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryS
 }
 
 func (r *ClusterSummaryReconciler) undeployResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1beta1.FeatureResources)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureResources)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployKustomizeResources(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1beta1.FeatureKustomize)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureKustomize)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
 func (r *ClusterSummaryReconciler) undeployHelm(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
-	f := getHandlersForFeature(configv1beta1.FeatureHelm)
+	f := getHandlersForFeature(libsveltosv1beta1.FeatureHelm)
 	return r.undeployFeature(ctx, clusterSummaryScope, f, logger)
 }
 
@@ -827,21 +832,21 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureResources) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureResources) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureHelm) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureHelm) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Helm Charts not deployed yet. Reconciliation is needed.")
 			return true
 		}
 	}
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs) != 0 {
-		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, configv1beta1.FeatureKustomize) {
+		if !r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureKustomize) {
 			logger.V(logs.LogDebug).Info("Mode set to one time. Kustomization resources not deployed yet. Reconciliation is needed.")
 			return true
 		}
@@ -1156,7 +1161,7 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 
 	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
 		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
-		if fs.Status != configv1beta1.FeatureStatusRemoved {
+		if fs.Status != libsveltosv1beta1.FeatureStatusRemoved {
 			logger.V(logs.LogInfo).Info("Not all features marked as removed")
 			return false
 		}
@@ -1172,6 +1177,7 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	// ResourceSummary is a Sveltos resource deployed in managed clusters.
 	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
+
 	err := unDeployResourceSummaryInstance(ctx, cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
 		cs.Name, cs.Spec.ClusterType, logger)
 	if err != nil {
@@ -1190,7 +1196,7 @@ func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
-		string(configv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		string(libsveltosv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType); err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to check/update cluster:shard pair %v", err))
 		return err
@@ -1289,7 +1295,7 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 		profileName := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.DependsOn[i]
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Considering %s %s", profileReference.Kind, profileName))
 		var cs *configv1beta1.ClusterSummary
-		cs, err = getClusterSummary(ctx, r.Client, profileReference.Kind, profileName,
+		cs, err = clusterops.GetClusterSummary(ctx, r.Client, profileReference.Kind, profileName,
 			clusterSummaryScope.ClusterSummary.Spec.ClusterNamespace, clusterSummaryScope.ClusterSummary.Spec.ClusterName,
 			clusterSummaryScope.ClusterSummary.Spec.ClusterType)
 		if err != nil {
@@ -1319,25 +1325,25 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 
 func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.ClusterSummaryScope, failureMessage string) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
-		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureHelm, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(libsveltosv1beta1.FeatureHelm, &failureMessage)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
-		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureResources, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(libsveltosv1beta1.FeatureResources, &failureMessage)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
-		clusterSummaryScope.SetFailureMessage(configv1beta1.FeatureKustomize, &failureMessage)
+		clusterSummaryScope.SetFailureMessage(libsveltosv1beta1.FeatureKustomize, &failureMessage)
 	}
 }
 
-func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status configv1beta1.FeatureStatus) {
+func (r *ClusterSummaryReconciler) resetFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope, status libsveltosv1beta1.FeatureStatus) {
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureHelm, status, nil, nil)
+		clusterSummaryScope.SetFeatureStatus(libsveltosv1beta1.FeatureHelm, status, nil, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureResources, status, nil, nil)
+		clusterSummaryScope.SetFeatureStatus(libsveltosv1beta1.FeatureResources, status, nil, nil)
 	}
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs != nil {
-		clusterSummaryScope.SetFeatureStatus(configv1beta1.FeatureKustomize, status, nil, nil)
+		clusterSummaryScope.SetFeatureStatus(libsveltosv1beta1.FeatureKustomize, status, nil, nil)
 	}
 }
 
@@ -1366,21 +1372,21 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 // Removes any cleanup job
 func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *configv1beta1.ClusterSummary) {
 	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(configv1beta1.FeatureHelm), clusterSummary.Spec.ClusterType, true)
+		string(libsveltosv1beta1.FeatureHelm), clusterSummary.Spec.ClusterType, true)
 
 	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(configv1beta1.FeatureKustomize), clusterSummary.Spec.ClusterType, true)
+		string(libsveltosv1beta1.FeatureKustomize), clusterSummary.Spec.ClusterType, true)
 
 	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(configv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
+		string(libsveltosv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
 }
 
 // resetFeatureStatusToProvisioning reset status from Provisioned to Provisioning
 func (r *ClusterSummaryReconciler) resetFeatureStatusToProvisioning(clusterSummaryScope *scope.ClusterSummaryScope) {
-	status := configv1beta1.FeatureStatusProvisioning
+	status := libsveltosv1beta1.FeatureStatusProvisioning
 	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
 		fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
-		if fs.Status == configv1beta1.FeatureStatusProvisioned {
+		if fs.Status == libsveltosv1beta1.FeatureStatusProvisioned {
 			fs.Status = status
 		}
 	}

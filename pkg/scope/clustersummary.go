@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 // ClusterSummaryScopeParams defines the input parameters used to create a new ClusterSummary Scope.
@@ -101,8 +102,8 @@ func (s *ClusterSummaryScope) initializeFeatureStatusSummary() {
 }
 
 // SetFeatureStatus sets the feature status.
-func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1beta1.FeatureID,
-	status configv1beta1.FeatureStatus, hash []byte, failed *bool) {
+func (s *ClusterSummaryScope) SetFeatureStatus(featureID libsveltosv1beta1.FeatureID,
+	status libsveltosv1beta1.FeatureStatus, hash []byte, failed *bool) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
@@ -141,7 +142,7 @@ func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1beta1.FeatureID
 }
 
 // ResetConsecutiveFailures reset status consecutiveFailures
-func (s *ClusterSummaryScope) ResetConsecutiveFailures(featureID configv1beta1.FeatureID) {
+func (s *ClusterSummaryScope) ResetConsecutiveFailures(featureID libsveltosv1beta1.FeatureID) {
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures = 0
@@ -156,7 +157,7 @@ func (s *ClusterSummaryScope) SetDependenciesMessage(message *string) {
 }
 
 // SetFailureMessage sets the infrastructure status failure message.
-func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1beta1.FeatureID, failureMessage *string) {
+func (s *ClusterSummaryScope) SetFailureMessage(featureID libsveltosv1beta1.FeatureID, failureMessage *string) {
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].FailureMessage = failureMessage
@@ -176,7 +177,7 @@ func (s *ClusterSummaryScope) SetFailureMessage(featureID configv1beta1.FeatureI
 }
 
 // SetFailureReason sets the feature status failure reason.
-func (s *ClusterSummaryScope) SetFailureReason(featureID configv1beta1.FeatureID,
+func (s *ClusterSummaryScope) SetFailureReason(featureID libsveltosv1beta1.FeatureID,
 	failureReason *string) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {
@@ -197,7 +198,7 @@ func (s *ClusterSummaryScope) SetFailureReason(featureID configv1beta1.FeatureID
 	)
 }
 
-func (s *ClusterSummaryScope) SetLastAppliedTime(featureID configv1beta1.FeatureID,
+func (s *ClusterSummaryScope) SetLastAppliedTime(featureID libsveltosv1beta1.FeatureID,
 	lastAppliedTime *metav1.Time) {
 
 	for i := range s.ClusterSummary.Status.FeatureSummaries {

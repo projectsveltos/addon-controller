@@ -30,6 +30,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -45,7 +46,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: cluster.Namespace,
 				Name:      clusterProfileNamePrefix + randomString(),
-				Labels:    map[string]string{controllers.ClusterProfileLabelName: randomString()},
+				Labels:    map[string]string{clusterops.ClusterProfileLabelName: randomString()},
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
@@ -61,13 +62,13 @@ var _ = Describe("ResourceSummary Collection", func() {
 			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash:      []byte(randomString()),
 			},
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash:      []byte(randomString()),
 			},
 		}
@@ -134,7 +135,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 				return false
 			}
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
 					return currentClusterSummary.Status.FeatureSummaries[i].Hash == nil
 				}
 			}
@@ -177,7 +178,7 @@ func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsvel
 				ChartName:        randomString(),
 				ReleaseName:      randomString(),
 				ReleaseNamespace: randomString(),
-				Resources: []libsveltosv1beta1.Resource{
+				Resources: []libsveltosv1beta1.ResourceSummaryResource{
 					{
 						Name:      helmResource.Name,
 						Namespace: helmResource.Namespace,

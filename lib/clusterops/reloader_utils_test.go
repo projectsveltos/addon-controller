@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers_test
+package clusterops_test
 
 import (
 	"context"
@@ -25,17 +25,25 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
+)
+
+const (
+	kubeconfigPostfix        = "-kubeconfig"
+	resourceSummaryNamespace = "projectsveltos"
+	version                  = "v0.31.0"
 )
 
 var _ = Describe("Reloader utils", func() {
@@ -65,7 +73,7 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		for i := range testData {
-			Expect(controllers.WatchForRollingUpgrade(testData[i].resource)).To(
+			Expect(clusterops.WatchForRollingUpgrade(testData[i].resource)).To(
 				Equal(testData[i].result), fmt.Sprintf("resource %s", testData[i].resource.Kind))
 		}
 	})
@@ -79,8 +87,8 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		clusterProfileName := randomString()
-		feature := configv1beta1.FeatureHelm
-		Expect(controllers.CreateReloaderInstance(context.TODO(), c,
+		feature := libsveltosv1beta1.FeatureHelm
+		Expect(clusterops.CreateReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, reloaderInfo)).To(Succeed())
 
 		reloaders := &libsveltosv1beta1.ReloaderList{}
@@ -101,9 +109,10 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		clusterProfileName := randomString()
-		feature := configv1beta1.FeatureHelm
-		Expect(controllers.DeployReloaderInstance(context.TODO(), c,
-			clusterProfileName, feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		feature := libsveltosv1beta1.FeatureHelm
+		Expect(clusterops.DeployReloaderInstance(context.TODO(), c, clusterProfileName,
+			feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		reloaders := &libsveltosv1beta1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
@@ -129,8 +138,8 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		// Reloader Spec.ReloaderInfo is updated now
-		Expect(controllers.DeployReloaderInstance(context.TODO(), c,
-			clusterProfileName, feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		Expect(clusterops.DeployReloaderInstance(context.TODO(), c, clusterProfileName,
+			feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
@@ -151,13 +160,13 @@ var _ = Describe("Reloader utils", func() {
 	It("removeReloaderInstance returns no error when Reloader instance does not exist", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		Expect(controllers.RemoveReloaderInstance(context.TODO(), c, randomString(),
-			configv1beta1.FeatureKustomize, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
+		Expect(clusterops.RemoveReloaderInstance(context.TODO(), c, randomString(),
+			libsveltosv1beta1.FeatureKustomize, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 	})
 
 	It("removeReloaderInstance removes Reloader instance", func() {
 		clusterProfileName := randomString()
-		feature := configv1beta1.FeatureKustomize
+		feature := libsveltosv1beta1.FeatureKustomize
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -166,13 +175,13 @@ var _ = Describe("Reloader utils", func() {
 		Expect(err).To(BeNil())
 		Expect(c.Create(context.TODO(), reloaderCRD)).To(Succeed())
 
-		Expect(controllers.CreateReloaderInstance(context.TODO(), c,
+		Expect(clusterops.CreateReloaderInstance(context.TODO(), c,
 			clusterProfileName, feature, nil)).To(Succeed())
 		reloaders := &libsveltosv1beta1.ReloaderList{}
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
 		Expect(len(reloaders.Items)).To(Equal(1))
 
-		Expect(controllers.RemoveReloaderInstance(context.TODO(), c, clusterProfileName,
+		Expect(clusterops.RemoveReloaderInstance(context.TODO(), c, clusterProfileName,
 			feature, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 
 		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
@@ -196,32 +205,17 @@ var _ = Describe("Reloader utils", func() {
 		// Creates cluster and Secret with kubeconfig to access it
 		// This is needed as updateReloaderWithDeployedResources fetches the
 		// Secret containing the Kubeconfig to access the cluster
-		cluster := prepareCluster()
+		prepareCluster()
 
-		clusterProfileOwner := &metav1.OwnerReference{
+		clusterProfileOwner := &corev1.ObjectReference{
 			Kind:       configv1beta1.ClusterProfileKind,
 			APIVersion: configv1beta1.GroupVersion.String(),
 			Name:       randomString(),
 			UID:        types.UID(randomString()),
 		}
 
-		clusterSummary := &configv1beta1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: randomString(),
-			},
-			Spec: configv1beta1.ClusterSummarySpec{
-				ClusterNamespace: cluster.Namespace,
-				ClusterName:      cluster.Name,
-				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1beta1.Spec{
-					Reloader: true,
-				},
-			},
-		}
-
-		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1beta1.FeatureResources, resources, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		Expect(clusterops.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
+			libsveltosv1beta1.FeatureResources, resources, false, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		reloaders := &libsveltosv1beta1.ReloaderList{}
 
@@ -242,10 +236,8 @@ var _ = Describe("Reloader utils", func() {
 			))
 		}
 
-		clusterSummary.Spec.ClusterProfileSpec.Reloader = false
-
-		Expect(controllers.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
-			configv1beta1.FeatureResources, nil, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		Expect(clusterops.UpdateReloaderWithDeployedResources(context.TODO(), testEnv.Client, clusterProfileOwner,
+			libsveltosv1beta1.FeatureResources, nil, true, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		Eventually(func() bool {
 			err := testEnv.Client.List(context.TODO(), reloaders)
@@ -254,23 +246,23 @@ var _ = Describe("Reloader utils", func() {
 	})
 
 	It("convertResourceReportsToObjectReference converts ResourceReports to ObjectReference", func() {
-		resourceReports := []configv1beta1.ResourceReport{
+		resourceReports := []libsveltosv1beta1.ResourceReport{
 			{
-				Resource: configv1beta1.Resource{
+				Resource: libsveltosv1beta1.Resource{
 					Kind:      "StatefulSet",
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
-				Resource: configv1beta1.Resource{
+				Resource: libsveltosv1beta1.Resource{
 					Kind:      "DaemonSet",
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
-				Resource: configv1beta1.Resource{
+				Resource: libsveltosv1beta1.Resource{
 					Kind:      "Deployment",
 					Name:      randomString(),
 					Namespace: randomString(),
@@ -278,7 +270,7 @@ var _ = Describe("Reloader utils", func() {
 			},
 		}
 
-		resources := controllers.ConvertResourceReportsToObjectReference(resourceReports)
+		resources := clusterops.ConvertResourceReportsToObjectReference(resourceReports)
 		Expect(len(resources)).To(Equal(len(resourceReports)))
 
 		for i := range resourceReports {
@@ -293,7 +285,7 @@ var _ = Describe("Reloader utils", func() {
 	It("convertHelmResourcesToObjectReference converts HelmResources to ObjectReference", func() {
 		resourceReports := []libsveltosv1beta1.HelmResources{
 			{
-				Resources: []libsveltosv1beta1.Resource{
+				Resources: []libsveltosv1beta1.ResourceSummaryResource{
 					{
 						Kind:      "StatefulSet",
 						Name:      randomString(),
@@ -307,7 +299,7 @@ var _ = Describe("Reloader utils", func() {
 				},
 			},
 			{
-				Resources: []libsveltosv1beta1.Resource{
+				Resources: []libsveltosv1beta1.ResourceSummaryResource{
 					{
 						Kind:      "Deployment",
 						Name:      randomString(),
@@ -322,7 +314,7 @@ var _ = Describe("Reloader utils", func() {
 			},
 		}
 
-		resources := controllers.ConvertHelmResourcesToObjectReference(resourceReports)
+		resources := clusterops.ConvertHelmResourcesToObjectReference(resourceReports)
 
 		for i := range resourceReports {
 			for j := range resourceReports[i].Resources {
@@ -335,3 +327,82 @@ var _ = Describe("Reloader utils", func() {
 		}
 	})
 })
+
+func prepareCluster() *clusterv1.Cluster {
+	namespace := randomString()
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+	cluster := &clusterv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      randomString(),
+		},
+	}
+
+	machine := &clusterv1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      randomString(),
+			Labels: map[string]string{
+				clusterv1.ClusterNameLabel:         cluster.Name,
+				clusterv1.MachineControlPlaneLabel: "ok",
+			},
+		},
+	}
+
+	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), machine)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+	cluster.Status = clusterv1.ClusterStatus{
+		InfrastructureReady: true,
+		ControlPlaneReady:   true,
+	}
+	Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
+
+	machine.Status = clusterv1.MachineStatus{
+		Phase: string(clusterv1.MachinePhaseRunning),
+	}
+	Expect(testEnv.Status().Update(context.TODO(), machine)).To(Succeed())
+
+	// Create a secret with cluster kubeconfig
+
+	By("Create the secret with cluster kubeconfig")
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cluster.Namespace,
+			Name:      cluster.Name + kubeconfigPostfix,
+		},
+		Data: map[string][]byte{
+			"value": testEnv.Kubeconfig,
+		},
+	}
+	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
+
+	By("Create the ConfigMap with drift-detection version")
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: resourceSummaryNamespace,
+			Name:      "drift-detection-version",
+		},
+		Data: map[string]string{
+			"version": version,
+		},
+	}
+	err := testEnv.Client.Create(context.TODO(), cm)
+	if err != nil {
+		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
+	}
+	Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
+	Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+	return cluster
+}

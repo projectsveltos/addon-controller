@@ -31,7 +31,8 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 // This test runs in Serial because it requires the addon controller to only onboard
@@ -135,12 +136,12 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
 			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
@@ -148,7 +149,7 @@ var _ = Describe("Helm", Serial, func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
 		deleteClusterProfile(clusterProfile)

@@ -39,6 +39,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/internal/test/helpers/external"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -331,7 +332,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			sveltosCluster.Name, sveltosCluster.Name, false)
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -415,7 +416,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, matchingCluster.Name, false)
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -486,7 +487,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, nonMatchingCluster.Name, false)
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -541,7 +542,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: randomString(),
 				Name:      clusterProfileNamePrefix + randomString(),
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfile.Name,
+					clusterops.ClusterProfileLabelName: clusterProfile.Name,
 				},
 				Finalizers: []string{configv1beta1.ClusterSummaryFinalizer},
 			},
@@ -731,7 +732,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, matchingCluster.Name, false)
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -816,7 +817,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		currentClusterReportList := &configv1beta1.ClusterReportList{}
 		listOptions := []client.ListOption{
 			client.MatchingLabels{
-				controllers.ClusterProfileLabelName: clusterProfile.Name,
+				clusterops.ClusterProfileLabelName: clusterProfile.Name,
 			},
 		}
 		err = c.List(context.TODO(), currentClusterReportList, listOptions...)
@@ -865,7 +866,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfile.Name,
+					clusterops.ClusterProfileLabelName: clusterProfile.Name,
 				},
 			},
 		}
@@ -875,7 +876,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: matchingCluster.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfile.Name + randomString(),
+					clusterops.ClusterProfileLabelName: clusterProfile.Name + randomString(),
 				},
 			},
 		}
@@ -923,7 +924,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: profile.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ProfileLabelName: profile.Name,
+					clusterops.ProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -940,7 +941,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ProfileLabelName: profile.Name,
+					clusterops.ProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -957,7 +958,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: profile.Name,
+					clusterops.ClusterProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -1018,7 +1019,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: profile.Namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ProfileLabelName: profile.Name,
+					clusterops.ProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -1036,7 +1037,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ProfileLabelName: profile.Name,
+					clusterops.ProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -1054,7 +1055,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Namespace: randomString(),
 				Name:      randomString(),
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: profile.Name,
+					clusterops.ClusterProfileLabelName: profile.Name,
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{

@@ -24,7 +24,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -151,7 +151,7 @@ var _ = Describe("Feature", func() {
 			currentClusterProfile)).To(Succeed())
 
 		Byf("Verify ClusterSummary for dependent ClusterProfile")
-		policyClusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		policyClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -161,7 +161,7 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: helmClusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
 		Byf("Verify CLusterSummary for prerequisite ClusterProfile")
-		helmClusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		helmClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -170,7 +170,7 @@ var _ = Describe("Feature", func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
-			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
+			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
 		policies := []policy{
@@ -178,7 +178,7 @@ var _ = Describe("Feature", func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, policyClusterProfile.Name,
-			policyClusterSummary.Spec.ClusterNamespace, policyClusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			policyClusterSummary.Spec.ClusterNamespace, policyClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		deleteClusterProfile(policyClusterProfile)

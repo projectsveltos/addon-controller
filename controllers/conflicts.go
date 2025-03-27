@@ -19,63 +19,18 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/go-logr/logr"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-// Any Helm chart can be managed by only one ClusterProfile/Profile instance
-// Any Kubernetes resources can be managed by only one ClusterProfile/Profile instance
-// A conflict arises when a ClusterProfile or Profile tries to manage a resource (chart
-// or Kubernetes object) already controlled by another. These conflicts are resolved based on tier.
-// Each ClusterProfile or Profile belongs to a specific tier, with lower tiers taking precedence.
-// In case of a tie (same tier), the existing owner (the Profile/ClusterProfile currently managing
-// the resource) retains control.
-
-// Determines if a ClusterProfile/Profile can take ownership of a resource
-// currently managed by another ClusterProfile/Profile.
-// This function considers the tier of the claiming ClusterProfile/Profile
-// (represented by 'claimingTier') and the current owner information
-// (`currentOwner`). Ownership can be transferred if the claiming profile
-// belongs to a lower tier than the current owner. In case of tiers being
-// equal, the function returns false to maintain the current ownership.
-//
-// Args:
-//
-//	currentOwnerTier:  The tier of the ClusterProfile/Profile currently with ownership
-//	claimingTier: The tier of the ClusterProfile/Profile trying to take ownership
-//
-// Returns:
-//   - true if the claiming ClusterProfile/Profile has higher ownership priority (lower tier),
-//   - false otherwise.
-func hasHigherOwnershipPriority(currentOwnerTier, claimingTier int32) bool {
-	return claimingTier < currentOwnerTier
-}
-
-func getTier(tierData string) int32 {
-	value, err := strconv.ParseInt(tierData, 10, 32)
-	if err != nil {
-		// Return tier max value
-		return 1<<31 - 1
-	}
-
-	// Tier minimun value is 1. So this indicates a
-	// corrupted value.
-	if value == 0 {
-		// Return tier max value
-		return 1<<31 - 1
-	}
-
-	return int32(value)
-}
-
 // Requeue a ClusterSummary for reconciliation. This method resets status causing reconciliation to happen
-func requeueClusterSummary(ctx context.Context, featureID configv1beta1.FeatureID,
+func requeueClusterSummary(ctx context.Context, featureID libsveltosv1beta1.FeatureID,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
@@ -125,7 +80,7 @@ func requeueClusterSummary(ctx context.Context, featureID configv1beta1.FeatureI
 	// Reset the hash a deployment happens again
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("reset status of ClusterSummary %s/%s",
 		clusterSummary.Namespace, clusterSummary.Name))
-	clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, nil, nil)
+	clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusProvisioning, nil, nil)
 
 	return c.Status().Update(ctx, clusterSummaryScope.ClusterSummary)
 }

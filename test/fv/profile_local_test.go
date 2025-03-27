@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -73,7 +73,7 @@ metadata:
 
 		verifyProfileMatches(profile)
 
-		verifyClusterSummary(controllers.ProfileLabelName,
+		verifyClusterSummary(clusterops.ProfileLabelName,
 			profile.Name, &profile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -109,7 +109,7 @@ metadata:
 		}
 		Expect(k8sClient.Update(context.TODO(), currentProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ProfileLabelName,
 			currentProfile.Name, &currentProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -125,8 +125,8 @@ metadata:
 			}
 
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
-					if currentClusterSummary.Status.FeatureSummaries[i].Status != configv1beta1.FeatureStatusProvisioned {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+					if currentClusterSummary.Status.FeatureSummaries[i].Status != libsveltosv1beta1.FeatureStatusProvisioned {
 						if currentClusterSummary.Status.FeatureSummaries[i].FailureMessage != nil &&
 							*currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == errorMsg {
 							return true
@@ -164,7 +164,7 @@ metadata:
 		}
 		Expect(k8sClient.Update(context.TODO(), currentProfile)).To(Succeed())
 
-		clusterSummary = verifyClusterSummary(controllers.ProfileLabelName,
+		clusterSummary = verifyClusterSummary(clusterops.ProfileLabelName,
 			currentProfile.Name, &currentProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -179,8 +179,8 @@ metadata:
 			}
 
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
-					if currentClusterSummary.Status.FeatureSummaries[i].Status == configv1beta1.FeatureStatusProvisioned {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+					if currentClusterSummary.Status.FeatureSummaries[i].Status == libsveltosv1beta1.FeatureStatusProvisioned {
 						return true
 					}
 				}

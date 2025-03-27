@@ -44,46 +44,6 @@ func (m *DryRunReconciliationError) Error() string {
 	return "mode is DryRun. Nothing is reconciled"
 }
 
-type ValidateHealth struct {
-	// Name is the name of this check
-	Name string `json:"name"`
-
-	// FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
-	// This field indicates when to run this check.
-	// For instance:
-	// - if set to Helm this check will be run after all helm
-	// charts specified in the ClusterProfile are deployed.
-	// - if set to Resources this check will be run after the content
-	// of all the ConfigMaps/Secrets referenced by ClusterProfile in the
-	// PolicyRef sections is deployed
-	FeatureID FeatureID `json:"featureID"`
-
-	// Group of the resource to fetch in the managed Cluster.
-	Group string `json:"group"`
-
-	// Version of the resource to fetch in the managed Cluster.
-	Version string `json:"version"`
-
-	// Kind of the resource to fetch in the managed Cluster.
-	// +kubebuilder:validation:MinLength=1
-	Kind string `json:"kind"`
-
-	// LabelFilters allows to filter resources based on current labels.
-	// +optional
-	LabelFilters []libsveltosv1beta1.LabelFilter `json:"labelFilters,omitempty"`
-
-	// Namespace of the resource to fetch in the managed Cluster.
-	// Empty for resources scoped at cluster level.
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
-
-	// Script is a text containing a lua script.
-	// Must return struct with field "health"
-	// representing whether object is a match (true or false)
-	// +optional
-	Script string `json:"script,omitempty"`
-}
-
 // SyncMode specifies how features are synced in a workload cluster.
 // +kubebuilder:validation:Enum:=OneTime;Continuous;ContinuousWithDriftDetection;DryRun
 type SyncMode string
@@ -622,16 +582,6 @@ type PolicyRef struct {
 	Optional bool `json:"optional,omitempty"`
 }
 
-type DriftExclusion struct {
-	// Paths is a slice of JSON6902 paths to exclude from configuration drift evaluation.
-	// +required
-	Paths []string `json:"paths"`
-
-	// Target points to the resources that the paths refers to.
-	// +optional
-	Target *libsveltosv1beta1.PatchSelector `json:"target,omitempty"`
-}
-
 type Clusters struct {
 	// Hash represents of a unique value for ClusterProfile Spec at
 	// a fixed point in time
@@ -774,7 +724,7 @@ type Spec struct {
 	// is healthy
 	// +listType=atomic
 	// +optional
-	ValidateHealths []ValidateHealth `json:"validateHealths,omitempty"`
+	ValidateHealths []libsveltosv1beta1.ValidateHealth `json:"validateHealths,omitempty"`
 
 	// Define additional Kustomize inline Patches applied for all resources on this profile
 	// Within the Patch Spec you can use templating
@@ -787,7 +737,7 @@ type Spec struct {
 	// when evaluating drift, optionally targeting specific resources and features.
 	// +listType=atomic
 	// +optional
-	DriftExclusions []DriftExclusion `json:"driftExclusions,omitempty"`
+	DriftExclusions []libsveltosv1beta1.DriftExclusion `json:"driftExclusions,omitempty"`
 
 	// The maximum number of consecutive deployment failures that Sveltos will permit.
 	// After this many consecutive failures, the deployment will be considered failed, and Sveltos will stop retrying.

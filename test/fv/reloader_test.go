@@ -18,8 +18,8 @@ package fv_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -91,7 +91,7 @@ var _ = Describe("Reloader", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -130,13 +130,13 @@ var _ = Describe("Reloader", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name,
-			configv1beta1.FeatureResources)
+			libsveltosv1beta1.FeatureResources)
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -201,9 +201,6 @@ var _ = Describe("Reloader", func() {
 
 // getReloaderName returns the Reloader's name
 func getReloaderName(clusterProfileName string) string {
-	feature := configv1beta1.FeatureResources
-	h := sha256.New()
-	fmt.Fprintf(h, "%s--%s", clusterProfileName, feature)
-	hash := h.Sum(nil)
-	return fmt.Sprintf("%x", hash)
+	feature := libsveltosv1beta1.FeatureResources
+	return fmt.Sprintf("%s--%s", clusterProfileName, strings.ToLower(string(feature)))
 }

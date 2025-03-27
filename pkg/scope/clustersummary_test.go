@@ -30,6 +30,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -115,13 +116,13 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		hash := []byte(randomString())
 		failed := false
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioned, hash, &failed)
+		scope.SetFeatureStatus(libsveltosv1beta1.FeatureResources, libsveltosv1beta1.FeatureStatusProvisioned, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
 		Expect(clusterSummary.Status.FeatureSummaries[0].ConsecutiveFailures).To(BeZero())
-		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioned))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioned))
 	})
 
 	It("SetFailureMessage updates ClusterSummary Status FeatureSummary when not nil", func() {
@@ -133,7 +134,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -142,12 +143,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		found := false
 		failureMessage := failedToDeploy
-		scope.SetFailureMessage(configv1beta1.FeatureResources, &failureMessage)
+		scope.SetFailureMessage(libsveltosv1beta1.FeatureResources, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1beta1.FeatureResources {
+			if fs.FeatureID == libsveltosv1beta1.FeatureResources {
 				found = true
 				Expect(fs.FailureMessage).ToNot(BeNil())
 				Expect(*fs.FailureMessage).To(Equal(failureMessage))
@@ -169,10 +170,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureMessage := failedToDeploy
-		scope.SetFailureMessage(configv1beta1.FeatureHelm, &failureMessage)
+		scope.SetFailureMessage(libsveltosv1beta1.FeatureHelm, &failureMessage)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureHelm))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureHelm))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(Equal(failureMessage))
 	})
@@ -188,7 +189,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		consecutiveFailures := uint(3)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash: []byte(randomString()), ConsecutiveFailures: consecutiveFailures},
 		}
 
@@ -199,28 +200,28 @@ var _ = Describe("ClusterSummaryScope", func() {
 		hash := []byte(randomString())
 		failed := true
 		found := false
-		scope.SetFeatureStatus(configv1beta1.FeatureHelm, configv1beta1.FeatureStatusProvisioning, hash, &failed)
+		scope.SetFeatureStatus(libsveltosv1beta1.FeatureHelm, libsveltosv1beta1.FeatureStatusProvisioning, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1beta1.FeatureHelm {
+			if fs.FeatureID == libsveltosv1beta1.FeatureHelm {
 				found = true
-				Expect(fs.Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+				Expect(fs.Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
 				Expect(fs.ConsecutiveFailures).To(Equal(consecutiveFailures + 1))
 			}
 		}
 		Expect(found).To(Equal(true))
 
 		found = false
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash, &failed)
+		scope.SetFeatureStatus(libsveltosv1beta1.FeatureResources, libsveltosv1beta1.FeatureStatusProvisioning, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1beta1.FeatureResources {
+			if fs.FeatureID == libsveltosv1beta1.FeatureResources {
 				found = true
-				Expect(fs.Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+				Expect(fs.Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
 				Expect(fs.ConsecutiveFailures).To(Equal(uint(1)))
 			}
 		}
@@ -238,7 +239,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		consecutiveFailures := uint(2)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash: []byte(randomString()), ConsecutiveFailures: consecutiveFailures},
 		}
 
@@ -248,10 +249,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		hash := []byte(randomString())
 		failed := false
-		scope.SetFeatureStatus(configv1beta1.FeatureResources, configv1beta1.FeatureStatusProvisioning, hash, &failed)
+		scope.SetFeatureStatus(libsveltosv1beta1.FeatureResources, libsveltosv1beta1.FeatureStatusProvisioning, hash, &failed)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
 		Expect(clusterSummary.Status.FeatureSummaries[0].Hash).To(Equal(hash))
 		Expect(clusterSummary.Status.FeatureSummaries[0].ConsecutiveFailures).To(BeZero())
 	})
@@ -269,11 +270,11 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		hash := []byte(randomString())
-		scope.SetFeatureStatus(configv1beta1.FeatureHelm, configv1beta1.FeatureStatusProvisioning, hash, nil)
+		scope.SetFeatureStatus(libsveltosv1beta1.FeatureHelm, libsveltosv1beta1.FeatureStatusProvisioning, hash, nil)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureHelm))
-		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioning))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureHelm))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
 	})
 
 	It("SetFailureReason updates ClusterSummary Status FeatureSummary when not nil", func() {
@@ -285,7 +286,7 @@ var _ = Describe("ClusterSummaryScope", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		scope, err := scope.NewClusterSummaryScope(params)
@@ -294,12 +295,12 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		found := false
 		failureReason := apiserverNotReachable
-		scope.SetFailureReason(configv1beta1.FeatureHelm, &failureReason)
+		scope.SetFailureReason(libsveltosv1beta1.FeatureHelm, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(2))
 		for i := range clusterSummary.Status.FeatureSummaries {
 			fs := clusterSummary.Status.FeatureSummaries[i]
-			if fs.FeatureID == configv1beta1.FeatureHelm {
+			if fs.FeatureID == libsveltosv1beta1.FeatureHelm {
 				found = true
 				Expect(fs.FailureReason).ToNot(BeNil())
 				Expect(*fs.FailureReason).To(Equal(failureReason))
@@ -321,10 +322,10 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		failureReason := apiserverNotReachable
-		scope.SetFailureReason(configv1beta1.FeatureResources, &failureReason)
+		scope.SetFailureReason(libsveltosv1beta1.FeatureResources, &failureReason)
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureReason).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureReason).To(Equal(failureReason))
 	})
@@ -343,8 +344,8 @@ var _ = Describe("ClusterSummaryScope", func() {
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash:      []byte(randomString()),
 			},
 		}
@@ -372,18 +373,18 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		now := metav1.NewTime(time.Now())
-		scope.SetLastAppliedTime(configv1beta1.FeatureHelm, &now)
+		scope.SetLastAppliedTime(libsveltosv1beta1.FeatureHelm, &now)
 
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureHelm))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureHelm))
 		Expect(clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).To(Equal(now))
 	})
 
 	It("SetLastAppliedTime updates featureSummary with time (entry existing)", func() {
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
 		}
 
 		params := &scope.ClusterSummaryScopeParams{
@@ -398,11 +399,11 @@ var _ = Describe("ClusterSummaryScope", func() {
 		Expect(scope).ToNot(BeNil())
 
 		now := metav1.NewTime(time.Now())
-		scope.SetLastAppliedTime(configv1beta1.FeatureResources, &now)
+		scope.SetLastAppliedTime(libsveltosv1beta1.FeatureResources, &now)
 
 		Expect(clusterSummary.Status.FeatureSummaries).ToNot(BeNil())
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureResources))
 		Expect(clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].LastAppliedTime).To(Equal(now))
 	})

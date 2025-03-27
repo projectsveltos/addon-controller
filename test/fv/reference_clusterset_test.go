@@ -28,7 +28,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -73,7 +73,7 @@ var _ = Describe("ClusterSet", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		By("Update ClusterSet MaxReplicas to 0")

@@ -439,4 +439,3 @@ drift-detection-manager:
 	cd pkg/drift-detection; go generate
 	@echo "Downloading drift detection manager common yaml for agentless fv"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/drift-detection-mgmt_cluster_common_manifest.yaml
-

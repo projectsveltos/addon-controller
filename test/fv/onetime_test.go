@@ -29,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -87,7 +87,7 @@ var _ = Describe("SyncMode one time", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -103,13 +103,13 @@ var _ = Describe("SyncMode one time", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
 			{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		By("Updating content of policy in ConfigMap")
@@ -142,7 +142,7 @@ var _ = Describe("SyncMode one time", func() {
 
 		// Since SyncMode is OneTime ClusterProfile's changes are not propagated to already existing ClusterSummary.
 		Byf("Verifying ClusterSummary still references the ConfigMap")
-		currentClusterSummary, err := getClusterSummary(context.TODO(), controllers.ClusterProfileLabelName,
+		currentClusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		Expect(err).To(BeNil())
 		Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).ToNot(BeNil())

@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -101,7 +101,7 @@ var _ = Describe("Feature", Serial, func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts and referencing ConfigMap %s/%s",
@@ -166,7 +166,8 @@ var _ = Describe("Feature", Serial, func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -176,7 +177,7 @@ var _ = Describe("Feature", Serial, func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
 		policies := []policy{
@@ -185,7 +186,7 @@ var _ = Describe("Feature", Serial, func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		const six = 6
@@ -199,7 +200,7 @@ var _ = Describe("Feature", Serial, func() {
 			}
 			for i := range currentClusterSummary.Status.FeatureSummaries {
 				fs := &currentClusterSummary.Status.FeatureSummaries[i]
-				if fs.FeatureID == configv1beta1.FeatureHelm {
+				if fs.FeatureID == libsveltosv1beta1.FeatureHelm {
 					return fs.FailureMessage != nil &&
 						*fs.FailureMessage == "the maximum number of consecutive errors has been reached"
 				}

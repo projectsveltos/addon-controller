@@ -317,5 +317,6 @@ func isArtifactSame(oldArtifact, newArtifact *sourcev1.Artifact) bool {
 	if oldArtifact != nil && newArtifact == nil {
 		return false
 	}
+
 	return reflect.DeepEqual(oldArtifact.Digest, newArtifact.Digest)
 }

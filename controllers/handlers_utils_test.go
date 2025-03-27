@@ -40,10 +40,10 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
@@ -128,351 +128,6 @@ status:
   unavailableReplicas: %d
   readyReplicas: %d
   availableReplicas: %d`
-
-	multusData = `apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: network-attachment-definitions.k8s.cni.cncf.io
-spec:
-  group: k8s.cni.cncf.io
-  scope: Namespaced
-  names:
-    plural: network-attachment-definitions
-    singular: network-attachment-definition
-    kind: NetworkAttachmentDefinition
-    shortNames:
-    - net-attach-def
-  versions:
-  - name: v1
-    served: true
-    storage: true
-    schema:
-      openAPIV3Schema:
-        description: 'NetworkAttachmentDefinition is a CRD schema specified by the Network Plumbing Working Group
-			to express the intent for attaching pods to one or more logical or physical networks. 
-			More information available at: https://github.com/k8snetworkplumbingwg/multi-net-spec'
-        type: object
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this represen tation of an object. Servers
-				should convert recognized schemas to the latest internal value, and may reject unrecognized values.
-				More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers
-			may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. 
-			More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: 'NetworkAttachmentDefinition spec defines the desired state of a network attachment'
-            type: object
-            properties:
-              config:
-                description: 'NetworkAttachmentDefinition config is a JSON-formatted CNI configuration'
-                type: string
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: multus
-  namespace: kube-system
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: multus
-rules:
-- apiGroups: ["k8s.cni.cncf.io"]
-  resources:
-  - '*'
-  verbs:
-  - '*'
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  - pods/status
-  verbs:
-  - get
-  - update
-- apiGroups:
-  - ""
-  - events.k8s.io
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: multus
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: multus
-subjects:
-- kind: ServiceAccount
-  name: multus
-  namespace: kube-system
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: kube-multus-ds
-  namespace: kube-system
-  labels:
-    tier: node
-    app: multus
-    name: multus
-spec:
-  selector:
-    matchLabels:
-      name: multus
-  updateStrategy:
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        tier: node
-        app: multus
-        name: multus
-    spec:
-      hostNetwork: true
-      hostPID: true
-      tolerations:
-      - operator: Exists
-        effect: NoSchedule
-      - operator: Exists
-        effect: NoExecute
-      serviceAccountName: multus
-      containers:
-      - name: kube-multus
-        image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.0.2-thick
-        command: ["/usr/src/multus-cni/bin/multus-daemon"]
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "200Mi"
-          limits:
-            cpu: "100m"
-            memory: "200Mi"
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: cni
-          mountPath: /host/etc/cni/net.d
-        - name: host-run
-          mountPath: /host/run
-        - name: host-var-lib-cni-multus
-          mountPath: /var/lib/cni/multus
-        - name: host-var-lib-kubelet
-          mountPath: /var/lib/kubelet
-        - name: host-run-k8s-cni-cncf-io
-          mountPath: /run/k8s.cni.cncf.io
-        - name: host-run-netns
-          mountPath: /run/netns
-          mountPropagation: HostToContainer
-        - name: multus-daemon-config
-          mountPath: /etc/cni/net.d/multus.d
-          readOnly: true
-        - name: hostroot
-          mountPath: /hostroot
-          mountPropagation: HostToContainer
-      initContainers:
-      - name: install-multus-binary
-        image: ghcr.io/k8snetworkplumbingwg/multus-cni:v4.0.2-thick
-        command:
-        - "cp"
-        - "/usr/src/multus-cni/bin/multus-shim"
-        - "/host/opt/cni/bin/multus-shim"
-        resources:
-          requests:
-            cpu: "10m"
-            memory: "15Mi"
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: cnibin
-          mountPath: /host/opt/cni/bin
-          mountPropagation: Bidirectional
-      terminationGracePeriodSeconds: 10
-      volumes:
-      - name: cni
-        hostPath:
-          path: /etc/cni/net.d
-      - name: cnibin
-        hostPath:
-          path: /opt/cni/bin
-      - name: hostroot
-        hostPath:
-          path: /
-      - name: multus-daemon-config
-        configMap:
-          name: multus-daemon-config
-          items:
-          - key: daemon-config.json
-            path: daemon-config.json
-      - name: host-run
-        hostPath:
-          path: /run
-      - name: host-var-lib-cni-multus
-        hostPath:
-          path: /var/lib/cni/multus
-      - name: host-var-lib-kubelet
-        hostPath:
-          path: /var/lib/kubelet
-      - name: host-run-k8s-cni-cncf-io
-        hostPath:
-          path: /run/k8s.cni.cncf.io
-      - name: host-run-netns
-        hostPath:
-          path: /run/netns/`
-
-	piraeus = `---
-# Source: piraeus/templates/rbac.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: release-name-piraeus
-  labels:
-    helm.sh/chart: piraeus-2.5.1
-    app.kubernetes.io/component: piraeus-operator
-    app.kubernetes.io/name: piraeus-datastore
-    app.kubernetes.io/instance: release-name
-    app.kubernetes.io/version: "v2.5.1"
-    app.kubernetes.io/managed-by: Helm
----
-# Source: piraeus/templates/validating-webhook-configuration.yaml
-# Check if the TLS secret already exists and initialize variables for later use at the top level
-
-
-
-apiVersion: v1
-kind: Secret
-metadata:
-  name: release-name-piraeus-tls
-  labels:
-    helm.sh/chart: piraeus-2.5.1
-    app.kubernetes.io/component: piraeus-operator
-    app.kubernetes.io/name: piraeus-datastore
-    app.kubernetes.io/instance: release-name
-    app.kubernetes.io/version: "v2.5.1"
-    app.kubernetes.io/managed-by: Helm
-type: kubernetes.io/tls
-data:
-  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURmVENDQW1XZ0F3SUJBZ0lSQUsvYzU
----
-# Source: piraeus/templates/config.yaml
-# DO NOT EDIT; Automatically created by hack/copy-image-config-to-chart.sh
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: release-name-piraeus-image-config
-  labels:
-    helm.sh/chart: piraeus-2.5.1
-    app.kubernetes.io/component: piraeus-operator
-    app.kubernetes.io/name: piraeus-datastore
-    app.kubernetes.io/instance: release-name
-    app.kubernetes.io/version: "v2.5.1"
-    app.kubernetes.io/managed-by: Helm
-data:
-  0_piraeus_datastore_images.yaml: |
-    ---
-    # This is the configuration for default images used by piraeus-operator
-    #
-    # "base" is the default repository prefix to use.
-    base: quay.io/piraeusdatastore
-    # "components" is a mapping of image placeholders to actual image names with tag.
-    # For example, the image name "linstor-controller" in the kustomize-resources will be replaced by:
-    #   quay.io/piraeusdatastore/piraeus-server:v1.24.2
-    components:
-      linstor-controller:
-        tag: v1.27.1
-        image: piraeus-server
-      linstor-satellite:
-        # Pin with digest to ensure we pull the version with downgraded thin-send-recv
-        tag: v1.27.1@sha256:26037f77d30d5487024e02a808d4ef913b93b745f2bb850cabc7f43a5359adff
-        image: piraeus-server
-      linstor-csi:
-        tag: v1.6.0
-        image: piraeus-csi
-      drbd-reactor:
-        tag: v1.4.0
-        image: drbd-reactor
-      ha-controller:
-        tag: v1.2.1
-        image: piraeus-ha-controller
-      drbd-shutdown-guard:
-        tag: v1.0.0
-        image: drbd-shutdown-guard
-      ktls-utils:
-        tag: v0.10
-        image: ktls-utils
-      drbd-module-loader:
-        tag: v9.2.9
-        # The special "match" attribute is used to select an image based on the node's reported OS.
-        # The operator will first check the k8s node's ".status.nodeInfo.osImage" field, and compare it against the list
-        # here. If one matches, that specific image name will be used instead of the fallback image.
-        image: drbd9-noble # Fallback image: chose a recent kernel, which can hopefully compile whatever config is actually in use
-        match:
-          - osImage: CentOS Linux 7
-            image: drbd9-centos7
-          - osImage: CentOS Linux 8
-            image: drbd9-centos8
-          - osImage: AlmaLinux 8
-            image: drbd9-almalinux8
-          - osImage: Red Hat Enterprise Linux CoreOS
-            image: drbd9-almalinux8
-          - osImage: AlmaLinux 9
-            image: drbd9-almalinux9
-          - osImage: Rocky Linux 8
-            image: drbd9-almalinux8
-          - osImage: Rocky Linux 9
-            image: drbd9-almalinux9
-          - osImage: Ubuntu 18\.04
-            image: drbd9-bionic
-          - osImage: Ubuntu 20\.04
-            image: drbd9-focal
-          - osImage: Ubuntu 22\.04
-            image: drbd9-jammy
-          - osImage: Ubuntu 24\.04
-            image: drbd9-noble
-          - osImage: Debian GNU/Linux 12
-            image: drbd9-bookworm
-          - osImage: Debian GNU/Linux 11
-            image: drbd9-bullseye
-          - osImage: Debian GNU/Linux 10
-            image: drbd9-buster
-  0_sig_storage_images.yaml: |
-    ---
-    base: registry.k8s.io/sig-storage
-    components:
-      csi-attacher:
-        tag: v4.5.1
-        image: csi-attacher
-      csi-livenessprobe:
-        tag: v2.12.0
-        image: livenessprobe
-      csi-provisioner:
-        tag: v4.0.1
-        image: csi-provisioner
-      csi-snapshotter:
-        tag: v7.0.2
-        image: csi-snapshotter
-      csi-resizer:
-        tag: v1.10.1
-        image: csi-resizer
-      csi-external-health-monitor-controller:
-        tag: v0.11.0
-        image: csi-external-health-monitor-controller
-      csi-node-driver-registrar:
-        tag: v2.10.1
-        image: csi-node-driver-registrar`
 )
 
 var _ = Describe("HandlersUtils", func() {
@@ -508,7 +163,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -552,7 +207,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		controllers.AddLabel(role, controllers.ClusterSummaryLabelName, clusterSummary.Name)
+		deployer.AddLabel(role, clusterops.ClusterSummaryLabelName, clusterSummary.Name)
 		Expect(role.Labels).ToNot(BeNil())
 		Expect(len(role.Labels)).To(Equal(1))
 		for k := range role.Labels {
@@ -560,7 +215,7 @@ var _ = Describe("HandlersUtils", func() {
 		}
 
 		role.Labels = map[string]string{"reader": "ok"}
-		controllers.AddLabel(role, controllers.ClusterSummaryLabelName, clusterSummary.Name)
+		deployer.AddLabel(role, clusterops.ClusterSummaryLabelName, clusterSummary.Name)
 		Expect(role.Labels).ToNot(BeNil())
 		Expect(len(role.Labels)).To(Equal(2))
 		found := false
@@ -578,7 +233,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
+		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		Expect(deployer.CreateNamespace(context.TODO(), c, isDryRun, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
@@ -589,8 +245,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
-		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
+		isDryRun := true
+		Expect(deployer.CreateNamespace(context.TODO(), c, isDryRun, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
 		err := c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)
@@ -608,7 +264,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		Expect(controllers.CreateNamespace(context.TODO(), c, clusterSummary, namespace)).To(BeNil())
+		Expect(deployer.CreateNamespace(context.TODO(), c, false, namespace)).To(BeNil())
 
 		currentNs := &corev1.Namespace{}
 		Expect(c.Get(context.TODO(), types.NamespacedName{Name: namespace}, currentNs)).To(Succeed())
@@ -622,9 +278,11 @@ var _ = Describe("HandlersUtils", func() {
 		dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
 		Expect(err).To(BeNil())
 
+		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// following will successfully create deployment
-		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		currentDeployment := &appsv1.Deployment{}
@@ -636,7 +294,7 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
-		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []configv1beta1.DriftExclusion{
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
 					Kind:    "Deployment",
@@ -664,9 +322,11 @@ var _ = Describe("HandlersUtils", func() {
 				*currentDeployment.Spec.Replicas == newReplicas
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		isDryRun = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		isDriftDetection = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// New deploy will not override replicas
-		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		Consistently(func() bool {
@@ -686,9 +346,11 @@ var _ = Describe("HandlersUtils", func() {
 		dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
 		Expect(err).To(BeNil())
 
+		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// following will successfully create deployment
-		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		currentDeployment := &appsv1.Deployment{}
@@ -700,7 +362,7 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
-		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []configv1beta1.DriftExclusion{
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
 					Kind:    "Deployment",
@@ -736,9 +398,11 @@ var _ = Describe("HandlersUtils", func() {
 		u, err = k8s_utils.GetUnstructured([]byte(depl))
 		Expect(err).To(BeNil())
 
+		isDryRun = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		isDriftDetection = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// New deploy will not override replicas
-		_, err = controllers.UpdateResource(context.TODO(), dr, clusterSummary, u, []string{"status"},
-			textlogger.NewLogger(textlogger.NewConfig()))
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, []string{"status"}, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		Consistently(func() bool {
@@ -817,13 +481,13 @@ var _ = Describe("HandlersUtils", func() {
 			policy, err = k8s_utils.GetUnstructured([]byte(elements[i]))
 			Expect(err).To(BeNil())
 			var policyHash string
-			policyHash, err = controllers.ComputePolicyHash(policy)
+			policyHash, err = deployer.ComputePolicyHash(policy)
 			Expect(err).To(BeNil())
-			controllers.AddLabel(policy, deployer.ReferenceKindLabel, secret.Kind)
-			controllers.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
-			controllers.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
-			controllers.AddAnnotation(policy, deployer.PolicyHash, policyHash)
-			controllers.AddAnnotation(policy, deployer.OwnerTier, "100")
+			deployer.AddLabel(policy, deployer.ReferenceKindLabel, secret.Kind)
+			deployer.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
+			deployer.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
+			deployer.AddAnnotation(policy, deployer.PolicyHash, policyHash)
+			deployer.AddAnnotation(policy, deployer.OwnerTier, "100")
 			Expect(testEnv.Client.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
@@ -860,7 +524,7 @@ var _ = Describe("HandlersUtils", func() {
 		}
 
 		newValue := []string{depl}
-		splitValue, err := controllers.CustomSplit(newContent)
+		splitValue, err := deployer.CustomSplit(newContent)
 		Expect(err).To(BeNil())
 		newValue = append(newValue, splitValue...)
 		secret = createSecretWithPolicy(namespace, secret.Name, newValue...)
@@ -951,13 +615,13 @@ var _ = Describe("HandlersUtils", func() {
 			}
 			currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1beta1.FeatureResources,
-					Status:    configv1beta1.FeatureStatusProvisioned,
+					FeatureID: libsveltosv1beta1.FeatureResources,
+					Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				},
 			}
-			currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
+			currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
 				{
-					FeatureID: configv1beta1.FeatureResources,
+					FeatureID: libsveltosv1beta1.FeatureResources,
 					DeployedGroupVersionKind: []string{
 						"ClusterRole.v1.rbac.authorization.k8s.io",
 					},
@@ -980,7 +644,7 @@ var _ = Describe("HandlersUtils", func() {
 			deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			deployer.ReferenceNameLabel:      configMap.Name,
 			deployer.ReferenceNamespaceLabel: configMap.Namespace,
-			controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
+			deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
 			{Kind: configv1beta1.ClusterProfileKind, Name: clusterProfile.Name,
@@ -989,14 +653,14 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
 
-		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1beta1.FeatureResources)
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
 		Expect(deployedGKVs).ToNot(BeEmpty())
 
 		// Because ClusterSummary is not referencing any ConfigMap/Resource and because test created a ClusterRole
 		// pretending it was created by this ClusterSummary instance, UndeployStaleResources will remove no instance as
 		// syncMode is dryRun and will report one instance (ClusterRole created above) would be undeployed
 		undeploy, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(undeploy)).To(Equal(1))
 
@@ -1047,7 +711,7 @@ var _ = Describe("HandlersUtils", func() {
 					deployer.ReferenceKindLabel:      configMap1.Kind,
 					deployer.ReferenceNamespaceLabel: configMap1.Namespace,
 					deployer.ReferenceNameLabel:      configMap1.Name,
-					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
+					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
 				},
 			},
 		}
@@ -1061,7 +725,7 @@ var _ = Describe("HandlersUtils", func() {
 					deployer.ReferenceKindLabel:      configMap2.Kind,
 					deployer.ReferenceNamespaceLabel: configMap2.Namespace,
 					deployer.ReferenceNameLabel:      configMap2.Name,
-					controllers.ReasonLabel:          string(configv1beta1.FeatureResources),
+					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
 				},
 			},
 		}
@@ -1070,13 +734,13 @@ var _ = Describe("HandlersUtils", func() {
 		// because of the PolicyRefs feature. This is used by UndeployStaleResources.
 		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
-		currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
 			{
-				FeatureID: configv1beta1.FeatureResources,
+				FeatureID: libsveltosv1beta1.FeatureResources,
 				DeployedGroupVersionKind: []string{
 					"ClusterRole.v1.rbac.authorization.k8s.io",
 				},
@@ -1099,26 +763,26 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole1)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterRole2)).To(Succeed())
 
-		currentClusterRoles := map[string]configv1beta1.Resource{}
-		clusterRoleResource1 := &configv1beta1.Resource{
+		currentClusterRoles := map[string]libsveltosv1beta1.Resource{}
+		clusterRoleResource1 := &libsveltosv1beta1.Resource{
 			Name:  clusterRole1.Name,
 			Kind:  clusterRole1.GroupVersionKind().Kind,
 			Group: clusterRole1.GetObjectKind().GroupVersionKind().Group,
 		}
-		currentClusterRoles[controllers.GetPolicyInfo(clusterRoleResource1)] = *clusterRoleResource1
-		clusterRoleResource2 := &configv1beta1.Resource{
+		currentClusterRoles[deployer.GetPolicyInfo(clusterRoleResource1)] = *clusterRoleResource1
+		clusterRoleResource2 := &libsveltosv1beta1.Resource{
 			Name:  clusterRole2.Name,
 			Kind:  clusterRole2.GroupVersionKind().Kind,
 			Group: clusterRole2.GetObjectKind().GroupVersionKind().Group,
 		}
-		currentClusterRoles[controllers.GetPolicyInfo(clusterRoleResource2)] = *clusterRoleResource2
+		currentClusterRoles[deployer.GetPolicyInfo(clusterRoleResource2)] = *clusterRoleResource2
 
-		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, configv1beta1.FeatureResources)
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
 		Expect(deployedGKVs).ToNot(BeEmpty())
 		// undeployStaleResources finds all instances of policies deployed because of clusterSummary and
 		// removes the stale ones.
 		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -1139,11 +803,11 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs = nil
-		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource1))
-		delete(currentClusterRoles, controllers.GetPolicyInfo(clusterRoleResource2))
+		delete(currentClusterRoles, deployer.GetPolicyInfo(clusterRoleResource1))
+		delete(currentClusterRoles, deployer.GetPolicyInfo(clusterRoleResource2))
 
 		_, err = controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, currentClusterRoles,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -1164,74 +828,6 @@ var _ = Describe("HandlersUtils", func() {
 				types.NamespacedName{Name: clusterRoleName2}, currentClusterRole)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
-	})
-
-	It("customSplit returns all sections separated by ---", func() {
-		sections, err := controllers.CustomSplit(multusData)
-		Expect(err).To(BeNil())
-		Expect(len(sections)).To(Equal(5))
-
-		sections, err = controllers.CustomSplit("\n\n---\n")
-		Expect(err).To(BeNil())
-		Expect(len(sections)).To(Equal(0))
-
-		sections, err = controllers.CustomSplit(piraeus)
-		Expect(err).To(BeNil())
-		Expect(len(sections)).To(Equal(3))
-
-		multipleResources := `  
-  apiVersion: v1  
-  kind: Service  
-  metadata:    
-    labels:      
-      app: nats      
-      tailscale.com/proxy-class: default    
-    annotations:      
-      tailscale.com/tailnet-fqdn: nats-cluster-1    
-    name: nats-cluster-1  
-  spec:    
-    externalName: placeholder    
-    type: ExternalName
----
-  
-  apiVersion: v1  
-  kind: Service  
-  metadata:    
-    labels:      
-      app: nats      
-      tailscale.com/proxy-class: default    
-    annotations:      
-      tailscale.com/tailnet-fqdn: nats-cluster-2    
-    name: nats-cluster-2  
-  spec:    
-    externalName: placeholder    
-    type: ExternalName
----
-
-`
-		sections, err = controllers.CustomSplit(multipleResources)
-		Expect(err).To(BeNil())
-		Expect(len(sections)).To(Equal(2))
-	})
-
-	It("canDelete returns false when ClusterProfile is not referencing the policies anymore", func() {
-		depl := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
-				Name:      randomString(),
-			},
-		}
-		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
-
-		Expect(controllers.CanDelete(depl, map[string]configv1beta1.Resource{})).To(BeTrue())
-
-		name := controllers.GetPolicyInfo(&configv1beta1.Resource{
-			Kind:      depl.GetObjectKind().GroupVersionKind().Kind,
-			Group:     depl.GetObjectKind().GroupVersionKind().Group,
-			Name:      depl.GetName(),
-			Namespace: depl.GetNamespace(),
-		})
-		Expect(controllers.CanDelete(depl, map[string]configv1beta1.Resource{name: {}})).To(BeFalse())
 	})
 
 	It("addExtraLabels adds extra labels on unstructured", func() {
@@ -1348,51 +944,10 @@ metadata:
 		Expect(v).To(Equal(deplTemplate))
 	})
 
-	It("handleResourceDelete leaves policies on Cluster when mode is LeavePolicies", func() {
-		randomKey := randomString()
-		randomValue := randomString()
-		depl := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
-				Name:      randomString(),
-				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      randomString(),
-					deployer.ReferenceNameLabel:      randomString(),
-					deployer.ReferenceNamespaceLabel: randomString(),
-					randomKey:                        randomValue,
-				},
-			},
-		}
-		Expect(addTypeInformationToObject(scheme, depl)).To(Succeed())
-		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
-		clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior = configv1beta1.LeavePolicies
-		initObjects := []client.Object{depl, clusterSummary}
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
-
-		currentClusterSummary := &configv1beta1.ClusterSummary{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-			currentClusterSummary)).To(Succeed())
-
-		Expect(c.Delete(context.TODO(), currentClusterSummary)).To(Succeed())
-
-		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-			currentClusterSummary)).To(Succeed())
-
-		Expect(controllers.HandleResourceDelete(ctx, c, depl, currentClusterSummary,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
-
-		currentDepl := &appsv1.Deployment{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: depl.Namespace, Name: depl.Name}, currentDepl)).To(Succeed())
-		Expect(len(currentDepl.Labels)).To(Equal(1))
-		v, ok := currentDepl.Labels[randomKey]
-		Expect(ok).To(BeTrue())
-		Expect(v).To(Equal(randomValue))
-	})
-
 	It("collectContent collect contents with no error even when there are section with just comments", func() {
 		content := `# This file is generated from the individual YAML files by generate-provisioner-deployment.sh. Do not
 # edit this file directly but instead edit the source files and re-render.
-# 
+#
 # Generated from:
 #       examples/contour/01-crds.yaml
 #       examples/gateway/00-crds.yaml
@@ -1403,7 +958,7 @@ metadata:
 #       examples/gateway-provisioner/01-roles.yaml
 #       examples/gateway-provisioner/02-rolebindings.yaml
 #       examples/gateway-provisioner/03-gateway-provisioner.yaml
-         
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -1643,19 +1198,19 @@ status:
 
 // validateResourceReports validates that number of resourceResources with certain actions
 // match the expected number per action
-func validateResourceReports(resourceReports []configv1beta1.ResourceReport,
+func validateResourceReports(resourceReports []libsveltosv1beta1.ResourceReport,
 	created, updated, noAction, conflict int) {
 
 	var foundCreated, foundUpdated, foundNoAction, foundConflict int
 	for i := range resourceReports {
 		rr := &resourceReports[i]
-		if rr.Action == string(configv1beta1.CreateResourceAction) {
+		if rr.Action == string(libsveltosv1beta1.CreateResourceAction) {
 			foundCreated++
-		} else if rr.Action == string(configv1beta1.UpdateResourceAction) {
+		} else if rr.Action == string(libsveltosv1beta1.UpdateResourceAction) {
 			foundUpdated++
-		} else if rr.Action == string(configv1beta1.NoResourceAction) {
+		} else if rr.Action == string(libsveltosv1beta1.NoResourceAction) {
 			foundNoAction++
-		} else if rr.Action == string(configv1beta1.ConflictResourceAction) {
+		} else if rr.Action == string(libsveltosv1beta1.ConflictResourceAction) {
 			foundConflict++
 		}
 	}

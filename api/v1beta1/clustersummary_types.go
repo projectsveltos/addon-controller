@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -38,53 +39,11 @@ const (
 	ClusterSummaryKind = "ClusterSummary"
 )
 
-// +kubebuilder:validation:Enum:=Resources;Helm;Kustomize
-type FeatureID string
-
-const (
-	// FeatureResources is the identifier for generic Resources feature
-	FeatureResources = FeatureID("Resources")
-
-	// FeatureHelm is the identifier for Helm feature
-	FeatureHelm = FeatureID("Helm")
-
-	// FeatureKustomize is the identifier for Kustomize feature
-	FeatureKustomize = FeatureID("Kustomize")
-)
-
-// +kubebuilder:validation:Enum:=Provisioning;Provisioned;Failed;FailedNonRetriable;Removing;Removed
-type FeatureStatus string
-
-const (
-	// FeatureStatusProvisioning indicates that feature is being
-	// provisioned in the workload cluster
-	FeatureStatusProvisioning = FeatureStatus("Provisioning")
-
-	// FeatureStatusProvisioned indicates that feature has being
-	// provisioned in the workload cluster
-	FeatureStatusProvisioned = FeatureStatus("Provisioned")
-
-	// FeatureStatusFailed indicates that configuring the feature
-	// in the workload cluster failed
-	FeatureStatusFailed = FeatureStatus("Failed")
-
-	// FeatureStatusFailedNonRetriable indicates that configuring the feature
-	// in the workload cluster failed with a non retriable error
-	FeatureStatusFailedNonRetriable = FeatureStatus("FailedNonRetriable")
-
-	// FeatureStatusRemoving indicates that feature is being
-	// removed
-	FeatureStatusRemoving = FeatureStatus("Removing")
-
-	// FeatureStatusRemoved indicates that feature is removed
-	FeatureStatusRemoved = FeatureStatus("Removed")
-)
-
 // FeatureSummary contains a summary of the state of a workload
 // cluster feature.
 type FeatureSummary struct {
 	// FeatureID is an indentifier of the feature whose status is reported
-	FeatureID FeatureID `json:"featureID"`
+	FeatureID libsveltosv1beta1.FeatureID `json:"featureID"`
 
 	// Hash represents of a unique value for a feature at a fixed point in
 	// time
@@ -97,7 +56,7 @@ type FeatureSummary struct {
 
 	// Status represents the state of the feature in the workload cluster
 	// +optional
-	Status FeatureStatus `json:"status,omitempty"`
+	Status libsveltosv1beta1.FeatureStatus `json:"status,omitempty"`
 
 	// FailureReason indicates the type of error that occurred.
 	// +optional
@@ -117,17 +76,6 @@ type FeatureSummary struct {
 	// LastAppliedTime is the time feature was last reconciled
 	// +optional
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
-}
-
-type FeatureDeploymentInfo struct {
-	// FeatureID is an indentifier of the feature whose status is reported
-	FeatureID FeatureID `json:"featureID"`
-
-	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
-	// the workload cluster or the management cluster because of this feature.
-	// Each element has format kind.version.group
-	// +optional
-	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing
@@ -202,7 +150,7 @@ type ClusterSummaryStatus struct {
 	// +listType=map
 	// +listMapKey=featureID
 	// +optional
-	DeployedGVKs []FeatureDeploymentInfo `json:"deployedGVKs,omitempty"`
+	DeployedGVKs []libsveltosv1beta1.FeatureDeploymentInfo `json:"deployedGVKs,omitempty"`
 
 	// HelmReleaseSummaries reports the status of each helm chart
 	// directly managed by ClusterProfile.
@@ -273,6 +221,21 @@ func GetProfileOwnerReference(clusterSummary *ClusterSummary) (*metav1.OwnerRefe
 	}
 
 	return nil, fmt.Errorf("(Cluster)Profile owner not found")
+}
+
+// GetProfileOwnerReference returns the ClusterProfile/Profile owning a given ClusterSummary
+func GetProfileRef(clusterSummary *ClusterSummary) (*corev1.ObjectReference, error) {
+	profileOwnerRef, err := GetProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	return &corev1.ObjectReference{
+		Kind:       profileOwnerRef.Kind,
+		APIVersion: profileOwnerRef.APIVersion,
+		Name:       profileOwnerRef.Name,
+		UID:        profileOwnerRef.UID,
+	}, nil
 }
 
 // GetProfileOwnerAndTier returns the (Cluster)Profile owning this clusterSummary and its tier.

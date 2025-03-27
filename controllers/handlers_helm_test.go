@@ -42,6 +42,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -395,7 +396,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources[0].Features)).To(Equal(1))
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].FeatureID).To(
-			Equal(configv1beta1.FeatureHelm))
+			Equal(libsveltosv1beta1.FeatureHelm))
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts).ToNot(BeNil())
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts)).To(Equal(1))
 		Expect(currentClusterConfiguration.Status.ClusterProfileResources[0].Features[0].Charts[0].RepoURL).To(
@@ -530,7 +531,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterReportName(configv1beta1.ClusterProfileKind,
+				Name: clusterops.GetClusterReportName(configv1beta1.ClusterProfileKind,
 					clusterProfile.Name, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
@@ -539,10 +540,10 @@ var _ = Describe("HandlersHelm", func() {
 				ClusterName:      clusterSummary.Spec.ClusterName,
 			},
 			Status: configv1beta1.ClusterReportStatus{
-				ResourceReports: []configv1beta1.ResourceReport{
+				ResourceReports: []libsveltosv1beta1.ResourceReport{
 					{
-						Action:   string(configv1beta1.CreateResourceAction),
-						Resource: configv1beta1.Resource{Name: randomString(), Kind: randomString()}},
+						Action:   string(libsveltosv1beta1.CreateResourceAction),
+						Resource: libsveltosv1beta1.Resource{Name: randomString(), Kind: randomString()}},
 				},
 			},
 		}
@@ -593,7 +594,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		clusterReport := &configv1beta1.ClusterReport{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterReportName(configv1beta1.ClusterProfileKind,
+				Name: clusterops.GetClusterReportName(configv1beta1.ClusterProfileKind,
 					clusterProfile.Name, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
@@ -643,7 +644,7 @@ var _ = Describe("HandlersHelm", func() {
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
 		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1beta1.DryRunReconciliationError
@@ -769,7 +770,7 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope,
+		hash, err := controllers.HelmHash(context.TODO(), c, clusterSummaryScope.ClusterSummary,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())

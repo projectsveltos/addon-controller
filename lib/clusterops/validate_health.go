@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package clusterops
 
 import (
 	"context"
@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	sveltoslua "github.com/projectsveltos/libsveltos/lib/lua"
@@ -43,12 +42,17 @@ type healthStatus struct {
 	Message string `json:"message"`
 }
 
-// validateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
-func validateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, clusterSummary *configv1beta1.ClusterSummary,
-	featureID configv1beta1.FeatureID, logger logr.Logger) error {
+// ValidateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
+func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, validateHealths []libsveltosv1beta1.ValidateHealth,
+	featureID libsveltosv1beta1.FeatureID, logger logr.Logger) error {
 
-	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
-		check := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
+	// If SveltosCluster is in pull mode, this will done by the agent in the managed cluster
+	if remoteConfig == nil {
+		return nil
+	}
+
+	for i := range validateHealths {
+		check := &validateHealths[i]
 
 		if check.FeatureID != featureID {
 			continue
@@ -63,7 +67,7 @@ func validateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, clus
 	return nil
 }
 
-func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *configv1beta1.ValidateHealth,
+func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *libsveltosv1beta1.ValidateHealth,
 	logger logr.Logger) error {
 
 	l := logger.WithValues("validation", check.Name)
@@ -97,7 +101,7 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 }
 
 // fetchResources fetches resources from the managed cluster
-func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *configv1beta1.ValidateHealth,
+func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *libsveltosv1beta1.ValidateHealth,
 ) (*unstructured.UnstructuredList, error) {
 
 	gvk := schema.GroupVersionKind{

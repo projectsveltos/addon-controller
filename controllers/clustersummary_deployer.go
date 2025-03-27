@@ -35,6 +35,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 const (
@@ -54,13 +55,13 @@ func startDriftDetectionInMgmtCluster(o deployer.Options) bool {
 	return runInMgtmCluster
 }
 
-type getCurrentHash func(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
+type getCurrentHash func(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error)
 
 type getPolicyRefs func(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef
 
 type feature struct {
-	id          configv1beta1.FeatureID
+	id          libsveltosv1beta1.FeatureID
 	currentHash getCurrentHash
 	deploy      deployer.RequestHandler
 	undeploy    deployer.RequestHandler
@@ -92,7 +93,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	}
 
 	// Get hash of current configuration (at this very precise moment)
-	currentHash, err := f.currentHash(ctx, r.Client, clusterSummaryScope, logger)
+	currentHash, err := f.currentHash(ctx, r.Client, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
-	var status *configv1beta1.FeatureStatus
+	var status *libsveltosv1beta1.FeatureStatus
 	var resultError error
 
 	// Feature is not deployed yet
@@ -132,9 +133,23 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 	}
 
 	if status != nil {
+		if *status == libsveltosv1beta1.FeatureStatusProvisioned {
+			isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+			if err != nil {
+				errorMsg := err.Error()
+				clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+				return err
+			}
+			if isPullMode {
+				return r.verifyAgentDeployedContent(ctx, clusterSummaryScope, f, currentHash, logger)
+			}
+		}
+
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("result is available. updating status: %v", *status))
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
-		if *status == configv1beta1.FeatureStatusProvisioned {
+
+		if *status == libsveltosv1beta1.FeatureStatusProvisioned {
 			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
 			r.eventRecorder.Eventf(clusterSummary, corev1.EventTypeNormal, "sveltos", message)
@@ -142,25 +157,25 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 		}
 		if resultError != nil {
 			// Check if error is a NonRetriableError type
-			var nonRetriableError *NonRetriableError
+			var nonRetriableError *configv1beta1.NonRetriableError
 			if errors.As(resultError, &nonRetriableError) {
-				nonRetriableStatus := configv1beta1.FeatureStatusFailedNonRetriable
+				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
 				return nil
 			}
 			if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
-				nonRetriableStatus := configv1beta1.FeatureStatusFailedNonRetriable
+				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 				resultError := errors.New("the maximum number of consecutive errors has been reached")
 				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
 				return nil
 			}
 		}
-		if *status == configv1beta1.FeatureStatusProvisioning {
+		if *status == libsveltosv1beta1.FeatureStatusProvisioning {
 			return fmt.Errorf("feature is still being provisioned")
 		}
 	} else {
 		logger.V(logs.LogDebug).Info("no result is available. mark status as provisioning")
-		s := configv1beta1.FeatureStatusProvisioning
+		s := libsveltosv1beta1.FeatureStatusProvisioning
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, nil, logger)
 	}
@@ -195,7 +210,7 @@ func genericDeploy(ctx context.Context, c client.Client,
 	// Before any per feature specific code
 
 	// Invoking per feature specific code
-	featureHandler := getHandlersForFeature(configv1beta1.FeatureID(featureID))
+	featureHandler := getHandlersForFeature(libsveltosv1beta1.FeatureID(featureID))
 	err := featureHandler.deploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger)
 	if err != nil {
 		return err
@@ -230,7 +245,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		return fmt.Errorf("deploying %s still in progress. Wait before cleanup", string(f.id))
 	}
 
-	if r.isFeatureRemoved(clusterSummaryScope.ClusterSummary, f.id) {
+	if r.isFeatureRemoved(clusterSummaryScope, f.id) {
 		logger.V(logs.LogDebug).Info("feature is removed")
 		// feature is removed. Nothing to do.
 		return nil
@@ -241,8 +256,8 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	status := r.convertResultStatus(result)
 
 	if status != nil {
-		if *status == configv1beta1.FeatureStatusProvisioning {
-			s := configv1beta1.FeatureStatusRemoving
+		if *status == libsveltosv1beta1.FeatureStatusProvisioning {
+			s := libsveltosv1beta1.FeatureStatusRemoving
 			status = &s
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return fmt.Errorf("feature is still being removed")
@@ -251,26 +266,58 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		// Failure to undeploy because of missing permission is ignored.
 		if apierrors.IsForbidden(result.Err) {
 			logger.V(logs.LogInfo).Info("undeploying failing because of missing permission.")
-			tmpStatus := configv1beta1.FeatureStatusRemoved
+			tmpStatus := libsveltosv1beta1.FeatureStatusRemoved
 			status = &tmpStatus
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return nil
 		}
 
-		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
-		if *status == configv1beta1.FeatureStatusRemoved {
-			return nil
+		if *status == libsveltosv1beta1.FeatureStatusRemoved {
+			// Determine if the cluster is in pull mode. If so and the status is 'removed',
+			// verify the agent's status to confirm successful undeployment. Otherwise, if not
+			// in pull mode, undeployment is considered complete.
+			isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+			if err != nil {
+				errorMsg := err.Error()
+				clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+				return err
+			}
+
+			if isPullMode {
+				agentStatus, err := r.getAgentRemovedContentStatus(ctx, clusterSummaryScope, f, logger)
+				if err != nil {
+					errorMsg := err.Error()
+					clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+					return err
+				}
+
+				// Only mark as removed if agent confirms removal
+				if agentStatus == libsveltosv1beta1.FeatureStatusRemoved {
+					r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
+					return nil
+				}
+			} else {
+				// For non-pull mode clusters, mark as removed immediately
+				r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
+				return nil
+			}
+		} else { // if *status != libsveltosv1beta1.FeatureStatusRemoved
+			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 		}
-	} else {
+	}
+
+	if status == nil {
 		logger.V(logs.LogDebug).Info("no result is available. mark status as removing")
-		s := configv1beta1.FeatureStatusRemoving
+		s := libsveltosv1beta1.FeatureStatusRemoving
 		status = &s
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, nil, logger)
 	}
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")
 	if err := r.Deployer.Deploy(ctx, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, true, genericUndeploy, programDuration, deployer.Options{}); err != nil {
+		clusterSummary.Name, string(f.id), clusterSummary.Spec.ClusterType, true, genericUndeploy, programDuration,
+		deployer.Options{}); err != nil {
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, err, logger)
 		return err
 	}
@@ -300,7 +347,7 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	}
 
 	// Invoking per feature specific code
-	featureHandler := getHandlersForFeature(configv1beta1.FeatureID(featureID))
+	featureHandler := getHandlersForFeature(libsveltosv1beta1.FeatureID(featureID))
 	if err := featureHandler.undeploy(ctx, c, clusterNamespace, clusterName, applicant, featureID, clusterType, o, logger); err != nil {
 		return err
 	}
@@ -310,10 +357,86 @@ func genericUndeploy(ctx context.Context, c client.Client,
 	return nil
 }
 
+// If SveltosCluster is in pull mode, verify whether agent has pulled and successuffly deployed it.
+func (r *ClusterSummaryReconciler) verifyAgentDeployedContent(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, f feature, currentHash []byte, logger logr.Logger,
+) error {
+
+	logger.V(logs.LogDebug).Info("Verify if agent has deployed content")
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	isProvisioned, cgStatus, err := r.isPullModeDeployed(ctx, clusterSummary, f.id, logger)
+	if err != nil {
+		errorMsg := err.Error()
+		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+		status := libsveltosv1beta1.FeatureStatusProvisioning
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &status, currentHash, nil, logger)
+		return err
+	}
+
+	if cgStatus != nil {
+		clusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID:                f.id,
+				DeployedGroupVersionKind: cgStatus.DeployedGroupVersionKind,
+			},
+		}
+	}
+
+	if !isProvisioned {
+		msg := "cluster in pull mode. agent is still provisioning"
+		logger.V(logs.LogDebug).Info(msg)
+		status := libsveltosv1beta1.FeatureStatusProvisioning
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &status, currentHash, nil, logger)
+		return errors.New(msg)
+	}
+
+	logger.V(logs.LogDebug).Info("agent provisioned content")
+	err = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+	if err != nil {
+		errorMsg := err.Error()
+		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+		return err
+	}
+	clusterSummaryScope.SetFailureMessage(f.id, nil)
+	clusterSummaryScope.SetLastAppliedTime(f.id, cgStatus.LastAppliedTime)
+	status := libsveltosv1beta1.FeatureStatusProvisioned
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("result is available. updating status: %v", status))
+	r.updateFeatureStatus(clusterSummaryScope, f.id, &status, currentHash, nil, logger)
+
+	return nil
+}
+
+// If SveltosCluster is in pull mode, verify whether agent has successuffly removed content from cluster.
+func (r *ClusterSummaryReconciler) getAgentRemovedContentStatus(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, f feature, logger logr.Logger) (libsveltosv1beta1.FeatureStatus, error) {
+
+	logger.V(logs.LogDebug).Info("Verify if agent has removed content")
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	isRemoved, err := r.isPullModeRemoved(ctx, clusterSummary, f.id, logger)
+	if err != nil {
+		return libsveltosv1beta1.FeatureStatusRemoving, err
+	}
+
+	if !isRemoved {
+		logger.V(logs.LogDebug).Info("cluster in pull mode. agent is still removing content")
+		return libsveltosv1beta1.FeatureStatusRemoving, nil
+	}
+
+	logger.V(logs.LogDebug).Info("agent removed content")
+	err = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+	if err != nil {
+		return libsveltosv1beta1.FeatureStatusRemoving, err
+	}
+
+	return libsveltosv1beta1.FeatureStatusRemoved, nil
+}
+
 // isFeatureStatusPresent returns true if feature status is set.
 // That means feature was deployed/being deployed
 func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *configv1beta1.ClusterSummary,
-	featureID configv1beta1.FeatureID) bool {
+	featureID libsveltosv1beta1.FeatureID) bool {
 
 	if fs := getFeatureSummaryForFeatureID(clusterSummary, featureID); fs != nil {
 		return true
@@ -325,10 +448,10 @@ func (r *ClusterSummaryReconciler) isFeatureStatusPresent(clusterSummary *config
 // isFeatureDeployed returns true if feature is marked as deployed (present in FeatureSummaries and status
 // is set to Provisioned).
 func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1beta1.ClusterSummary,
-	featureID configv1beta1.FeatureID) bool {
+	featureID libsveltosv1beta1.FeatureID) bool {
 
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1beta1.FeatureStatusProvisioned {
+	if fs != nil && fs.Status == libsveltosv1beta1.FeatureStatusProvisioned {
 		return true
 	}
 
@@ -337,10 +460,10 @@ func (r *ClusterSummaryReconciler) isFeatureDeployed(clusterSummary *configv1bet
 
 // isFeatureFailedWithNonRetriableError returns true if feature is marked as failed with a non retriable error
 func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterSummary *configv1beta1.ClusterSummary,
-	featureID configv1beta1.FeatureID) bool {
+	featureID libsveltosv1beta1.FeatureID) bool {
 
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1beta1.FeatureStatusFailedNonRetriable {
+	if fs != nil && fs.Status == libsveltosv1beta1.FeatureStatusFailedNonRetriable {
 		return true
 	}
 
@@ -349,11 +472,12 @@ func (r *ClusterSummaryReconciler) isFeatureFailedWithNonRetriableError(clusterS
 
 // isFeatureRemoved returns true if feature is marked as removed (present in FeatureSummaries and status
 // is set to Removed).
-func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1beta1.ClusterSummary,
-	featureID configv1beta1.FeatureID) bool {
+func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummaryScope *scope.ClusterSummaryScope,
+	featureID libsveltosv1beta1.FeatureID) bool {
 
+	clusterSummary := clusterSummaryScope.ClusterSummary
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil && fs.Status == configv1beta1.FeatureStatusRemoved {
+	if fs != nil && fs.Status == libsveltosv1beta1.FeatureStatusRemoved {
 		return true
 	}
 
@@ -363,7 +487,7 @@ func (r *ClusterSummaryReconciler) isFeatureRemoved(clusterSummary *configv1beta
 // getHash returns, if available, the hash corresponding to the featureID configuration last time it
 // was processed.
 func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1beta1.FeatureID) []byte {
+	featureID libsveltosv1beta1.FeatureID) []byte {
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
@@ -377,7 +501,7 @@ func (r *ClusterSummaryReconciler) getHash(clusterSummaryScope *scope.ClusterSum
 // getConsecutiveFailures returns, if available, the number of consecutive failures corresponding to the
 // featureID
 func (r *ClusterSummaryReconciler) getConsecutiveFailures(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1beta1.FeatureID) uint {
+	featureID libsveltosv1beta1.FeatureID) uint {
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
@@ -389,7 +513,7 @@ func (r *ClusterSummaryReconciler) getConsecutiveFailures(clusterSummaryScope *s
 }
 
 func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scope.ClusterSummaryScope,
-	featureID configv1beta1.FeatureID, status *configv1beta1.FeatureStatus, hash []byte, statusError error,
+	featureID libsveltosv1beta1.FeatureID, status *libsveltosv1beta1.FeatureStatus, hash []byte, statusError error,
 	logger logr.Logger) {
 
 	if status == nil {
@@ -400,19 +524,19 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	now := metav1.NewTime(time.Now())
 
 	switch *status {
-	case configv1beta1.FeatureStatusProvisioned:
+	case libsveltosv1beta1.FeatureStatusProvisioned:
 		failed := false
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioned, hash, &failed)
+		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusProvisioned, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
-	case configv1beta1.FeatureStatusRemoved:
+	case libsveltosv1beta1.FeatureStatusRemoved:
 		failed := false
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoved, hash, &failed)
+		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusRemoved, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
-	case configv1beta1.FeatureStatusProvisioning:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusProvisioning, hash, nil)
-	case configv1beta1.FeatureStatusRemoving:
-		clusterSummaryScope.SetFeatureStatus(featureID, configv1beta1.FeatureStatusRemoving, hash, nil)
-	case configv1beta1.FeatureStatusFailed, configv1beta1.FeatureStatusFailedNonRetriable:
+	case libsveltosv1beta1.FeatureStatusProvisioning:
+		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusProvisioning, hash, nil)
+	case libsveltosv1beta1.FeatureStatusRemoving:
+		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusRemoving, hash, nil)
+	case libsveltosv1beta1.FeatureStatusFailed, libsveltosv1beta1.FeatureStatusFailedNonRetriable:
 		failed := true
 		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash, &failed)
 		err := statusError.Error()
@@ -422,19 +546,19 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	clusterSummaryScope.SetLastAppliedTime(featureID, &now)
 }
 
-func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *configv1beta1.FeatureStatus {
+func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *libsveltosv1beta1.FeatureStatus {
 	switch result.ResultStatus {
 	case deployer.Deployed:
-		s := configv1beta1.FeatureStatusProvisioned
+		s := libsveltosv1beta1.FeatureStatusProvisioned
 		return &s
 	case deployer.Failed:
-		s := configv1beta1.FeatureStatusFailed
+		s := libsveltosv1beta1.FeatureStatusFailed
 		return &s
 	case deployer.InProgress:
-		s := configv1beta1.FeatureStatusProvisioning
+		s := libsveltosv1beta1.FeatureStatusProvisioning
 		return &s
 	case deployer.Removed:
-		s := configv1beta1.FeatureStatusRemoved
+		s := libsveltosv1beta1.FeatureStatusRemoved
 		return &s
 	case deployer.Unavailable:
 		return nil
@@ -444,8 +568,8 @@ func (r *ClusterSummaryReconciler) convertResultStatus(result deployer.Result) *
 }
 
 // shouldRedeploy returns true if this feature requires to be redeployed.
-func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.ClusterSummaryScope, f feature,
-	isConfigSame bool, logger logr.Logger) bool {
+func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.ClusterSummaryScope,
+	f feature, isConfigSame bool, logger logr.Logger) bool {
 
 	if clusterSummaryScope.IsDryRunSync() {
 		logger.V(logs.LogDebug).Info("dry run mode. Always redeploy.")
@@ -453,6 +577,7 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.Clu
 	}
 
 	deployed := r.isFeatureDeployed(clusterSummaryScope.ClusterSummary, f.id)
+
 	isErrorNonRetriable := false
 	if !deployed {
 		isErrorNonRetriable = r.isFeatureFailedWithNonRetriableError(clusterSummaryScope.ClusterSummary, f.id)
@@ -471,6 +596,66 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(clusterSummaryScope *scope.Clu
 	}
 
 	return true
+}
+
+// isPullModeDeployed checks if the cluster is in pull mode and if the agent has successfully deployed the configuration.
+// It returns the deployment status and any error encountered.
+func (r *ClusterSummaryReconciler) isPullModeDeployed(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	featureID libsveltosv1beta1.FeatureID, logger logr.Logger) (bool, *libsveltosv1beta1.ConfigurationGroupStatus, error) {
+
+	status, err := pullmode.GetResourceDeploymentStatus(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Kind, clusterSummary.Name, string(featureID), logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if content is deployed to cluster: %v", err))
+		return false, nil, err
+	}
+
+	if status == nil {
+		logger.V(logs.LogInfo).Info("empty status. content not deployed to cluster yet")
+		return false, nil, nil
+	}
+
+	if status.FailureMessage != nil {
+		return false, status, fmt.Errorf("%s", *status.FailureMessage)
+	}
+
+	if status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned {
+		return true, status, nil
+	}
+
+	return false, status, nil
+}
+
+// isPullModeRemoved checks if the cluster is in pull mode and if the agent has successfully undeployed the configuration.
+// It returns the deployment status and any error encountered.
+func (r *ClusterSummaryReconciler) isPullModeRemoved(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	featureID libsveltosv1beta1.FeatureID, logger logr.Logger) (bool, error) {
+
+	status, err := pullmode.GetResourceDeploymentStatus(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Kind, clusterSummary.Name, string(featureID), logger)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if content is undeployed from cluster: %v", err))
+		return false, err
+	}
+
+	if status == nil {
+		logger.V(logs.LogInfo).Info("empty status. content still present on cluster yet")
+		return false, nil
+	}
+
+	if status.FailureMessage != nil {
+		return false, fmt.Errorf("%s", *status.FailureMessage)
+	}
+
+	if status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusRemoved {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // maxNumberOfConsecutiveFailureReached returns true if max number of consecutive failures has been reached.

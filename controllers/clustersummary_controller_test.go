@@ -41,6 +41,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	fakedeployer "github.com/projectsveltos/libsveltos/lib/deployer/fake"
@@ -86,7 +87,7 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -292,7 +293,7 @@ var _ = Describe("ClustersummaryController", func() {
 			},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioning},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 		}
 
 		initObjects := []client.Object{
@@ -378,17 +379,17 @@ var _ = Describe("ClustersummaryController", func() {
 		featureResourcesVerified := false
 		featureKustomizeVerified := false
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureHelmVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureResourcesVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureKustomize {
 				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
 				Expect(*clusterSummary.Status.FeatureSummaries[i].FailureMessage).To(Equal(failureMsg))
 				featureKustomizeVerified = true
@@ -430,9 +431,9 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
-			{FeatureID: configv1beta1.FeatureKustomize, Status: configv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
+			{FeatureID: libsveltosv1beta1.FeatureKustomize, Status: libsveltosv1beta1.FeatureStatusProvisioned, Hash: []byte(randomString())},
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -454,24 +455,24 @@ var _ = Describe("ClustersummaryController", func() {
 			PolicyMux:    sync.Mutex{},
 		}
 
-		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, configv1beta1.FeatureStatusFailed)
+		controllers.ResetFeatureStatus(reconciler, clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
 
 		featureHelmVerified := false
 		featureResourcesVerified := false
 		featureKustomizeVerified := false
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureHelmVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureResourcesVerified = true
 			}
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
-				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(configv1beta1.FeatureStatusFailed))
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureKustomize {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
 				Expect(clusterSummary.Status.FeatureSummaries[i].Hash).To(BeNil())
 				featureKustomizeVerified = true
 			}
@@ -488,7 +489,7 @@ var _ = Describe("ClustersummaryController", func() {
 			{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(), ReleaseName: randomString()},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioning},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 		}
 
 		initObjects := []client.Object{
@@ -529,8 +530,8 @@ var _ = Describe("ClustersummaryController", func() {
 			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
 		}
 
 		initObjects := []client.Object{
@@ -605,8 +606,8 @@ var _ = Describe("ClustersummaryController", func() {
 	It("shouldRedeploy returns true in DryRun mode", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
 		}
 		initObjects := []client.Object{
 			clusterProfile,
@@ -635,7 +636,7 @@ var _ = Describe("ClustersummaryController", func() {
 		})
 		Expect(err).To(BeNil())
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// In SyncMode DryRun even if config is same (input for ShouldRedeploy) result is redeploy
 		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
@@ -721,8 +722,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoving},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusRemoved},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusRemoving},
 		}
 
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
@@ -769,8 +770,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		// Mark all features as removed
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoved},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusRemoved},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusRemoved},
 		}
 
 		clusterSummaryScope.ClusterSummary = clusterSummary
@@ -784,8 +785,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusRemoved},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoving},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusRemoved},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusRemoving},
 		}
 
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
@@ -900,8 +901,8 @@ var _ = Describe("ClustersummaryController", func() {
 			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
 		}
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureHelm, Status: configv1beta1.FeatureStatusProvisioned},
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
 		}
 
 		// No cluster.
@@ -932,7 +933,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {
 		clusterProfileAName := randomString()
-		clusterSummaryAName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryAName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfileAName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileAName, clusterSummaryAName))
 		clusterSummaryA := &configv1beta1.ClusterSummary{
@@ -940,9 +941,9 @@ var _ = Describe("ClustersummaryController", func() {
 				Name:      clusterSummaryAName,
 				Namespace: namespace,
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfileAName,
-					configv1beta1.ClusterNameLabel:      clusterName,
-					configv1beta1.ClusterTypeLabel:      string(libsveltosv1beta1.ClusterTypeCapi),
+					clusterops.ClusterProfileLabelName: clusterProfileAName,
+					configv1beta1.ClusterNameLabel:     clusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
 				},
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
@@ -961,7 +962,7 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 
 		clusterProfileBName := randomString()
-		clusterSummaryBName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryBName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfileBName, clusterName, false)
 		By(fmt.Sprintf("Create a ClusterProfile %s (and ClusterSummary %s) used as dependency", clusterProfileBName, clusterSummaryBName))
 		clusterSummaryB := &configv1beta1.ClusterSummary{
@@ -969,9 +970,9 @@ var _ = Describe("ClustersummaryController", func() {
 				Name:      clusterSummaryBName,
 				Namespace: namespace,
 				Labels: map[string]string{
-					controllers.ClusterProfileLabelName: clusterProfileBName,
-					configv1beta1.ClusterNameLabel:      clusterName,
-					configv1beta1.ClusterTypeLabel:      string(libsveltosv1beta1.ClusterTypeCapi),
+					clusterops.ClusterProfileLabelName: clusterProfileBName,
+					configv1beta1.ClusterNameLabel:     clusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
 				},
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
@@ -1037,8 +1038,8 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryA.Status = configv1beta1.ClusterSummaryStatus{
 			FeatureSummaries: []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1beta1.FeatureHelm,
-					Status:    configv1beta1.FeatureStatusProvisioned,
+					FeatureID: libsveltosv1beta1.FeatureHelm,
+					Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				},
 			},
 		}
@@ -1055,12 +1056,12 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryB.Status = configv1beta1.ClusterSummaryStatus{
 			FeatureSummaries: []configv1beta1.FeatureSummary{
 				{
-					FeatureID: configv1beta1.FeatureHelm,
-					Status:    configv1beta1.FeatureStatusProvisioned,
+					FeatureID: libsveltosv1beta1.FeatureHelm,
+					Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				},
 				{
-					FeatureID: configv1beta1.FeatureResources,
-					Status:    configv1beta1.FeatureStatusProvisioned,
+					FeatureID: libsveltosv1beta1.FeatureResources,
+					Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				},
 			},
 		}
@@ -1214,7 +1215,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1beta1.FeatureResources))).To(Succeed())
+		Expect(dep.RegisterFeatureID(string(libsveltosv1beta1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		// Reconcile so it is tracked that referencingClusterSummary is referencing configMap
@@ -1278,7 +1279,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), testEnv.Client)
-		Expect(dep.RegisterFeatureID(string(configv1beta1.FeatureResources))).To(Succeed())
+		Expect(dep.RegisterFeatureID(string(libsveltosv1beta1.FeatureResources))).To(Succeed())
 		clusterSummaryReconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
 		_, err := clusterSummaryReconciler.Reconcile(context.TODO(), ctrl.Request{

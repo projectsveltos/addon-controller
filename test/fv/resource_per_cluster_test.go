@@ -30,7 +30,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -47,7 +47,7 @@ var _ = Describe("Feature", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -95,7 +95,7 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -118,14 +118,14 @@ var _ = Describe("Feature", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
 			{kind: "ClusterRole", name: updateClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
 			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		By("Updating ConfigMap to reference new ClusterRole")
@@ -154,7 +154,7 @@ var _ = Describe("Feature", func() {
 			{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		By("Updating Secret to reference new Pod")
@@ -187,7 +187,7 @@ var _ = Describe("Feature", func() {
 			{kind: "Pod", name: newPodName, namespace: defaultNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		Byf("Changing clusterprofile to not reference configmap/secret anymore")
@@ -195,7 +195,7 @@ var _ = Describe("Feature", func() {
 		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 

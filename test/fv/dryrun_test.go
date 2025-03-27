@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -98,7 +98,7 @@ var _ = Describe("DryRun", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to reference ConfigMap with Kong ServiceAccount %s/%s",
@@ -141,15 +141,15 @@ var _ = Describe("DryRun", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		verifyDeployedGroupVersionKind(clusterProfile.Name)
 
@@ -158,14 +158,14 @@ var _ = Describe("DryRun", func() {
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
 		policies := []policy{
 			{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		Byf("Create a configMap with kong Role")
@@ -179,7 +179,7 @@ var _ = Describe("DryRun", func() {
 
 		verifyClusterProfileMatches(dryRunClusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			dryRunClusterProfile.Name, &dryRunClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -242,7 +242,7 @@ var _ = Describe("DryRun", func() {
 		})
 		Expect(err).To(BeNil())
 
-		dryRunClusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		dryRunClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -287,13 +287,13 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1beta1.CreateResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.CreateResourceAction))
 			if err != nil {
 				return err
 			}
 			// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1beta1.ConflictResourceAction))
+				"ServiceAccount", "", string(libsveltosv1beta1.ConflictResourceAction))
 			if err != nil {
 				return err
 			}
@@ -349,13 +349,13 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1beta1.CreateResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.CreateResourceAction))
 			if err != nil {
 				return err
 			}
 			// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1beta1.UpdateResourceAction))
+				"ServiceAccount", "", string(libsveltosv1beta1.UpdateResourceAction))
 			if err != nil {
 				return err
 			}
@@ -412,15 +412,15 @@ var _ = Describe("DryRun", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", dryRunClusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", dryRunClusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, configv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, dryRunClusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		Byf("Verifying ServiceAccount kong/kong-serviceaccount is deployed managed cluster")
 		err = workloadClient.Get(context.TODO(),
@@ -471,7 +471,7 @@ var _ = Describe("DryRun", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -514,14 +514,14 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1beta1.NoResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.NoResourceAction))
 			if err != nil {
 				return err
 			}
 			// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 			// So action would be delete
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1beta1.DeleteResourceAction))
+				"ServiceAccount", "", string(libsveltosv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
@@ -604,14 +604,14 @@ var _ = Describe("DryRun", func() {
 			}
 			// If not in DryRun, it would create Kong Role
 			err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-				"Role", "rbac.authorization.k8s.io", string(configv1beta1.DeleteResourceAction))
+				"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
 			// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 			// So action would be delete
 			err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
-				"ServiceAccount", "", string(configv1beta1.DeleteResourceAction))
+				"ServiceAccount", "", string(libsveltosv1beta1.DeleteResourceAction))
 			if err != nil {
 				return err
 			}
@@ -623,7 +623,7 @@ var _ = Describe("DryRun", func() {
 		currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile))
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -686,7 +686,7 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			controllers.ClusterProfileLabelName: clusterProfileName,
+			clusterops.ClusterProfileLabelName: clusterProfileName,
 		},
 	}
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
@@ -695,7 +695,7 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 	found := false
 	for i := range clusterSummaryList.Items[0].Status.DeployedGVKs {
 		fs := clusterSummaryList.Items[0].Status.DeployedGVKs[i]
-		if fs.FeatureID == configv1beta1.FeatureResources {
+		if fs.FeatureID == libsveltosv1beta1.FeatureResources {
 			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
 			found = true
 		}

@@ -39,6 +39,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -184,7 +185,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   clusterProfileNamePrefix + randomString(),
-				Labels: map[string]string{controllers.ClusterProfileLabelName: clusterProfile.Name},
+				Labels: map[string]string{clusterops.ClusterProfileLabelName: clusterProfile.Name},
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterType: libsveltosv1beta1.ClusterTypeCapi,

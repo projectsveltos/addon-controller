@@ -33,7 +33,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -137,7 +137,7 @@ var _ = Describe("Feature", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -176,7 +176,7 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -190,7 +190,7 @@ var _ = Describe("Feature", func() {
 
 		Byf("Verifying ClusterSummary reports an error")
 		Eventually(func() bool {
-			clusterSummary, err := getClusterSummary(context.TODO(), controllers.ClusterProfileLabelName,
+			clusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
 				clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 			if err != nil ||
 				clusterSummary == nil {

@@ -29,7 +29,7 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -53,7 +53,7 @@ var _ = Describe("Missing Reference", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(controllers.ClusterProfileLabelName,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -81,7 +81,7 @@ var _ = Describe("Missing Reference", func() {
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		By("Verify ClusterSummary reports error about missing reference")
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		Eventually(func() bool {
@@ -94,9 +94,9 @@ var _ = Describe("Missing Reference", func() {
 			}
 
 			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
 					return currentClusterSummary.Status.FeatureSummaries[i].Status ==
-						configv1beta1.FeatureStatusFailedNonRetriable
+						libsveltosv1beta1.FeatureStatusFailedNonRetriable
 				}
 			}
 			return false
@@ -131,13 +131,13 @@ var _ = Describe("Missing Reference", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
 			{kind: "Namespace", name: namespaceName, namespace: "", group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureResources,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
 
 		deleteClusterProfile(clusterProfile)

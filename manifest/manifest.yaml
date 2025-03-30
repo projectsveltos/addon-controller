@@ -4968,6 +4968,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - clustersets
+  - resourcesummaries
   - sets
   verbs:
   - create
@@ -5003,6 +5004,14 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - resourcesummaries/status
+  verbs:
+  - get
+  - list
+  - update
 - apiGroups:
   - source.toolkit.fluxcd.io
   resources:

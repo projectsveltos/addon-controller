@@ -43,6 +43,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 const (
@@ -56,7 +57,7 @@ const (
 	driftDetectionFeatureLabelValue     = "drift-detection"
 )
 
-func getResourceSummaryNamespace() string {
+func getResourceSummaryNamespaceInManagedCluster() string {
 	return projectsveltos
 }
 
@@ -64,8 +65,12 @@ func getDriftDetectionNamespaceInMgmtCluster() string {
 	return projectsveltos
 }
 
-func getResourceSummaryName(clusterSummaryNamespace, clusterSummaryName string) string {
+func getResourceSummaryNameInManagedCluster(clusterSummaryNamespace, clusterSummaryName string) string {
 	return fmt.Sprintf("%s--%s", clusterSummaryNamespace, clusterSummaryName)
+}
+
+func getResourceSummaryNameInManagemntCluster(clusterSummaryName string) string {
+	return clusterSummaryName
 }
 
 func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
@@ -81,16 +86,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 		return err
 	}
 
-	// Sveltos resources are deployed using cluster-admin role.
-	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace,
-		clusterName, "", "", clusterType, logger)
-	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
-		return err
-	}
-
-	err = deployDriftDetectionCRDs(ctx, remoteRestConfig, logger)
+	err = deployDriftDetectionCRDs(ctx, clusterNamespace, clusterName, clusterType,
+		startInMgmtCluster, logger)
 	if err != nil {
 		return err
 	}
@@ -103,7 +100,7 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 			clusterName, "do-not-send-reports", clusterType, patches, logger)
 	}
 
-	return deployDriftDetectionManager(ctx, remoteRestConfig, clusterNamespace,
+	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace,
 		clusterName, "do-not-send-reports", clusterType, patches, logger)
 }
 
@@ -116,18 +113,23 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("clustersummary", applicant)
 	logger.V(logs.LogDebug).Info("deploy resourcesummary")
 
-	// ResourceSummary is a Sveltos resource created in managed clusters.
-	// Sveltos resources are always created using cluster-admin so that admin does not need to be
-	// given such permissions.
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName, "", "",
-		clusterType, logger)
+	clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return err
 	}
 
+	resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, applicant)
+
+	lbls := map[string]string{
+		sveltos_upgrade.ClusterNameLabel:               clusterName,
+		sveltos_upgrade.ClusterTypeLabel:               strings.ToLower(string(clusterType)),
+		libsveltosv1beta1.ClusterSummaryNameLabel:      applicant,
+		libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterNamespace,
+	}
+
 	// Deploy ResourceSummary instance
-	err = deployResourceSummaryInstance(ctx, remoteClient, resources, kustomizeResources,
-		helmResources, clusterNamespace, applicant, driftExclusions, logger)
+	err = deployResourceSummaryInstance(ctx, clusterClient, resources, kustomizeResources, helmResources,
+		resourceSummaryNameInfo.Namespace, resourceSummaryNameInfo.Name, lbls, driftExclusions, logger)
 	if err != nil {
 		return err
 	}
@@ -136,17 +138,34 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	return nil
 }
 
-func deployDriftDetectionCRDs(ctx context.Context, remoteRestConfig *rest.Config, logger logr.Logger) error {
+func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, startInMgmtCluster bool, logger logr.Logger) error {
+
+	// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
+	// this operation is a no-op if the agent is deployed there.
+	if startInMgmtCluster {
+		return nil
+	}
+
+	var err error
+	cacheMgr := clustercache.GetManager()
+	remoteConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterNamespace,
+		clusterName, "", "", clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
+		return err
+	}
+
 	logger.V(logs.LogDebug).Info("deploy debuggingConfiguration CRD")
 	// Deploy DebuggingConfiguration CRD
-	err := deployDebuggingConfigurationCRD(ctx, remoteRestConfig, logger)
+	err = deployDebuggingConfigurationCRD(ctx, remoteConfig, logger)
 	if err != nil {
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary CRD")
 	// Deploy ResourceSummary CRD
-	err = deployResourceSummaryCRD(ctx, remoteRestConfig, logger)
+	err = deployResourceSummaryCRD(ctx, remoteConfig, logger)
 	if err != nil {
 		return err
 	}
@@ -241,10 +260,18 @@ func replaceRegistry(agentYAML, registry string) string {
 	return strings.Replace(agentYAML, oldRegistry, registry, 1)
 }
 
-// deployDriftDetectionManager deploys drift-detection-manager in the managed cluster
-func deployDriftDetectionManager(ctx context.Context, remoteRestConfig *rest.Config,
-	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+// deployDriftDetectionManagerInManagedCluster deploys the drift-detection-manager component within the managed cluster.
+func deployDriftDetectionManagerInManagedCluster(ctx context.Context, clusterNamespace, clusterName, mode string,
+	clusterType libsveltosv1beta1.ClusterType, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+
+	// Sveltos resources are deployed using cluster-admin role.
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, "", "", clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get cluster rest config")
+		return err
+	}
 
 	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in managed cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerYAML())
@@ -284,6 +311,8 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 	return deployDriftDetectionManagerResources(ctx, restConfig, driftDetectionManagerYAML, lbls, patches, logger)
 }
 
+// deployDriftDetectionManagerResources handles drift-detection-component deployment.
+// The restConfig parameter indicates whether to deploy to the management or managed cluster.
 func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.Config,
 	driftDetectionManagerYAML string, lbls map[string]string, patches []libsveltosv1beta1.Patch,
 	logger logr.Logger) error {
@@ -368,43 +397,27 @@ func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig
 	return nil
 }
 
-func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,
+func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Client,
 	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
-	helmResources []libsveltosv1beta1.HelmResources, clusterNamespace, applicant string,
+	helmResources []libsveltosv1beta1.HelmResources, namespace, name string, lbls map[string]string,
 	driftExclusions []configv1beta1.DriftExclusion, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
 
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: getResourceSummaryNamespace(),
-		},
-	}
-	err := remoteClient.Create(ctx, ns)
-	if err != nil && !apierrors.IsAlreadyExists(err) {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to create namespace %s: %v", ns.Name, err))
-		return err
-	}
-
 	patches := transformDriftExclusionsToPatches(driftExclusions)
 
 	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-	err = remoteClient.Get(ctx,
-		types.NamespacedName{
-			Namespace: getResourceSummaryNamespace(),
-			Name:      getResourceSummaryName(clusterNamespace, applicant)},
+	err := clusterClient.Get(ctx,
+		types.NamespacedName{Namespace: namespace, Name: name},
 		currentResourceSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present. creating it.")
 			toDeployResourceSummary := &libsveltosv1beta1.ResourceSummary{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      getResourceSummaryName(clusterNamespace, applicant),
-					Namespace: getResourceSummaryNamespace(),
-					Labels: map[string]string{
-						libsveltosv1beta1.ClusterSummaryNameLabel:      applicant,
-						libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterNamespace,
-					},
+					Name:      name,
+					Namespace: namespace,
+					Labels:    lbls,
 				},
 			}
 			if resources != nil {
@@ -418,7 +431,7 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 			}
 			toDeployResourceSummary.Spec.Patches = patches
 
-			return remoteClient.Create(ctx, toDeployResourceSummary)
+			return clusterClient.Create(ctx, toDeployResourceSummary)
 		}
 		return err
 	}
@@ -436,11 +449,10 @@ func deployResourceSummaryInstance(ctx context.Context, remoteClient client.Clie
 		currentResourceSummary.Labels = map[string]string{}
 	}
 	currentResourceSummary.Spec.Patches = patches
-	currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNameLabel] = applicant
-	currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel] = clusterNamespace
+	currentResourceSummary.Labels = lbls
 
 	logger.V(logsettings.LogDebug).Info("resourceSummary instance already present. updating it.")
-	return remoteClient.Update(ctx, currentResourceSummary)
+	return clusterClient.Update(ctx, currentResourceSummary)
 }
 
 // transformDriftExclusionPathsToPatches transforms a DriftExclusion instance to a Patch instance.
@@ -482,11 +494,21 @@ func transformDriftExclusionsToPatches(driftExclusions []configv1beta1.DriftExcl
 	return patches
 }
 
-func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Client,
-	clusterNamespace, applicant string, logger logr.Logger) error {
+func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clusterName, applicant string,
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+
+	// ResourceSummaries reside in the same cluster as the drift detection component.
+	// This function dynamically selects the appropriate Kubernetes client:
+	// - Management cluster's client if drift detection is deployed there.
+	// - A managed cluster's client (obtained via clusterproxy) if drift detection is in a managed cluster.
+
+	clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
 
 	resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
-	err := remoteClient.Get(ctx,
+	err = clusterClient.Get(ctx,
 		types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -497,12 +519,10 @@ func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Cl
 	}
 
 	logger.V(logs.LogDebug).Info("unDeploy resourceSummary instance")
+
+	resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, applicant)
 	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-	err = remoteClient.Get(ctx,
-		types.NamespacedName{
-			Namespace: getResourceSummaryNamespace(),
-			Name:      getResourceSummaryName(clusterNamespace, applicant)},
-		currentResourceSummary)
+	err = clusterClient.Get(ctx, resourceSummaryNameInfo, currentResourceSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present.")
@@ -513,7 +533,7 @@ func unDeployResourceSummaryInstance(ctx context.Context, remoteClient client.Cl
 		return err
 	}
 
-	return remoteClient.Delete(ctx, currentResourceSummary)
+	return clusterClient.Delete(ctx, currentResourceSummary)
 }
 
 // Generate unique name for drift-detection-manager
@@ -704,4 +724,39 @@ func addTemplateSpecLabels(u *unstructured.Unstructured, lbls map[string]string)
 	var uDeployment unstructured.Unstructured
 	uDeployment.SetUnstructuredContent(content)
 	return &uDeployment, nil
+}
+
+// ResourceSummaries reside in the same cluster as the drift detection component.
+// This function dynamically selects the appropriate Kubernetes client:
+// - Management cluster's client if drift detection is deployed there.
+// - A managed cluster's client (obtained via clusterproxy) if drift detection is in a managed cluster.
+func getResourceSummaryClient(ctx context.Context, clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (client.Client, error) {
+
+	if getAgentInMgmtCluster() {
+		return getManagementClusterClient(), nil
+	}
+
+	// ResourceSummary is a Sveltos resource created in managed clusters.
+	// Sveltos resources are always created using cluster-admin so that admin does not need to be
+	// given such permissions.
+	return clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, "", "", clusterType, logger)
+}
+
+// Determines the NamespacedName for the ResourceSummary based on the drift detection component's deployment location.
+// If deployed in the management cluster, it uses the cluster's namespace and a management-specific naming scheme.
+// If deployed in a managed cluster, it uses the projectsveltos namespace and a managed-cluster-specific naming scheme.
+func getResourceSummaryNameInfo(clusterNamespace, clusterSummaryName string) types.NamespacedName {
+	var resourceSummaryNamespace, resourceSummaryName string
+
+	if getAgentInMgmtCluster() {
+		resourceSummaryNamespace = clusterNamespace
+		resourceSummaryName = getResourceSummaryNameInManagemntCluster(clusterSummaryName)
+	} else {
+		resourceSummaryNamespace = getResourceSummaryNamespaceInManagedCluster()
+		resourceSummaryName = getResourceSummaryNameInManagedCluster(clusterNamespace, clusterSummaryName)
+	}
+
+	return types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummaryName}
 }

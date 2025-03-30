@@ -39,7 +39,7 @@ import (
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
-func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey, version string,
+func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, agentInMgmtCluster bool, shardkey, version string,
 	logger logr.Logger) {
 
 	const interval = 10 * time.Second
@@ -54,7 +54,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
-			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)
+			err = collectResourceSummariesFromCluster(ctx, c, agentInMgmtCluster, cluster, version, logger)
 			if err != nil {
 				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
 					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
@@ -67,7 +67,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 	}
 }
 
-func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
+func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, agentInMgmtCluster bool,
 	cluster *corev1.ObjectReference, version string, logger logr.Logger) error {
 
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
@@ -87,16 +87,16 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	// Use cluster-admin role to collect Sveltos resources from managed clusters
-	var remoteClient client.Client
-	remoteClient, err = clusterproxy.GetKubernetesClient(ctx, c, cluster.Namespace, cluster.Name, "", "",
+	//  ResourceSummary location depends on drift-detection-manager: management cluster if it's running there,
+	// otherwise managed cluster.
+	clusterClient, err := getResourceSummaryClient(ctx, cluster.Namespace, cluster.Name,
 		clusterproxy.GetClusterType(clusterRef), logger)
 	if err != nil {
 		return err
 	}
 
 	var installed bool
-	installed, err = isResourceSummaryInstalled(ctx, remoteClient)
+	installed, err = isResourceSummaryInstalled(ctx, clusterClient)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
 		return err
@@ -106,7 +106,9 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, remoteClient, version, logger) {
+	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
+		cluster.Name, clusterproxy.GetClusterType(clusterRef), agentInMgmtCluster, logger) {
+
 		msg := "compatibility checks failed"
 		logger.V(logs.LogDebug).Info(msg)
 		return errors.New(msg)
@@ -114,7 +116,8 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")
 	rsList := libsveltosv1beta1.ResourceSummaryList{}
-	err = remoteClient.List(ctx, &rsList)
+
+	err = clusterClient.List(ctx, &rsList)
 	if err != nil {
 		return err
 	}
@@ -129,7 +132,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client,
 		}
 		if rs.Status.ResourcesChanged || rs.Status.HelmResourcesChanged || rs.Status.KustomizeResourcesChanged {
 			// process resourceSummary
-			err = processResourceSummary(ctx, c, remoteClient, rs, l)
+			err = processResourceSummary(ctx, clusterClient, rs, l)
 			if err != nil {
 				return err
 			}
@@ -154,7 +157,10 @@ func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, err
 	return true, nil
 }
 
-func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
+// clusterClient points to the cluster where ResourceSummary is. That can be
+// the management cluster if running in agentless mode or the managed cluster
+// otherwise
+func processResourceSummary(ctx context.Context, clusterClient client.Client,
 	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
 	if rs.Labels == nil {
@@ -178,8 +184,8 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterSummary := &configv1beta1.ClusterSummary{}
-		err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
-			clusterSummary)
+		err := getManagementClusterClient().Get(ctx,
+			types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, clusterSummary)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				logger.V(logs.LogInfo).Info("clusterSummary not found. Nothing to do.")
@@ -222,7 +228,7 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 			}
 		}
 
-		err = c.Status().Update(ctx, clusterSummary)
+		err = getManagementClusterClient().Status().Update(ctx, clusterSummary)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update ClusterSummary status: %v", err))
 			return err
@@ -234,7 +240,7 @@ func processResourceSummary(ctx context.Context, c, remoteClient client.Client,
 		return err
 	}
 
-	return resetResourceSummaryStatus(ctx, remoteClient, rs, logger)
+	return resetResourceSummaryStatus(ctx, clusterClient, rs, logger)
 }
 
 func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,

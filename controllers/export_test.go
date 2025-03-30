@@ -153,6 +153,7 @@ var (
 var (
 	DeployDebuggingConfigurationCRD                  = deployDebuggingConfigurationCRD
 	DeployResourceSummaryCRD                         = deployResourceSummaryCRD
+	DeployDriftDetectionManagerInCluster             = deployDriftDetectionManagerInCluster
 	DeployResourceSummaryInCluster                   = deployResourceSummaryInCluster
 	DeployResourceSummaryInstance                    = deployResourceSummaryInstance
 	UpdateDeployedGroupVersionKind                   = updateDeployedGroupVersionKind
@@ -162,8 +163,8 @@ var (
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
 	TransformDriftExclusionsToPatches                = transformDriftExclusionsToPatches
 
-	GetResourceSummaryNamespace = getResourceSummaryNamespace
-	GetResourceSummaryName      = getResourceSummaryName
+	GetResourceSummaryNamespaceInManagedCluster = getResourceSummaryNamespaceInManagedCluster
+	GetResourceSummaryNameInManagedCluster      = getResourceSummaryNameInManagedCluster
 )
 
 var (

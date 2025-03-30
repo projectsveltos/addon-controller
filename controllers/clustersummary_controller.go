@@ -90,7 +90,6 @@ type ClusterSummaryReconciler struct {
 	Scheme               *runtime.Scheme
 	Logger               logr.Logger
 	ReportMode           ReportMode
-	AgentInMgmtCluster   bool   // if true, indicates drift-detection-manager needs to be started in the management cluster
 	ShardKey             string // when set, only clusters matching the ShardKey will be reconciled
 	Version              string
 	Deployer             deployer.DeployerInterface
@@ -103,6 +102,9 @@ type ClusterSummaryReconciler struct {
 	ctrl              controller.Controller
 }
 
+// If the drift-detection component is deployed in the management cluster, the addon-controller will deploy ResourceSummaries within the same cluster,
+// thus requiring the necessary permissions.
+
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clustersummaries/finalizers,verbs=update;patch
@@ -110,6 +112,8 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterconfigurations/status,verbs=get;list;update
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports,verbs=get;list;watch
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports/status,verbs=get;list;update
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=resourcesummaries,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=resourcesummaries/status,verbs=get;list;update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
@@ -431,10 +435,11 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	if r.ReportMode == CollectFromManagementCluster {
-		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, r.Version, mgr.GetLogger())
+		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), getAgentInMgmtCluster(), r.ShardKey,
+			r.Version, mgr.GetLogger())
 	}
 
-	if r.AgentInMgmtCluster {
+	if getAgentInMgmtCluster() {
 		go removeStaleDriftDetectionManager(ctx, r.Logger)
 	}
 
@@ -1135,14 +1140,8 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 	// ResourceSummary is a Sveltos resource deployed in managed clusters.
 	// Such resources are always created, removed using cluster-admin roles.
 	cs := clusterSummaryScope.ClusterSummary
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, r.Client, cs.Spec.ClusterNamespace,
-		cs.Spec.ClusterName, "", "", cs.Spec.ClusterType, logger)
-	if err != nil {
-		return err
-	}
-
-	err = unDeployResourceSummaryInstance(ctx, remoteClient, cs.Spec.ClusterNamespace,
-		cs.Name, logger)
+	err := unDeployResourceSummaryInstance(ctx, cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+		cs.Name, cs.Spec.ClusterType, logger)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

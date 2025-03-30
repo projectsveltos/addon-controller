@@ -164,7 +164,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 	// Getting here means either feature failed to be deployed or configuration has changed.
 	// Feature must be (re)deployed.
 	options := deployer.Options{HandlerOptions: map[string]string{}}
-	if r.AgentInMgmtCluster {
+	if getAgentInMgmtCluster() {
 		options.HandlerOptions[driftDetectionInMgtmCluster] = "management"
 	}
 

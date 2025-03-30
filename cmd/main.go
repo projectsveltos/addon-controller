@@ -181,6 +181,8 @@ func main() {
 	controllers.SetLuaConfigMap(luaConfigMap)
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 	controllers.SetDriftDetectionRegistry(registry)
+	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
@@ -495,7 +497,6 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		ShardKey:             shardKey,
 		Version:              version,
 		ReportMode:           reportMode,
-		AgentInMgmtCluster:   agentInMgmtCluster,
 		Deployer:             d,
 		ClusterMap:           make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),

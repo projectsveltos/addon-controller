@@ -248,7 +248,7 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 
 .PHONY: fv-agentless
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml
+	$(KUBECTL) apply -f test/drift-detection-mgmt_cluster_common_manifest.yaml
 	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml
 	cp manifest/deployment-agentless.yaml test/addon-controller-deployment-agentless.yaml
 	$(KUBECTL) apply -f test/addon-controller-deployment-agentless.yaml
@@ -431,8 +431,11 @@ drift-detection-manager:
 	@echo "Downloading drift detection manager yaml"
 	$(eval digest :=$(call get-digest))
 	@echo "image digest is $(digest)"
-	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager.yaml
-	curl -L https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
 	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
 	cd pkg/drift-detection; go generate
+	@echo "Downloading drift detection manager common yaml for agentless fv"
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/drift-detection-mgmt_cluster_common_manifest.yaml
+	

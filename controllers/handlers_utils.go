@@ -1977,6 +1977,12 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 	// or viceversa) reconcile.
 	config += fmt.Sprintf("%v", clusterProfileSpec.SyncMode)
 
+	// When using ContinuousWithDriftDetection in agentless mode, ResourceSummary instances are now managed in the management cluster.
+	// This addition ensures the ClusterSummary is redeployed due to the change in deployment location.
+	if clusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection && getAgentInMgmtCluster() {
+		config += ("agentless")
+	}
+
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
 	config += fmt.Sprintf("%v", clusterProfileSpec.Reloader)

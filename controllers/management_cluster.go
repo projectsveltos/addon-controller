@@ -32,6 +32,7 @@ var (
 	luaConfigMap            string
 	capiOnboardAnnotation   string
 	driftDetectionRegistry  string
+	agentInMgmtCluster      bool
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config) {
@@ -49,6 +50,14 @@ func SetLuaConfigMap(name string) {
 
 func SetCAPIOnboardAnnotation(key string) {
 	capiOnboardAnnotation = key
+}
+
+func SetDriftDetectionRegistry(reg string) {
+	driftDetectionRegistry = reg
+}
+
+func SetAgentInMgmtCluster(isInMgmtCluster bool) {
+	agentInMgmtCluster = isInMgmtCluster
 }
 
 func getManagementClusterConfig() *rest.Config {
@@ -71,8 +80,12 @@ func getCAPIOnboardAnnotation() string {
 	return capiOnboardAnnotation
 }
 
-func SetDriftDetectionRegistry(reg string) {
-	driftDetectionRegistry = reg
+func getDriftDetectionRegistry() string {
+	return driftDetectionRegistry
+}
+
+func getAgentInMgmtCluster() bool {
+	return agentInMgmtCluster
 }
 
 func collectDriftDetectionConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {
@@ -99,8 +112,4 @@ func collectLuaConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {
 	}
 
 	return configMap, nil
-}
-
-func getDriftDetectionRegistry() string {
-	return driftDetectionRegistry
 }

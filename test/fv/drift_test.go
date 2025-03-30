@@ -297,7 +297,11 @@ reportsController:
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.FeatureHelm,
 			nil, charts)
 
-		verifyResourceSummary(workloadClient, clusterSummary)
+		if isAgentLessMode() {
+			verifyResourceSummary(k8sClient, clusterSummary)
+		} else {
+			verifyResourceSummary(workloadClient, clusterSummary)
+		}
 
 		// Wait to make sure a watcher is started in the managed cluster
 		const sleepTime = 30
@@ -485,21 +489,30 @@ func isDeplLabelCorrect(lbls map[string]string, key, value string) bool {
 
 func verifyResourceSummary(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {
 	Byf("Verify ResourceSummary is present")
+
+	lbls := map[string]string{
+		libsveltosv1beta1.ClusterSummaryNameLabel:      clusterSummary.Name,
+		libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
+	}
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels(lbls),
+	}
+
 	Eventually(func() bool {
-		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-		resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
-		err := c.Get(context.TODO(),
-			types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
-			currentResourceSummary)
-		return err == nil
+		resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
+		err := c.List(context.TODO(), resourceSummaries, listOptions...)
+		if err != nil {
+			return false
+		}
+		return len(resourceSummaries.Items) == 1
 	}, timeout, pollingInterval).Should(BeTrue())
 
-	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-	resourceSummaryName := fmt.Sprintf("%s--%s", clusterSummary.Namespace, clusterSummary.Name)
-	err := c.Get(context.TODO(),
-		types.NamespacedName{Namespace: "projectsveltos", Name: resourceSummaryName},
-		currentResourceSummary)
-	Expect(err).To(BeNil())
+	resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
+	Expect(c.List(context.TODO(), resourceSummaries, listOptions...)).To(Succeed())
+	Expect(len(resourceSummaries.Items)).To(Equal(1))
+
+	currentResourceSummary := &resourceSummaries.Items[0]
 
 	deploymentKind := "Deployment"
 

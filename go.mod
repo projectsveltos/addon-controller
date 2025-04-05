@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v28.0.2+incompatible
+	github.com/docker/cli v28.0.4+incompatible
 	github.com/fluxcd/pkg/http/fetch v0.15.0
 	github.com/fluxcd/pkg/tar v0.11.0
 	github.com/fluxcd/source-controller/api v1.5.0
@@ -14,7 +14,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/onsi/ginkgo/v2 v2.23.3
-	github.com/onsi/gomega v1.36.3
+	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.51.2-0.20250329132248-33ded0c31199
 	github.com/prometheus/client_golang v1.21.1

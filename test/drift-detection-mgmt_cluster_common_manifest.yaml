@@ -20,19 +20,12 @@ rules:
   - ""
   resources:
   - configmaps
+  - secrets
   verbs:
   - create
   - get
   - list
   - update
-  - watch
-- apiGroups:
-  - '*'
-  resources:
-  - '*'
-  verbs:
-  - get
-  - list
   - watch
 - apiGroups:
   - authentication.k8s.io
@@ -80,6 +73,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - sveltosclusters
+  - sveltosclusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cluster.x-k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

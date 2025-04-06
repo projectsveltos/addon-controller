@@ -51,11 +51,13 @@ func isReloaderInstalled(ctx context.Context, c client.Client) (bool, error) {
 	return true, nil
 }
 
-// removeReloaderInstance removes Reloader instance from the managed cluster
-func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
+// removeReloaderInstance removes Reloader instance from the management or the managed cluster
+// If Sveltos agents are deployed in the management cluster, Reloader instances are deployed to
+// the management cluster. Otherwise to the managed cluster.
+func removeReloaderInstance(ctx context.Context, reloaderClient client.Client,
 	clusterProfileName string, feature configv1beta1.FeatureID, logger logr.Logger) error {
 
-	installed, err := isReloaderInstalled(ctx, remoteClient)
+	installed, err := isReloaderInstalled(ctx, reloaderClient)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if Reloader is installed %v", err))
 		return err
@@ -65,7 +67,7 @@ func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
 		return nil
 	}
 
-	reloader, err := getReloaderInstance(ctx, remoteClient, clusterProfileName,
+	reloader, err := getReloaderInstance(ctx, reloaderClient, clusterProfileName,
 		feature, textlogger.NewLogger(textlogger.NewConfig()))
 	if err != nil {
 		return err
@@ -77,16 +79,18 @@ func removeReloaderInstance(ctx context.Context, remoteClient client.Client,
 
 	logger = logger.WithValues("reloader", reloader.Name)
 	logger.V(logs.LogDebug).Info("deleting reloader")
-	return remoteClient.Delete(ctx, reloader)
+	return reloaderClient.Delete(ctx, reloader)
 }
 
-// deployReloaderInstance creates/updates Reloader instance to the managed cluster.
+// deployReloaderInstance creates/updates Reloader instance to the management or managed cluster.
+// If Sveltos agents are deployed in the management cluster, Reloader instances are deployed to
+// the management cluster. Otherwise to the managed cluster.
 // Any Deployment, StatefulSet, DaemonSet instance deployed by Sveltos and mounting either
 // a ConfigMap or Secret as volume, need to be reloaded (via rolling upgrade) when mounted
 // resources are modified.
 // Reloader instance contains list of Deployment, StatefulSet, DaemonSet instances sveltos-agent needs
 // to watch (along with mounted ConfigMaps/Secrets) to detect when is time to trigger a rolling upgrade.
-func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
+func deployReloaderInstance(ctx context.Context, reloaderClient client.Client,
 	clusterProfileName string, feature configv1beta1.FeatureID, resources []corev1.ObjectReference,
 	logger logr.Logger) error {
 
@@ -103,7 +107,7 @@ func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
 		}
 	}
 
-	reloader, err := getReloaderInstance(ctx, remoteClient, clusterProfileName, feature, logger)
+	reloader, err := getReloaderInstance(ctx, reloaderClient, clusterProfileName, feature, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get reloader instance: %v", err))
 		return err
@@ -111,11 +115,11 @@ func deployReloaderInstance(ctx context.Context, remoteClient client.Client,
 
 	if reloader == nil {
 		// Reloader is not present in the managed cluster
-		return createReloaderInstance(ctx, remoteClient, clusterProfileName, feature, reloaderInfo)
+		return createReloaderInstance(ctx, reloaderClient, clusterProfileName, feature, reloaderInfo)
 	}
 
 	reloader.Spec.ReloaderInfo = reloaderInfo
-	return remoteClient.Update(ctx, reloader)
+	return reloaderClient.Update(ctx, reloader)
 }
 
 // createReloaderInstance creates Reloader instance to managed cluster.
@@ -193,6 +197,24 @@ func watchForRollingUpgrade(resource *corev1.ObjectReference) bool {
 	}
 }
 
+// Reloader instances reside in the same cluster as the sveltos-agent component.
+// This function dynamically selects the appropriate Kubernetes client:
+// - Management cluster's client if Sveltos agents are deployed there.
+// - A managed cluster's client (obtained via clusterproxy) if Sveltos agents are in a managed cluster.
+func getReloaderClient(ctx context.Context, clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (client.Client, error) {
+
+	if getAgentInMgmtCluster() {
+		return getManagementClusterClient(), nil
+	}
+
+	// ResourceSummary is a Sveltos resource created in managed clusters.
+	// Sveltos resources are always created using cluster-admin so that admin does not need to be
+	// given such permissions.
+	return clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, "", "", clusterType, logger)
+}
+
 // updateReloaderWithDeployedResources updates corresponding Reloader instance in the
 // managed cluster.
 // Reload indicates whether reloader instance needs to be removed, which can happen
@@ -204,9 +226,10 @@ func updateReloaderWithDeployedResources(ctx context.Context, c client.Client,
 
 	// Ignore admin. Deploying Reloaders must be done as Sveltos.
 	// There is no need to ask tenant to be granted Reloader permissions
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType, logger)
+	reloaderClient, err := getReloaderClient(ctx, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get reloader client: %v", err))
 		return err
 	}
 
@@ -214,11 +237,11 @@ func updateReloaderWithDeployedResources(ctx context.Context, c client.Client,
 	if !clusterSummary.DeletionTimestamp.IsZero() ||
 		!clusterSummary.Spec.ClusterProfileSpec.Reloader {
 
-		return removeReloaderInstance(ctx, remoteClient, clusterProfileOwnerRef.Name,
+		return removeReloaderInstance(ctx, reloaderClient, clusterProfileOwnerRef.Name,
 			feature, logger)
 	}
 
-	return deployReloaderInstance(ctx, remoteClient, clusterProfileOwnerRef.Name,
+	return deployReloaderInstance(ctx, reloaderClient, clusterProfileOwnerRef.Name,
 		feature, resources, logger)
 }
 

@@ -300,6 +300,7 @@ reportsController:
 		if isAgentLessMode() {
 			verifyResourceSummary(k8sClient, clusterSummary)
 		} else {
+			// Verify ResourceSummary in the managed cluster
 			verifyResourceSummary(workloadClient, clusterSummary)
 		}
 

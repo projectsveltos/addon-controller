@@ -39,7 +39,7 @@ import (
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
-func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, agentInMgmtCluster bool, shardkey, version string,
+func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey, version string,
 	logger logr.Logger) {
 
 	const interval = 10 * time.Second
@@ -54,7 +54,7 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, ag
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
-			err = collectResourceSummariesFromCluster(ctx, c, agentInMgmtCluster, cluster, version, logger)
+			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)
 			if err != nil {
 				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
 					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
@@ -67,8 +67,8 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, ag
 	}
 }
 
-func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, agentInMgmtCluster bool,
-	cluster *corev1.ObjectReference, version string, logger logr.Logger) error {
+func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
+	version string, logger logr.Logger) error {
 
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
 	clusterRef := &corev1.ObjectReference{
@@ -107,7 +107,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, a
 	}
 
 	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
-		cluster.Name, clusterproxy.GetClusterType(clusterRef), agentInMgmtCluster, logger) {
+		cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
 
 		msg := "compatibility checks failed"
 		logger.V(logs.LogDebug).Info(msg)

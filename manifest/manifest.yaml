@@ -4968,6 +4968,7 @@ rules:
   - lib.projectsveltos.io
   resources:
   - clustersets
+  - reloaders
   - resourcesummaries
   - sets
   verbs:

@@ -135,38 +135,65 @@ var _ = Describe("Reloader", func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying Reloader is present in the managed cluster")
-		currentReloader := &libsveltosv1beta1.Reloader{}
-		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1beta1.FeatureResources)},
-			currentReloader)).To(Succeed())
-		Byf("Verifying Reloader list Deployment")
-		Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
-		Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
-			libsveltosv1beta1.ReloaderInfo{
-				Kind:      "Deployment",
-				Namespace: ns,
-				Name:      deploymentName,
-			},
-		))
+		if isAgentLessMode() {
+			Byf("Verifying Reloader is present in the management cluster")
+			currentReloader := &libsveltosv1beta1.Reloader{}
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: getReloaderName(clusterProfile.Name)},
+				currentReloader)).To(Succeed())
+			Byf("Verifying Reloader list Deployment")
+			Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
+			Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
+				libsveltosv1beta1.ReloaderInfo{
+					Kind:      "Deployment",
+					Namespace: ns,
+					Name:      deploymentName,
+				},
+			))
+		} else {
+			Byf("Verifying Reloader is present in the managed cluster")
+			currentReloader := &libsveltosv1beta1.Reloader{}
+			Expect(workloadClient.Get(context.TODO(),
+				types.NamespacedName{Name: getReloaderName(clusterProfile.Name)},
+				currentReloader)).To(Succeed())
+			Byf("Verifying Reloader list Deployment")
+			Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
+			Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
+				libsveltosv1beta1.ReloaderInfo{
+					Kind:      "Deployment",
+					Namespace: ns,
+					Name:      deploymentName,
+				},
+			))
+		}
 
 		deleteClusterProfile(clusterProfile)
 
-		Byf("Verifying Reloader is removed from the workload cluster")
-		Eventually(func() bool {
-			currentReloader := &libsveltosv1beta1.Reloader{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Name: getReloaderName(clusterProfile.Name, configv1beta1.FeatureResources)},
-				currentReloader)
-			return err != nil && apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
+		if isAgentLessMode() {
+			Byf("Verifying Reloader is removed from the management cluster")
+			Eventually(func() bool {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				err = k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: getReloaderName(clusterProfile.Name)},
+					currentReloader)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		} else {
+			Byf("Verifying Reloader is removed from the workload cluster")
+			Eventually(func() bool {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				err = workloadClient.Get(context.TODO(),
+					types.NamespacedName{Name: getReloaderName(clusterProfile.Name)},
+					currentReloader)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
 	})
 })
 
 // getReloaderName returns the Reloader's name
-func getReloaderName(clusterProfileName string,
-	feature configv1beta1.FeatureID) string {
-
+func getReloaderName(clusterProfileName string) string {
+	feature := configv1beta1.FeatureResources
 	h := sha256.New()
 	fmt.Fprintf(h, "%s--%s", clusterProfileName, feature)
 	hash := h.Sum(nil)

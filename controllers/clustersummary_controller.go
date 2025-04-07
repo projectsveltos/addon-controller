@@ -114,6 +114,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterreports/status,verbs=get;list;update
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=resourcesummaries,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=resourcesummaries/status,verbs=get;list;update
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=reloaders,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
 //+kubebuilder:rbac:groups=controlplane.cluster.x-k8s.io,resources=kubeadmcontrolplanes,verbs=get;watch;list
@@ -435,8 +436,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	// Later on, in main, we detect that and if CAPI is present WatchForCAPI will be invoked.
 
 	if r.ReportMode == CollectFromManagementCluster {
-		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), getAgentInMgmtCluster(), r.ShardKey,
-			r.Version, mgr.GetLogger())
+		go collectAndProcessResourceSummaries(ctx, mgr.GetClient(), r.ShardKey, r.Version, mgr.GetLogger())
 	}
 
 	if getAgentInMgmtCluster() {

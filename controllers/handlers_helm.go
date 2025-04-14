@@ -2144,7 +2144,28 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 			return nil, err
 		}
 
-		resources = append(resources, policy)
+		// If object is corev1.List, expand it here
+		if policy.GetKind() == "List" && policy.GetAPIVersion() == "v1" {
+			list := &corev1.List{}
+			err := runtime.DefaultUnstructuredConverter.FromUnstructured(policy.Object, list)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, item := range list.Items {
+				// Convert raw extension to unstructured
+				unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&item)
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("failed to get unstructure from corev1.List %.100s", item))
+					return nil, err
+				}
+				u := &unstructured.Unstructured{}
+				u.SetUnstructuredContent(unstructuredObj)
+				resources = append(resources, u)
+			}
+		} else {
+			resources = append(resources, policy)
+		}
 	}
 
 	return resources, nil

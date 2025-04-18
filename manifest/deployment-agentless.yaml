@@ -21,10 +21,11 @@ spec:
       - args:
         - --diagnostics-address=:8443
         - --report-mode=0
-        - --agent-in-mgmt-cluster
+        - --shard-key=
         - --capi-onboard-annotation=
         - --v=5
         - --version=main
+        - --agent-in-mgmt-cluster=true
         command:
         - /manager
         env:

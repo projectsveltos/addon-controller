@@ -22,9 +22,9 @@ while IFS= read -r line; do
     fi
 
     if [[ $in_section == true ]]; then
-        # Replace "shard-key=" with "- --agent-in-mgmt-cluster'"
-        if [[ $line == *"shard-key"* ]]; then
-            line=$(echo "$line" | sed "s/shard-key=/agent-in-mgmt-cluster/")
+        # Replace "agent-in-mgmt-cluster="false with "- --agent-in-mgmt-cluster=true'"
+        if [[ $line == *"agent-in-mgmt-cluster"* ]]; then
+            line=$(echo "$line" | sed "s/agent-in-mgmt-cluster=false/agent-in-mgmt-cluster=true/")
         fi
 
         # Write the line to the current section file

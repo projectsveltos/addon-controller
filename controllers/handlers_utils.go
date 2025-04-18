@@ -312,7 +312,6 @@ func updateResource(ctx context.Context, dr dynamic.ResourceInterface,
 		}
 		return nil, err
 	}
-
 	return updatedObject, applySubresources(ctx, dr, object, subresources, &options)
 }
 
@@ -480,9 +479,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, fmt.Errorf("profile can only deploy resource in same namespace in the management cluster")
 		}
 
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
-			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
-
 		resource, policyHash := getResource(policy, hasIgnoreConfigurationDriftAnnotation(policy), referencedObject, profileTier, featureID, logger)
 
 		// If policy is namespaced, create namespace if not already existing
@@ -542,9 +538,12 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			}
 		}
 
-		policy, err = updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
+
+		updatedPolicy, err := updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
 		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
-		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, policy, resource))
+		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, updatedPolicy, resource))
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("%v", err)

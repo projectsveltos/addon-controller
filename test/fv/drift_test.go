@@ -450,7 +450,7 @@ func isAgentLessMode() bool {
 	Expect(len(addonControllerDepl.Spec.Template.Spec.Containers)).To(Equal(1))
 
 	for i := range addonControllerDepl.Spec.Template.Spec.Containers[0].Args {
-		if strings.Contains(addonControllerDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster") {
+		if strings.Contains(addonControllerDepl.Spec.Template.Spec.Containers[0].Args[i], "agent-in-mgmt-cluster=true") {
 			By("Addon-controller in agentless mode")
 			return true
 		}

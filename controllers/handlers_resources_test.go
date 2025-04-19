@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -150,9 +149,16 @@ var _ = Describe("HandlersResource", func() {
 
 		currentClusterRole := &rbacv1.ClusterRole{}
 		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)).To(Succeed())
-		Expect(currentClusterRole.OwnerReferences).ToNot(BeNil())
-		Expect(len(currentClusterRole.OwnerReferences)).To(Equal(1))
-		Expect(util.IsOwnedByObject(currentClusterRole, clusterProfile)).To(BeTrue())
+		// OwnerReference is not set anymore
+		Expect(currentClusterRole.OwnerReferences).To(BeNil())
+		Expect(currentClusterRole.Annotations).ToNot(BeNil())
+		v, ok := currentClusterRole.Annotations[deployer.OwnerName]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(clusterProfile.Name))
+
+		v, ok = currentClusterRole.Annotations[deployer.OwnerKind]
+		Expect(ok).To(BeTrue())
+		Expect(v).To(Equal(configv1beta1.ClusterProfileKind))
 	})
 
 	It("unDeployResources removes all ClusterRole and Role created by a ClusterSummary", func() {

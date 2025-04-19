@@ -479,7 +479,8 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return nil, fmt.Errorf("profile can only deploy resource in same namespace in the management cluster")
 		}
 
-		resource, policyHash := getResource(policy, hasIgnoreConfigurationDriftAnnotation(policy), referencedObject, profileTier, featureID, logger)
+		resource, policyHash := getResource(policy, hasIgnoreConfigurationDriftAnnotation(policy), referencedObject,
+			profile, profileTier, featureID, logger)
 
 		// If policy is namespaced, create namespace if not already existing
 		err = createNamespace(ctx, destClient, clusterSummary, policy.GetNamespace())
@@ -514,8 +515,8 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			return reports, err
 		}
 
-		addMetadata(policy, resourceInfo.GetResourceVersion(), profile,
-			clusterSummary.Spec.ClusterProfileSpec.ExtraLabels, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
+		addMetadata(policy, resourceInfo.GetResourceVersion(), clusterSummary.Spec.ClusterProfileSpec.ExtraLabels,
+			clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
 		if deployingToMgmtCluster {
 			// When deploying resources in the management cluster, just setting (Cluster)Profile as OwnerReference is
@@ -531,7 +532,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
 				// No action required. Even though ClusterProfile has higher priority, it is in DryRun
 				// mode. So what's already deployed stays as it is.
-				err = requeueAllOldOwners(ctx, resourceInfo.GetOwnerReferences(), featureID, clusterSummary, logger)
+				err = requeueAllOldOwners(ctx, resourceInfo, featureID, clusterSummary, logger)
 				if err != nil {
 					return reports, err
 				}
@@ -576,7 +577,7 @@ func handleDeployUnstructuredErrors(conflictErrorMsg, errorMsg string, clusterSu
 	return nil
 }
 
-func addMetadata(policy *unstructured.Unstructured, resourceVersion string, profile client.Object,
+func addMetadata(policy *unstructured.Unstructured, resourceVersion string,
 	extraLabels, extraAnnotations map[string]string) {
 
 	// The canDeployResource function validates if objects can be deployed. It achieves this by
@@ -592,7 +593,8 @@ func addMetadata(policy *unstructured.Unstructured, resourceVersion string, prof
 	// This approach ensures that conflict resolution decisions made by canDeployResource remain valid during the policy update.
 	policy.SetResourceVersion(resourceVersion)
 
-	k8s_utils.AddOwnerReference(policy, profile)
+	// Replaced OwnerReference with annotations
+	// k8s_utils.AddOwnerReference(policy, profile)
 
 	addExtraLabels(policy, extraLabels)
 	addExtraAnnotations(policy, extraAnnotations)
@@ -601,10 +603,23 @@ func addMetadata(policy *unstructured.Unstructured, resourceVersion string, prof
 // requeueAllOldOwners gets the list of all ClusterProfile/Profile instances currently owning the resource in the
 // managed cluster (profiles). For each one, it finds the corresponding ClusterSummary and via requeueOldOwner reset
 // the Status so a new reconciliation happens.
-func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectReference,
+func requeueAllOldOwners(ctx context.Context, resourceInfo *deployer.ResourceInfo,
 	featureID configv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
+
+	profileOwners := resourceInfo.GetOwnerReferences()
+
+	annotations := resourceInfo.CurrentResource.GetAnnotations()
+
+	// Since release v0.52.1 we replaced OwnerReference with annotations
+	if annotations != nil && annotations[deployer.OwnerName] != "" {
+		profileOwners = append(profileOwners, corev1.ObjectReference{
+			Name: annotations[deployer.OwnerName],
+			Kind: annotations[deployer.OwnerKind],
+		})
+	}
+
 	// Since release v0.30.0 only one profile instance can deploy a resource in a managed
 	// cluster. Before that though multiple instances could have deployed same resource
 	// provided all those instances were referencing same ConfigMap/Secret.
@@ -619,7 +634,7 @@ func requeueAllOldOwners(ctx context.Context, profileOwners []corev1.ObjectRefer
 			profileName = types.NamespacedName{Name: profileOwners[i].Name}
 		case configv1beta1.ProfileKind:
 			profileKind = configv1beta1.ProfileKind
-			profileName = types.NamespacedName{Namespace: clusterSummary.Namespace, Name: profileOwners[i].Name}
+			profileName = types.NamespacedName{Name: profileOwners[i].Name}
 		default:
 			continue
 		}
@@ -864,8 +879,8 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 
 // getResource returns sveltos Resource and the resource hash hash
 func getResource(policy *unstructured.Unstructured, ignoreForConfigurationDrift bool,
-	referencedObject *corev1.ObjectReference, tier int32, featureID configv1beta1.FeatureID, logger logr.Logger,
-) (resource *configv1beta1.Resource, policyHash string) {
+	referencedObject *corev1.ObjectReference, profile client.Object, tier int32, featureID configv1beta1.FeatureID,
+	logger logr.Logger) (resource *configv1beta1.Resource, policyHash string) {
 
 	resource = &configv1beta1.Resource{
 		Name:      policy.GetName(),
@@ -895,6 +910,8 @@ func getResource(policy *unstructured.Unstructured, ignoreForConfigurationDrift 
 	addLabel(policy, reasonLabel, string(featureID))
 	addAnnotation(policy, deployer.PolicyHash, policyHash)
 	addAnnotation(policy, deployer.OwnerTier, fmt.Sprintf("%d", tier))
+	addAnnotation(policy, deployer.OwnerName, profile.GetName())
+	addAnnotation(policy, deployer.OwnerKind, profile.GetObjectKind().GroupVersionKind().Kind)
 
 	return resource, policyHash
 }
@@ -1335,8 +1352,8 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 		for j := range list.Items {
 			r := list.Items[j]
-			rr, err := undeployStaleResource(ctx, isMgmtCluster, remoteClient, profile, clusterSummary,
-				r, currentPolicies, logger)
+			rr, err := undeployStaleResource(ctx, isMgmtCluster, remoteClient, profile,
+				clusterSummary, r, currentPolicies, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -1378,7 +1395,7 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	// If this ClusterSummary is the only OwnerReference and it is not deploying this policy anymore,
 	// policy would be withdrawn
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		if canDelete(&r, currentPolicies) && k8s_utils.IsOnlyOwnerReference(&r, profile) &&
+		if canDelete(&r, currentPolicies) && isResourceOwner(&r, profile) &&
 			!isLeavePolicies(clusterSummary, logger) {
 
 			resourceReport = &configv1beta1.ResourceReport{
@@ -1392,20 +1409,30 @@ func undeployStaleResource(ctx context.Context, isMgmtCluster bool, remoteClient
 	} else if canDelete(&r, currentPolicies) {
 		logger.V(logs.LogVerbose).Info(fmt.Sprintf("remove owner reference %s/%s", r.GetNamespace(), r.GetName()))
 
-		k8s_utils.RemoveOwnerReference(&r, profile)
-
-		if len(r.GetOwnerReferences()) != 0 {
-			// Other ClusterSummary are still deploying this very same policy
-			return nil, nil
-		}
-
-		err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
-		if err != nil {
-			return nil, err
+		if isResourceOwner(&r, profile) {
+			err := handleResourceDelete(ctx, remoteClient, &r, clusterSummary, logger)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
 	return resourceReport, nil
+}
+
+func isResourceOwner(resource *unstructured.Unstructured, profile client.Object) bool {
+	// First consider annotations
+	annotations := resource.GetAnnotations()
+	if annotations != nil && annotations[deployer.OwnerKind] != "" {
+		return annotations[deployer.OwnerKind] == profile.GetObjectKind().GroupVersionKind().Kind &&
+			annotations[deployer.OwnerName] == profile.GetName()
+	}
+
+	if k8s_utils.IsOwnerReference(resource, profile) {
+		return true
+	}
+
+	return false
 }
 
 func handleResourceDelete(ctx context.Context, remoteClient client.Client, policy client.Object,

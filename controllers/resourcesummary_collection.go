@@ -24,11 +24,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -45,15 +47,39 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 	const interval = 10 * time.Second
 
 	for {
+		time.Sleep(interval)
+
 		logger.V(logs.LogVerbose).Info("collecting ResourceSummaries")
 		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", getCAPIOnboardAnnotation(),
 			shardkey, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
+			continue
+		}
+
+		var clustersWithDD map[corev1.ObjectReference]bool
+		if getAgentInMgmtCluster() {
+			clustersWithDD, err = getListOfClusterWithDriftDetectionDeployed(ctx, c)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusters with drift detection: %v", err))
+				continue
+			}
 		}
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
+			// In agentless mode, Sveltos optimizes resource collection.
+			// It skips ResourceSummary checks for managed clusters without drift detection.
+			// This is because, agentlessly, ResourceSummary instances reside in the management cluster so the
+			// check on whether ResourceSummary is deployed, will always pass.
+			// The 'clustersWithDD' list explicitly tracks clusters where drift detection is active,
+			// ensuring Sveltos only attempts ResourceSummary collection from these relevant clusters.
+			if getAgentInMgmtCluster() {
+				if _, ok := clustersWithDD[*cluster]; !ok {
+					continue
+				}
+			}
+
 			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)
 			if err != nil {
 				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
@@ -62,8 +88,6 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 				}
 			}
 		}
-
-		time.Sleep(interval)
 	}
 }
 
@@ -260,4 +284,39 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	resourceSummary.Status.ResourcesChanged = false
 	resourceSummary.Status.HelmResourcesChanged = false
 	return remoteClient.Status().Update(ctx, resourceSummary)
+}
+
+func getListOfClusterWithDriftDetectionDeployed(ctx context.Context, c client.Client,
+) (map[corev1.ObjectReference]bool, error) {
+
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			driftDetectionFeatureLabelKey: driftDetectionFeatureLabelValue,
+		},
+	}
+	deployments := &appsv1.DeploymentList{}
+	err := c.List(ctx, deployments, listOptions...)
+	if err != nil {
+		return nil, err
+	}
+
+	clustersWithDriftDetection := make(map[corev1.ObjectReference]bool, len(deployments.Items))
+
+	for i := range deployments.Items {
+		depl := &deployments.Items[i]
+		cluster := corev1.ObjectReference{
+			Namespace: depl.Labels[driftDetectionClusterNamespaceLabel],
+			Name:      depl.Labels[driftDetectionClusterNameLabel],
+		}
+		if strings.EqualFold(depl.Labels[driftDetectionClusterTypeLabel], string(libsveltosv1beta1.ClusterTypeCapi)) {
+			cluster.Kind = clusterv1.ClusterKind
+			cluster.APIVersion = clusterv1.GroupVersion.String()
+		} else {
+			cluster.Kind = libsveltosv1beta1.SveltosClusterKind
+			cluster.APIVersion = libsveltosv1beta1.GroupVersion.String()
+		}
+		clustersWithDriftDetection[cluster] = true
+	}
+
+	return clustersWithDriftDetection, nil
 }

@@ -27,7 +27,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= v0.52.2
 
 .PHONY: all
 all: build
@@ -182,7 +182,7 @@ govulncheck: $(GOVULNCHECK)
 .PHONY: check-manifests
 check-manifests: manifests ## Verify manifests file is up to date
 	test `git status --porcelain $(GENERATED_FILES) | grep -cE '(^\?)|(^ M)'` -eq 0 || (echo "The manifest file changed, please 'make manifests' and commit the results"; exit 1)
-	
+
 ifeq ($(shell go env GOOS),darwin) # Use the darwin/amd64 binary until an arm64 version is available
 KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path --arch amd64 $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
 else
@@ -250,9 +250,7 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) apply -f test/drift-detection-mgmt_cluster_common_manifest.yaml
 	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml
-	cp manifest/deployment-agentless.yaml test/addon-controller-deployment-agentless.yaml
-	$(KUBECTL) apply -f test/addon-controller-deployment-agentless.yaml
-	rm -f test/addon-controller-deployment-agentless.yaml
+	$(KUBECTL) apply -f manifest/deployment-agentless.yaml
 	sleep 60
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
@@ -441,4 +439,4 @@ drift-detection-manager:
 	cd pkg/drift-detection; go generate
 	@echo "Downloading drift detection manager common yaml for agentless fv"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/drift-detection-mgmt_cluster_common_manifest.yaml
-	
+

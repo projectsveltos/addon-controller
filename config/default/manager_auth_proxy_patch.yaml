@@ -16,7 +16,7 @@ spec:
         - --shard-key=
         - --capi-onboard-annotation=
         - "--v=5"
-        - "--version=v0.52.2"
+        - "--version=main"
         - "--agent-in-mgmt-cluster=false"
         env:
         - name: GOMEMLIMIT

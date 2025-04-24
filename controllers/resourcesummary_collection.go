@@ -57,27 +57,16 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 			continue
 		}
 
-		var clustersWithDD map[corev1.ObjectReference]bool
-		if getAgentInMgmtCluster() {
-			clustersWithDD, err = getListOfClusterWithDriftDetectionDeployed(ctx, c)
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusters with drift detection: %v", err))
-				continue
-			}
+		clustersWithDD, err := getListOfClusterWithDriftDetectionDeployed(ctx, c)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusters with drift detection: %v", err))
+			continue
 		}
 
 		for i := range clusterList {
 			cluster := &clusterList[i]
-			// In agentless mode, Sveltos optimizes resource collection.
-			// It skips ResourceSummary checks for managed clusters without drift detection.
-			// This is because, agentlessly, ResourceSummary instances reside in the management cluster so the
-			// check on whether ResourceSummary is deployed, will always pass.
-			// The 'clustersWithDD' list explicitly tracks clusters where drift detection is active,
-			// ensuring Sveltos only attempts ResourceSummary collection from these relevant clusters.
-			if getAgentInMgmtCluster() {
-				if _, ok := clustersWithDD[*cluster]; !ok {
-					continue
-				}
+			if _, ok := clustersWithDD[*cluster]; !ok {
+				continue
 			}
 
 			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)

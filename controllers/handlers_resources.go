@@ -393,14 +393,14 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 		} else {
 			var source client.Object
 			source, err = getSource(ctx, c, reference.Namespace, reference.Name, reference.Kind)
-			if err == nil && source == nil {
+			if err == nil && source != nil {
 				s := source.(sourcev1.Source)
 				if s.GetArtifact() != nil {
 					config += s.GetArtifact().Revision
 				}
-			}
-			if source.GetAnnotations() != nil {
-				config += getDataSectionHash(source.GetAnnotations())
+				if source.GetAnnotations() != nil {
+					config += getDataSectionHash(source.GetAnnotations())
+				}
 			}
 		}
 		if err != nil {

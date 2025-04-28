@@ -108,11 +108,14 @@ func (s *ClusterSummaryScope) SetFeatureStatus(featureID configv1beta1.FeatureID
 		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
 			s.ClusterSummary.Status.FeatureSummaries[i].Status = status
 			s.ClusterSummary.Status.FeatureSummaries[i].Hash = hash
-			if failed != nil {
-				if *failed {
-					s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures++
-				} else {
-					s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures = 0
+			if s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+				// In DryRun mode we always get an error back. Do not increase ConsecutiveFailures
+				if failed != nil {
+					if *failed {
+						s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures++
+					} else {
+						s.ClusterSummary.Status.FeatureSummaries[i].ConsecutiveFailures = 0
+					}
 				}
 			}
 			return

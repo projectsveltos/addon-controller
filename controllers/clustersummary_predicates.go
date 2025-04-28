@@ -307,6 +307,10 @@ func hasArtifactChanged(objNew, objOld client.Object) bool {
 }
 
 func isArtifactSame(oldArtifact, newArtifact *sourcev1.Artifact) bool {
+	if oldArtifact == nil && newArtifact == nil {
+		return true
+	}
+
 	if oldArtifact == nil && newArtifact != nil {
 		return false
 	}

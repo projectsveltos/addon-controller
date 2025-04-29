@@ -24,13 +24,11 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -271,6 +269,7 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 
 	logger.V(logs.LogDebug).Info("reset resourceSummary status")
 	resourceSummary.Status.ResourcesChanged = false
+	resourceSummary.Status.KustomizeResourcesChanged = false
 	resourceSummary.Status.HelmResourcesChanged = false
 	return remoteClient.Status().Update(ctx, resourceSummary)
 }
@@ -278,34 +277,50 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 func getListOfClusterWithDriftDetectionDeployed(ctx context.Context, c client.Client,
 ) (map[corev1.ObjectReference]bool, error) {
 
-	listOptions := []client.ListOption{
-		client.MatchingLabels{
-			driftDetectionFeatureLabelKey: driftDetectionFeatureLabelValue,
-		},
-	}
-	deployments := &appsv1.DeploymentList{}
-	err := c.List(ctx, deployments, listOptions...)
+	clustersWithDriftDetection := make(map[corev1.ObjectReference]bool, 0)
+
+	clusterProfiles := &configv1beta1.ClusterProfileList{}
+	err := c.List(ctx, clusterProfiles)
 	if err != nil {
 		return nil, err
 	}
 
-	clustersWithDriftDetection := make(map[corev1.ObjectReference]bool, len(deployments.Items))
+	for i := range clusterProfiles.Items {
+		clusterProfile := &clusterProfiles.Items[i]
+		if clusterProfile.Spec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
+			continue
+		}
 
-	for i := range deployments.Items {
-		depl := &deployments.Items[i]
-		cluster := corev1.ObjectReference{
-			Namespace: depl.Labels[driftDetectionClusterNamespaceLabel],
-			Name:      depl.Labels[driftDetectionClusterNameLabel],
+		clustersWithDriftDetection = addMatchingClusters(clusterProfile.Status.MatchingClusterRefs,
+			clustersWithDriftDetection)
+	}
+
+	profiles := &configv1beta1.ProfileList{}
+	err = c.List(ctx, profiles)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range profiles.Items {
+		profile := &profiles.Items[i]
+		if profile.Spec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
+			continue
 		}
-		if strings.EqualFold(depl.Labels[driftDetectionClusterTypeLabel], string(libsveltosv1beta1.ClusterTypeCapi)) {
-			cluster.Kind = clusterv1.ClusterKind
-			cluster.APIVersion = clusterv1.GroupVersion.String()
-		} else {
-			cluster.Kind = libsveltosv1beta1.SveltosClusterKind
-			cluster.APIVersion = libsveltosv1beta1.GroupVersion.String()
-		}
-		clustersWithDriftDetection[cluster] = true
+
+		clustersWithDriftDetection = addMatchingClusters(profile.Status.MatchingClusterRefs,
+			clustersWithDriftDetection)
 	}
 
 	return clustersWithDriftDetection, nil
+}
+
+func addMatchingClusters(matchingClusterRefs []corev1.ObjectReference,
+	clustersWithDriftDetection map[corev1.ObjectReference]bool) map[corev1.ObjectReference]bool {
+
+	for i := range matchingClusterRefs {
+		cluster := &matchingClusterRefs[i]
+		clustersWithDriftDetection[*cluster] = true
+	}
+
+	return clustersWithDriftDetection
 }

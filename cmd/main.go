@@ -123,7 +123,6 @@ func main() {
 	pflag.Parse()
 
 	reportMode = controllers.ReportMode(tmpReportMode)
-
 	disableFor := []client.Object{}
 	byObject := map[client.Object]cache.ByObject{}
 	if disableCaching {

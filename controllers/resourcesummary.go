@@ -97,11 +97,11 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	if startInMgmtCluster {
 		restConfig := getManagementClusterConfig()
 		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace,
-			clusterName, "do-not-send-reports", clusterType, patches, logger)
+			clusterName, "do-not-send-updates", clusterType, patches, logger)
 	}
 
 	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace,
-		clusterName, "do-not-send-reports", clusterType, patches, logger)
+		clusterName, "do-not-send-updates", clusterType, patches, logger)
 }
 
 func deployResourceSummaryInCluster(ctx context.Context, c client.Client,

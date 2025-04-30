@@ -417,6 +417,8 @@ func (m *manager) react(obj client.Object, logger logr.Logger) {
 		Name:       obj.GetName(),
 	}
 
+	logger = logger.WithValues("resource", fmt.Sprintf("%s/%s", ref.Namespace, ref.Name))
+
 	// finds all ClusterSummary objects that want to be informed about updates to this specific resource.
 	// It takes into account registrations made through KustomizationRefs
 	if v, ok := m.mgmtResourcesWatchedKustomizeRef[ref]; ok {

@@ -543,8 +543,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
 		updatedPolicy, err := updateResource(ctx, dr, clusterSummary, policy, subresources, logger)
-		resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
-		reports = append(reports, *generateResourceReport(policyHash, resourceInfo, updatedPolicy, resource))
+		if updatedPolicy != nil {
+			resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
+			reports = append(reports, *generateResourceReport(policyHash, resourceInfo, updatedPolicy, resource))
+		}
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("%v", err)

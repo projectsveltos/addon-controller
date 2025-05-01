@@ -132,20 +132,7 @@ func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *confi
 	options := metav1.ListOptions{}
 
 	if len(check.LabelFilters) > 0 {
-		labelFilter := ""
-		for i := range check.LabelFilters {
-			if labelFilter != "" {
-				labelFilter += ","
-			}
-			f := check.LabelFilters[i]
-			if f.Operation == libsveltosv1beta1.OperationEqual {
-				labelFilter += fmt.Sprintf("%s=%s", f.Key, f.Value)
-			} else {
-				labelFilter += fmt.Sprintf("%s!=%s", f.Key, f.Value)
-			}
-		}
-
-		options.LabelSelector = labelFilter
+		options.LabelSelector = addLabelFilters(check.LabelFilters)
 	}
 
 	if check.Namespace != "" {
@@ -161,6 +148,32 @@ func fetchResources(ctx context.Context, remoteConfig *rest.Config, check *confi
 	}
 
 	return list, nil
+}
+
+func addLabelFilters(labelFilters []libsveltosv1beta1.LabelFilter) string {
+	labelFilter := ""
+	if len(labelFilters) > 0 {
+		for i := range labelFilters {
+			if labelFilter != "" {
+				labelFilter += ","
+			}
+			f := labelFilters[i]
+			switch f.Operation {
+			case libsveltosv1beta1.OperationEqual:
+				labelFilter += fmt.Sprintf("%s=%s", f.Key, f.Value)
+			case libsveltosv1beta1.OperationDifferent:
+				labelFilter += fmt.Sprintf("%s!=%s", f.Key, f.Value)
+			case libsveltosv1beta1.OperationHas:
+				// Key exists, value is not checked
+				labelFilter += f.Key
+			case libsveltosv1beta1.OperationDoesNotHave:
+				// Key does not exist
+				labelFilter += fmt.Sprintf("!%s", f.Key)
+			}
+		}
+	}
+
+	return labelFilter
 }
 
 // isHealthy verifies whether resource is healthy according to Lua script

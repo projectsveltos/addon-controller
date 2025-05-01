@@ -7,8 +7,8 @@ require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v28.1.1+incompatible
-	github.com/fluxcd/pkg/http/fetch v0.15.0
-	github.com/fluxcd/pkg/tar v0.11.0
+	github.com/fluxcd/pkg/http/fetch v0.16.0
+	github.com/fluxcd/pkg/tar v0.12.0
 	github.com/fluxcd/source-controller/api v1.5.0
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.2
@@ -16,7 +16,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.23.4
 	github.com/onsi/gomega v1.37.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v0.52.3
+	github.com/projectsveltos/libsveltos v0.53.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/spf13/pflag v1.0.6
 	github.com/yuin/gopher-lua v1.1.1
@@ -31,7 +31,7 @@ require (
 	k8s.io/component-base v0.32.4
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20250321185631-1f6e0b77f77e
-	sigs.k8s.io/cluster-api v1.10.0
+	sigs.k8s.io/cluster-api v1.10.1
 	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/kustomize/api v0.19.0
 	sigs.k8s.io/kustomize/kyaml v0.19.0
@@ -110,7 +110,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/lib/pq v1.10.9 // indirect
@@ -131,7 +131,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/go-digest/blake3 v0.0.0-20240426182413-22b78e47854a // indirect
+	github.com/opencontainers/go-digest/blake3 v0.0.0-20250116041648-1e56c6daea3b // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/projectsveltos/lua-utils/glua-json v0.0.0-20250301182851-e4fbb9fd7ff7 // indirect

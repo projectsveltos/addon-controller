@@ -356,11 +356,17 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummaryScope *sc
 	referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummaryScope.Namespace(), reference.Namespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, reference.Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			return nil, err
+		}
 
-		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), reference.Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, reference.Name, clusterSummary.Spec.ClusterType)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))

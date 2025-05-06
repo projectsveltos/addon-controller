@@ -350,8 +350,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 					logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
 				} else {
-					credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c,
-						clusterSummary.Spec.ClusterNamespace, currentChart)
+					credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c, clusterSummary, currentChart)
 					if err != nil {
 						logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process credentials %v", err))
 						return nil, err
@@ -828,8 +827,8 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 		return registryOptions, nil
 	}
 
-	credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, getManagementClusterClient(),
-		clusterSummary.Spec.ClusterNamespace, currentChart)
+	credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, getManagementClusterClient(), clusterSummary,
+		currentChart)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process credentials %v", err))
 		return registryOptions, err
@@ -841,8 +840,12 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 	registryOptions.skipTLSVerify = getInsecureSkipTLSVerify(currentChart)
 
 	if currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
-		credentialSecretNamespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummary.Spec.ClusterNamespace,
-			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
+		credentialSecretNamespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
 
 		secret := &corev1.Secret{}
 		err = getManagementClusterClient().Get(ctx,
@@ -2077,8 +2080,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 		l.V(logs.LogDebug).Info("collecting resources for helm chart")
 		// Conflicts are already resolved by the time this is invoked. So it is safe to call CanManageChart
 		if chartManager.CanManageChart(clusterSummary, currentChart) {
-			credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c,
-				clusterSummary.Spec.ClusterNamespace, currentChart)
+			credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c, clusterSummary, currentChart)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process credentials %v", err))
 				return nil, err
@@ -2666,15 +2668,15 @@ func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
 	return nil
 }
 
-func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterNamespace string,
+func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	requestedChart *configv1beta1.HelmChart) (credentialsPath, caPath string, err error) {
 
-	credentialsPath, err = createFileWithCredentials(ctx, c, clusterNamespace, requestedChart)
+	credentialsPath, err = createFileWithCredentials(ctx, c, clusterSummary, requestedChart)
 	if err != nil {
 		return "", "", err
 	}
 
-	caPath, err = createFileWithCA(ctx, c, clusterNamespace, requestedChart)
+	caPath, err = createFileWithCA(ctx, c, clusterSummary, requestedChart)
 	if err != nil {
 		return "", "", err
 	}
@@ -2684,7 +2686,7 @@ func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterNames
 
 // createFileWithCredentials fetches the credentials from a Secret and writes it to a temporary file.
 // Returns the path to the temporary file.
-func createFileWithCredentials(ctx context.Context, c client.Client, clusterNamespace string,
+func createFileWithCredentials(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	requestedChart *configv1beta1.HelmChart) (string, error) {
 
 	if requestedChart.RegistryCredentialsConfig == nil ||
@@ -2693,11 +2695,15 @@ func createFileWithCredentials(ctx context.Context, c client.Client, clusterName
 		return "", nil
 	}
 	credSecretRef := requestedChart.RegistryCredentialsConfig.CredentialsSecretRef
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterNamespace, requestedChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		requestedChart.RegistryCredentialsConfig.CredentialsSecretRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return "", err
+	}
 
 	secret := &corev1.Secret{}
-	err := c.Get(ctx,
+	err = c.Get(ctx,
 		types.NamespacedName{
 			Namespace: namespace,
 			Name:      credSecretRef.Name,
@@ -2734,7 +2740,7 @@ func createFileWithCredentials(ctx context.Context, c client.Client, clusterName
 
 // createFileWithCA fetches the CA certificate from a Secret and writes it to a temporary file.
 // Returns the path to the temporary file.
-func createFileWithCA(ctx context.Context, c client.Client, clusterNamespace string,
+func createFileWithCA(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	requestedChart *configv1beta1.HelmChart) (string, error) {
 
 	if requestedChart.RegistryCredentialsConfig == nil {
@@ -2745,11 +2751,15 @@ func createFileWithCA(ctx context.Context, c client.Client, clusterNamespace str
 		return "", nil
 	}
 
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterNamespace, requestedChart.RegistryCredentialsConfig.CASecretRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		requestedChart.RegistryCredentialsConfig.CASecretRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return "", err
+	}
 
 	secret := &corev1.Secret{}
-	err := c.Get(ctx,
+	err = c.Get(ctx,
 		types.NamespacedName{
 			Namespace: namespace,
 			Name:      requestedChart.RegistryCredentialsConfig.CASecretRef.Name,

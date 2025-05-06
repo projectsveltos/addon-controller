@@ -301,8 +301,16 @@ var _ = Describe("Hash methods", func() {
 				}
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		initObjects := []client.Object{
 			clusterSummary,
+			cluster,
 		}
 		for i := 0; i < repoNum; i++ {
 			initObjects = append(initObjects, &gitRepositories[i])
@@ -345,7 +353,7 @@ var _ = Describe("Hash methods", func() {
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})
 
-	It(`getKustomizeReferenceResourceHash returns the hash considering all referenced 
+	It(`getKustomizeReferenceResourceHash returns the hash considering all referenced
 	ConfigMap/Secret in the ValueFrom section`, func() {
 		namespace := randomString()
 		configMap := &corev1.ConfigMap{
@@ -405,10 +413,18 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		initObjects := []client.Object{
 			configMap,
 			secret,
 			clusterSummary,
+			cluster,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
@@ -562,9 +578,17 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		initObjects := []client.Object{
 			configMap,
 			secret,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()

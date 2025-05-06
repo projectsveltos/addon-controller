@@ -775,7 +775,7 @@ var _ = Describe("Hash methods", func() {
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
 	})
 
-	It(`getHelmReferenceResourceHash returns the hash considering all referenced 
+	It(`getHelmReferenceResourceHash returns the hash considering all referenced
 	ConfigMap/Secret in the ValueFrom section`, func() {
 		namespace := randomString()
 
@@ -838,10 +838,18 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		initObjects := []client.Object{
 			configMap,
 			secret,
 			clusterSummary,
+			cluster,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
@@ -890,13 +898,20 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		h := sha256.New()
 		expectedHash := render.AsCode(requestedChart.Values)
 		expectedHash += render.AsCode(configMap.Data[key])
 		h.Write([]byte(expectedHash))
 
 		initObjects := []client.Object{
-			configMap,
+			configMap, cluster,
 		}
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
@@ -946,8 +961,35 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: cluster.Namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind:       configv1beta1.ClusterProfileKind,
+						Name:       randomString(),
+						APIVersion: "config.projectsveltos.io/v1beta1",
+						UID:        types.UID(randomString()),
+					},
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+
 		initObjects := []client.Object{
-			secretCredentials, secretCA,
+			secretCredentials, secretCA, cluster,
 		}
 
 		requestedChart := configv1beta1.HelmChart{
@@ -967,7 +1009,7 @@ var _ = Describe("Hash methods", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		credentialsPath, caPath, err := controllers.GetCredentialsAndCAFiles(context.TODO(), c,
-			randomString(), &requestedChart)
+			clusterSummary, &requestedChart)
 		Expect(err).To(BeNil())
 		Expect(credentialsPath).ToNot(BeEmpty())
 		verifyFileContent(credentialsPath, credentialsBytes)

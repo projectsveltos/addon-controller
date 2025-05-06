@@ -1141,11 +1141,18 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 		var object client.Object
 		reference := &references[i]
 
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummary.Namespace, references[i].Namespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, references[i].Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			return nil, nil, err
+		}
 
-		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), references[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, references[i].Name,
+			clusterSummary.Spec.ClusterType)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))
@@ -1838,11 +1845,18 @@ func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSumm
 
 	var config string
 	for i := range valuesFrom {
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummary.Namespace, valuesFrom[i].Namespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return "", err
+		}
 
-		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), valuesFrom[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Name,
+			clusterSummary.Spec.ClusterType)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
@@ -1883,11 +1897,17 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 	template = make(map[string]string)
 	nonTemplate = make(map[string]string)
 	for i := range valuesFrom {
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummary.Namespace, valuesFrom[i].Namespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return nil, nil, err
+		}
 
-		name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), valuesFrom[i].Name)
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, valuesFrom[i].Name, clusterSummary.Spec.ClusterType)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))

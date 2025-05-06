@@ -338,11 +338,14 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) ([]byte, error) {
 
 	var result string
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return nil, err
+	}
 
-	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		return nil, err
 	}
@@ -513,11 +516,14 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
 	}
 
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return "", err
+	}
 
-	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		return "", err
 	}
@@ -539,11 +545,14 @@ func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,
 	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return "", err
+	}
 
-	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		return "", err
 	}
@@ -560,11 +569,14 @@ func prepareFileSystemWithSecret(ctx context.Context, c client.Client,
 	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	namespace := libsveltostemplate.GetReferenceResourceNamespace(
-		clusterSummary.Namespace, kustomizationRef.Namespace)
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return "", err
+	}
 
-	name, err := libsveltostemplate.GetReferenceResourceName(clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, string(clusterSummary.Spec.ClusterType), kustomizationRef.Name)
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		return "", err
 	}

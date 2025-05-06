@@ -291,6 +291,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			configMap,
 			clusterSummary,
 			clusterProfile,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()

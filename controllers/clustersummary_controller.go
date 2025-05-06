@@ -213,7 +213,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.resetFeatureStatus(clusterSummaryScope, configv1beta1.FeatureStatusFailed)
 		// if cluster is not ready, do nothing and don't queue for reconciliation.
 		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
-		_ = r.updateMaps(clusterSummaryScope, logger)
+		_ = r.updateMaps(ctx, clusterSummaryScope, logger)
 
 		return reconcile.Result{}, nil
 	}
@@ -337,7 +337,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{}, nil
 	}
 
-	err := r.updateMaps(clusterSummaryScope, logger)
+	err := r.updateMaps(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -711,13 +711,15 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 	}
 }
 
-func (r *ClusterSummaryReconciler) updateMaps(clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
+
 	if clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeOneTime {
 		logger.V(logs.LogDebug).Info("sync mode is one time. No need to reconcile on policies change.")
 		return nil
 	}
 	logger.V(logs.LogDebug).Info("update policy map")
-	currentReferences, err := r.getCurrentReferences(clusterSummaryScope)
+	currentReferences, err := r.getCurrentReferences(ctx, clusterSummaryScope)
 	if err != nil {
 		logger.V(logs.LogInfo).Info("failed to get current references: %v", err)
 		return err
@@ -834,21 +836,21 @@ func (r *ClusterSummaryReconciler) shouldReconcile(clusterSummaryScope *scope.Cl
 	return false
 }
 
-func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *scope.ClusterSummaryScope,
-) (*libsveltosset.Set, error) {
+func (r *ClusterSummaryReconciler) getCurrentReferences(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope) (*libsveltosset.Set, error) {
 
-	currentReferences, err := r.getPolicyRefReferences(clusterSummaryScope)
+	currentReferences, err := r.getPolicyRefReferences(ctx, clusterSummaryScope)
 	if err != nil {
 		return nil, err
 	}
 
-	kustomizationRefs, err := r.getKustomizationRefReferences(clusterSummaryScope)
+	kustomizationRefs, err := r.getKustomizationRefReferences(ctx, clusterSummaryScope)
 	if err != nil {
 		return nil, err
 	}
 	currentReferences.Append(kustomizationRefs)
 
-	helmRefs, err := r.getHelmChartsReferences(clusterSummaryScope)
+	helmRefs, err := r.getHelmChartsReferences(ctx, clusterSummaryScope)
 	if err != nil {
 		return nil, err
 	}
@@ -858,17 +860,22 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(clusterSummaryScope *sco
 }
 
 // getPolicyRefReferences get all references considering the PolicyRef section
-func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *scope.ClusterSummaryScope,
-) (*libsveltosset.Set, error) {
+func (r *ClusterSummaryReconciler) getPolicyRefReferences(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope) (*libsveltosset.Set, error) {
 
+	cs := clusterSummaryScope.ClusterSummary
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		referencedNamespace := clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, referencedNamespace, cs.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
 
-		cs := clusterSummaryScope.ClusterSummary
-		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
-			string(cs.Spec.ClusterType), clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name)
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+			clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name, cs.Spec.ClusterType)
 		if err != nil {
 			return nil, err
 		}
@@ -884,21 +891,24 @@ func (r *ClusterSummaryReconciler) getPolicyRefReferences(clusterSummaryScope *s
 }
 
 // getKustomizationRefReferences get all references considering the KustomizationRef section
-func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryScope *scope.ClusterSummaryScope,
-) (*libsveltosset.Set, error) {
+func (r *ClusterSummaryReconciler) getKustomizationRefReferences(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope) (*libsveltosset.Set, error) {
 
+	cs := clusterSummaryScope.ClusterSummary
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs {
 		kr := &clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs[i]
 
 		referencedNamespace := kr.Namespace
 
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, referencedNamespace, cs.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
 
-		cs := clusterSummaryScope.ClusterSummary
-		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, string(cs.Spec.ClusterType), kr.Name)
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, kr.Name, cs.Spec.ClusterType)
 		if err != nil {
 			return nil, err
 		}
@@ -921,7 +931,7 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 			Name:       referencedName,
 		})
 
-		valuesFromReferences, err := getKustomizationValueFrom(clusterSummaryScope, kr)
+		valuesFromReferences, err := getKustomizationValueFrom(ctx, clusterSummaryScope, kr)
 		if err != nil {
 			return nil, err
 		}
@@ -933,19 +943,22 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(clusterSummaryS
 // getKustomizationValueFrom gets referenced ConfigMap/Secret in a KustomizationRef.
 // KustomizationRef can reference both ConfigMap/Secret each containing key-value pairs that will be used, if defined,
 // to replace placeholder value in the output generated by Kustomize SDK.
-func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, kr *configv1beta1.KustomizationRef,
-) (*libsveltosset.Set, error) {
+func getKustomizationValueFrom(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	kr *configv1beta1.KustomizationRef) (*libsveltosset.Set, error) {
 
 	currentValuesFromReferences := &libsveltosset.Set{}
 
+	cs := clusterSummaryScope.ClusterSummary
 	for i := range kr.ValuesFrom {
 		referencedNamespace := kr.ValuesFrom[i].Namespace
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, referencedNamespace, cs.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
 
-		cs := clusterSummaryScope.ClusterSummary
-		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, string(cs.Spec.ClusterType), kr.ValuesFrom[i].Name)
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, kr.ValuesFrom[i].Name, cs.Spec.ClusterType)
 		if err != nil {
 			return nil, err
 		}
@@ -962,8 +975,8 @@ func getKustomizationValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, k
 }
 
 // getHelmChartsReferences get all references considering the HelmChart section
-func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *scope.ClusterSummaryScope,
-) (*libsveltosset.Set, error) {
+func (r *ClusterSummaryReconciler) getHelmChartsReferences(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope) (*libsveltosset.Set, error) {
 
 	currentReferences := &libsveltosset.Set{}
 	for i := range clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
@@ -977,7 +990,7 @@ func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *
 			currentReferences.Insert(sourceRef)
 		}
 
-		valuesFromReferences, err := getHelmChartValueFrom(clusterSummaryScope, hc)
+		valuesFromReferences, err := getHelmChartValueFrom(ctx, clusterSummaryScope, hc)
 		if err != nil {
 			return nil, err
 		}
@@ -988,19 +1001,22 @@ func (r *ClusterSummaryReconciler) getHelmChartsReferences(clusterSummaryScope *
 
 // getHelmChartValueFrom gets referenced ConfigMap/Secret in a HelmChart.
 // HelmChart can reference both ConfigMap/Secret each containing configuration for the helm release.
-func getHelmChartValueFrom(clusterSummaryScope *scope.ClusterSummaryScope, hc *configv1beta1.HelmChart,
-) (*libsveltosset.Set, error) {
+func getHelmChartValueFrom(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	hc *configv1beta1.HelmChart) (*libsveltosset.Set, error) {
 
 	currentValuesFromReferences := &libsveltosset.Set{}
 
+	cs := clusterSummaryScope.ClusterSummary
 	for i := range hc.ValuesFrom {
 		referencedNamespace := hc.ValuesFrom[i].Namespace
-		namespace := libsveltostemplate.GetReferenceResourceNamespace(
-			clusterSummaryScope.Namespace(), referencedNamespace)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, referencedNamespace, cs.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
 
-		cs := clusterSummaryScope.ClusterSummary
-		referencedName, err := libsveltostemplate.GetReferenceResourceName(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, string(cs.Spec.ClusterType), hc.ValuesFrom[i].Name)
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, hc.ValuesFrom[i].Name, cs.Spec.ClusterType)
 		if err != nil {
 			return nil, err
 		}

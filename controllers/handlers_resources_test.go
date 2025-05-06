@@ -375,10 +375,18 @@ var _ = Describe("Hash methods", func() {
 			},
 		}
 
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
 		initObjects := []client.Object{
 			clusterSummary,
 			configMap1,
 			configMap2,
+			cluster,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()

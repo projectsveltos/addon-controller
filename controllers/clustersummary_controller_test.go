@@ -870,7 +870,7 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryScope := getClusterSummaryScope(c,
 			textlogger.NewLogger(textlogger.NewConfig()), clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
-		set, err := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
+		set, err := controllers.GetCurrentReferences(reconciler, context.TODO(), clusterSummaryScope)
 		Expect(err).To(BeNil())
 		Expect(set.Len()).To(Equal(4))
 	})
@@ -885,7 +885,7 @@ var _ = Describe("ClustersummaryController", func() {
 		clusterSummaryScope := getClusterSummaryScope(c,
 			textlogger.NewLogger(textlogger.NewConfig()), clusterProfile, clusterSummary)
 		reconciler := getClusterSummaryReconciler(nil, nil)
-		set, err := controllers.GetCurrentReferences(reconciler, clusterSummaryScope)
+		set, err := controllers.GetCurrentReferences(reconciler, context.TODO(), clusterSummaryScope)
 		Expect(err).To(BeNil())
 		Expect(set.Len()).To(Equal(1))
 		items := set.Items()

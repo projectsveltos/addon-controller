@@ -125,14 +125,12 @@ type ValueFrom struct {
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. The Profile namespace will be used.
+	// Namespace can be expressed as a template and instantiate using any cluster field.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
-	// Name can be expressed as a template and instantiate using
-	// - cluster namespace: .Cluster.metadata.namespace
-	// - cluster name: .Cluster.metadata.name
-	// - cluster type: .Cluster.kind
+	// Name can be expressed as a template and instantiate using any cluster field.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -464,13 +462,11 @@ type KustomizationRef struct {
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. The Profile namespace will be used.
+	// Namespace can be expressed as a template and instantiate using any cluster field.
 	Namespace string `json:"namespace"`
 
 	// Name of the referenced resource.
-	// Name can be expressed as a template and instantiate using
-	// - cluster namespace: .Cluster.metadata.namespace
-	// - cluster name: .Cluster.metadata.name
-	// - cluster type: .Cluster.kind
+	// Name can be expressed as a template and instantiate using any cluster field.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 
@@ -557,10 +553,7 @@ type TemplateResourceRef struct {
 	// cluster to fetch and use during template instantiation.
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
-	// Name and namespace can be expressed as a template and instantiate using
-	// - cluster namespace: .Cluster.metadata.namespace
-	// - cluster name: .Cluster.metadata.name
-	// - cluster type: .Cluster.kind
+	// Name and namespace can be expressed as a template and instantiate using any cluster field.
 	Resource corev1.ObjectReference `json:"resource"`
 
 	// Identifier is how the resource will be referred to in the
@@ -573,14 +566,12 @@ type PolicyRef struct {
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. Profile namespace will be used.
+	// Namespace can be expressed as a template and instantiate using any cluster field.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
-	// Name can be expressed as a template and instantiate using
-	// - cluster namespace: .Cluster.metadata.namespace
-	// - cluster name: .Cluster.metadata.name
-	// - cluster type: .Cluster.kind
+	// Name can be expressed as a template and instantiate using any cluster field.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
 

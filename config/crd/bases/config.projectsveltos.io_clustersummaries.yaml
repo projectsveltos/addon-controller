@@ -611,10 +611,7 @@ spec:
                               name:
                                 description: |-
                                   Name of the referenced resource.
-                                  Name can be expressed as a template and instantiate using
-                                  - cluster namespace: .Cluster.metadata.namespace
-                                  - cluster name: .Cluster.metadata.name
-                                  - cluster type: .Cluster.kind
+                                  Name can be expressed as a template and instantiate using any cluster field.
                                 minLength: 1
                                 type: string
                               namespace:
@@ -623,6 +620,7 @@ spec:
                                   For ClusterProfile namespace can be left empty. In such a case, namespace will
                                   be implicit set to cluster's namespace.
                                   For Profile namespace must be left empty. The Profile namespace will be used.
+                                  Namespace can be expressed as a template and instantiate using any cluster field.
                                 type: string
                             required:
                             - kind
@@ -685,10 +683,7 @@ spec:
                         name:
                           description: |-
                             Name of the referenced resource.
-                            Name can be expressed as a template and instantiate using
-                            - cluster namespace: .Cluster.metadata.namespace
-                            - cluster name: .Cluster.metadata.name
-                            - cluster type: .Cluster.kind
+                            Name can be expressed as a template and instantiate using any cluster field.
                           minLength: 1
                           type: string
                         namespace:
@@ -697,6 +692,7 @@ spec:
                             For ClusterProfile namespace can be left empty. In such a case, namespace will
                             be implicit set to cluster's namespace.
                             For Profile namespace must be left empty. The Profile namespace will be used.
+                            Namespace can be expressed as a template and instantiate using any cluster field.
                           type: string
                         path:
                           description: |-
@@ -763,10 +759,7 @@ spec:
                               name:
                                 description: |-
                                   Name of the referenced resource.
-                                  Name can be expressed as a template and instantiate using
-                                  - cluster namespace: .Cluster.metadata.namespace
-                                  - cluster name: .Cluster.metadata.name
-                                  - cluster type: .Cluster.kind
+                                  Name can be expressed as a template and instantiate using any cluster field.
                                 minLength: 1
                                 type: string
                               namespace:
@@ -775,6 +768,7 @@ spec:
                                   For ClusterProfile namespace can be left empty. In such a case, namespace will
                                   be implicit set to cluster's namespace.
                                   For Profile namespace must be left empty. The Profile namespace will be used.
+                                  Namespace can be expressed as a template and instantiate using any cluster field.
                                 type: string
                             required:
                             - kind
@@ -905,10 +899,7 @@ spec:
                         name:
                           description: |-
                             Name of the referenced resource.
-                            Name can be expressed as a template and instantiate using
-                            - cluster namespace: .Cluster.metadata.namespace
-                            - cluster name: .Cluster.metadata.name
-                            - cluster type: .Cluster.kind
+                            Name can be expressed as a template and instantiate using any cluster field.
                           minLength: 1
                           type: string
                         namespace:
@@ -917,6 +908,7 @@ spec:
                             For ClusterProfile namespace can be left empty. In such a case, namespace will
                             be implicit set to cluster's namespace.
                             For Profile namespace must be left empty. Profile namespace will be used.
+                            Namespace can be expressed as a template and instantiate using any cluster field.
                           type: string
                         path:
                           description: |-
@@ -997,10 +989,7 @@ spec:
                             cluster to fetch and use during template instantiation.
                             For ClusterProfile namespace can be left empty. In such a case, namespace will
                             be implicit set to cluster's namespace.
-                            Name and namespace can be expressed as a template and instantiate using
-                            - cluster namespace: .Cluster.metadata.namespace
-                            - cluster name: .Cluster.metadata.name
-                            - cluster type: .Cluster.kind
+                            Name and namespace can be expressed as a template and instantiate using any cluster field.
                           properties:
                             apiVersion:
                               description: API version of the referent.

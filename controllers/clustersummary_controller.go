@@ -310,7 +310,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	r.cleanMaps(clusterSummaryScope)
 
 	manager := getManager()
-	manager.stopStaleWatchForTemplateResourceRef(clusterSummaryScope.ClusterSummary, true)
+	manager.stopStaleWatchForTemplateResourceRef(ctx, clusterSummaryScope.ClusterSummary, true)
 
 	logger.V(logs.LogInfo).Info("Reconcile delete success")
 
@@ -1342,7 +1342,7 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 		}
 	}
 
-	manager.stopStaleWatchForTemplateResourceRef(clusterSummary, false)
+	manager.stopStaleWatchForTemplateResourceRef(ctx, clusterSummary, false)
 	return nil
 }
 

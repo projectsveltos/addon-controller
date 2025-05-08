@@ -155,12 +155,12 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 
 	var err error
 	// If namespace is not defined, default to cluster namespace
-	resource.Namespace, err = getTemplateResourceNamespace(clusterSummary, ref)
+	resource.Namespace, err = getTemplateResourceNamespace(ctx, clusterSummary, ref)
 	if err != nil {
 		return err
 	}
 
-	resource.Name, err = getTemplateResourceName(clusterSummary, ref)
+	resource.Name, err = getTemplateResourceName(ctx, clusterSummary, ref)
 	if err != nil {
 		return err
 	}
@@ -257,8 +257,8 @@ func (m *manager) stopStaleWatchForMgmtResource(currentResources map[corev1.Obje
 // It then stops any watchers that were previously set up to deliver notifications about those specific
 // resources to ClusterSummary.
 // Resources that are still included in the currentResources map will continue to be watched.
-func (m *manager) stopStaleWatchForTemplateResourceRef(clusterSummary *configv1beta1.ClusterSummary,
-	removeAll bool) {
+func (m *manager) stopStaleWatchForTemplateResourceRef(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, removeAll bool) {
 
 	consumer := &corev1.ObjectReference{
 		APIVersion: configv1beta1.GroupVersion.Group,
@@ -273,12 +273,12 @@ func (m *manager) stopStaleWatchForTemplateResourceRef(clusterSummary *configv1b
 		for i := range clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs {
 			resource := &clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i].Resource
 			var err error
-			resource.Namespace, err = getTemplateResourceNamespace(clusterSummary,
+			resource.Namespace, err = getTemplateResourceNamespace(ctx, clusterSummary,
 				&clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i])
 			if err != nil {
 				continue
 			}
-			resource.Name, _ = getTemplateResourceName(clusterSummary,
+			resource.Name, _ = getTemplateResourceName(ctx, clusterSummary,
 				&clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs[i])
 
 			currentResources[*resource] = true

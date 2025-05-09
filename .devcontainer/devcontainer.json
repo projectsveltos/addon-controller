@@ -1,0 +1,32 @@
+{
+  "name": "Project Sveltos",
+  "containerEnv": {
+    "KUBECONFIG": "/vscode/.kube/config",
+    "WORKDIR": "${localWorkspaceFolder}"
+  },
+  "build": {
+    "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
+    "context": "${localWorkspaceFolder}",
+    "args": {
+      "GO_VERSION": "1.24.1",
+      "KUBECTX_VERSION": "0.9.5",
+      "SVELTOSCTL_VERSION": "0.53.0"
+    }
+  },
+  "workspaceFolder": "${localWorkspaceFolder}",
+  "workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind",
+  "mounts": [
+    "source=${localWorkspaceFolder}/test/.kube,target=/vscode/.kube,type=bind"
+  ],
+  "runArgs": [],
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [],
+      "settings": {}
+    }
+  },
+  "initializeCommand": "mkdir -p ${localWorkspaceFolder}/test/.kube"
+}

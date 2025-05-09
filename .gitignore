@@ -34,3 +34,6 @@ pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml-e
 pkg/drift-detection/drift-detection-manager.yaml-e
 
 version.txt
+
+# Test Kubernetes config files
+test/.kube

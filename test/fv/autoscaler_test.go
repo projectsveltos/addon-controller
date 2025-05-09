@@ -126,6 +126,7 @@ var _ = Describe("Feature", func() {
 					Name: autoscaler,
 				},
 				Identifier: "AutoscalerSecret",
+				Optional:   true,
 			},
 		}
 		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{

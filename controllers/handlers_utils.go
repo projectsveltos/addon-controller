@@ -1174,6 +1174,9 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 				msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
 					reference.Kind, reference.Namespace, name)
 				logger.V(logs.LogInfo).Info(msg)
+				if reference.Optional {
+					continue
+				}
 				return nil, nil, &NonRetriableError{Message: msg}
 			}
 			return nil, nil, err
@@ -1917,15 +1920,11 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
-				msg := fmt.Sprintf("failed to get ConfigMap %s/%s", namespace, name)
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				if apierrors.IsNotFound(err) {
-					msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
-						libsveltosv1beta1.ConfigMapReferencedResourceKind, namespace, name)
-					logger.V(logs.LogInfo).Info(msg)
-					return nil, nil, &NonRetriableError{Message: msg}
+				err = handleReferenceError(err, valuesFrom[i].Kind, namespace, name, valuesFrom[i].Optional, logger)
+				if err == nil {
+					continue
 				}
-				return nil, nil, fmt.Errorf("%s: %w", msg, err)
+				return nil, nil, err
 			}
 
 			if instantiateTemplate(configMap, logger) {
@@ -1948,15 +1947,11 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
 			if err != nil {
-				msg := fmt.Sprintf("failed to get Secret %s/%s", namespace, name)
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
-				if apierrors.IsNotFound(err) {
-					msg := fmt.Sprintf("Referenced resource: %s %s/%s does not exist",
-						libsveltosv1beta1.SecretReferencedResourceKind, namespace, name)
-					logger.V(logs.LogInfo).Info(msg)
-					return nil, nil, &NonRetriableError{Message: msg}
+				err = handleReferenceError(err, valuesFrom[i].Kind, namespace, name, valuesFrom[i].Optional, logger)
+				if err == nil {
+					continue
 				}
-				return nil, nil, fmt.Errorf("%s: %w", msg, err)
+				return nil, nil, err
 			}
 			if instantiateTemplate(secret, logger) {
 				for key, value := range secret.Data {
@@ -1979,6 +1974,24 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 	}
 
 	return template, nonTemplate, nil
+}
+
+func handleReferenceError(err error, kind, namespace, name string, optional bool,
+	logger logr.Logger) error {
+
+	msg := fmt.Sprintf("Referenced resource: %s %s/%s", kind, namespace, name)
+
+	if apierrors.IsNotFound(err) {
+		msg += " does not exist"
+		logger.V(logs.LogInfo).Info(msg)
+		if optional {
+			return nil
+		}
+		return &NonRetriableError{Message: msg}
+	}
+
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("%s: %v", msg, err))
+	return fmt.Errorf("%s: %w", msg, err)
 }
 
 func addToMap(m map[string]string, key, value string) {

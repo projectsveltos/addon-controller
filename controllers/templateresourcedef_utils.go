@@ -79,7 +79,7 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 		var u *unstructured.Unstructured
 		u, err = dr.Get(ctx, ref.Resource.Name, metav1.GetOptions{})
 		if err != nil {
-			if apierrors.IsNotFound(err) {
+			if apierrors.IsNotFound(err) && ref.Optional {
 				continue
 			}
 			return nil, err

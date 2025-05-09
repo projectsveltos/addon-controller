@@ -584,6 +584,13 @@ spec:
                               For Profile namespace must be left empty. The Profile namespace will be used.
                               Namespace can be expressed as a template and instantiate using any cluster field.
                             type: string
+                          optional:
+                            default: false
+                            description: |-
+                              Optional indicates that the referenced resource is not mandatory.
+                              If set to true and the resource is not found, the error will be ignored,
+                              and Sveltos will continue processing other ValueFroms.
+                            type: boolean
                         required:
                         - kind
                         - name
@@ -656,6 +663,13 @@ spec:
                         For Profile namespace must be left empty. The Profile namespace will be used.
                         Namespace can be expressed as a template and instantiate using any cluster field.
                       type: string
+                    optional:
+                      default: false
+                      description: |-
+                        Optional indicates that the referenced resource is not mandatory.
+                        If set to true and the resource is not found, the error will be ignored,
+                        and Sveltos will continue processing other ValueFroms.
+                      type: boolean
                     path:
                       description: |-
                         Path to the directory containing the kustomization.yaml file, or the
@@ -732,6 +746,13 @@ spec:
                               For Profile namespace must be left empty. The Profile namespace will be used.
                               Namespace can be expressed as a template and instantiate using any cluster field.
                             type: string
+                          optional:
+                            default: false
+                            description: |-
+                              Optional indicates that the referenced resource is not mandatory.
+                              If set to true and the resource is not found, the error will be ignored,
+                              and Sveltos will continue processing other ValueFroms.
+                            type: boolean
                         required:
                         - kind
                         - name
@@ -872,6 +893,13 @@ spec:
                         For Profile namespace must be left empty. Profile namespace will be used.
                         Namespace can be expressed as a template and instantiate using any cluster field.
                       type: string
+                    optional:
+                      default: false
+                      description: |-
+                        Optional indicates that the referenced resource is not mandatory.
+                        If set to true and the resource is not found, the error will be ignored,
+                        and Sveltos will continue processing other PolicyRefs.
+                      type: boolean
                     path:
                       description: |-
                         Path to the directory containing the YAML files.
@@ -945,6 +973,13 @@ spec:
                         Identifier is how the resource will be referred to in the
                         template
                       type: string
+                    optional:
+                      default: false
+                      description: |-
+                        Optional indicates that the referenced resource is not mandatory.
+                        If set to true and the resource is not found, the error will be ignored,
+                        and Sveltos will continue processing other TemplateResourceRefs.
+                      type: boolean
                     resource:
                       description: |-
                         Resource references a Kubernetes instance in the management

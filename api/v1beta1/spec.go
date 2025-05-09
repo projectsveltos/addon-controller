@@ -138,6 +138,13 @@ type ValueFrom struct {
 	// - ConfigMap/Secret
 	// +kubebuilder:validation:Enum=ConfigMap;Secret
 	Kind string `json:"kind"`
+
+	// Optional indicates that the referenced resource is not mandatory.
+	// If set to true and the resource is not found, the error will be ignored,
+	// and Sveltos will continue processing other ValueFroms.
+	// +kubebuilder:default:=false
+	// +optional
+	Optional bool `json:"optional,omitempty"`
 }
 
 type RegistryCredentialsConfig struct {
@@ -485,6 +492,13 @@ type KustomizationRef struct {
 	// +optional
 	Path string `json:"path,omitempty"`
 
+	// Optional indicates that the referenced resource is not mandatory.
+	// If set to true and the resource is not found, the error will be ignored,
+	// and Sveltos will continue processing other ValueFroms.
+	// +kubebuilder:default:=false
+	// +optional
+	Optional bool `json:"optional,omitempty"`
+
 	// TargetNamespace sets or overrides the namespace in the
 	// kustomization.yaml file.
 	// +kubebuilder:validation:MinLength=1
@@ -559,6 +573,13 @@ type TemplateResourceRef struct {
 	// Identifier is how the resource will be referred to in the
 	// template
 	Identifier string `json:"identifier"`
+
+	// Optional indicates that the referenced resource is not mandatory.
+	// If set to true and the resource is not found, the error will be ignored,
+	// and Sveltos will continue processing other TemplateResourceRefs.
+	// +kubebuilder:default:=false
+	// +optional
+	Optional bool `json:"optional,omitempty"`
 }
 
 type PolicyRef struct {
@@ -592,6 +613,13 @@ type PolicyRef struct {
 	// +kubebuilder:default:=Remote
 	// +optional
 	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+
+	// Optional indicates that the referenced resource is not mandatory.
+	// If set to true and the resource is not found, the error will be ignored,
+	// and Sveltos will continue processing other PolicyRefs.
+	// +kubebuilder:default:=false
+	// +optional
+	Optional bool `json:"optional,omitempty"`
 }
 
 type DriftExclusion struct {

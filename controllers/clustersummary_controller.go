@@ -933,6 +933,9 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(ctx context.Con
 
 		valuesFromReferences, err := getKustomizationValueFrom(ctx, clusterSummaryScope, kr)
 		if err != nil {
+			if kr.Optional {
+				continue
+			}
 			return nil, err
 		}
 		currentReferences.Append(valuesFromReferences)

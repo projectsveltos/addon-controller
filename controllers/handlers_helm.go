@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"dario.cat/mergo"
 	"github.com/Masterminds/semver/v3"
 	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/credentials"
@@ -2044,41 +2045,106 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
 	logger logr.Logger) (chartutil.Values, error) {
 
-	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	// Get management cluster resources once
+	mgmtConfig := getManagementClusterConfig()
+	mgmtClient := getManagementClusterClient()
+
+	instantiatedValues, err := instantiateTemplateValues(ctx, mgmtConfig, mgmtClient,
 		clusterSummary, requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	c := getManagementClusterClient()
-	templatedValuesFrom, valuesFrom, err := getHelmChartValuesFrom(ctx, c, clusterSummary, requestedChart, logger)
+	// Create result map
+	var result map[string]any
+	err = yaml.Unmarshal([]byte(instantiatedValues), &result)
 	if err != nil {
 		return nil, err
 	}
 
-	for k := range templatedValuesFrom {
-		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			clusterSummary, requestedChart.ChartName, templatedValuesFrom[k], mgmtResources, logger)
-		if err != nil {
-			return nil, err
-		}
-		instantiatedValues += fmt.Sprintf("\n\n%s", instantiatedValuesFrom)
+	valuesFrom, err := getHelmChartValuesFrom(ctx, mgmtClient, clusterSummary, requestedChart, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	for k := range valuesFrom {
-		instantiatedValues += fmt.Sprintf("\n\n%s", valuesFrom[k])
+		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, mgmtConfig, mgmtClient,
+			clusterSummary, requestedChart.ChartName, valuesFrom[k], mgmtResources, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		// Parse to map
+		var instantiatedValuesMap map[string]any
+		err = yaml.Unmarshal([]byte(instantiatedValuesFrom), &instantiatedValuesMap)
+		if err != nil {
+			return nil, err
+		}
+
+		err = mergo.Merge(&result, instantiatedValuesMap, mergo.WithOverride)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying helm charts with Values %q", instantiatedValues))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying helm charts with values %#v", valuesFrom))
 
-	return chartutil.ReadValues([]byte(instantiatedValues))
+	return chartutil.Values(result), nil
 }
 
-// getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret
+// getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret.
+// order is
 func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	helmChart *configv1beta1.HelmChart, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
+	helmChart *configv1beta1.HelmChart, logger logr.Logger) (values []string, err error) {
 
-	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, false, logger)
+	values = []string{}
+	for i := range helmChart.ValuesFrom {
+		vf := &helmChart.ValuesFrom[i]
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, vf.Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				vf.Kind, vf.Namespace, vf.Name, err))
+			return nil, err
+		}
+
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, vf.Name, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				vf.Kind, vf.Namespace, vf.Name, err))
+			return nil, err
+		}
+
+		if vf.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
+			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+			if err != nil {
+				err = handleReferenceError(err, vf.Kind, namespace, name, vf.Optional, logger)
+				if err == nil {
+					continue
+				}
+				return nil, err
+			}
+
+			for _, value := range configMap.Data {
+				values = append(values, value)
+			}
+		} else if vf.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
+			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+			if err != nil {
+				err = handleReferenceError(err, vf.Kind, namespace, name, vf.Optional, logger)
+				if err == nil {
+					continue
+				}
+				return nil, err
+			}
+			for _, value := range secret.Data {
+				values = append(values, string(value))
+			}
+		}
+	}
+	return values, nil
 }
 
 // collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all

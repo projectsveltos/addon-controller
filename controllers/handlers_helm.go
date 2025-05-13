@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -48,6 +49,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/helmpath"
 	"helm.sh/helm/v3/pkg/registry"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/repo"
@@ -981,6 +983,26 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 		logger.V(logs.LogInfo).Info("non OCI. Download index file.")
 		_, err = chartRepo.DownloadIndexFile()
 		if err != nil {
+			// Check if error is "no chart version found for"
+			if strings.Contains(err.Error(), "no chart version found for") {
+				logger.V(logs.LogInfo).Info("Chart version not found, cleaning repository cache", "repo", entry.Name)
+
+				// Create the cache path for this repository
+				repoCache := filepath.Join(settings.RepositoryCache, helmpath.CacheIndexFile(entry.Name))
+
+				// Remove the cache file
+				if err := os.Remove(repoCache); err != nil {
+					logger.V(logs.LogDebug).Error(err, "Failed to remove repository cache")
+				}
+
+				// Try downloading again after clearing cache
+				_, err = chartRepo.DownloadIndexFile()
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+
 			return err
 		}
 	}

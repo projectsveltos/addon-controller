@@ -75,6 +75,14 @@ func (r *NonRetriableError) Error() string {
 	return r.Message
 }
 
+type ClusterSummaryDeletedError struct {
+	Message string
+}
+
+func (r *ClusterSummaryDeletedError) Error() string {
+	return r.Message
+}
+
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {

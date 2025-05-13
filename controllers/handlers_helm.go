@@ -2040,45 +2040,103 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 	return err
 }
 
-func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
-	logger logr.Logger) (chartutil.Values, error) {
+func mergeMaps(dst, src map[string]interface{}) map[string]interface{} {
+	for k, vSrc := range src {
+		if vDst, exists := dst[k]; exists {
+			mapDst, okDst := vDst.(map[string]interface{})
+			mapSrc, okSrc := vSrc.(map[string]interface{})
+			if okDst && okSrc {
+				dst[k] = mergeMaps(mapDst, mapSrc)
+				continue
+			}
+		}
+		dst[k] = vSrc
+	}
+	return dst
+}
 
-	instantiatedValues, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		clusterSummary, requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
+func splitAndParseYAML(raw string) (map[string]interface{}, error) {
+	result := map[string]interface{}{}
+	dec := yaml.NewDecoder(strings.NewReader(raw))
+	for {
+		doc := map[string]interface{}{}
+		if err := dec.Decode(&doc); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, err
+		}
+		result = mergeMaps(result, doc)
+	}
+	return result, nil
+}
+
+func loadValuesFromConfigMap(
+	ctx context.Context,
+	c client.Client,
+	clusterSummary *configv1beta1.ClusterSummary,
+	vf configv1beta1.ValueFrom,
+) (map[string]any, error) {
+
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		vf.Namespace, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return nil, err
+	}
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		vf.Name, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		return nil, err
+	}
+	cm, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+	if err != nil {
+		if apierrors.IsNotFound(err) && vf.Optional {
+			return map[string]any{}, nil
+		}
+		return nil, err
+	}
+	merged := map[string]any{}
+	for _, raw := range cm.Data {
+		section := map[string]any{}
+		if err := yaml.Unmarshal([]byte(raw), &section); err != nil {
+			return nil, err
+		}
+		merged = mergeMaps(merged, section)
+	}
+	return merged, nil
+}
+
+func getInstantiatedValues(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured,
+	requestedChart *configv1beta1.HelmChart,
+	logger logr.Logger,
+) (chartutil.Values, error) {
+
+	baseYAML, err := instantiateTemplateValues(ctx,
+		getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary, requestedChart.ChartName, requestedChart.Values,
+		mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	c := getManagementClusterClient()
-	templatedValuesFrom, valuesFrom, err := getHelmChartValuesFrom(ctx, c, clusterSummary, requestedChart, logger)
+	mergedValues, err := splitAndParseYAML(baseYAML)
 	if err != nil {
 		return nil, err
 	}
 
-	for k := range templatedValuesFrom {
-		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			clusterSummary, requestedChart.ChartName, templatedValuesFrom[k], mgmtResources, logger)
+	for _, vf := range requestedChart.ValuesFrom {
+		m, err := loadValuesFromConfigMap(ctx, getManagementClusterClient(), clusterSummary, vf)
 		if err != nil {
 			return nil, err
 		}
-		instantiatedValues += fmt.Sprintf("\n\n%s", instantiatedValuesFrom)
+		mergedValues = mergeMaps(mergedValues, m)
 	}
 
-	for k := range valuesFrom {
-		instantiatedValues += fmt.Sprintf("\n\n%s", valuesFrom[k])
-	}
-
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying helm charts with Values %q", instantiatedValues))
-
-	return chartutil.ReadValues([]byte(instantiatedValues))
-}
-
-// getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret
-func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	helmChart *configv1beta1.HelmChart, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
-
-	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, false, logger)
+	return mergedValues, nil
 }
 
 // collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all

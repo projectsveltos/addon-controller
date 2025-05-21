@@ -756,6 +756,20 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart, kubeconfig string,
 	registryOptions *registryClientOptions, logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
 
+	//nolint: gosec // maxHistory is guaranteed to be non-negative
+	maxHistory := uint(getMaxHistoryValue(currentChart.Options))
+
+	if fs := getFeatureSummaryForFeatureID(clusterSummary, configv1beta1.FeatureHelm); fs != nil {
+		if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil &&
+			strings.Contains(*fs.FailureMessage, "context deadline exceeded") {
+
+			err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("install helm release")
 	err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
@@ -2481,7 +2495,11 @@ func getDeletionPropagation(options *configv1beta1.HelmOptions) string {
 
 func getMaxHistoryValue(options *configv1beta1.HelmOptions) int {
 	if options != nil {
-		return options.UpgradeOptions.MaxHistory
+		maxHistory := options.UpgradeOptions.MaxHistory
+		if maxHistory <= 0 {
+			maxHistory = 1
+		}
+		return maxHistory
 	}
 
 	return defaultMaxHistory

@@ -207,6 +207,7 @@ var (
 )
 
 var (
-	AssociatedClusterExist = associatedClusterExist
-	RemoveDuplicates       = removeDuplicates
+	DeplAssociatedClusterExist = deplAssociatedClusterExist
+	RemoveStaleResourceSummary = removeStaleResourceSummary
+	RemoveDuplicates           = removeDuplicates
 )

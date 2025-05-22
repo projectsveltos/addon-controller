@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +29,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -428,7 +430,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 		}
 	})
 
-	It("associatedClusterExist returns false when associated cluster does not exist",
+	It("deplAssociatedClusterExist returns false when associated cluster does not exist",
 		func() {
 			clusterNamespace := randomString()
 			clusterName := randomString()
@@ -474,7 +476,8 @@ spec:
 			Expect(c.Get(context.TODO(),
 				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, currentDepl)).To(Succeed())
 
-			Expect(controllers.AssociatedClusterExist(context.TODO(), c, currentDepl, logger)).To(BeFalse())
+			exist, _, _, _ := controllers.DeplAssociatedClusterExist(context.TODO(), c, currentDepl, logger)
+			Expect(exist).To(BeFalse())
 
 			sveltosCluster := libsveltosv1beta1.SveltosCluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -483,8 +486,57 @@ spec:
 				},
 			}
 			Expect(c.Create(context.TODO(), &sveltosCluster)).To(Succeed())
-			Expect(controllers.AssociatedClusterExist(context.TODO(), c, currentDepl, logger)).To(BeTrue())
+			exist, _, _, _ = controllers.DeplAssociatedClusterExist(context.TODO(), c, currentDepl, logger)
+			Expect(exist).To(BeTrue())
+		})
 
+	It("removeStaleResourceSummary removes stales resourceSummary instances",
+		func() {
+			clusterNamespace := randomString()
+			clusterName := randomString()
+			clusterType := libsveltosv1beta1.ClusterTypeSveltos
+
+			logger := textlogger.NewLogger(textlogger.NewConfig())
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterNamespace,
+				},
+			}
+
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+			rs := fmt.Sprintf(`apiVersion: lib.projectsveltos.io/v1beta1
+kind: ResourceSummary
+metadata:
+  labels:
+    projectsveltos.io/cluster-summary-namespace: %s
+    version.projectsveltos.io/clustername: %s
+    version.projectsveltos.io/clustertype: %s
+  name: deploy-cert-manager-sveltos-cluster1
+  namespace: %s
+`, clusterNamespace, clusterName, strings.ToLower(string(clusterType)), clusterNamespace)
+
+			u, err := k8s_utils.GetUnstructured([]byte(rs))
+			Expect(err).To(BeNil())
+
+			Expect(testEnv.Create(context.TODO(), u)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, u)).To(Succeed())
+
+			currentRS := &libsveltosv1beta1.ResourceSummary{}
+
+			Expect(controllers.RemoveStaleResourceSummary(context.TODO(), clusterNamespace, clusterName,
+				clusterType, logger)).To(Succeed())
+
+			Eventually(func() bool {
+				err = testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, currentRS)
+				if err == nil {
+					return false
+				}
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
 		})
 })
 

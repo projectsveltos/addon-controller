@@ -286,8 +286,17 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 		logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
 		cs := clusterSummaryScope.ClusterSummary
-		if err := removeDriftDetectionManagerFromManagementCluster(ctx,
-			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger); err != nil {
+
+		err = removeStaleResourceSummary(ctx, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to remove resourceSummary instances from management cluster: %v", err))
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+
+		err := removeDriftDetectionManagerFromManagementCluster(ctx,
+			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+		if err != nil {
 			logger.V(logs.LogInfo).Info(
 				fmt.Sprintf("failed to remove drift-detection-manager resources from management cluster: %v", err))
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
@@ -439,7 +448,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	}
 
 	if getAgentInMgmtCluster() {
-		go removeStaleDriftDetectionManager(ctx, r.Logger)
+		go removeStaleDriftDetectionResources(ctx, r.Logger)
 	}
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())

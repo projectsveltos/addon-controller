@@ -760,9 +760,7 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	maxHistory := uint(getMaxHistoryValue(currentChart.Options))
 
 	if fs := getFeatureSummaryForFeatureID(clusterSummary, configv1beta1.FeatureHelm); fs != nil {
-		if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil &&
-			strings.Contains(*fs.FailureMessage, "context deadline exceeded") {
-
+		if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil {
 			err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 			if err != nil {
 				return nil, err

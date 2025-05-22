@@ -126,9 +126,19 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 	}
 
 	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")
+	listOptions := []client.ListOption{}
+	if getAgentInMgmtCluster() {
+		listOptions = []client.ListOption{
+			client.MatchingLabels{
+				sveltos_upgrade.ClusterNameLabel:               cluster.Name,
+				libsveltosv1beta1.ClusterSummaryNamespaceLabel: cluster.Namespace,
+			},
+		}
+	}
+
 	rsList := libsveltosv1beta1.ResourceSummaryList{}
 
-	err = clusterClient.List(ctx, &rsList)
+	err = clusterClient.List(ctx, &rsList, listOptions...)
 	if err != nil {
 		return err
 	}
@@ -138,7 +148,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 	for i := range rsList.Items {
 		rs := &rsList.Items[i]
 		if !rs.DeletionTimestamp.IsZero() {
-			// ignore deleted ClassifierReport
+			// ignore deleted resourceSummary
 			continue
 		}
 		if rs.Status.ResourcesChanged || rs.Status.HelmResourcesChanged || rs.Status.KustomizeResourcesChanged {

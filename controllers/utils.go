@@ -50,6 +50,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 //+kubebuilder:rbac:groups=extension.projectsveltos.io,resources=yttsources,verbs=get;list;watch
@@ -498,7 +499,8 @@ func getSortedKustomizationRefs(clusterSummary *configv1beta1.ClusterSummary) []
 }
 
 // Identifies and removes drift detection deployments that are no longer associated with active clusters
-func removeStaleDriftDetectionManager(ctx context.Context, logger logr.Logger) {
+// Identifies and removes resourceSummary instances from clusters that are no longer existing
+func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger) {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
 			driftDetectionFeatureLabelKey: driftDetectionFeatureLabelValue,
@@ -507,6 +509,7 @@ func removeStaleDriftDetectionManager(ctx context.Context, logger logr.Logger) {
 
 	for {
 		time.Sleep(time.Minute)
+
 		c := getManagementClusterClient()
 		driftDetectionDeployments := &appsv1.DeploymentList{}
 		err := c.List(ctx, driftDetectionDeployments, listOptions...)
@@ -518,7 +521,15 @@ func removeStaleDriftDetectionManager(ctx context.Context, logger logr.Logger) {
 		for i := range driftDetectionDeployments.Items {
 			depl := &driftDetectionDeployments.Items[i]
 
-			if !associatedClusterExist(ctx, c, depl, logger) {
+			exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
+			if !exist {
+				// find resourceSummaries from this cluster and remove those.
+				// Remove deployment only after this one succeed
+				err = removeStaleResourceSummary(ctx, clusterNs, clusterName, clusterType, logger)
+				if err != nil {
+					continue
+				}
+
 				logger.V(logsettings.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
 					depl.Namespace, depl.Name))
 				_ = c.Delete(ctx, depl)
@@ -527,35 +538,72 @@ func removeStaleDriftDetectionManager(ctx context.Context, logger logr.Logger) {
 	}
 }
 
-func associatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.Deployment, logger logr.Logger) bool {
+func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
+
+	c := getManagementClusterClient()
+
+	rsListOptions := []client.ListOption{
+		client.MatchingLabels{
+			sveltos_upgrade.ClusterNameLabel:               clusterName,
+			sveltos_upgrade.ClusterTypeLabel:               strings.ToLower(string(clusterType)),
+			libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterNamespace,
+		},
+	}
+
+	logger.V(logsettings.LogInfo).Info(fmt.Sprintf("MGIANLUC %v", rsListOptions))
+
+	resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
+	err := c.List(ctx, resourceSummaries, rsListOptions...)
+	if err != nil {
+		logger.V(logsettings.LogInfo).Info(
+			fmt.Sprintf("failed to collect resourceSummary instances: %v", err))
+		return err
+	}
+
+	for i := range resourceSummaries.Items {
+		rs := &resourceSummaries.Items[i]
+		err = c.Delete(ctx, rs)
+		if err != nil {
+			logger.V(logsettings.LogInfo).Info(
+				fmt.Sprintf("failed to delete resourceSummary instance: %v", err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.Deployment,
+	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
+
 	if depl.Labels == nil {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
 			depl.Namespace, depl.Name))
-		return true
+		return true, "", "", ""
 	}
 
 	clusterNamespace, ok := depl.Labels[driftDetectionClusterNamespaceLabel]
 	if !ok {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterNamespaceLabel))
-		return true
+		return true, "", "", ""
 	}
 
-	clusterName, ok := depl.Labels[driftDetectionClusterNameLabel]
+	clusterName, ok = depl.Labels[driftDetectionClusterNameLabel]
 	if !ok {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterNameLabel))
-		return true
+		return true, "", "", ""
 	}
 
 	clusterTypeString, ok := depl.Labels[driftDetectionClusterTypeLabel]
 	if !ok {
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterTypeLabel))
-		return true
+		return true, "", "", ""
 	}
 
-	var clusterType libsveltosv1beta1.ClusterType
 	if strings.EqualFold(clusterTypeString, string(libsveltosv1beta1.ClusterTypeSveltos)) {
 		clusterType = libsveltosv1beta1.ClusterTypeSveltos
 	} else if strings.EqualFold(clusterTypeString, string(libsveltosv1beta1.ClusterTypeCapi)) {
@@ -565,11 +613,11 @@ func associatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.D
 	_, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return false
+			return false, clusterNamespace, clusterName, clusterType
 		}
 		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
 			clusterNamespace, clusterName, clusterTypeString, err))
 	}
 
-	return true
+	return true, "", "", ""
 }

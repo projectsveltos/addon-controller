@@ -47,7 +47,7 @@ spec:
         - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:17c2c10741ecf13fa7dceb495edb62dc905b8f9f76a645c6bacea087137f5fa3
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:34aebc52b3aeb98d31a14393ca11ae07eee0b2836e15d53c4a559186ee45957f
         livenessProbe:
           failureThreshold: 3
           httpGet:

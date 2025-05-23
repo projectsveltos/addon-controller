@@ -1797,6 +1797,32 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 				return nil, err
 			}
 
+			if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+				// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
+				// Let the other ClusterSummary take it over.
+
+				currentChart := &configv1beta1.HelmChart{
+					ReleaseNamespace: managedHelmReleases[i].Namespace,
+					ReleaseName:      managedHelmReleases[i].Name,
+				}
+				otherRegisteredClusterSummaries := chartManager.GetRegisteredClusterSummariesForChart(
+					clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+					clusterSummary.Spec.ClusterType, currentChart)
+				if len(otherRegisteredClusterSummaries) > 1 {
+					// Immediately unregister so next inline ClusterSummary can take this over
+					chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+					err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
+						otherRegisteredClusterSummaries, logger)
+					if err != nil {
+						// TODO: Handle errors to prevent bad state. ClusterSummary no longer manage the chart,
+						// but no other ClusterSummary instance has been requeued.
+						return nil, err
+					}
+
+					continue
+				}
+			}
+
 			if err := uninstallRelease(ctx, clusterSummary, managedHelmReleases[i].Name,
 				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil,
 				logger); err != nil {

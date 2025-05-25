@@ -355,13 +355,9 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.32.0
+    version: v1.33.0
     workers:
       machineDeployments:
       - class: default-worker
         name: md-0
-        replicas: 2
-      machinePools:
-      - class: default-worker
-        name: mp-0
         replicas: 2

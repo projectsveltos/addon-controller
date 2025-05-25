@@ -927,7 +927,7 @@ var _ = Describe("ClustersummaryController", func() {
 		result, err = controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
-		Expect(result.Requeue).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
 	})
 
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {

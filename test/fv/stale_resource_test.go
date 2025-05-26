@@ -80,9 +80,7 @@ const (
     sessionAffinity: None`
 )
 
-// This test runs in Serial because it requires the addon controller to only onboard
-// capi cluster with onboard annotations
-var _ = Describe("Stale Resources", Serial, func() {
+var _ = Describe("Stale Resources", func() {
 	const (
 		namePrefix = "stale-resource"
 	)

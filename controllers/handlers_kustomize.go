@@ -146,6 +146,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
+	// If a deployment error happened, do not try to clean stale resources. Because of the error potentially
+	// all resources might be considered stale at this time.
+	if deployError != nil {
+		return deployError
+	}
+
 	var undeployed []configv1beta1.ResourceReport
 	_, undeployed, err = cleanStaleKustomizeResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		localResourceReports, remoteResourceReports, logger)
@@ -172,10 +178,6 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return &configv1beta1.DryRunReconciliationError{}
-	}
-
-	if deployError != nil {
-		return deployError
 	}
 
 	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1beta1.FeatureKustomize, logger)

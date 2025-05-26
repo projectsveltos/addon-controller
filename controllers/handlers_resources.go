@@ -101,6 +101,12 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	// If a deployment error happened, do not try to clean stale resources. Because of the error potentially
+	// all resources might be considered stale at this time.
+	if deployError != nil {
+		return deployError
+	}
+
 	var undeployed []configv1beta1.ResourceReport
 	_, undeployed, err = cleanStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
 		localResourceReports, remoteResourceReports, logger)
@@ -123,10 +129,6 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterType, remoteDeployed, logger)
 	if err != nil {
 		return err
-	}
-
-	if deployError != nil {
-		return deployError
 	}
 
 	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1beta1.FeatureResources, logger)

@@ -1286,9 +1286,9 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	_, err = upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
-		currentRelease, err := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+		currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
 			kubeconfig, registryOptions, getEnableClientCacheValue(requestedChart.Options))
-		if err == nil && currentRelease.Info.Status.IsPending() {
+		if getErr == nil && currentRelease.Info.Status.IsPending() {
 			// This error: "another operation (install/upgrade/rollback) is in progress"
 			// With Sveltos this error should never happen. A previous check ensures that only one
 			// ClusterProfile/Profile can manage a Helm Chart with a given name in a specific namespace within

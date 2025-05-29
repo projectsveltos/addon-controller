@@ -551,8 +551,6 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 		},
 	}
 
-	logger.V(logsettings.LogInfo).Info(fmt.Sprintf("MGIANLUC %v", rsListOptions))
-
 	resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
 	err := c.List(ctx, resourceSummaries, rsListOptions...)
 	if err != nil {

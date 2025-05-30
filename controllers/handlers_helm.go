@@ -1302,7 +1302,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 			// a managed cluster.
 			// Ignore the recoverRelease result. Always return an error as we must install this release back
 			_ = recoverRelease(ctx, clusterSummary, requestedChart, kubeconfig, registryOptions, logger)
-			return fmt.Errorf("tried recovering by uininstalling first")
+			return fmt.Errorf("tried recovering by uninstalling first")
 		}
 		return err
 	}

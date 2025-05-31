@@ -491,10 +491,6 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	}
 
 	releaseReports, chartDeployed, deployError := walkChartsAndDeploy(ctx, c, clusterSummary, kubeconfig, mgmtResources, logger)
-	// Even if there is a deployment error do not return just yet. Update various status and clean stale resources.
-	if deployError != nil {
-		logger.V(logs.LogInfo).Info("MGIANLUC handleCharts failed")
-	}
 
 	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
 	// anymore, such helm release has been successfully remove at this point. So
@@ -535,7 +531,6 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	}
 
 	if deployError != nil {
-		logger.V(logs.LogInfo).Info("MGIANLUC handleCharts failed")
 		return deployError
 	}
 
@@ -599,7 +594,6 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 					instantiatedChart.ChartName, instantiatedChart.ReleaseName, err)
 				continue
 			}
-			logger.V(logs.LogInfo).Info("MGIANLUC walkChartsAndDeploy failed")
 			return releaseReports, chartDeployed, err
 		}
 
@@ -795,7 +789,6 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	logger.V(logs.LogDebug).Info("upgrade helm release")
 	err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Info("MGIANLUC handleUpgrade failed")
 		return nil, err
 	}
 	var message string
@@ -937,7 +930,6 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig,
 			registryOptions, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info("MGIANLUC handleChart failed")
 			return nil, nil, err
 		}
 	} else if shouldUninstall(currentRelease, currentChart) {
@@ -1743,7 +1735,6 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
 		values, mgmtResources, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Info("MGIANLUC upgradeRelease failed")
 		return err
 	}
 

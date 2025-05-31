@@ -545,9 +545,8 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 
 	rsListOptions := []client.ListOption{
 		client.MatchingLabels{
-			sveltos_upgrade.ClusterNameLabel:               clusterName,
-			sveltos_upgrade.ClusterTypeLabel:               strings.ToLower(string(clusterType)),
-			libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterNamespace,
+			sveltos_upgrade.ClusterNameLabel: clusterName,
+			sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(clusterType)),
 		},
 	}
 
@@ -561,6 +560,15 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 
 	for i := range resourceSummaries.Items {
 		rs := &resourceSummaries.Items[i]
+
+		ns, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+		if !ok {
+			continue
+		}
+		if ns != clusterNamespace {
+			continue
+		}
+
 		err = c.Delete(ctx, rs)
 		if err != nil {
 			logger.V(logsettings.LogInfo).Info(

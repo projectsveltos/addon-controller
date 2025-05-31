@@ -488,32 +488,59 @@ func isDeplLabelCorrect(lbls map[string]string, key, value string) bool {
 	return v == value
 }
 
+func matchesClusterSummary(rs *libsveltosv1beta1.ResourceSummary, clusterSummary *configv1beta1.ClusterSummary,
+) bool {
+
+	if rs.Annotations == nil {
+		return false
+	}
+	v, ok := rs.Annotations[libsveltosv1beta1.ClusterSummaryNameAnnotation]
+	if !ok {
+		return false
+	}
+	if v != clusterSummary.Name {
+		return false
+	}
+	v, ok = rs.Annotations[libsveltosv1beta1.ClusterSummaryNamespaceAnnotation]
+	if !ok {
+		return false
+	}
+	if v != clusterSummary.Namespace {
+		return false
+	}
+	return true
+}
+
 func verifyResourceSummary(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {
 	Byf("Verify ResourceSummary is present")
 
-	lbls := map[string]string{
-		libsveltosv1beta1.ClusterSummaryNameLabel:      clusterSummary.Name,
-		libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
-	}
-
-	listOptions := []client.ListOption{
-		client.MatchingLabels(lbls),
-	}
-
 	Eventually(func() bool {
 		resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
-		err := c.List(context.TODO(), resourceSummaries, listOptions...)
+		err := c.List(context.TODO(), resourceSummaries)
 		if err != nil {
 			return false
 		}
-		return len(resourceSummaries.Items) == 1
+		for i := range resourceSummaries.Items {
+			rs := &resourceSummaries.Items[i]
+			if matchesClusterSummary(rs, clusterSummary) {
+				return true
+			}
+		}
+		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 
 	resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
-	Expect(c.List(context.TODO(), resourceSummaries, listOptions...)).To(Succeed())
-	Expect(len(resourceSummaries.Items)).To(Equal(1))
+	Expect(c.List(context.TODO(), resourceSummaries)).To(Succeed())
 
-	currentResourceSummary := &resourceSummaries.Items[0]
+	var currentResourceSummary *libsveltosv1beta1.ResourceSummary
+	for i := range resourceSummaries.Items {
+		rs := &resourceSummaries.Items[i]
+		if matchesClusterSummary(rs, clusterSummary) {
+			currentResourceSummary = rs
+		}
+	}
+
+	Expect(currentResourceSummary).ToNot(BeNil())
 
 	deploymentKind := "Deployment"
 

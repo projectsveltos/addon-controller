@@ -130,8 +130,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 	if getAgentInMgmtCluster() {
 		listOptions = []client.ListOption{
 			client.MatchingLabels{
-				sveltos_upgrade.ClusterNameLabel:               cluster.Name,
-				libsveltosv1beta1.ClusterSummaryNamespaceLabel: cluster.Namespace,
+				sveltos_upgrade.ClusterNameLabel: cluster.Name,
 			},
 		}
 	}
@@ -147,6 +146,15 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 
 	for i := range rsList.Items {
 		rs := &rsList.Items[i]
+
+		ns, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+		if !ok {
+			continue
+		}
+		if ns != cluster.Namespace {
+			continue
+		}
+
 		if !rs.DeletionTimestamp.IsZero() {
 			// ignore deleted resourceSummary
 			continue
@@ -178,26 +186,78 @@ func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, err
 	return true, nil
 }
 
+func getClusterSummaryNameFromResourceSummary(rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger,
+) (string, bool) {
+
+	// ResourceSummary previously used labels for ClusterSummary Namespace and Name.
+	// This information is now stored as annotations. For backward compatibility, we'll
+	// check annotations first, then labels.
+
+	var clusterSummaryName string
+	ok := false
+
+	if rs.Annotations != nil {
+		clusterSummaryName, ok = rs.Annotations[libsveltosv1beta1.ClusterSummaryNameAnnotation]
+	}
+
+	if !ok { // If not found in annotations, try labels
+		if rs.Labels != nil {
+			clusterSummaryName, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
+		}
+	}
+
+	if !ok { // If still not found after checking both
+		logger.V(logs.LogInfo).Info("neither ClusterSummary name annotation nor label are set. Cannot process it.")
+		return "", false
+	}
+
+	return clusterSummaryName, true
+}
+
+func getClusterSummaryNamespaceFromResourceSummary(rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger,
+) (string, bool) {
+
+	// ResourceSummary previously used labels for ClusterSummary Namespace and Name.
+	// This information is now stored as annotations. For backward compatibility, we'll
+	// check annotations first, then labels.
+
+	// Get ClusterSummary Namespace
+	var clusterSummaryNamespace string
+	ok := false
+
+	if rs.Annotations != nil {
+		clusterSummaryNamespace, ok = rs.Annotations[libsveltosv1beta1.ClusterSummaryNamespaceAnnotation]
+	}
+
+	if !ok { // If not found in annotations, try labels
+		if rs.Labels != nil {
+			clusterSummaryNamespace, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
+		}
+	}
+
+	if !ok { // If still not found after checking both
+		logger.V(logs.LogInfo).Info("neither ClusterSummary namespace annotation nor label are set. Cannot process it.")
+		return "", false
+	}
+
+	return clusterSummaryNamespace, true
+}
+
 // clusterClient points to the cluster where ResourceSummary is. That can be
 // the management cluster if running in agentless mode or the managed cluster
 // otherwise
 func processResourceSummary(ctx context.Context, clusterClient client.Client,
 	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
-	if rs.Labels == nil {
-		logger.V(logs.LogInfo).Info("labels not set. Cannot process it")
-		return nil
-	}
-
 	// Get ClusterSummary
-	clusterSummaryName, ok := rs.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
+	clusterSummaryName, ok := getClusterSummaryNameFromResourceSummary(rs, logger)
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummary name label not set. Cannot process it")
 		return nil
 	}
 
 	var clusterSummaryNamespace string
-	clusterSummaryNamespace, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
+	clusterSummaryNamespace, ok = getClusterSummaryNamespaceFromResourceSummary(rs, logger)
 	if !ok {
 		logger.V(logs.LogInfo).Info("clusterSummary namespace label not set. Cannot process it")
 		return nil

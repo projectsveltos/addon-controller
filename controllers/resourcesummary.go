@@ -121,15 +121,18 @@ func deployResourceSummaryInCluster(ctx context.Context, c client.Client,
 	resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, applicant)
 
 	lbls := map[string]string{
-		sveltos_upgrade.ClusterNameLabel:               clusterName,
-		sveltos_upgrade.ClusterTypeLabel:               strings.ToLower(string(clusterType)),
-		libsveltosv1beta1.ClusterSummaryNameLabel:      applicant,
-		libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterNamespace,
+		sveltos_upgrade.ClusterNameLabel: clusterName,
+		sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(clusterType)),
+	}
+
+	annotations := map[string]string{
+		libsveltosv1beta1.ClusterSummaryNameAnnotation:      applicant,
+		libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterNamespace,
 	}
 
 	// Deploy ResourceSummary instance
 	err = deployResourceSummaryInstance(ctx, clusterClient, resources, kustomizeResources, helmResources,
-		resourceSummaryNameInfo.Namespace, resourceSummaryNameInfo.Name, lbls, driftExclusions, logger)
+		resourceSummaryNameInfo.Namespace, resourceSummaryNameInfo.Name, lbls, annotations, driftExclusions, logger)
 	if err != nil {
 		return err
 	}
@@ -399,8 +402,9 @@ func deployDriftDetectionManagerPatchedResources(ctx context.Context, restConfig
 
 func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Client,
 	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
-	helmResources []libsveltosv1beta1.HelmResources, namespace, name string, lbls map[string]string,
-	driftExclusions []configv1beta1.DriftExclusion, logger logr.Logger) error {
+	helmResources []libsveltosv1beta1.HelmResources, namespace, name string,
+	lbls, annotations map[string]string, driftExclusions []configv1beta1.DriftExclusion, logger logr.Logger,
+) error {
 
 	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
 
@@ -415,9 +419,10 @@ func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Cli
 			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present. creating it.")
 			toDeployResourceSummary := &libsveltosv1beta1.ResourceSummary{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-					Labels:    lbls,
+					Name:        name,
+					Namespace:   namespace,
+					Labels:      lbls,
+					Annotations: annotations,
 				},
 			}
 			if resources != nil {
@@ -450,6 +455,7 @@ func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Cli
 	}
 	currentResourceSummary.Spec.Patches = patches
 	currentResourceSummary.Labels = lbls
+	currentResourceSummary.Annotations = annotations
 
 	logger.V(logsettings.LogDebug).Info("resourceSummary instance already present. updating it.")
 	return clusterClient.Update(ctx, currentResourceSummary)

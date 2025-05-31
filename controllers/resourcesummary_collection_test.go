@@ -43,7 +43,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "default",
+				Namespace: cluster.Namespace,
 				Name:      clusterProfileNamePrefix + randomString(),
 				Labels:    map[string]string{controllers.ClusterProfileLabelName: randomString()},
 			},
@@ -90,9 +90,9 @@ var _ = Describe("ResourceSummary Collection", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		resourceSummary := getResourceSummary(nil, nil)
-		resourceSummary.Labels = map[string]string{
-			libsveltosv1beta1.ClusterSummaryNameLabel:      clusterSummary.Name,
-			libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterSummary.Namespace,
+		resourceSummary.Annotations = map[string]string{
+			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
+			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummary.Namespace,
 		}
 		Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())

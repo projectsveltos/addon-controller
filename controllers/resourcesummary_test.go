@@ -82,13 +82,13 @@ var _ = Describe("ResourceSummary Deployer", func() {
 
 		clusterSummaryNamespace := randomString()
 		clusterSummaryName := randomString()
-		lbls := map[string]string{
-			libsveltosv1beta1.ClusterSummaryNameLabel:      clusterSummaryName,
-			libsveltosv1beta1.ClusterSummaryNamespaceLabel: clusterSummaryNamespace,
+		annotations := map[string]string{
+			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummaryName,
+			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummaryNamespace,
 		}
 
 		Expect(controllers.DeployResourceSummaryInstance(ctx, c, resources, nil, nil,
-			namespace, name, lbls, nil, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+			namespace, name, nil, annotations, nil, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 		Expect(c.Get(context.TODO(),
@@ -98,12 +98,12 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			},
 			currentResourceSummary)).To(Succeed())
 
-		Expect(currentResourceSummary.Labels).ToNot(BeNil())
-		v, ok := currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
+		Expect(currentResourceSummary.Annotations).ToNot(BeNil())
+		v, ok := currentResourceSummary.Annotations[libsveltosv1beta1.ClusterSummaryNameAnnotation]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterSummaryName))
 
-		v, ok = currentResourceSummary.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
+		v, ok = currentResourceSummary.Annotations[libsveltosv1beta1.ClusterSummaryNamespaceAnnotation]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(clusterSummaryNamespace))
 

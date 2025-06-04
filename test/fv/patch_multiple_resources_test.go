@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -58,27 +59,35 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 
 		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, cmNamespace, cmName)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: cm.Namespace,
-				Name:      cm.Name,
-			},
-		}
-		currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
-			{
-				Target: &libsveltosv1beta1.PatchSelector{
-					Kind: "Namespace",
-					Name: ".*",
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: cm.Namespace,
+					Name:      cm.Name,
 				},
-				Patch: `- op: add
+			}
+			currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
+				{
+					Target: &libsveltosv1beta1.PatchSelector{
+						Kind: "Namespace",
+						Name: ".*",
+					},
+					Patch: `- op: add
   path: /metadata/labels/type
   value: operator`,
-			},
-		}
+				},
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -53,45 +54,61 @@ var _ = Describe("Dependencies", func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfileDependency.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://airflow.apache.org",
-				RepositoryName:   "apache-airflow",
-				ChartName:        "apache-airflow/airflow",
-				ChartVersion:     "1.15.0",
-				ReleaseName:      "airflow",
-				ReleaseNamespace: "airflow",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Values: `createUserJob:
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://airflow.apache.org",
+					RepositoryName:   "apache-airflow",
+					ChartName:        "apache-airflow/airflow",
+					ChartVersion:     "1.15.0",
+					ReleaseName:      "airflow",
+					ReleaseNamespace: "airflow",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values: `createUserJob:
   useHelmHooks: false
   applyCustomEnv: false
 migrateDatabaseJob:
   useHelmHooks: false
   applyCustomEnv: false`,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummaryDependency := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
-				ChartName:        "bitnami/flink",
-				ChartVersion:     "1.4.0",
-				ReleaseName:      "flink",
-				ReleaseNamespace: "flink",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://charts.bitnami.com/bitnami",
+					RepositoryName:   "bitnami",
+					ChartName:        "bitnami/flink",
+					ChartVersion:     "1.4.0",
+					ReleaseName:      "flink",
+					ReleaseNamespace: "flink",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

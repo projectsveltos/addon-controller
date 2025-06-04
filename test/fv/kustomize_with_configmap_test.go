@@ -28,6 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -87,24 +88,31 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		Byf("Update ClusterProfile %s to reference ConfigMap kustomize", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{
-			{
-				Kind:            string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace:       defaultNamespace,
-				Name:            kustomizeConfigMapName, // this is created by Makefile and contains kustomize files
-				Path:            "./overlays/production/",
-				TargetNamespace: targetNamespace,
-				ValuesFrom: []configv1beta1.ValueFrom{
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: labelsConfigMap.Namespace,
-						Name:      labelsConfigMap.Name,
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{
+				{
+					Kind:            string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace:       defaultNamespace,
+					Name:            kustomizeConfigMapName, // this is created by Makefile and contains kustomize files
+					Path:            "./overlays/production/",
+					TargetNamespace: targetNamespace,
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: labelsConfigMap.Namespace,
+							Name:      labelsConfigMap.Name,
+						},
 					},
 				},
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

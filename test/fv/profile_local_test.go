@@ -27,6 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -48,16 +49,19 @@ metadata:
 
 	It("deploymentType Local only allows resources to be created in the same namespace", Label("FV", "EXTENDED"), func() {
 		By("Grant addon-controller permission to create/delete ServiceAccount in the management cluster")
-		clusterRole := &rbacv1.ClusterRole{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: "addon-controller-role-extra"},
-			clusterRole)).To(Succeed())
-		clusterRole.Rules = append(clusterRole.Rules,
-			rbacv1.PolicyRule{
-				Verbs:     []string{"*"},
-				APIGroups: []string{""},
-				Resources: []string{"serviceaccounts"},
-			})
-		Expect(k8sClient.Update(context.TODO(), clusterRole)).To(Succeed())
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			clusterRole := &rbacv1.ClusterRole{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: "addon-controller-role-extra"},
+				clusterRole)).To(Succeed())
+			clusterRole.Rules = append(clusterRole.Rules,
+				rbacv1.PolicyRule{
+					Verbs:     []string{"*"},
+					APIGroups: []string{""},
+					Resources: []string{"serviceaccounts"},
+				})
+			return k8sClient.Update(context.TODO(), clusterRole)
+		})
+		Expect(err).To(BeNil())
 
 		Byf("Create a Profile matching Cluster %s/%s",
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)

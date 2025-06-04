@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -48,20 +49,28 @@ var _ = Describe("Helm", func() {
 
 		Byf("Update ClusterProfile %s to deploy oci helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
-				RepositoryName:   "oci-vault",
-				ChartName:        "vault",
-				ChartVersion:     "1.6.0",
-				ReleaseName:      "vault",
-				ReleaseNamespace: "vault",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
+					RepositoryName:   "oci-vault",
+					ChartName:        "vault",
+					ChartVersion:     "1.6.0",
+					ReleaseName:      "vault",
+					ReleaseNamespace: "vault",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

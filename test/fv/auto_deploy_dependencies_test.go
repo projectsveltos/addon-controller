@@ -47,7 +47,7 @@ metadata:
       The ':latest' tag is mutable and can lead to unexpected errors if the
       image changes. A best practice is to use an immutable tag that maps to
       a specific version of an application Pod. This policy validates that the image
-      specifies a tag and that it is not called latest.      
+      specifies a tag and that it is not called latest.
 spec:
   validationFailureAction: Audit
   background: true
@@ -98,7 +98,7 @@ var _ = Describe("Feature", func() {
 	It("With AutoDeployDependencies set Sveltos resolves all prerequesities", Label("NEW-FV"), func() {
 		Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector is not set
 		helmClusterProfile := getClusterProfile(namePrefix, map[string]string{})
-		Byf("Update ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
+		Byf("Create ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
 		helmClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",

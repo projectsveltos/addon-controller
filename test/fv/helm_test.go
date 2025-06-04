@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -63,42 +64,50 @@ var _ = Describe("Helm", func() {
 			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
+
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.3.4",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
-				RepositoryURL:    "https://docs.wildfly.org/wildfly-charts/",
-				RepositoryName:   "wildfly",
-				ChartName:        "wildfly/wildfly",
-				ChartVersion:     "2.4.0",
-				ReleaseName:      "wildfly",
-				ReleaseNamespace: "wildfly",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kyverno.github.io/kyverno/",
+					RepositoryName:   "kyverno",
+					ChartName:        "kyverno/kyverno",
+					ChartVersion:     "v3.3.4",
+					ReleaseName:      "kyverno-latest",
+					ReleaseNamespace: "kyverno",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+				{
+					RepositoryURL:    "https://docs.wildfly.org/wildfly-charts/",
+					RepositoryName:   "wildfly",
+					ChartName:        "wildfly/wildfly",
+					ChartVersion:     "2.4.0",
+					ReleaseName:      "wildfly",
+					ReleaseNamespace: "wildfly",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
 
-		currentClusterProfile.Spec.ValidateHealths = []configv1beta1.ValidateHealth{
-			{
-				Name:      "kyverno-deployment-health",
-				FeatureID: configv1beta1.FeatureHelm,
-				Namespace: "kyverno",
-				Group:     "apps",
-				Version:   "v1",
-				Kind:      "Deployment",
-				Script:    luaEvaluateDeploymentHealth,
-			},
-		}
+			currentClusterProfile.Spec.ValidateHealths = []configv1beta1.ValidateHealth{
+				{
+					Name:      "kyverno-deployment-health",
+					FeatureID: configv1beta1.FeatureHelm,
+					Namespace: "kyverno",
+					Group:     "apps",
+					Version:   "v1",
+					Kind:      "Deployment",
+					Script:    luaEvaluateDeploymentHealth,
+				},
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

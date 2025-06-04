@@ -30,6 +30,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -151,21 +152,29 @@ var _ = Describe("Feature", func() {
 
 		Byf("Update ClusterProfile %s to reference ConfigMap and add Tenant admin labels", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Labels = map[string]string{
-			libsveltosv1beta1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
-			libsveltosv1beta1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
-		}
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMapNs,
-				Name:      configMapName,
-				// Deploy content of this configMap into management cluster
-				DeploymentType: configv1beta1.DeploymentTypeLocal,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Labels = map[string]string{
+				libsveltosv1beta1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
+				libsveltosv1beta1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
+			}
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMapNs,
+					Name:      configMapName,
+					// Deploy content of this configMap into management cluster
+					DeploymentType: configv1beta1.DeploymentTypeLocal,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

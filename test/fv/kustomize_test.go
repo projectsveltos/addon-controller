@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -61,17 +62,24 @@ var _ = Describe("Kustomize with GitRepository", func() {
 
 		Byf("Update ClusterProfile %s to reference GitRepository flux-system/flux-system", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{
-			{
-				Kind:            sourcev1.GitRepositoryKind,
-				Namespace:       gitRepositoryNamespace,
-				Name:            gitRepositoryName,
-				Path:            "./helloWorld",
-				TargetNamespace: targetNamespace,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.KustomizationRefs = []configv1beta1.KustomizationRef{
+				{
+					Kind:            sourcev1.GitRepositoryKind,
+					Namespace:       gitRepositoryNamespace,
+					Name:            gitRepositoryName,
+					Path:            "./helloWorld",
+					TargetNamespace: targetNamespace,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		Byf("Verifying GitRepository %s/%s exists", gitRepositoryNamespace, gitRepositoryName)
 		gitRepository := &sourcev1.GitRepository{}

@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -58,19 +59,27 @@ var _ = Describe("Helm", func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://operator.min.io",
-				RepositoryName:   "minio-operator",
-				ChartName:        "minio-operator/minio-operator",
-				ChartVersion:     "4.3.7",
-				ReleaseName:      minioReleaseName,
-				ReleaseNamespace: minioNamespace,
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://operator.min.io",
+					RepositoryName:   "minio-operator",
+					ChartName:        "minio-operator/minio-operator",
+					ChartVersion:     "4.3.7",
+					ReleaseName:      minioReleaseName,
+					ReleaseNamespace: minioNamespace,
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

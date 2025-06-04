@@ -74,9 +74,9 @@ var _ = Describe("Feature", func() {
 
 	// This Helm release contains corev1.List. Verify those are expanded so drift-detection can watch for configuration drift
 	It("Expand corev1List in helm charts", Label("NEW-FV"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Get a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		Byf("Update ClusterProfile %s to deploy kube-prometheus-stack helm chart", clusterProfile.Name)
+		Byf("Create ClusterProfile %s to deploy kube-prometheus-stack helm chart", clusterProfile.Name)
 		clusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
 				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",

@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -78,44 +79,51 @@ metadata:
 		Byf("Update ClusterProfile %s to deploy helm charts and referencing ConfigMap %s/%s",
 			clusterProfile.Name, configMap.Namespace, configMap.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
 
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-				RepositoryName:   "prometheus-community",
-				ChartName:        "prometheus-community/prometheus",
-				ChartVersion:     "25.24.0",
-				ReleaseName:      "prometheus",
-				ReleaseNamespace: "prometheus",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				ValuesFrom: []configv1beta1.ValueFrom{
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: namespace,
-						Name:      randomString(), // this wont exist but it is marked as optional
-						Optional:  true,
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
+					RepositoryName:   "prometheus-community",
+					ChartName:        "prometheus-community/prometheus",
+					ChartVersion:     "25.24.0",
+					ReleaseName:      "prometheus",
+					ReleaseNamespace: "prometheus",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: namespace,
+							Name:      randomString(), // this wont exist but it is marked as optional
+							Optional:  true,
+						},
 					},
 				},
-			},
-		}
+			}
 
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
-				Name:      configMap.Name,
-			},
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
-				Name:      randomString(), // this wont exist but it is marked as optional
-				Optional:  true,
-			},
-		}
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      randomString(), // this wont exist but it is marked as optional
+					Optional:  true,
+				},
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

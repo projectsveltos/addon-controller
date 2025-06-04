@@ -26,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -49,26 +50,34 @@ var _ = Describe("HelmOptions", func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-				RepositoryName:   "external-dns",
-				ChartName:        "external-dns/external-dns",
-				ChartVersion:     "1.14.5",
-				ReleaseName:      "external-dns",
-				ReleaseNamespace: "external-dns",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Options: &configv1beta1.HelmOptions{
-					DependencyUpdate: true,
-					InstallOptions: configv1beta1.HelmInstallOptions{
-						Replace: false,
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
+					RepositoryName:   "external-dns",
+					ChartName:        "external-dns/external-dns",
+					ChartVersion:     "1.14.5",
+					ReleaseName:      "external-dns",
+					ReleaseNamespace: "external-dns",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Options: &configv1beta1.HelmOptions{
+						DependencyUpdate: true,
+						InstallOptions: configv1beta1.HelmInstallOptions{
+							Replace: false,
+						},
 					},
 				},
-			},
-		}
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
@@ -102,27 +111,35 @@ var _ = Describe("HelmOptions", func() {
 			nil, charts)
 
 		Byf("Update ClusterProfile %s to upgrade external-dns helm charts", clusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-				RepositoryName:   "external-dns",
-				ChartName:        "external-dns/external-dns",
-				ChartVersion:     "1.14.4",
-				ReleaseName:      "external-dns",
-				ReleaseNamespace: "external-dns",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Options: &configv1beta1.HelmOptions{
-					DependencyUpdate: true,
-					UpgradeOptions: configv1beta1.HelmUpgradeOptions{
-						ResetValues: false,
-						MaxHistory:  5,
+
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
+					RepositoryName:   "external-dns",
+					ChartName:        "external-dns/external-dns",
+					ChartVersion:     "1.14.4",
+					ReleaseName:      "external-dns",
+					ReleaseNamespace: "external-dns",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Options: &configv1beta1.HelmOptions{
+						DependencyUpdate: true,
+						UpgradeOptions: configv1beta1.HelmUpgradeOptions{
+							ResetValues: false,
+							MaxHistory:  5,
+						},
 					},
 				},
-			},
-		}
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
@@ -143,27 +160,32 @@ var _ = Describe("HelmOptions", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Update ClusterProfile %s to uninstall external-dns helm charts", clusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-				RepositoryName:   "external-dns",
-				ChartName:        "external-dns/external-dns",
-				ChartVersion:     "1.14.4",
-				ReleaseName:      "external-dns",
-				ReleaseNamespace: "external-dns",
-				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
-				Options: &configv1beta1.HelmOptions{
-					DependencyUpdate: true,
-					UninstallOptions: configv1beta1.HelmUninstallOptions{
-						KeepHistory:         true,
-						DeletionPropagation: "background",
+
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
+					RepositoryName:   "external-dns",
+					ChartName:        "external-dns/external-dns",
+					ChartVersion:     "1.14.4",
+					ReleaseName:      "external-dns",
+					ReleaseNamespace: "external-dns",
+					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
+					Options: &configv1beta1.HelmOptions{
+						DependencyUpdate: true,
+						UninstallOptions: configv1beta1.HelmUninstallOptions{
+							KeepHistory:         true,
+							DeletionPropagation: "background",
+						},
 					},
 				},
-			},
-		}
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
 
 		Byf("Verifying external-dns deployment is removed from workload cluster")
 		Eventually(func() bool {

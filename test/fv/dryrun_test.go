@@ -26,6 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -103,30 +104,42 @@ var _ = Describe("DryRun", func() {
 		Byf("Update ClusterProfile %s to reference ConfigMap with Kong ServiceAccount %s/%s",
 			clusterProfile.Name, kongSAConfigMap.Namespace, kongSAConfigMap.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: kongSAConfigMap.Namespace,
-				Name:      kongSAConfigMap.Name,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: kongSAConfigMap.Namespace,
+					Name:      kongSAConfigMap.Name,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
 
 		Byf("Update ClusterProfile %s to deploy mysql helm chart", clusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-				RepositoryName:   "mariadb-operator",
-				ChartName:        "mariadb-operator/mariadb-operator",
-				ChartVersion:     "0.35.1",
-				ReleaseName:      "mariadb",
-				ReleaseNamespace: "mariadb",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+					RepositoryName:   "mariadb-operator",
+					ChartName:        "mariadb-operator/mariadb-operator",
+					ChartVersion:     "0.35.1",
+					ReleaseName:      "mariadb",
+					ReleaseNamespace: "mariadb",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
@@ -171,57 +184,63 @@ var _ = Describe("DryRun", func() {
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to reference configMaps with Kong's configuration", dryRunClusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: dryRunClusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMapNs, Name: kongRoleConfigMap.Name,
-			},
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMapNs, Name: kongSAConfigMap.Name,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: dryRunClusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMapNs, Name: kongRoleConfigMap.Name,
+				},
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMapNs, Name: kongSAConfigMap.Name,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
 
 		Byf("Update ClusterProfile %s to reference some helm charts", dryRunClusterProfile.Name)
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: dryRunClusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-				RepositoryName:   "mariadb-operator",
-				ChartName:        "mariadb-operator/mariadb-operator",
-				ChartVersion:     "0.36.0",
-				ReleaseName:      "mariadb",
-				ReleaseNamespace: "mariadb",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
-				RepositoryURL:    "https://charts.jetstack.io",
-				RepositoryName:   "jetstack",
-				ChartName:        "jetstack/cert-manager",
-				ChartVersion:     "v1.16.2",
-				ReleaseName:      "cert-manager",
-				ReleaseNamespace: "cert-manager",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Values: `crds:
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: dryRunClusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
+					RepositoryName:   "mariadb-operator",
+					ChartName:        "mariadb-operator/mariadb-operator",
+					ChartVersion:     "0.36.0",
+					ReleaseName:      "mariadb",
+					ReleaseNamespace: "mariadb",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+				{
+					RepositoryURL:    "https://charts.jetstack.io",
+					RepositoryName:   "jetstack",
+					ChartName:        "jetstack/cert-manager",
+					ChartVersion:     "v1.16.2",
+					ReleaseName:      "cert-manager",
+					ReleaseNamespace: "cert-manager",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values: `crds:
   enabled: true`,
-			},
-			{
-				RepositoryURL:    "https://cloudnative-pg.github.io/charts",
-				RepositoryName:   "cloudnative-pg",
-				ChartName:        "cloudnative-pg/cloudnative-pg",
-				ChartVersion:     "0.22.1",
-				ReleaseName:      "cnpg",
-				ReleaseNamespace: "cnpg-system",
-				HelmChartAction:  configv1beta1.HelmChartActionUninstall,
-			},
-		}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+				},
+				{
+					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
+					RepositoryName:   "cloudnative-pg",
+					ChartName:        "cloudnative-pg/cloudnative-pg",
+					ChartVersion:     "0.22.1",
+					ReleaseName:      "cnpg",
+					ReleaseNamespace: "cnpg-system",
+					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
 
 		dryRunClusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

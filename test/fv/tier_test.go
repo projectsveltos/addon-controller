@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -48,40 +49,48 @@ var _ = Describe("Helm", Serial, func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.2.6",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
-				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-				RepositoryName:   "prometheus-community",
-				ChartName:        "prometheus-community/prometheus",
-				ChartVersion:     "25.24.0",
-				ReleaseName:      "prometheus",
-				ReleaseNamespace: "prometheus",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
-				RepositoryURL:    "https://grafana.github.io/helm-charts",
-				RepositoryName:   "grafana",
-				ChartName:        "grafana/grafana",
-				ChartVersion:     "8.3.4",
-				ReleaseName:      "grafana",
-				ReleaseNamespace: "grafana",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
-		currentClusterProfile.Spec.Tier = 90
-		currentClusterProfile.Spec.ContinueOnConflict = true
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kyverno.github.io/kyverno/",
+					RepositoryName:   "kyverno",
+					ChartName:        "kyverno/kyverno",
+					ChartVersion:     "v3.2.6",
+					ReleaseName:      "kyverno-latest",
+					ReleaseNamespace: "kyverno",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+				{
+					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
+					RepositoryName:   "prometheus-community",
+					ChartName:        "prometheus-community/prometheus",
+					ChartVersion:     "25.24.0",
+					ReleaseName:      "prometheus",
+					ReleaseNamespace: "prometheus",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+				{
+					RepositoryURL:    "https://grafana.github.io/helm-charts",
+					RepositoryName:   "grafana",
+					ChartName:        "grafana/grafana",
+					ChartVersion:     "8.3.4",
+					ReleaseName:      "grafana",
+					ReleaseNamespace: "grafana",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+			currentClusterProfile.Spec.Tier = 90
+			currentClusterProfile.Spec.ContinueOnConflict = true
+
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

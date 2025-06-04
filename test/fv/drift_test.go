@@ -31,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -148,20 +149,24 @@ var _ = Describe("Helm", Serial, func() {
 		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
+		By("use driftExclusion to ignore cleanup controller spec/replicas changes")
+		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
+
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: clusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.2.6",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Values: `admissionController:
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kyverno.github.io/kyverno/",
+					RepositoryName:   "kyverno",
+					ChartName:        "kyverno/kyverno",
+					ChartVersion:     "v3.2.6",
+					ReleaseName:      "kyverno-latest",
+					ReleaseNamespace: "kyverno",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values: `admissionController:
   replicas: 1
 backgroundController:
   replicas: 1
@@ -169,57 +174,60 @@ cleanupController:
   replicas: 1
 reportsController:
   replicas: 1`,
-				ValuesFrom: []configv1beta1.ValueFrom{
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: labelsConfigMap.Namespace,
-						Name:      labelsConfigMap.Name,
-					},
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: cleanupControllerConfigMap.Namespace,
-						Name:      cleanupControllerConfigMap.Name,
-					},
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: admissionControllerConfigMap.Namespace,
-						Name:      admissionControllerConfigMap.Name,
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: labelsConfigMap.Namespace,
+							Name:      labelsConfigMap.Name,
+						},
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: cleanupControllerConfigMap.Namespace,
+							Name:      cleanupControllerConfigMap.Name,
+						},
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: admissionControllerConfigMap.Namespace,
+							Name:      admissionControllerConfigMap.Name,
+						},
 					},
 				},
-			},
-		}
+			}
 
-		By("use driftExclusion to ignore cleanup controller spec/replicas changes")
-		currentClusterProfile.Spec.DriftExclusions = []configv1beta1.DriftExclusion{
-			{
-				Paths: []string{"/spec/replicas"},
-				Target: &libsveltosv1beta1.PatchSelector{
-					Kind:      "Deployment",
-					Group:     "apps",
-					Version:   "v1",
-					Namespace: kyvernoNamespace,
-					Name:      cleanupControllerDeplName,
+			currentClusterProfile.Spec.DriftExclusions = []configv1beta1.DriftExclusion{
+				{
+					Paths: []string{"/spec/replicas"},
+					Target: &libsveltosv1beta1.PatchSelector{
+						Kind:      "Deployment",
+						Group:     "apps",
+						Version:   "v1",
+						Namespace: kyvernoNamespace,
+						Name:      cleanupControllerDeplName,
+					},
 				},
-			},
-		}
+			}
 
-		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
-		currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
-			{
-				Patch: `- op: add
+			currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
+				{
+					Patch: `- op: add
   path: /metadata/annotations/projectsveltos.io~1driftDetectionIgnore
   value: ok`,
-				Target: &libsveltosv1beta1.PatchSelector{
-					Group:     "apps",
-					Version:   "v1",
-					Kind:      "Deployment",
-					Namespace: kyvernoNamespace,
-					Name:      admissionControllerDeplName,
+					Target: &libsveltosv1beta1.PatchSelector{
+						Group:     "apps",
+						Version:   "v1",
+						Kind:      "Deployment",
+						Namespace: kyvernoNamespace,
+						Name:      admissionControllerDeplName,
+					},
 				},
-			},
-		}
+			}
 
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
@@ -543,29 +551,67 @@ func verifyResourceSummary(c client.Client, clusterSummary *configv1beta1.Cluste
 	Expect(currentResourceSummary).ToNot(BeNil())
 
 	deploymentKind := "Deployment"
+	verifyAdmissionControllerDeployment(c, currentResourceSummary, deploymentKind)
+
+	verifySpecReplicas(currentResourceSummary, deploymentKind)
+}
+
+func verifyAdmissionControllerDeployment(c client.Client,
+	currentResourceSummary *libsveltosv1beta1.ResourceSummary, deploymentKind string) {
 
 	// Patches has been configured to ignore admission controller for configuration
 	// drift (by adding annotation projectsveltos.io/driftDetectionIgnore)
 	Byf("Verify deployment %s/%s is marked to be ignored for configuration drift",
 		kyvernoNamespace, admissionControllerDeplName)
-	found := false
+	Eventually(func() bool {
+		resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
+		err := c.List(context.TODO(), resourceSummaries)
+		if err != nil {
+			return false
+		}
+		if len(resourceSummaries.Items) != 1 {
+			return false
+		}
+
+		currentResourceSummary := &resourceSummaries.Items[0]
+
+		found := false
+		ignore := false
+		for i := range currentResourceSummary.Spec.ChartResources {
+			for j := range currentResourceSummary.Spec.ChartResources[i].Resources {
+				r := &currentResourceSummary.Spec.ChartResources[i].Resources[j]
+				if r.Kind == deploymentKind && r.Namespace == kyvernoNamespace &&
+					r.Name == admissionControllerDeplName {
+
+					ignore = r.IgnoreForConfigurationDrift
+					found = true
+					break
+				}
+			}
+		}
+		return found && ignore
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	// DriftExclusion has been configured to NOT ignore for anything else
 	for i := range currentResourceSummary.Spec.ChartResources {
 		for j := range currentResourceSummary.Spec.ChartResources[i].Resources {
 			r := &currentResourceSummary.Spec.ChartResources[i].Resources[j]
 			if r.Kind == deploymentKind && r.Namespace == kyvernoNamespace &&
 				r.Name == admissionControllerDeplName {
 
-				Expect(r.IgnoreForConfigurationDrift).To(BeTrue())
-				found = true
+				continue
 			} else {
 				Expect(r.IgnoreForConfigurationDrift).To(BeFalse())
 			}
 		}
 	}
-	Expect(found).To(BeTrue())
+}
 
+func verifySpecReplicas(currentResourceSummary *libsveltosv1beta1.ResourceSummary,
+	deploymentKind string) {
+
+	found := false
 	// DriftExclusion has been configured to ignore cleanup controller spec/replicas
-	found = false
 	Byf("Verify deployment %s/%s spec/replicas is marked to be ignored for configuration drift",
 		kyvernoNamespace, cleanupControllerDeplName)
 	for i := range currentResourceSummary.Spec.Patches {

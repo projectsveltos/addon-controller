@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -105,57 +106,65 @@ var _ = Describe("Feature", Serial, func() {
 
 		Byf("Update ClusterProfile %s to deploy helm charts and referencing ConfigMap %s/%s",
 			clusterProfile.Name, configMap.Namespace, configMap.Name)
+		Byf("Setting ClusterProfile %s Spec.ContinueOnError true", clusterProfile.Name)
+
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
+
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
+
+			// Cert-manager installation will fails as CRDs are not present and we are not deploying those
+			// ALso sets timeout otherwise helm takes too long before giving up on cert-manager failures (due to CRDs not being installed)
+			const two = 2
+			helmTimeout := metav1.Duration{Duration: two * time.Minute}
+			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://charts.konghq.com",
+					RepositoryName:   "kong",
+					ChartName:        "kong/kong",
+					ChartVersion:     "2.46.0",
+					ReleaseName:      "kong",
+					ReleaseNamespace: "kong",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+				{
+					RepositoryURL:    "https://charts.jetstack.io",
+					RepositoryName:   "jetstack",
+					ChartName:        "jetstack/cert-manager",
+					ChartVersion:     "v1.16.2",
+					ReleaseName:      "cert-manager",
+					ReleaseNamespace: "cert-manager",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Options: &configv1beta1.HelmOptions{
+						Timeout: &helmTimeout,
+					},
+				},
+				{
+					RepositoryURL:    "https://helm.nginx.com/stable/",
+					RepositoryName:   "nginx-stable",
+					ChartName:        "nginx-stable/nginx-ingress",
+					ChartVersion:     "1.3.1",
+					ReleaseName:      "nginx-latest",
+					ReleaseNamespace: "nginx",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
+			}
+			currentClusterProfile.Spec.ContinueOnError = true
+
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-
-		// Cert-manager installation will fails as CRDs are not present and we are not deploying those
-		// ALso sets timeout otherwise helm takes too long before giving up on cert-manager failures (due to CRDs not being installed)
-		const two = 2
-		helmTimeout := metav1.Duration{Duration: two * time.Minute}
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://charts.konghq.com",
-				RepositoryName:   "kong",
-				ChartName:        "kong/kong",
-				ChartVersion:     "2.46.0",
-				ReleaseName:      "kong",
-				ReleaseNamespace: "kong",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-			{
-				RepositoryURL:    "https://charts.jetstack.io",
-				RepositoryName:   "jetstack",
-				ChartName:        "jetstack/cert-manager",
-				ChartVersion:     "v1.16.2",
-				ReleaseName:      "cert-manager",
-				ReleaseNamespace: "cert-manager",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Options: &configv1beta1.HelmOptions{
-					Timeout: &helmTimeout,
-				},
-			},
-			{
-				RepositoryURL:    "https://helm.nginx.com/stable/",
-				RepositoryName:   "nginx-stable",
-				ChartName:        "nginx-stable/nginx-ingress",
-				ChartVersion:     "1.3.1",
-				ReleaseName:      "nginx-latest",
-				ReleaseNamespace: "nginx",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
-				Name:      configMap.Name,
-			},
-		}
-		Byf("Setting ClusterProfile %s Spec.ContinueOnError true", clusterProfile.Name)
-		currentClusterProfile.Spec.ContinueOnError = true
-
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,

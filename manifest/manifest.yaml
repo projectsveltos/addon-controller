@@ -4912,6 +4912,13 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - update
+- apiGroups:
   - '*'
   resources:
   - '*'

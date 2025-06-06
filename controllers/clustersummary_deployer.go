@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -134,6 +135,9 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("result is available. updating status: %v", *status))
 		r.updateFeatureStatus(clusterSummaryScope, f.id, status, currentHash, resultError, logger)
 		if *status == configv1beta1.FeatureStatusProvisioned {
+			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
+				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+			r.eventRecorder.Eventf(clusterSummary, corev1.EventTypeNormal, "sveltos", message)
 			return nil
 		}
 		if resultError != nil {

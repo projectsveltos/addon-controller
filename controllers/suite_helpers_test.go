@@ -37,6 +37,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -157,7 +158,7 @@ func addLabelsToClusterSummary(clusterSummary *configv1beta1.ClusterSummary, clu
 	if labels == nil {
 		labels = make(map[string]string)
 	}
-	labels[controllers.ClusterProfileLabelName] = clusterProfileName
+	labels[clusterops.ClusterProfileLabelName] = clusterProfileName
 	labels[configv1beta1.ClusterTypeLabel] = string(clusterType)
 	labels[configv1beta1.ClusterNameLabel] = clusterName
 

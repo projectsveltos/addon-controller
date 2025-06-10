@@ -1774,6 +1774,118 @@ spec:
           status:
             description: ClusterReportStatus defines the observed state of ClusterReport
             properties:
+              helmResourceReports:
+                description: |-
+                  HelmResourceReports contains report on helm resources (when in pull mode, helm template resources are
+                  deployed directly)
+                items:
+                  properties:
+                    action:
+                      description: Action represent the type of operation on the Kubernetes
+                        resource.
+                      enum:
+                      - No Action
+                      - Create
+                      - Update
+                      - Delete
+                      - Conflict
+                      type: string
+                    message:
+                      description: |-
+                        Message is for any message that needs to added to better
+                        explain the action.
+                      type: string
+                    resource:
+                      description: Resource contains information about Kubernetes
+                        Resource
+                      properties:
+                        group:
+                          description: Group of the resource deployed in the Cluster.
+                          type: string
+                        ignoreForConfigurationDrift:
+                          default: false
+                          description: |-
+                            IgnoreForConfigurationDrift indicates to not track resource
+                            for configuration drift detection.
+                            This field has a meaning only when mode is ContinuousWithDriftDetection
+                          type: boolean
+                        kind:
+                          description: Kind of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                        lastAppliedTime:
+                          description: LastAppliedTime identifies when this resource
+                            was last applied to the cluster.
+                          format: date-time
+                          type: string
+                        name:
+                          description: Name of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the resource deployed in the Cluster.
+                            Empty for resources scoped at cluster level.
+                          type: string
+                        owner:
+                          description: Owner is the list of ConfigMap/Secret containing
+                            this resource.
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: |-
+                                If referring to a piece of an object instead of an entire object, this string
+                                should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container within a pod, this would take on a value like:
+                                "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                the event) or if no container name is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                referencing a part of an object.
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the referent.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            name:
+                              description: |-
+                                Name of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                              type: string
+                            resourceVersion:
+                              description: |-
+                                Specific resourceVersion to which this reference is made, if any.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                              type: string
+                            uid:
+                              description: |-
+                                UID of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        version:
+                          description: Version of the resource deployed in the Cluster.
+                          minLength: 1
+                          type: string
+                      required:
+                      - group
+                      - kind
+                      - name
+                      - owner
+                      - version
+                      type: object
+                  required:
+                  - resource
+                  type: object
+                type: array
               kustomizeResourceReports:
                 description: |-
                   KustomizeResourceReports contains report on Kubernetes resources
@@ -5050,6 +5162,8 @@ rules:
   - lib.projectsveltos.io
   resources:
   - clustersets
+  - configurationbundles
+  - configurationgroups
   - reloaders
   - resourcesummaries
   - sets
@@ -5080,6 +5194,16 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - configurationbundles/status
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
+  - configurationgroups/status
   - debuggingconfigurations
   - sveltosclusters
   - sveltosclusters/status

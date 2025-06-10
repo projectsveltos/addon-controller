@@ -13,3 +13,25 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
+
+package clusterops
+
+import (
+	"fmt"
+)
+
+const (
+	projectsveltos = "projectsveltos"
+)
+
+func GetResourceSummaryNamespaceInManagedCluster() string {
+	return projectsveltos
+}
+
+func GetResourceSummaryNameInManagedCluster(clusterSummaryNamespace, clusterSummaryName string) string {
+	return fmt.Sprintf("%s--%s", clusterSummaryNamespace, clusterSummaryName)
+}
+
+func GetResourceSummaryNameInManagemntCluster(clusterSummaryName string) string {
+	return clusterSummaryName
+}

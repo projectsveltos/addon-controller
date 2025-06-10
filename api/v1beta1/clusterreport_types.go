@@ -18,6 +18,8 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 // HelmAction represents the type of action on a give resource or helm release
@@ -31,17 +33,6 @@ const (
 	UpgradeHelmAction      HelmAction = "Upgrade"
 	UninstallHelmAction    HelmAction = "Delete"
 	ConflictHelmAction     HelmAction = "Conflict"
-)
-
-type ResourceAction string
-
-// Define the Action constants.
-const (
-	NoResourceAction       ResourceAction = "No Action"
-	CreateResourceAction   ResourceAction = "Create"
-	UpdateResourceAction   ResourceAction = "Update"
-	DeleteResourceAction   ResourceAction = "Delete"
-	ConflictResourceAction ResourceAction = "Conflict"
 )
 
 type ReleaseReport struct {
@@ -68,20 +59,6 @@ type ReleaseReport struct {
 	Message string `json:"message,omitempty"`
 }
 
-type ResourceReport struct {
-	// Resource contains information about Kubernetes Resource
-	Resource Resource `json:"resource"`
-
-	// Action represent the type of operation on the Kubernetes resource.
-	// +kubebuilder:validation:Enum=No Action;Create;Update;Delete;Conflict
-	Action string `json:"action,omitempty"`
-
-	// Message is for any message that needs to added to better
-	// explain the action.
-	// +optional
-	Message string `json:"message,omitempty"`
-}
-
 // ClusterReportSpec defines the desired state of ClusterReport
 type ClusterReportSpec struct {
 	// ClusterNamespace is the namespace of the CAPI Cluster this
@@ -99,15 +76,20 @@ type ClusterReportStatus struct {
 	// +optional
 	ReleaseReports []ReleaseReport `json:"releaseReports,omitempty"`
 
+	// HelmResourceReports contains report on helm resources (when in pull mode, helm template resources are
+	// deployed directly)
+	// +optional
+	HelmResourceReports []libsveltosv1beta1.ResourceReport `json:"helmResourceReports,omitempty"`
+
 	// ResourceReports contains report on Kubernetes resources
 	// deployed because of PolicyRefs
 	// +optional
-	ResourceReports []ResourceReport `json:"resourceReports,omitempty"`
+	ResourceReports []libsveltosv1beta1.ResourceReport `json:"resourceReports,omitempty"`
 
 	// KustomizeResourceReports contains report on Kubernetes resources
 	// deployed because of KustomizationRefs
 	// +optional
-	KustomizeResourceReports []ResourceReport `json:"kustomizeResourceReports,omitempty"`
+	KustomizeResourceReports []libsveltosv1beta1.ResourceReport `json:"kustomizeResourceReports,omitempty"`
 }
 
 // +kubebuilder:object:root=true

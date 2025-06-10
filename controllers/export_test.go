@@ -75,24 +75,14 @@ var (
 	GenericDeploy           = genericDeploy
 	GenericUndeploy         = genericUndeploy
 
-	GetClusterSummary            = getClusterSummary
-	AddLabel                     = addLabel
-	UpdateResource               = updateResource
-	CreateNamespace              = createNamespace
 	GetEntryKey                  = getEntryKey
 	DeployContentOfConfigMap     = deployContentOfConfigMap
 	DeployContentOfSecret        = deployContentOfSecret
 	DeployContent                = deployContent
 	GetClusterSummaryAdmin       = getClusterSummaryAdmin
-	AddAnnotation                = addAnnotation
-	ComputePolicyHash            = computePolicyHash
-	GetPolicyInfo                = getPolicyInfo
 	CollectContent               = collectContent
-	CustomSplit                  = customSplit
 	UndeployStaleResources       = undeployStaleResources
 	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
-	CanDelete                    = canDelete
-	HandleResourceDelete         = handleResourceDelete
 	GetSecret                    = getSecret
 	ReadFiles                    = readFiles
 
@@ -146,7 +136,6 @@ type (
 )
 
 var (
-	GetClusterReportName        = getClusterReportName
 	GetClusterConfigurationName = getClusterConfigurationName
 )
 
@@ -154,17 +143,12 @@ var (
 	DeployDebuggingConfigurationCRD                  = deployDebuggingConfigurationCRD
 	DeployResourceSummaryCRD                         = deployResourceSummaryCRD
 	DeployDriftDetectionManagerInCluster             = deployDriftDetectionManagerInCluster
-	DeployResourceSummaryInCluster                   = deployResourceSummaryInCluster
 	DeployResourceSummaryInstance                    = deployResourceSummaryInstance
 	UpdateDeployedGroupVersionKind                   = updateDeployedGroupVersionKind
 	DeployDriftDetectionManagerInManagementCluster   = deployDriftDetectionManagerInManagementCluster
 	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels
 	RemoveDriftDetectionManagerFromManagementCluster = removeDriftDetectionManagerFromManagementCluster
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
-	TransformDriftExclusionsToPatches                = transformDriftExclusionsToPatches
-
-	GetResourceSummaryNamespaceInManagedCluster = getResourceSummaryNamespaceInManagedCluster
-	GetResourceSummaryNameInManagedCluster      = getResourceSummaryNameInManagedCluster
 )
 
 var (
@@ -173,26 +157,6 @@ var (
 
 var (
 	InitializeManager = initializeManager
-)
-
-const (
-	ReasonLabel = reasonLabel
-)
-
-var (
-	IsHealthy      = isHealthy
-	FetchResources = fetchResources
-)
-
-// reloader utils
-var (
-	WatchForRollingUpgrade                  = watchForRollingUpgrade
-	CreateReloaderInstance                  = createReloaderInstance
-	DeployReloaderInstance                  = deployReloaderInstance
-	RemoveReloaderInstance                  = removeReloaderInstance
-	UpdateReloaderWithDeployedResources     = updateReloaderWithDeployedResources
-	ConvertResourceReportsToObjectReference = convertResourceReportsToObjectReference
-	ConvertHelmResourcesToObjectReference   = convertHelmResourcesToObjectReference
 )
 
 var (

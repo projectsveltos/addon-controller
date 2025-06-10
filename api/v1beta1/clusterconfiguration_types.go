@@ -19,49 +19,14 @@ package v1beta1
 import (
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
 	ClusterConfigurationKind = "ClusterConfiguration"
 )
-
-type Resource struct {
-	// Name of the resource deployed in the Cluster.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
-
-	// Namespace of the resource deployed in the Cluster.
-	// Empty for resources scoped at cluster level.
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
-
-	// Group of the resource deployed in the Cluster.
-	Group string `json:"group"`
-
-	// Kind of the resource deployed in the Cluster.
-	// +kubebuilder:validation:MinLength=1
-	Kind string `json:"kind"`
-
-	// Version of the resource deployed in the Cluster.
-	// +kubebuilder:validation:MinLength=1
-	Version string `json:"version"`
-
-	// LastAppliedTime identifies when this resource was last applied to the cluster.
-	// +optional
-	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
-
-	// Owner is the list of ConfigMap/Secret containing this resource.
-	Owner corev1.ObjectReference `json:"owner"`
-
-	// IgnoreForConfigurationDrift indicates to not track resource
-	// for configuration drift detection.
-	// This field has a meaning only when mode is ContinuousWithDriftDetection
-	// +kubebuilder:default:=false
-	// +optional
-	IgnoreForConfigurationDrift bool `json:"ignoreForConfigurationDrift,omitempty"`
-}
 
 type Chart struct {
 	// RepoURL URL of the repo containing the helm chart deployed
@@ -93,11 +58,11 @@ type Chart struct {
 
 type Feature struct {
 	// FeatureID is an indentifier of the feature whose status is reported
-	FeatureID FeatureID `json:"featureID"`
+	FeatureID libsveltosv1beta1.FeatureID `json:"featureID"`
 
 	// Resources is a list of resources deployed in the Cluster.
 	// +optional
-	Resources []Resource `json:"resources,omitempty"`
+	Resources []libsveltosv1beta1.Resource `json:"resources,omitempty"`
 
 	// Charts is a list of helm charts deployed in the Cluster.
 	// +optional

@@ -106,32 +106,41 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 		return err
 	}
 
-	var installed bool
-	installed, err = isResourceSummaryInstalled(ctx, clusterClient)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
-		return err
-	}
+	// if cluster is in pull mode, the agent in the managed cluster will create/update resourceSummaries (only metadata and status)
+	// to report drift detections. In case of Cluster in pull mode skip verification on resourceSummary installed and compatibility checks
+	if clusterClient != nil {
+		// not in pull mode
+		var installed bool
+		installed, err = isResourceSummaryInstalled(ctx, clusterClient)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
+			return err
+		}
 
-	if !installed {
-		return nil
-	}
+		if !installed {
+			return nil
+		}
 
-	if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
-		cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
+		if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
+			cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
 
-		msg := "compatibility checks failed"
-		logger.V(logs.LogDebug).Info(msg)
-		return errors.New(msg)
+			msg := "compatibility checks failed"
+			logger.V(logs.LogDebug).Info(msg)
+			return errors.New(msg)
+		}
+	} else {
+		logger.V(logs.LogVerbose).Info(fmt.Sprintf("SveltosCluster %s/%s is in pull mode", cluster.Namespace, cluster.Name))
+		clusterClient = getManagementClusterClient()
 	}
 
 	logger.V(logs.LogVerbose).Info("collecting ResourceSummaries from cluster")
 	listOptions := []client.ListOption{}
-	if getAgentInMgmtCluster() {
+	if getAgentInMgmtCluster() || clusterClient == nil {
 		listOptions = []client.ListOption{
 			client.MatchingLabels{
 				sveltos_upgrade.ClusterNameLabel: cluster.Name,
 			},
+			client.InNamespace(cluster.Namespace),
 		}
 	}
 
@@ -156,7 +165,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 		}
 
 		if !rs.DeletionTimestamp.IsZero() {
-			// ignore deleted resourceSummary
+			// ignore deleted ResourceSummary
 			continue
 		}
 		if rs.Status.ResourcesChanged || rs.Status.HelmResourcesChanged || rs.Status.KustomizeResourcesChanged {
@@ -282,27 +291,27 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 
 		l := logger.WithValues("clusterSummary", clusterSummary.Name)
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureHelm {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
 				if rs.Status.HelmResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy helm")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), logger)
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureResources {
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
 				if rs.Status.ResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), logger)
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == configv1beta1.FeatureKustomize {
+			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureKustomize {
 				if rs.Status.KustomizeResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
-					clusterSummary.Status.FeatureSummaries[i].Status = configv1beta1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), logger)
 				}

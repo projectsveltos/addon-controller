@@ -47,6 +47,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -86,7 +87,7 @@ var _ = Describe("KustomizeRefs", func() {
 			},
 		}
 
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, cluster.Name, false)
 		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -120,7 +121,7 @@ var _ = Describe("KustomizeRefs", func() {
 					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1beta1.FeatureKustomize),
+					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureKustomize),
 				},
 			},
 		}
@@ -139,7 +140,7 @@ var _ = Describe("KustomizeRefs", func() {
 					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					deployer.ReferenceNameLabel:      randomString(),
 					deployer.ReferenceNamespaceLabel: randomString(),
-					controllers.ReasonLabel:          string(configv1beta1.FeatureKustomize),
+					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureKustomize),
 				},
 			},
 		}
@@ -159,13 +160,13 @@ var _ = Describe("KustomizeRefs", func() {
 			currentClusterSummary)).To(Succeed())
 		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureKustomize,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureKustomize,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
-		currentClusterSummary.Status.DeployedGVKs = []configv1beta1.FeatureDeploymentInfo{
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
 			{
-				FeatureID: configv1beta1.FeatureKustomize,
+				FeatureID: libsveltosv1beta1.FeatureKustomize,
 				DeployedGroupVersionKind: []string{
 					"ServiceAccount.v1.",
 					"ConfigMaps.v1.",
@@ -185,7 +186,7 @@ var _ = Describe("KustomizeRefs", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.GenericUndeploy(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
-			string(configv1beta1.FeatureKustomize), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
+			string(libsveltosv1beta1.FeatureKustomize), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		// undeployKustomizeRefs finds all policies deployed because of a clusterSummary and deletes those.
@@ -347,7 +348,7 @@ var _ = Describe("Hash methods", func() {
 		h.Write([]byte(config))
 		expectHash := h.Sum(nil)
 
-		hash, err := controllers.KustomizationHash(context.TODO(), c, clusterSummaryScope,
+		hash, err := controllers.KustomizationHash(context.TODO(), c, clusterSummaryScope.ClusterSummary,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())

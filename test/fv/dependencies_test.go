@@ -25,7 +25,8 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 var _ = Describe("Dependencies", func() {
@@ -39,7 +40,7 @@ var _ = Describe("Dependencies", func() {
 		clusterProfileDependency.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfileDependency)).To(Succeed())
 		verifyClusterProfileMatches(clusterProfileDependency)
-		verifyClusterSummary(controllers.ClusterProfileLabelName, clusterProfileDependency.Name,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfileDependency.Name,
 			&clusterProfileDependency.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
@@ -49,7 +50,7 @@ var _ = Describe("Dependencies", func() {
 		clusterProfile.Spec.DependsOn = []string{clusterProfileDependency.Name}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 		verifyClusterProfileMatches(clusterProfile)
-		verifyClusterSummary(controllers.ClusterProfileLabelName, clusterProfile.Name,
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name,
 			&clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfileDependency.Name)
@@ -82,7 +83,7 @@ migrateDatabaseJob:
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfileDependency.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummaryDependency := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummaryDependency := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -109,7 +110,7 @@ migrateDatabaseJob:
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(controllers.ClusterProfileLabelName,
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
 
@@ -138,7 +139,7 @@ migrateDatabaseJob:
 			}
 
 			for i := range currentClusterSummaryDependecy.Status.FeatureSummaries {
-				if currentClusterSummaryDependecy.Status.FeatureSummaries[i].Status != configv1beta1.FeatureStatusProvisioned {
+				if currentClusterSummaryDependecy.Status.FeatureSummaries[i].Status != libsveltosv1beta1.FeatureStatusProvisioned {
 					return currentClusterSummary.Status.FeatureSummaries == nil
 				}
 			}
@@ -146,10 +147,10 @@ migrateDatabaseJob:
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummaryDependency.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummaryDependency.Name, configv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummaryDependency.Name, libsveltosv1beta1.FeatureHelm)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, configv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		deleteClusterProfile(clusterProfileDependency)
 

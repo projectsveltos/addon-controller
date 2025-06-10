@@ -36,6 +36,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -71,7 +72,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		}
 
 		clusterName = randomString()
-		clusterSummaryName := controllers.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
 			clusterProfile.Name, clusterName, false)
 		clusterSummary = &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
@@ -97,8 +98,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 	It("isFeatureDeployed returns false when feature is not deployed", func() {
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
 
@@ -113,14 +114,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, configv1beta1.FeatureResources)).To(BeFalse())
+		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureResources)).To(BeFalse())
 	})
 
 	It("isFeatureDeployed returns true when feature is deployed", func() {
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
 
@@ -135,14 +136,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, configv1beta1.FeatureHelm)).To(BeTrue())
+		Expect(controllers.IsFeatureDeployed(reconciler, clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureHelm)).To(BeTrue())
 	})
 
 	It("IsFeatureFailedWithNonRetriableError returns false when feature has not failed", func() {
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
 
@@ -158,14 +159,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.IsFeatureFailedWithNonRetriableError(reconciler, clusterSummaryScope.ClusterSummary,
-			configv1beta1.FeatureResources)).To(BeFalse())
+			libsveltosv1beta1.FeatureResources)).To(BeFalse())
 	})
 
 	It("IsFeatureFailedWithNonRetriableError returns true when feature has failed with non retriable error", func() {
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusFailedNonRetriable,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusFailedNonRetriable,
 			},
 		}
 
@@ -181,15 +182,15 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		Expect(controllers.IsFeatureFailedWithNonRetriableError(reconciler, clusterSummaryScope.ClusterSummary,
-			configv1beta1.FeatureResources)).To(BeTrue())
+			libsveltosv1beta1.FeatureResources)).To(BeTrue())
 	})
 
 	It("getHash returns nil when hash is not stored", func() {
 		hash := []byte(randomString())
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureHelm,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash:      hash,
 			},
 		}
@@ -205,7 +206,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1beta1.FeatureResources)
+		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, libsveltosv1beta1.FeatureResources)
 		Expect(currentHash).To(BeNil())
 	})
 
@@ -213,8 +214,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		hash := []byte(randomString())
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 				Hash:      hash,
 			},
 		}
@@ -230,7 +231,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, configv1beta1.FeatureResources)
+		currentHash := controllers.GetHash(reconciler, clusterSummaryScope, libsveltosv1beta1.FeatureResources)
 		Expect(reflect.DeepEqual(currentHash, hash)).To(BeTrue())
 	})
 
@@ -247,22 +248,22 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
 		hash := []byte(randomString())
-		status := configv1beta1.FeatureStatusFailed
+		status := libsveltosv1beta1.FeatureStatusFailed
 		statusErr := fmt.Errorf("failed to deploy")
-		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1beta1.FeatureResources, &status,
+		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, libsveltosv1beta1.FeatureResources, &status,
 			hash, statusErr, textlogger.NewLogger(textlogger.NewConfig()))
 
 		Expect(len(clusterSummary.Status.FeatureSummaries)).To(Equal(1))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
-		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusFailed))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).ToNot(BeNil())
 		Expect(*clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(Equal(statusErr.Error()))
 
-		status = configv1beta1.FeatureStatusProvisioned
-		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, configv1beta1.FeatureResources, &status,
+		status = libsveltosv1beta1.FeatureStatusProvisioned
+		controllers.UpdateFeatureStatus(reconciler, clusterSummaryScope, libsveltosv1beta1.FeatureResources, &status,
 			hash, nil, textlogger.NewLogger(textlogger.NewConfig()))
-		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(configv1beta1.FeatureResources))
-		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(configv1beta1.FeatureStatusProvisioned))
+		Expect(clusterSummary.Status.FeatureSummaries[0].FeatureID).To(Equal(libsveltosv1beta1.FeatureResources))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioned))
 		Expect(clusterSummary.Status.FeatureSummaries[0].FailureMessage).To(BeNil())
 	})
 
@@ -298,14 +299,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
 
-		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
+		ResourcesHash, err := controllers.ResourcesHash(ctx, c, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
+				FeatureID: libsveltosv1beta1.FeatureResources,
 				Hash:      ResourcesHash,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
 
@@ -315,7 +316,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// ClusterSummary Status is reporting feature has deployed. Configuration that needs to be deployed has not
 		// changed (so hash in ClusterSummary Status matches hash of all referenced ResourceRefs).
@@ -326,7 +327,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
@@ -360,13 +361,13 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummaryScope := getClusterSummaryScope(testEnv.Client, logger, clusterProfile, clusterSummary)
 
-		resourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummaryScope, textlogger.NewLogger(textlogger.NewConfig()))
+		resourcesHash, err := controllers.ResourcesHash(ctx, testEnv.Client, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
+				FeatureID: libsveltosv1beta1.FeatureResources,
 				Hash:      resourcesHash,
-				Status:    configv1beta1.FeatureStatusProvisioned,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
 			},
 		}
 
@@ -390,7 +391,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// Even though the feature is marked as deployed in ClusterSummary Status, the configuration has changed (ClusterSummary Status Hash
 		// does not match anymore the hash of all referenced ResourceRefs). In such situation, DeployFeature calls dep.Deploy.
@@ -401,7 +402,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -439,7 +440,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(testEnv.Client, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// The feature is not marked as deployed in ClusterSummary Status. In such situation, DeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
@@ -449,7 +450,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -466,8 +467,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
 			{
-				FeatureID: configv1beta1.FeatureResources,
-				Status:    configv1beta1.FeatureStatusRemoved,
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusRemoved,
 			},
 		}
 
@@ -477,7 +478,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// ClusterSummary Status is reporting feature has removed.
 		// UndeployFeature is supposed to return before calling dep.Deploy (fake deployer Deploy once called simply
@@ -487,7 +488,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err).To(BeNil())
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
@@ -514,7 +515,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// The feature is not marked as removed in ClusterSummary Status. In such situation, UndeployFeature calls dep.Deploy.
 		// fake deployer Deploy simply adds key to InProgress.
@@ -524,7 +525,7 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(err.Error()).To(Equal("cleanup request is queued"))
 
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
 	})
 
@@ -549,14 +550,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusRemoving},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusRemoving},
 		}
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		err := controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
@@ -584,14 +585,14 @@ var _ = Describe("ClustersummaryDeployer", func() {
 
 		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
 		dep.StoreInProgress(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-			clusterSummary.Name, string(configv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, false)
 		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
-			{FeatureID: configv1beta1.FeatureResources, Status: configv1beta1.FeatureStatusProvisioning},
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioning},
 		}
 
 		reconciler := getClusterSummaryReconciler(c, dep)
 
-		f := controllers.GetHandlersForFeature(configv1beta1.FeatureResources)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
@@ -608,22 +609,22 @@ var _ = Describe("Convert result", func() {
 		}
 		featureStatus := controllers.ConvertResultStatus(reconciler, result)
 		Expect(featureStatus).ToNot(BeNil())
-		Expect(*featureStatus).To(Equal(configv1beta1.FeatureStatusProvisioning))
+		Expect(*featureStatus).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
 
 		result.ResultStatus = deployer.Deployed
 		featureStatus = controllers.ConvertResultStatus(reconciler, result)
 		Expect(featureStatus).ToNot(BeNil())
-		Expect(*featureStatus).To(Equal(configv1beta1.FeatureStatusProvisioned))
+		Expect(*featureStatus).To(Equal(libsveltosv1beta1.FeatureStatusProvisioned))
 
 		result.ResultStatus = deployer.Failed
 		featureStatus = controllers.ConvertResultStatus(reconciler, result)
 		Expect(featureStatus).ToNot(BeNil())
-		Expect(*featureStatus).To(Equal(configv1beta1.FeatureStatusFailed))
+		Expect(*featureStatus).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
 
 		result.ResultStatus = deployer.Removed
 		featureStatus = controllers.ConvertResultStatus(reconciler, result)
 		Expect(featureStatus).ToNot(BeNil())
-		Expect(*featureStatus).To(Equal(configv1beta1.FeatureStatusRemoved))
+		Expect(*featureStatus).To(Equal(libsveltosv1beta1.FeatureStatusRemoved))
 
 		result.ResultStatus = deployer.Unavailable
 		featureStatus = controllers.ConvertResultStatus(reconciler, result)

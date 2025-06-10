@@ -38,7 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -147,7 +147,7 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	return client.New(restConfig, client.Options{Scheme: scheme})
 }
 
-func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryName string, featureID configv1beta1.FeatureID) {
+func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryName string, featureID libsveltosv1beta1.FeatureID) {
 	Eventually(func() bool {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err := k8sClient.Get(context.TODO(),
@@ -158,7 +158,7 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 		}
 		for i := range currentClusterSummary.Status.FeatureSummaries {
 			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID &&
-				currentClusterSummary.Status.FeatureSummaries[i].Status == configv1beta1.FeatureStatusProvisioned &&
+				currentClusterSummary.Status.FeatureSummaries[i].Status == libsveltosv1beta1.FeatureStatusProvisioned &&
 				currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == nil {
 
 				return true
@@ -173,7 +173,7 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 func deleteClusterProfile(clusterProfile *configv1beta1.ClusterProfile) {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			controllers.ClusterProfileLabelName: clusterProfile.Name,
+			clusterops.ClusterProfileLabelName: clusterProfile.Name,
 		},
 	}
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
@@ -214,7 +214,7 @@ func deleteClusterProfile(clusterProfile *configv1beta1.ClusterProfile) {
 func deleteProfile(profile *configv1beta1.Profile) {
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
-			controllers.ProfileLabelName: profile.Name,
+			clusterops.ProfileLabelName: profile.Name,
 		},
 	}
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
@@ -476,7 +476,7 @@ type policy struct {
 }
 
 func verifyClusterConfiguration(profileKind, profileName, clusterNamespace, clusterName string,
-	featureID configv1beta1.FeatureID, expectedPolicies []policy, expectedCharts []configv1beta1.Chart) {
+	featureID libsveltosv1beta1.FeatureID, expectedPolicies []policy, expectedCharts []configv1beta1.Chart) {
 
 	Byf("Verifying ClusterConfiguration %s/%s", clusterNamespace, clusterName)
 	Eventually(func() bool {
@@ -506,7 +506,7 @@ func verifyClusterConfiguration(profileKind, profileName, clusterNamespace, clus
 }
 
 func verifyClusterConfigurationEntryForClusterProfile(clusterConfiguration *configv1beta1.ClusterConfiguration,
-	clusterProfileName string, featureID configv1beta1.FeatureID,
+	clusterProfileName string, featureID libsveltosv1beta1.FeatureID,
 	expectedPolicies []policy, expectedCharts []configv1beta1.Chart) bool {
 
 	for i := range clusterConfiguration.Status.ClusterProfileResources {
@@ -520,7 +520,7 @@ func verifyClusterConfigurationEntryForClusterProfile(clusterConfiguration *conf
 }
 
 func verifyClusterConfigurationEntryForProfile(clusterConfiguration *configv1beta1.ClusterConfiguration,
-	profileName string, featureID configv1beta1.FeatureID,
+	profileName string, featureID libsveltosv1beta1.FeatureID,
 	expectedPolicies []policy, expectedCharts []configv1beta1.Chart) bool {
 
 	for i := range clusterConfiguration.Status.ProfileResources {
@@ -533,7 +533,7 @@ func verifyClusterConfigurationEntryForProfile(clusterConfiguration *configv1bet
 	return false
 }
 
-func verifyClusterConfigurationPolicies(deployedFeatures []configv1beta1.Feature, featureID configv1beta1.FeatureID,
+func verifyClusterConfigurationPolicies(deployedFeatures []configv1beta1.Feature, featureID libsveltosv1beta1.FeatureID,
 	expectedPolicies []policy, expectedCharts []configv1beta1.Chart) bool {
 
 	index := -1

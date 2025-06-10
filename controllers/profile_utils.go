@@ -39,9 +39,11 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -72,10 +74,10 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 	// Originally only ClusterProfile was present and ClusterProfileLabelName was set.
 	// With the addition of Profiles, different label is set ProfileLabelName
 	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
+		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.MatchingLabels{clusterops.ProfileLabelName: profileScope.Name()},
 			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
@@ -430,7 +432,7 @@ func updateClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 		return nil
 	}
 
-	clusterSummary, err := getClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
+	clusterSummary, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
 		cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster))
 	if err != nil {
 		return err
@@ -455,26 +457,26 @@ func addClusterSummaryLabels(clusterSummary *configv1beta1.ClusterSummary, profi
 	cluster *corev1.ObjectReference) {
 
 	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		addLabel(clusterSummary, ClusterProfileLabelName, profileScope.Name())
+		deployer.AddLabel(clusterSummary, clusterops.ClusterProfileLabelName, profileScope.Name())
 	} else {
-		addLabel(clusterSummary, ProfileLabelName, profileScope.Name())
+		deployer.AddLabel(clusterSummary, clusterops.ProfileLabelName, profileScope.Name())
 	}
-	addLabel(clusterSummary, configv1beta1.ClusterNameLabel, cluster.Name)
+	deployer.AddLabel(clusterSummary, configv1beta1.ClusterNameLabel, cluster.Name)
 	if cluster.APIVersion == libsveltosv1beta1.GroupVersion.String() {
-		addLabel(clusterSummary, configv1beta1.ClusterTypeLabel, string(libsveltosv1beta1.ClusterTypeSveltos))
+		deployer.AddLabel(clusterSummary, configv1beta1.ClusterTypeLabel, string(libsveltosv1beta1.ClusterTypeSveltos))
 	} else {
-		addLabel(clusterSummary, configv1beta1.ClusterTypeLabel, string(libsveltosv1beta1.ClusterTypeCapi))
+		deployer.AddLabel(clusterSummary, configv1beta1.ClusterTypeLabel, string(libsveltosv1beta1.ClusterTypeCapi))
 	}
 
 	clusterProfileLabels := profileScope.Profile.GetLabels()
 	if clusterProfileLabels != nil {
 		v, ok := clusterProfileLabels[libsveltosv1beta1.ServiceAccountNameLabel]
 		if ok {
-			addLabel(clusterSummary, libsveltosv1beta1.ServiceAccountNameLabel, v)
+			deployer.AddLabel(clusterSummary, libsveltosv1beta1.ServiceAccountNameLabel, v)
 		}
 		v, ok = clusterProfileLabels[libsveltosv1beta1.ServiceAccountNamespaceLabel]
 		if ok {
-			addLabel(clusterSummary, libsveltosv1beta1.ServiceAccountNamespaceLabel, v)
+			deployer.AddLabel(clusterSummary, libsveltosv1beta1.ServiceAccountNamespaceLabel, v)
 		}
 	}
 }
@@ -483,7 +485,7 @@ func addClusterSummaryLabels(clusterSummary *configv1beta1.ClusterSummary, profi
 func createClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterSummaryName := GetClusterSummaryName(profileScope.GetKind(), profileScope.Name(),
+	clusterSummaryName := clusterops.GetClusterSummaryName(profileScope.GetKind(), profileScope.Name(),
 		cluster.Name, cluster.APIVersion == libsveltosv1beta1.GroupVersion.String())
 
 	clusterSummary := &configv1beta1.ClusterSummary{
@@ -626,7 +628,7 @@ func patchClusterSummary(ctx context.Context, c client.Client, profileScope *sco
 	// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 	// continuous).
 	// ClusterSummary won't program cluster in paused state.
-	_, err := getClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(), cluster.Namespace,
+	_, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(), cluster.Namespace,
 		cluster.Name, clusterproxy.GetClusterType(cluster))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -666,10 +668,10 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 
 	listOptions := []client.ListOption{}
 	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
+		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.MatchingLabels{clusterops.ProfileLabelName: profileScope.Name()},
 			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
@@ -778,15 +780,15 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 		configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
 	}
 	if profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
-		lbls[ClusterProfileLabelName] = profile.GetName()
+		lbls[clusterops.ClusterProfileLabelName] = profile.GetName()
 	} else {
-		lbls[ProfileLabelName] = profile.GetName()
+		lbls[clusterops.ProfileLabelName] = profile.GetName()
 	}
 
 	clusterReport := &configv1beta1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name: getClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
+			Name: clusterops.GetClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
 				cluster.Name, clusterType),
 			Labels: lbls,
 			OwnerReferences: []metav1.OwnerReference{
@@ -823,10 +825,10 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 	}
 
 	if profileScope.GetKind() == configv1beta1.ClusterProfileKind {
-		listOptions = append(listOptions, client.MatchingLabels{ClusterProfileLabelName: profileScope.Name()})
+		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
 	} else {
 		listOptions = append(listOptions,
-			client.MatchingLabels{ProfileLabelName: profileScope.Name()},
+			client.MatchingLabels{clusterops.ProfileLabelName: profileScope.Name()},
 			client.InNamespace(profileScope.Namespace()))
 	}
 
@@ -963,7 +965,7 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatingClusters.Clusters[i]
 		clusterType := clusterproxy.GetClusterType(cluster)
-		clusterSumary, err := getClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
+		clusterSumary, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
 			cluster.Namespace, cluster.Name, clusterType)
 		if err != nil {
 			return err

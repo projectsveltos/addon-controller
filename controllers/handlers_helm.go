@@ -73,13 +73,14 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
-	"github.com/projectsveltos/addon-controller/pkg/scope"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
 
@@ -131,52 +132,66 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	startInMgmtCluster := startDriftDetectionInMgmtCluster(o)
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
-		err = deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, applicant,
-			clusterType, startInMgmtCluster, logger)
-		if err != nil {
-			return err
-		}
-
-		// Since we are updating resources to watch for drift, remove helm section in ResourceSummary to eliminate
-		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
-		// a configuration drift is happening)
-		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name, clusterType, nil, nil,
-			[]libsveltosv1beta1.HelmResources{}, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-			return err
-		}
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
 	}
 
-	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", clusterNamespace, clusterName))
 	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
-	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
-	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterNamespace, clusterName,
-		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	var kubeconfig string
+	if !isPullMode {
+		var closer func()
+		kubeconfig, closer, err = getFileWithKubeconfig(ctx, c, clusterSummary, logger)
+		if err != nil {
+			return err
+		}
+		defer closer()
+	} else {
+		// If SveltosCluster is in pull mode, discard all previous staged resources. Those will be regenerated now.
+		err = pullmode.DiscardStagedResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace,
+			clusterName, configv1beta1.ClusterSummaryKind, applicant, string(libsveltosv1beta1.FeatureHelm), logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	startInMgmtCluster := startDriftDetectionInMgmtCluster(o)
+	err = manageDriftDetectionManagerDeploymentForHelm(ctx, c, clusterSummary, clusterNamespace, clusterName, clusterType,
+		isPullMode, startInMgmtCluster, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to manage DriftDetectionManager for helm")
+		return err
+	}
+
+	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, isPullMode, logger)
 	if err != nil {
 		return err
 	}
 
-	kubeconfig, closer, err := clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
-	if err != nil {
-		return err
+	if isPullMode {
+		return nil
 	}
-	defer closer()
 
-	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, logger)
-	if err != nil {
-		return err
-	}
+	return postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, logger)
+}
+
+func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	kubeconfig string, logger logr.Logger) error {
+
+	c := getManagementClusterClient()
+
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+	clusterNamespace := clusterSummary.Spec.ClusterNamespace
+	clusterName := clusterSummary.Spec.ClusterName
+	clusterType := clusterSummary.Spec.ClusterType
 
 	var helmResources []libsveltosv1beta1.HelmResources
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection ||
 		clusterSummary.Spec.ClusterProfileSpec.Reloader {
 
+		var err error
 		helmResources, err = collectResourcesFromManagedHelmChartsForDriftDetection(ctx, c, clusterSummary, kubeconfig, logger)
 		if err != nil {
 			return err
@@ -184,15 +199,23 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	}
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
+			return err
+		}
+
+		resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, clusterSummary.Name)
+
 		// Deploy resourceSummary
-		err = deployResourceSummaryInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
-			clusterType, nil, nil, helmResources, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, logger)
+		err = deployer.DeployResourceSummaryInCluster(ctx, clusterClient, resourceSummaryNameInfo, clusterNamespace, clusterName,
+			clusterSummary.Name, clusterType, nil, nil, helmResources, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			logger)
 		if err != nil {
 			return err
 		}
 	}
 
-	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
 	if err != nil {
 		return err
 	}
@@ -202,9 +225,9 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	// in the managed cluster when a mounted ConfigMap/Secret is updated. In order to do so, sveltos-agent
 	// needs to be instructed which Deployment/StatefulSet/DaemonSet instances require this behavior.
 	// Update corresponding Reloader instance (instance will be deleted if Reloader is set to false)
-	resources := convertHelmResourcesToObjectReference(helmResources)
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureHelm,
-		resources, clusterSummary, logger)
+	resources := clusterops.ConvertHelmResourcesToObjectReference(helmResources)
+	err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureHelm,
+		resources, !clusterSummary.Spec.ClusterProfileSpec.Reloader, logger)
 	if err != nil {
 		return err
 	}
@@ -215,7 +238,48 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 	if err != nil {
 		return err
 	}
-	return validateHealthPolicies(ctx, remoteRestConfig, clusterSummary, configv1beta1.FeatureHelm, logger)
+	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
+		libsveltosv1beta1.FeatureHelm, logger)
+}
+
+func manageDriftDetectionManagerDeploymentForHelm(ctx context.Context, c client.Client,
+	clusterSummary *configv1beta1.ClusterSummary, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode, startInMgmtCluster bool, logger logr.Logger) error {
+
+	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
+		err := deployDriftDetectionManagerInCluster(ctx, c, clusterNamespace, clusterName, clusterSummary.Name,
+			string(libsveltosv1beta1.FeatureHelm), clusterType, isPullMode, startInMgmtCluster, logger)
+		if err != nil {
+			return err
+		}
+
+		// If SveltosCLuster is in pull mode, do nothing. A knob will notify agent about DriftDetection being set
+		// and agent will manage the ResourceSummary life cycle in the managed cluster
+		if isPullMode {
+			return nil
+		}
+
+		clusterClient, err := getResourceSummaryClient(ctx, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
+			return err
+		}
+
+		resourceSummaryNameInfo := getResourceSummaryNameInfo(clusterNamespace, clusterSummary.Name)
+
+		// Since we are updating resources to watch for drift, remove helm section in ResourceSummary to eliminate
+		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
+		// a configuration drift is happening)
+		err = deployer.DeployResourceSummaryInCluster(ctx, clusterClient, resourceSummaryNameInfo, clusterNamespace, clusterName,
+			clusterSummary.Name, clusterType, nil, nil, []libsveltosv1beta1.HelmResources{}, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			return err
+		}
+	}
+
+	return nil
 }
 
 func undeployHelmCharts(ctx context.Context, c client.Client,
@@ -239,6 +303,29 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	logger.V(logs.LogDebug).Info("undeployHelmCharts")
+
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, c, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+	if isPullMode {
+		// If SveltosCluster is in pull mode, discard all previous staged resources. Those will be regenerated now.
+		err = pullmode.DiscardStagedResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace,
+			clusterName, configv1beta1.ClusterSummaryKind, applicant, string(libsveltosv1beta1.FeatureHelm), logger)
+		if err != nil {
+			return err
+		}
+
+		profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
+		if err != nil {
+			return err
+		}
+
+		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef)
+		return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+			string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+	}
 
 	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
@@ -273,19 +360,22 @@ func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSum
 	}
 	releaseReports = append(releaseReports, undeployedReports...)
 
-	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, c, profileOwnerRef, configv1beta1.FeatureKustomize,
-		nil, clusterSummary, logger)
+	err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureKustomize,
+		nil, true, logger)
 	if err != nil {
 		return err
 	}
 
-	err = updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef,
-		configv1beta1.FeatureHelm, nil, []configv1beta1.Chart{})
+	isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+	clean := !clusterSummary.DeletionTimestamp.IsZero()
+	err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, clean, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, profileRef, libsveltosv1beta1.FeatureHelm,
+		nil, []configv1beta1.Chart{})
 	if err != nil {
 		return err
 	}
@@ -397,10 +487,10 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 	return releaseReports, nil
 }
 
-func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.ClusterSummaryScope,
+func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummaryScope.ClusterSummary)
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary)
 	if err != nil {
 		return nil, err
 	}
@@ -409,7 +499,6 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 	var config string
 	config += string(clusterProfileSpecHash)
 
-	clusterSummary := clusterSummaryScope.ClusterSummary
 	if clusterSummary.Spec.ClusterProfileSpec.HelmCharts == nil {
 		return h.Sum(nil), nil
 	}
@@ -439,7 +528,7 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 			}
 		}
 
-		valueFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummaryScope.ClusterSummary,
+		valueFromHash, err := getHelmReferenceResourceHash(ctx, c, clusterSummary,
 			currentChart, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(
@@ -452,7 +541,7 @@ func helmHash(ctx context.Context, c client.Client, clusterSummaryScope *scope.C
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
-		if h.FeatureID == configv1beta1.FeatureHelm {
+		if h.FeatureID == libsveltosv1beta1.FeatureHelm {
 			config += render.AsCode(h)
 		}
 	}
@@ -472,7 +561,7 @@ func getHelmRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.P
 }
 
 func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	c, remoteClient client.Client, kubeconfig string, logger logr.Logger) error {
+	c, remoteClient client.Client, kubeconfig string, isPullMode bool, logger logr.Logger) error {
 
 	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
@@ -490,7 +579,9 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 		return err
 	}
 
-	releaseReports, chartDeployed, deployError := walkChartsAndDeploy(ctx, c, clusterSummary, kubeconfig, mgmtResources, logger)
+	releaseReports, chartDeployed, deployError := walkChartsAndDeploy(ctx, c, clusterSummary, kubeconfig, mgmtResources,
+		isPullMode, logger)
+	// Even if there is a deployment error do not return just yet. Update various status and clean stale resources.
 
 	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
 	// anymore, such helm release has been successfully remove at this point. So
@@ -498,32 +589,40 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	if err != nil {
 		return err
 	}
-	// First get the helm releases currently managed and uninstall all the ones
-	// not referenced anymore. Only if this operation succeeds, removes all stale
-	// helm release registration for this clusterSummary.
-	var undeployedReports []configv1beta1.ReleaseReport
-	undeployedReports, err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
-	if err != nil {
-		return err
-	}
-	releaseReports = append(releaseReports, undeployedReports...)
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-		chartManager, mgrErr := chartmanager.GetChartManagerInstance(ctx, c)
-		if mgrErr != nil {
-			return mgrErr
+
+	if isPullMode {
+		err = commitStagedResourcesForDeployment(ctx, clusterSummary, logger)
+		if err != nil {
+			return err
+		}
+	} else {
+		// First get the helm releases currently managed and uninstall all the ones
+		// not referenced anymore. Only if this operation succeeds, removes all stale
+		// helm release registration for this clusterSummary.
+		var undeployedReports []configv1beta1.ReleaseReport
+		undeployedReports, err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
+		if err != nil {
+			return err
+		}
+		releaseReports = append(releaseReports, undeployedReports...)
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+			chartManager, mgrErr := chartmanager.GetChartManagerInstance(ctx, c)
+			if mgrErr != nil {
+				return mgrErr
+			}
+
+			chartManager.RemoveStaleRegistrations(clusterSummary)
 		}
 
-		chartManager.RemoveStaleRegistrations(clusterSummary)
-	}
+		err = updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
+		if err != nil {
+			return err
+		}
 
-	err = updateChartsInClusterConfiguration(ctx, c, clusterSummary, chartDeployed, logger)
-	if err != nil {
-		return err
-	}
-
-	err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
-	if err != nil {
-		return err
+		err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
+		if err != nil {
+			return err
+		}
 	}
 	// In DryRun mode always return an error.
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -540,7 +639,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 // walkChartsAndDeploy walks all referenced helm charts. Deploys (install or upgrade) any chart
 // this clusterSummary is registered to manage.
 func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, isPullMode bool, logger logr.Logger,
 ) ([]configv1beta1.ReleaseReport, []configv1beta1.Chart, error) {
 
 	errorMsg := ""
@@ -582,12 +681,13 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 			// when profile currently managing the helm chart is removed, all
 			// conflicting profiles will be automatically reconciled.
 			return releaseReports, chartDeployed,
-				&NonRetriableError{Message: conflictErrorMessage}
+				&configv1beta1.NonRetriableError{Message: conflictErrorMessage}
 		}
 
 		var report *configv1beta1.ReleaseReport
 		var currentRelease *releaseInfo
-		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig, logger)
+		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig,
+			isPullMode, logger)
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("chart: %s, release: %s, %v\n",
@@ -632,7 +732,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		// for helm chart a conflict is a non retriable error.
 		// when profile currently managing the helm chart is removed, all
 		// conflicting profiles will be automatically reconciled.
-		return releaseReports, chartDeployed, &NonRetriableError{Message: conflictErrorMessage}
+		return releaseReports, chartDeployed, &configv1beta1.NonRetriableError{Message: conflictErrorMessage}
 	}
 
 	return releaseReports, chartDeployed, nil
@@ -698,7 +798,7 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			return false, err
 		}
 
-		if hasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) {
+		if deployer.HasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) {
 			if claimingHelmManager.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 				// Since we are in DryRun mode do not reset the other ClusterSummary. It will still be managing
 				// the helm chart
@@ -713,7 +813,7 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			}
 
 			// Reset Status of the ClusterSummary previously managing this resource
-			err = requeueClusterSummary(ctx, configv1beta1.FeatureHelm, currentHelmManager, logger)
+			err = requeueClusterSummary(ctx, libsveltosv1beta1.FeatureHelm, currentHelmManager, logger)
 			if err != nil {
 				return false, err
 			}
@@ -753,54 +853,55 @@ func resetHelmReleaseSummaries(ctx context.Context, c client.Client, clusterSumm
 
 func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart, kubeconfig string,
-	registryOptions *registryClientOptions, logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
+	registryOptions *registryClientOptions, templateOnly bool, logger logr.Logger) (*release.Release, *configv1beta1.ReleaseReport, error) {
 
 	//nolint: gosec // maxHistory is guaranteed to be non-negative
 	maxHistory := uint(getMaxHistoryValue(currentChart.Options))
 
-	if fs := getFeatureSummaryForFeatureID(clusterSummary, configv1beta1.FeatureHelm); fs != nil {
+	if fs := getFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureHelm); fs != nil {
 		if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil {
 			err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
 
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("install helm release")
-	err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
+	release, err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, templateOnly, logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	report = &configv1beta1.ReleaseReport{
 		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.InstallHelmAction),
 	}
-	return report, nil
+	return release, report, nil
 }
 
 func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
 	currentRelease *releaseInfo, kubeconfig string, registryOptions *registryClientOptions,
-	logger logr.Logger) (*configv1beta1.ReleaseReport, error) {
+	logger logr.Logger) (*release.Release, *configv1beta1.ReleaseReport, error) {
 
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
-	err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
+	release, err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
 	var message string
 	current, err := semver.NewVersion(currentRelease.ChartVersion)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
-		return nil, err
+		return release, nil, err
 	}
 	expected, err := semver.NewVersion(currentChart.ChartVersion)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
-		return nil, err
+		return release, nil, err
 	}
 	if current.Compare(expected) != 0 {
 		message = fmt.Sprintf("Current version: %q. Would move to version: %q",
@@ -813,7 +914,7 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.UpgradeHelmAction),
 		Message: message,
 	}
-	return report, nil
+	return release, report, nil
 }
 
 func handleUninstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -887,7 +988,7 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 
 func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
-	kubeconfig string, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+	kubeconfig string, isPullMode bool, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
 
 	registryOptions, err := createRegistryClientOptions(ctx, clusterSummary, currentChart, logger)
 	if err != nil {
@@ -902,13 +1003,6 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		defer os.Remove(registryOptions.caPath)
 	}
 
-	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
-		currentChart.ReleaseNamespace, kubeconfig, registryOptions, getEnableClientCacheValue(currentChart.Options))
-	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
-		return nil, nil, err
-	}
-	var report *configv1beta1.ReleaseReport
-
 	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName",
 		currentChart.ReleaseName, "version", currentChart.ChartVersion)
 
@@ -920,14 +1014,34 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 		}
 	}
 
+	if isPullMode {
+		return prepareChartForAgent(ctx, clusterSummary, mgmtResources, currentChart, registryOptions, logger)
+	}
+
+	return deployHelmChart(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
+}
+
+func deployHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
+	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger,
+) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+
+	currentRelease, err := getReleaseInfo(currentChart.ReleaseName,
+		currentChart.ReleaseNamespace, kubeconfig, registryOptions, getEnableClientCacheValue(currentChart.Options))
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return nil, nil, err
+	}
+	var report *configv1beta1.ReleaseReport
+
+	// In pull mode we cannot verify
 	if shouldInstall(currentRelease, currentChart) {
-		report, err = handleInstall(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig,
-			registryOptions, logger)
+		_, report, err = handleInstall(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig,
+			registryOptions, false, logger)
 		if err != nil {
 			return nil, nil, err
 		}
 	} else if shouldUpgrade(ctx, currentRelease, currentChart, clusterSummary, logger) {
-		report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig,
+		_, report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, currentChart, currentRelease, kubeconfig,
 			registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
@@ -1034,8 +1148,8 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 // No action in DryRun mode.
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, settings *cli.EnvSettings,
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
-	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
-) (map[string]interface{}, error) {
+	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, templateOnly bool, logger logr.Logger,
+) (*release.Release, error) {
 
 	if !isReferencingFluxSource(requestedChart) && requestedChart.ChartName == "" {
 		return nil, fmt.Errorf("chart name can not be empty")
@@ -1064,7 +1178,8 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, err
 	}
 
-	installClient, err := getHelmInstallClient(requestedChart, kubeconfig, registryOptions, patches)
+	installClient, err := getHelmInstallClient(ctx, requestedChart, kubeconfig, registryOptions, patches,
+		templateOnly, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm install client: %v", err))
 		return nil, err
@@ -1099,7 +1214,6 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, fmt.Errorf("%w: failed reloading chart after repo update", err)
 	}
 
-	installClient.DryRun = false
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		installClient.DryRun = true
 	}
@@ -1117,15 +1231,16 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		// is still in use" error should be impossible.
 		// There is no constant defined in the helm library but this is an error seen more than once.
 		if err.Error() == "cannot re-use a name that is still in use" {
-			return nil, upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+			_, err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
 				values, mgmtResources, logger)
+			return nil, err
 		}
 		return nil, err
 	}
 
 	logger.V(logs.LogDebug).Info("installing release done")
 
-	return r.Config, nil
+	return r, nil
 }
 
 func checkDependencies(chartRequested *chart.Chart, installClient *action.Install, cp string, settings *cli.EnvSettings) error {
@@ -1210,15 +1325,15 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
 	kubeconfig string, registryOptions *registryClientOptions, values map[string]interface{},
-	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (*release.Release, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return nil
+		return nil, nil
 	}
 
 	if !isReferencingFluxSource(requestedChart) && requestedChart.ChartName == "" {
-		return fmt.Errorf("chart name can not be empty")
+		return nil, fmt.Errorf("chart name can not be empty")
 	}
 
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace", requestedChart.ReleaseNamespace,
@@ -1226,7 +1341,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, requestedChart, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if tmpDir != "" {
 		defer os.RemoveAll(tmpDir)
@@ -1241,14 +1356,14 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	driftExclusionPatches := transformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
+	driftExclusionPatches := deployer.TransformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
 
 	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	patches = append(patches, driftExclusionPatches...)
@@ -1257,32 +1372,30 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	cp, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	chartRequested, err := loader.Load(cp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if req := chartRequested.Metadata.Dependencies; req != nil {
 		err = action.CheckDependencies(chartRequested, req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-
-	upgradeClient.DryRun = false
 
 	err = upgradeCRDs(ctx, requestedChart, kubeconfig, chartRequested.CRDObjects(), logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to upgrade crds: %v", err))
-		return err
+		return nil, err
 	}
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
 	defer cancel()
 
-	_, err = upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
+	release, err := upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
 		currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
@@ -1294,20 +1407,20 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 			// a managed cluster.
 			// Ignore the recoverRelease result. Always return an error as we must install this release back
 			_ = recoverRelease(ctx, clusterSummary, requestedChart, kubeconfig, registryOptions, logger)
-			return fmt.Errorf("tried recovering by uninstalling first")
+			return nil, fmt.Errorf("tried recovering by uninstalling first")
 		}
-		return err
+		return nil, err
 	}
 
 	logger.V(logs.LogDebug).Info("upgrading release done")
 
-	return nil
+	return release, nil
 }
 
 func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
 	logger logr.Logger) (int, error) {
 
-	crds, err := getUnstructured(chartFile.Data, logger)
+	crds, err := deployer.GetUnstructured(chartFile.Data, logger)
 	if err != nil {
 		return 0, err
 	}
@@ -1643,41 +1756,39 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1beta1.
 // No action in DryRun mode.
 func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) error {
+	kubeconfig string, registryOptions *registryClientOptions, templateOnly bool, logger logr.Logger) (*release.Release, error) {
 
 	// No-op in DryRun mode
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return nil
+	if !templateOnly && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return nil, nil
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Installing chart %s from repo %s %s)",
 		requestedChart.ChartName,
 		requestedChart.RepositoryURL,
 		requestedChart.RepositoryName))
-
 	settings := getSettings(requestedChart.ReleaseNamespace, registryOptions)
 
 	if !isReferencingFluxSource(requestedChart) {
 		err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
 			requestedChart.RepositoryURL, registryOptions, logger)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	var values chartutil.Values
 	values, err := getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
-		values, mgmtResources, logger)
+	release, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+		values, mgmtResources, templateOnly, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return release, nil
 }
 
 // doUninstallRelease uninstalls helm release from the CAPI Cluster.
@@ -1704,11 +1815,11 @@ func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Clust
 // No action in DryRun mode.
 func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) error {
+	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) (*release.Release, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return nil
+		return nil, nil
 	}
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("Upgrading chart %s from repo %s %s)",
@@ -1722,23 +1833,17 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		err := repoAddOrUpdate(settings, requestedChart.RepositoryName,
 			requestedChart.RepositoryURL, registryOptions, logger)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	var values chartutil.Values
 	values, err := getInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+	return upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
 		values, mgmtResources, logger)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // updateChartsInClusterConfiguration updates deployed chart info on ClusterConfiguration
@@ -1753,12 +1858,16 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("update deployed chart info. Number of deployed helm chart: %d",
 		len(chartDeployed)))
-	profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	return updateClusterConfiguration(ctx, c, clusterSummary, profileOwnerRef, configv1beta1.FeatureHelm, nil, chartDeployed)
+	isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+	clean := !clusterSummary.DeletionTimestamp.IsZero()
+	return clusterops.UpdateClusterConfiguration(ctx, c, isDryRun, clean, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, profileRef, libsveltosv1beta1.FeatureHelm,
+		nil, chartDeployed)
 }
 
 // undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
@@ -2060,7 +2169,7 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterReportName := getClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
+	clusterReportName := clusterops.GetClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -2257,7 +2366,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 }
 
 func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
-	elements, err := customSplit(manifest)
+	elements, err := deployer.CustomSplit(manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -2298,17 +2407,17 @@ func collectHelmContent(manifest string, logger logr.Logger) ([]*unstructured.Un
 	return resources, nil
 }
 
-func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []libsveltosv1beta1.Resource {
-	resources := make([]libsveltosv1beta1.Resource, len(policies))
+func unstructuredToSveltosResources(policies []*unstructured.Unstructured) []libsveltosv1beta1.ResourceSummaryResource {
+	resources := make([]libsveltosv1beta1.ResourceSummaryResource, len(policies))
 
 	for i := range policies {
-		r := libsveltosv1beta1.Resource{
+		r := libsveltosv1beta1.ResourceSummaryResource{
 			Namespace:                   policies[i].GetNamespace(),
 			Name:                        policies[i].GetName(),
 			Kind:                        policies[i].GetKind(),
 			Group:                       policies[i].GetObjectKind().GroupVersionKind().Group,
 			Version:                     policies[i].GetObjectKind().GroupVersionKind().Version,
-			IgnoreForConfigurationDrift: hasIgnoreConfigurationDriftAnnotation(policies[i]),
+			IgnoreForConfigurationDrift: deployer.HasIgnoreConfigurationDriftAnnotation(policies[i]),
 		}
 
 		resources[i] = r
@@ -2552,8 +2661,8 @@ func getRecreateValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig string,
-	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch,
+func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
+	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch, templateOnly bool, logger logr.Logger,
 ) (*action.Install, error) {
 
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
@@ -2587,6 +2696,22 @@ func getHelmInstallClient(requestedChart *configv1beta1.HelmChart, kubeconfig st
 
 	if len(patches) > 0 {
 		installClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
+	}
+
+	installClient.DryRun = false
+	if templateOnly {
+		currentVersion, err := k8s_utils.GetKubernetesVersion(ctx, getManagementClusterConfig(), logger)
+		if err != nil {
+			return nil, fmt.Errorf("%w: failed to get management cluster Kubernetes version", err)
+		}
+		// We simply wantnto get list of resources that would be deployed. This is to prepare
+		// what agent for a SveltosCluster in pull mode needs to deploy
+		installClient.DryRun = true
+		installClient.ClientOnly = true
+		installClient.KubeVersion, err = chartutil.ParseKubeVersion(currentVersion)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return installClient, nil
@@ -2706,7 +2831,10 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		addExtraLabels(r, clusterSummary.Spec.ClusterProfileSpec.ExtraLabels)
 		addExtraAnnotations(r, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
-		_, err = updateResource(ctx, dr, clusterSummary, r, []string{}, logger)
+		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
+		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
+		_, err = deployer.UpdateResource(ctx, dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			r, []string{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
 				r.GetKind(), r.GetNamespace(), r.GetName(), err))
@@ -3072,7 +3200,7 @@ func requeueAllOtherClusterSummaries(ctx context.Context, c client.Client,
 			return err
 		}
 
-		err = requeueClusterSummary(ctx, configv1beta1.FeatureHelm, cs, logger)
+		err = requeueClusterSummary(ctx, libsveltosv1beta1.FeatureHelm, cs, logger)
 		if err != nil {
 			return err
 		}
@@ -3101,11 +3229,13 @@ func evaluateValuesDiff(ctx context.Context, currentValues map[string]interface{
 		return "", err
 	}
 
-	proposedValues, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
-		values, mgmtResources, logger)
+	r, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
+		values, mgmtResources, false, logger)
 	if err != nil {
 		return "", err
 	}
+
+	proposedValues := r.Config
 
 	return valuesDiff(currentValues, proposedValues)
 }
@@ -3247,4 +3377,170 @@ func canManageChart(ctx context.Context, c client.Client, clusterSummary *config
 	}
 
 	return determineChartOwnership(ctx, c, clusterSummary, instantiatedChart, logger)
+}
+
+// addExtraLabels adds ExtraLabels to policy.
+// If policy already has a label with a key present in `ExtraLabels`, the value from `ExtraLabels` will
+// override the existing value.
+func addExtraLabels(policy *unstructured.Unstructured, extraLabels map[string]string) {
+	if extraLabels == nil {
+		return
+	}
+
+	if len(extraLabels) == 0 {
+		return
+	}
+
+	for k := range extraLabels {
+		deployer.AddLabel(policy, k, extraLabels[k])
+	}
+}
+
+// addExtraAnnotations adds ExtraAnnotations to policy.
+// If policy already has an annotation with a key present in `ExtraAnnotations`, the value from `ExtraAnnotations`
+// will override the existing value.
+func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map[string]string) {
+	if extraAnnotations == nil {
+		return
+	}
+
+	if len(extraAnnotations) == 0 {
+		return
+	}
+
+	for k := range extraAnnotations {
+		deployer.AddAnnotation(policy, k, extraAnnotations[k])
+	}
+}
+
+// If in pull mode either remove resources or treat it as an upgrade
+func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
+	registryOptions *registryClientOptions, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+
+	if currentChart.HelmChartAction == configv1beta1.HelmChartActionUninstall {
+		releaseReport := &configv1beta1.ReleaseReport{
+			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
+			Action: string(configv1beta1.UninstallHelmAction),
+		}
+
+		// Since this is Uninstall, prepare a single ConfigurationBundle with no resources
+		// After walking on all charts ConfigurationGroup is created
+		return nil, releaseReport, pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm), nil, false, logger)
+	}
+
+	// In pull mode always treat it as an install. This will allow us to get list of resources helm would install (equivalent
+	// of helm template). Those resources will be made available for the agent inside ConfigurationBundles.
+	release, _, err := handleInstall(ctx, clusterSummary, mgmtResources, currentChart, "", registryOptions, true, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rInfo := &releaseInfo{
+		ReleaseName:      release.Name,
+		ReleaseNamespace: release.Namespace,
+		Revision:         strconv.Itoa(release.Version),
+		Status:           release.Info.Status.String(),
+		Chart:            release.Chart.Metadata.Name,
+		ChartVersion:     release.Chart.Metadata.Version,
+		AppVersion:       release.Chart.AppVersion(),
+		ReleaseLabels:    release.Labels,
+		Icon:             release.Chart.Metadata.Icon,
+		Values:           release.Config,
+	}
+
+	releaseReport := &configv1beta1.ReleaseReport{
+		ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
+		Action: string(configv1beta1.UpgradeHelmAction),
+	}
+
+	resources, err := collectHelmContent(release.Manifest, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
+
+	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Do not call CommitStagedResourcesForDeployment now. Walk all charts only then call CommitStagedResourcesForDeployment
+	return rInfo, releaseReport, nil
+}
+
+// splitResources returns a slice of slice of resources according to those rules:
+// 1. Each CRD instance is in its own group with no other resources
+// 2. no more than 10 resources are put in the same group
+func splitResources(resources []*unstructured.Unstructured) [][]*unstructured.Unstructured {
+	var crdInstances []*unstructured.Unstructured
+	var otherResources []*unstructured.Unstructured
+
+	// Separate CRD instances from other resources
+	for _, resource := range resources {
+		if resource.GetAPIVersion() == apiextensionsv1.SchemeGroupVersion.String() &&
+			resource.GetKind() == "CustomResourceDefinition" {
+
+			crdInstances = append(crdInstances, resource)
+		} else {
+			otherResources = append(otherResources, resource)
+		}
+	}
+
+	// Put each CRD instance in its own subgroup
+	var result [][]*unstructured.Unstructured
+	for _, crd := range crdInstances {
+		result = append(result, []*unstructured.Unstructured{crd})
+	}
+
+	// Split other resources into subgroups of no more than 10
+	for i := 0; i < len(otherResources); i += 10 {
+		end := i + 10
+		if end > len(otherResources) {
+			end = len(otherResources)
+		}
+		result = append(result, otherResources[i:end])
+	}
+
+	return result
+}
+
+func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, currentChart *configv1beta1.HelmChart,
+	resources []*unstructured.Unstructured, logger logr.Logger) error {
+
+	baseKey := fmt.Sprintf("%s-%s-%s", currentChart.ReleaseNamespace, currentChart.ReleaseName, currentChart.RepositoryName)
+	bundleResources := make(map[string][]unstructured.Unstructured)
+
+	bunldes := splitResources(resources)
+
+	for i := range bunldes {
+		key := fmt.Sprintf("%s-%d", baseKey, i)
+		bundleResources[key] = convertPointerSliceToValueSlice(bunldes[i])
+		err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+			string(libsveltosv1beta1.FeatureHelm), bundleResources, false, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to stage resources for deployment: %v", err))
+			return err
+		}
+	}
+
+	return nil
+}
+
+func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) error {
+
+	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
+	if err != nil {
+		return err
+	}
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef)
+	// Commit deployment
+	return pullmode.CommitStagedResourcesForDeployment(ctx, getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
+		clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm), logger, setters...)
 }

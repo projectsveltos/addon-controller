@@ -143,7 +143,6 @@ var (
 	DeployDebuggingConfigurationCRD                  = deployDebuggingConfigurationCRD
 	DeployResourceSummaryCRD                         = deployResourceSummaryCRD
 	DeployDriftDetectionManagerInCluster             = deployDriftDetectionManagerInCluster
-	DeployResourceSummaryInstance                    = deployResourceSummaryInstance
 	UpdateDeployedGroupVersionKind                   = updateDeployedGroupVersionKind
 	DeployDriftDetectionManagerInManagementCluster   = deployDriftDetectionManagerInManagementCluster
 	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels

@@ -37,8 +37,9 @@ var _ = Describe("ClusterSet", func() {
 		namePrefix = "clusterset-"
 	)
 
-	It("ClusterProfile referencing ClusteSet: picks ClusterSet selected clusters", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterSet matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("ClusterProfile referencing ClusteSet: picks ClusterSet selected clusters", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterSet matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterSet := getClusterSet(namePrefix, map[string]string{key: value})
 		clusterSet.Spec.MaxReplicas = 1
 		Expect(k8sClient.Create(context.TODO(), clusterSet)).To(Succeed())
@@ -50,12 +51,18 @@ var _ = Describe("ClusterSet", func() {
 			types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)).To(Succeed())
 		Expect(currentClusterSet.Status.SelectedClusterRefs).ToNot(BeNil())
 		Expect(len(currentClusterSet.Status.SelectedClusterRefs)).To(Equal(1))
+
+		apiVersion := clusterv1.GroupVersion.String()
+		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+			apiVersion = libsveltosv1beta1.GroupVersion.String()
+		}
+
 		Expect(currentClusterSet.Status.SelectedClusterRefs).To(ContainElement(
 			corev1.ObjectReference{
-				Kind:       "Cluster",
-				APIVersion: clusterv1.GroupVersion.String(),
-				Namespace:  kindWorkloadCluster.Namespace,
-				Name:       kindWorkloadCluster.Name,
+				Kind:       kindWorkloadCluster.GetKind(),
+				APIVersion: apiVersion,
+				Namespace:  kindWorkloadCluster.GetNamespace(),
+				Name:       kindWorkloadCluster.GetName(),
 			}))
 
 		Byf("Creating ClusterProfile referencing ClusterSet")
@@ -73,8 +80,8 @@ var _ = Describe("ClusterSet", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		By("Update ClusterSet MaxReplicas to 0")
 		Expect(k8sClient.Get(context.TODO(),

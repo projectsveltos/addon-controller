@@ -95,7 +95,7 @@ var _ = Describe("Feature", func() {
 		namePrefix = "auto-deploy-dependencies-"
 	)
 
-	It("With AutoDeployDependencies set Sveltos resolves all prerequesities", Label("NEW-FV"), func() {
+	It("With AutoDeployDependencies set Sveltos resolves all prerequesities", Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
 		Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector is not set
 		helmClusterProfile := getClusterProfile(namePrefix, map[string]string{})
 		Byf("Create ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
@@ -104,7 +104,7 @@ var _ = Describe("Feature", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.3.5",
+				ChartVersion:     "v3.4.2",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -128,7 +128,7 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		policyClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		policyClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Byf("Make ClusterProfile %s depend on ClusterProfile %s", policyClusterProfile.Name, helmClusterProfile.Name)
@@ -153,7 +153,7 @@ var _ = Describe("Feature", func() {
 		Byf("Verify ClusterSummary for dependent ClusterProfile")
 		policyClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		// Because of dependencies, expect also the ClusterProfile deploying Kyverno is a match
 		verifyClusterProfileMatches(helmClusterProfile)
@@ -163,15 +163,16 @@ var _ = Describe("Feature", func() {
 		Byf("Verify CLusterSummary for prerequisite ClusterProfile")
 		helmClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.5", Namespace: "kyverno"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
+				helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
-			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		policies := []policy{
 			{kind: "ClusterPolicy", name: "disallow-latest-tag", namespace: "", group: "kyverno.io"},
@@ -191,7 +192,7 @@ var _ = Describe("Feature", func() {
 
 func verifyClusterProfileIsNotAMatch(clusterProfile *configv1beta1.ClusterProfile) {
 	Byf("Verifying Cluster %s/%s is NOT a match for ClusterProfile %s",
-		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterProfile.Name)
+		kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), clusterProfile.Name)
 	Eventually(func() bool {
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
@@ -199,8 +200,8 @@ func verifyClusterProfileIsNotAMatch(clusterProfile *configv1beta1.ClusterProfil
 			return false
 		}
 		for i := range currentClusterProfile.Status.MatchingClusterRefs {
-			if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
+			if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.GetNamespace() &&
+				currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.GetName() &&
 				currentClusterProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
 
 				return false

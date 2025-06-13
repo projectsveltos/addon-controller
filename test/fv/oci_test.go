@@ -37,16 +37,16 @@ var _ = Describe("Helm", func() {
 		namePrefix = "helm-oci-"
 	)
 
-	It("Deploy and updates oci helm charts correctly", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Deploy and updates oci helm charts correctly", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Update ClusterProfile %s to deploy oci helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
@@ -75,7 +75,7 @@ var _ = Describe("Helm", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -90,15 +90,17 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "vault", ChartVersion: "1.6.0", Namespace: "vault"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "vault", ChartVersion: "1.6.0", Namespace: "vault"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for vault")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -117,7 +119,7 @@ var _ = Describe("Helm", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying vault deployment is still present in the workload cluster")
 		Eventually(func() error {
@@ -127,15 +129,17 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		charts = []configv1beta1.Chart{
-			{ReleaseName: "vault", ChartVersion: "1.5.0", Namespace: "vault"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "vault", ChartVersion: "1.5.0", Namespace: "vault"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 

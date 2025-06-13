@@ -224,6 +224,11 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		return nil, err
 	}
 
+	resources, err = applyPatches(ctx, clusterSummary, resources, mgmtResources, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	ref := &corev1.ObjectReference{
 		Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
 		Namespace: referencedObject.GetNamespace(),
@@ -243,7 +248,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,
-		libsveltosv1beta1.FeatureResources, clusterSummary, mgmtResources, subresources, logger)
+		libsveltosv1beta1.FeatureResources, clusterSummary, subresources, logger)
 }
 
 // adjustNamespace fixes namespace.
@@ -311,15 +316,10 @@ func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 //nolint:funlen // requires a lot of arguments because kustomize and plain resources are using this function
 func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	featureID libsveltosv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
+	featureID libsveltosv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary,
 	subresources []string, logger logr.Logger) (reports []libsveltosv1beta1.ResourceReport, err error) {
 
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
-	if err != nil {
-		return nil, err
-	}
-
-	referencedUnstructured, err = applyPatches(ctx, clusterSummary, referencedUnstructured, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -406,9 +406,6 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 				}
 			}
 		}
-
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v)",
-			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster))
 
 		updatedPolicy, err := deployer.UpdateResource(ctx, dr, clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection,
 			clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
@@ -702,8 +699,6 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 		return nil, nil, err
 	}
 
-	var tmpResourceReports []libsveltosv1beta1.ResourceReport
-
 	// Assume that if objects are deployed in the management clusters, those are needed before any
 	// resource is deployed in the managed cluster. So try to deploy those first if any.
 
@@ -714,17 +709,15 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 			UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
 		}
 	}
-	tmpResourceReports, err = deployObjects(ctx, true, c, localConfig, objectsToDeployLocally, clusterSummary,
+	localReports, err = deployObjects(ctx, true, c, localConfig, objectsToDeployLocally, clusterSummary,
 		mgmtResources, logger)
-	localReports = append(localReports, tmpResourceReports...)
 	if err != nil {
 		return localReports, nil, err
 	}
 
 	// Deploy all resources that need to be deployed in the managed cluster
-	tmpResourceReports, err = deployObjects(ctx, false, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
+	remoteReports, err = deployObjects(ctx, false, remoteClient, remoteConfig, objectsToDeployRemotely, clusterSummary,
 		mgmtResources, logger)
-	remoteReports = append(remoteReports, tmpResourceReports...)
 	if err != nil {
 		return localReports, remoteReports, err
 	}
@@ -777,39 +770,60 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 	return reports, nil
 }
 
-func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
-	remoteConfig *rest.Config, remoteClient client.Client, featureID libsveltosv1beta1.FeatureID,
-	clusterSummary *configv1beta1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
-	currentPolicies map[string]libsveltosv1beta1.Resource, logger logr.Logger) ([]libsveltosv1beta1.ResourceReport, error) {
-
-	logger.V(logs.LogDebug).Info("removing stale resources")
-
+func isManagedClusterDeleted(ctx context.Context, isMgmtCluster bool, clusterSummary *configv1beta1.ClusterSummary) (bool, error) {
 	if !isMgmtCluster {
 		cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return nil, nil
+				return true, nil
 			}
-			return nil, err
+			return false, err
 		}
 
 		if !cluster.GetDeletionTimestamp().IsZero() {
 			// if cluster is marked for deletion, no need to worry about removing resources deployed
 			// there. This check applies only for managed cluster. Resources deployed in the management
 			// cluster are still removed
-			return nil, nil
+			return true, nil
 		}
 	}
+	return false, nil
+}
 
-	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
+func setupRemoteConfigAndClient(isMgmtCluster bool, remoteConfig *rest.Config, remoteClient client.Client,
+	clusterSummary *configv1beta1.ClusterSummary) (*rest.Config, client.Client, error) {
+
+	if isMgmtCluster {
+		localConfig := rest.CopyConfig(getManagementClusterConfig())
+		adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+		if adminName != "" {
+			localConfig.Impersonate = rest.ImpersonationConfig{
+				UserName: fmt.Sprintf("system:serviceaccount:%s:%s", adminNamespace, adminName),
+			}
+		}
+		localClient, err := client.New(localConfig, client.Options{Scheme: remoteClient.Scheme()})
+		if err != nil {
+			return nil, nil, err
+		}
+		return localConfig, localClient, nil
+	}
+	return remoteConfig, remoteClient, nil
+}
+
+func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *rest.Config, remoteClient client.Client,
+	featureID libsveltosv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
+	currentPolicies map[string]libsveltosv1beta1.Resource, profile client.Object, logger logr.Logger,
+) ([]libsveltosv1beta1.ResourceReport, error) {
+
+	undeployed := make([]libsveltosv1beta1.ResourceReport, 0)
+
+	localConfig, localClient, err := setupRemoteConfigAndClient(isMgmtCluster, remoteConfig, remoteClient, clusterSummary)
 	if err != nil {
 		return nil, err
 	}
 
-	undeployed := make([]libsveltosv1beta1.ResourceReport, 0)
-
-	dc := discovery.NewDiscoveryClientForConfigOrDie(remoteConfig)
+	dc := discovery.NewDiscoveryClientForConfigOrDie(localConfig)
 	groupResources, err := restmapper.GetAPIGroupResources(dc)
 	if err != nil {
 		return nil, err
@@ -862,7 +876,7 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 
 		for j := range list.Items {
 			r := list.Items[j]
-			rr, err := deployer.UndeployStaleResource(ctx, skipAnnotationKey, skipAnnotationValue, remoteClient,
+			rr, err := deployer.UndeployStaleResource(ctx, skipAnnotationKey, skipAnnotationValue, localClient,
 				profile, leavePolicies, isDryRun, r, currentPolicies, logger)
 			if err != nil {
 				return nil, err
@@ -875,6 +889,30 @@ func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
 	}
 
 	return undeployed, nil
+}
+
+func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
+	remoteConfig *rest.Config, remoteClient client.Client, featureID libsveltosv1beta1.FeatureID,
+	clusterSummary *configv1beta1.ClusterSummary, deployedGVKs []schema.GroupVersionKind,
+	currentPolicies map[string]libsveltosv1beta1.Resource, logger logr.Logger) ([]libsveltosv1beta1.ResourceReport, error) {
+
+	logger.V(logs.LogDebug).Info("removing stale resources")
+
+	isClusterDeleted, err := isManagedClusterDeleted(ctx, isMgmtCluster, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	if isClusterDeleted {
+		return nil, nil
+	}
+
+	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	return processDeployedGVKs(ctx, isMgmtCluster, remoteConfig, remoteClient, featureID, clusterSummary, deployedGVKs,
+		currentPolicies, profile, logger)
 }
 
 // isLeavePolicies returns true if:
@@ -1324,7 +1362,7 @@ func getTemplateResourceRefHash(ctx context.Context, clusterSummary *configv1bet
 }
 
 func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
-	profileRef *corev1.ObjectReference) []pullmode.Option {
+	profileRef *corev1.ObjectReference, configurationHash []byte) []pullmode.Option {
 
 	setters := make([]pullmode.Option, 0)
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
@@ -1344,6 +1382,7 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		setters = append(setters, pullmode.WithLeavePolicies())
 	}
 
+	setters = append(setters, pullmode.WithRequestorHash(configurationHash))
 	deployedGVKs := getDeployedGroupVersionKinds(clusterSummary, featureID)
 	gvks := tranformGroupVersionKindToString(deployedGVKs)
 

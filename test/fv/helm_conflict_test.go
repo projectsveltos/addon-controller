@@ -26,7 +26,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -38,18 +37,9 @@ var _ = Describe("Helm with conflicts", func() {
 		namePrefix = "helm-conflict-"
 	)
 
-	BeforeEach(func() {
-		// Set Cluster unpaused
-		currentCluster := &clusterv1.Cluster{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCluster)).To(Succeed())
-
-		Expect(k8sClient.Update(context.TODO(), currentCluster)).To(Succeed())
-	})
-
-	It("Two ClusterProfiles managing same helm chart on same cluster", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Two ClusterProfiles managing same helm chart on same cluster", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -59,7 +49,7 @@ var _ = Describe("Helm with conflicts", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		sparkVersion := "9.3.0"
 		addSparkHelmChart(clusterProfile.Name, sparkVersion)
@@ -68,7 +58,7 @@ var _ = Describe("Helm with conflicts", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -82,12 +72,14 @@ var _ = Describe("Helm with conflicts", func() {
 				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		By("Creating a second ClusterProfile which conflicts with first ClusterProfile")
 		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -100,26 +92,39 @@ var _ = Describe("Helm with conflicts", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile2.Name}, currentClusterProfile)).To(Succeed())
 		clusterSummary = verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Deleting clusterProfile %s", clusterProfile.Name)
 		deleteClusterProfile(clusterProfile)
 
-		// Since second ClusterProfile is waiting to manage same helm chart, it should not be ever
-		// uninstalled when first ClusterProfile is deleted
-		Byf("Verifying spark statefulset is still in the workload cluster")
-		Consistently(func() error {
-			statefulSet := &appsv1.StatefulSet{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
-		}, timeout/2, pollingInterval).Should(BeNil())
-
-		charts = []configv1beta1.Chart{
-			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+			// In pull-mode handing over to old conflicting profile is a best effort try.
+			// So verify StatefulSet eventually is there
+			Byf("Verifying spark statefulset is still in the workload cluster")
+			Eventually(func() error {
+				statefulSet := &appsv1.StatefulSet{}
+				return workloadClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+			}, timeout/2, pollingInterval).Should(BeNil())
+		} else {
+			// Since second ClusterProfile is waiting to manage same helm chart, it should not be ever
+			// uninstalled when first ClusterProfile is deleted
+			Byf("Verifying spark statefulset is still in the workload cluster")
+			Consistently(func() error {
+				statefulSet := &appsv1.StatefulSet{}
+				return workloadClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+			}, timeout/2, pollingInterval).Should(BeNil())
 		}
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
+
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
+		}
 
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
 		deleteClusterProfile(clusterProfile2)
@@ -129,6 +134,9 @@ var _ = Describe("Helm with conflicts", func() {
 			statefulSet := &appsv1.StatefulSet{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+			if err == nil {
+				return !statefulSet.DeletionTimestamp.IsZero()
+			}
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

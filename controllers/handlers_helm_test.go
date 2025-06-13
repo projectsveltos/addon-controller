@@ -644,7 +644,7 @@ var _ = Describe("HandlersHelm", func() {
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
 		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig,
-			false, textlogger.NewLogger(textlogger.NewConfig()))
+			false, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1beta1.DryRunReconciliationError

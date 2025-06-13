@@ -18,7 +18,6 @@ package controllers_test
 
 import (
 	"context"
-	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -60,72 +59,6 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			return testEnv.Get(context.TODO(),
 				types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
-	})
-
-	It("deployResourceSummaryInstance updates ResourceSummary instance", func() {
-		resources := []libsveltosv1beta1.Resource{
-			{
-				Name:      randomString(),
-				Namespace: randomString(),
-				Group:     randomString(),
-				Kind:      randomString(),
-				Version:   randomString(),
-			},
-		}
-		namespace := randomString()
-		name := randomString()
-
-		// are created
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-		err := testEnv.Create(context.TODO(), ns)
-		if err != nil {
-			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-		}
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
-
-		clusterSummaryNamespace := namespace
-		clusterSummaryName := randomString()
-		annotations := map[string]string{
-			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummaryName,
-			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummaryNamespace,
-		}
-
-		Expect(controllers.DeployResourceSummaryInstance(ctx, testEnv.Client, resources, nil, nil,
-			namespace, name, nil, annotations, nil, textlogger.NewLogger(textlogger.NewConfig()))).
-			To(Succeed())
-
-		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-
-		Eventually(func() error {
-			return testEnv.Get(context.TODO(),
-				types.NamespacedName{
-					Name:      name,
-					Namespace: namespace,
-				},
-				currentResourceSummary)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{
-				Name:      name,
-				Namespace: namespace,
-			},
-			currentResourceSummary)).To(Succeed())
-
-		Expect(currentResourceSummary.Annotations).ToNot(BeNil())
-		v, ok := currentResourceSummary.Annotations[libsveltosv1beta1.ClusterSummaryNameAnnotation]
-		Expect(ok).To(BeTrue())
-		Expect(v).To(Equal(clusterSummaryName))
-
-		v, ok = currentResourceSummary.Annotations[libsveltosv1beta1.ClusterSummaryNamespaceAnnotation]
-		Expect(ok).To(BeTrue())
-		Expect(v).To(Equal(clusterSummaryNamespace))
-
-		Expect(reflect.DeepEqual(currentResourceSummary.Spec.Resources, resources)).To(BeTrue())
 	})
 
 	It("deployDriftDetectionManagerInCluster deploys CRDs in cluster", func() {

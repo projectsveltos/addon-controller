@@ -46,7 +46,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		kustomizeConfigMapName = "kustomize"
 	)
 
-	It("Deploy Kustomize resources with ConfigMap", Label("FV", "EXTENDED"), func() {
+	It("Deploy Kustomize resources with ConfigMap", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Verifying ConfigMap kustomize exists. It is created by Makefile")
 		kustomizeConfigMap := &corev1.ConfigMap{}
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: defaultNamespace, Name: kustomizeConfigMapName},
@@ -73,7 +73,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		}
 		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -82,7 +82,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		targetNamespace := randomString()
 
@@ -116,7 +116,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -148,7 +148,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for kustomize", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureKustomize)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureKustomize)
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
@@ -178,7 +178,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying Service is removed from the workload cluster")
 		Eventually(func() bool {

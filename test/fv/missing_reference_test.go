@@ -45,105 +45,106 @@ var _ = Describe("Missing Reference", func() {
 		namePrefix = "missing-reference-"
 	)
 
-	It("Deploy and updates resources referenced in ResourceRefs correctly. Handles missing references by reporting an error.", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
-		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+	It("Deploy and updates resources referenced in ResourceRefs correctly. Handles missing references by reporting an error.",
+		Label("FV", "PULLMODE", "EXTENDED"), func() {
+			Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+			clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+			Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		verifyClusterProfileMatches(clusterProfile)
+			verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				clusterProfile.Name, &clusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		configMapNamespace := randomString()
-		configMapName := randomString()
+			configMapNamespace := randomString()
+			configMapName := randomString()
 
-		Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMapNamespace, configMapName)
-		currentClusterProfile := &configv1beta1.ClusterProfile{}
+			Byf("Update ClusterProfile %s to reference ConfigMap %s/%s", clusterProfile.Name, configMapNamespace, configMapName)
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
 
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Expect(k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+				currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: configMapNamespace,
+						Name:      configMapName,
+					},
+				}
+				return k8sClient.Update(context.TODO(), currentClusterProfile)
+			})
+			Expect(err).To(BeNil())
+
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-				{
-					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-					Namespace: configMapNamespace,
-					Name:      configMapName,
+
+			By("Verify ClusterSummary reports error about missing reference")
+			clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				currentClusterProfile.Name, &currentClusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+			Eventually(func() bool {
+				currentClusterSummary := &configv1beta1.ClusterSummary{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+					currentClusterSummary)
+				if err != nil {
+					return false
+				}
+
+				for i := range currentClusterSummary.Status.FeatureSummaries {
+					if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+						return currentClusterSummary.Status.FeatureSummaries[i].Status ==
+							libsveltosv1beta1.FeatureStatusFailedNonRetriable
+					}
+				}
+				return false
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Byf("Create configMap's namespace %s", configMapNamespace)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapNamespace,
 				},
 			}
-			return k8sClient.Update(context.TODO(), currentClusterProfile)
+			Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+
+			Byf("Create a configMap with a Namespace")
+			namespaceName := randomString()
+			configMap := createConfigMapWithPolicy(configMapNamespace, configMapName,
+				fmt.Sprintf(namespace, namespaceName))
+			Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+			currentConfigMap := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+
+			Byf("Getting client to access the workload cluster")
+			workloadClient, err := getKindWorkloadClusterKubeconfig()
+			Expect(err).To(BeNil())
+			Expect(workloadClient).ToNot(BeNil())
+
+			Byf("Verifying proper Namespace in the ConfigMap.Data is created in the workload cluster")
+			Eventually(func() error {
+				currentNamespace := &corev1.Namespace{}
+				return workloadClient.Get(context.TODO(), types.NamespacedName{Name: namespaceName}, currentNamespace)
+			}, timeout, pollingInterval).Should(BeNil())
+
+			Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
+			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
+			policies := []policy{
+				{kind: "Namespace", name: namespaceName, namespace: "", group: ""},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
+				policies, nil)
+
+			deleteClusterProfile(clusterProfile)
+
+			currentNs := &corev1.Namespace{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNamespace}, currentNs)).To(Succeed())
+			Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 		})
-		Expect(err).To(BeNil())
-
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-
-		By("Verify ClusterSummary reports error about missing reference")
-		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		Eventually(func() bool {
-			currentClusterSummary := &configv1beta1.ClusterSummary{}
-			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-				currentClusterSummary)
-			if err != nil {
-				return false
-			}
-
-			for i := range currentClusterSummary.Status.FeatureSummaries {
-				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
-					return currentClusterSummary.Status.FeatureSummaries[i].Status ==
-						libsveltosv1beta1.FeatureStatusFailedNonRetriable
-				}
-			}
-			return false
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Byf("Create configMap's namespace %s", configMapNamespace)
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNamespace,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
-
-		Byf("Create a configMap with a Namespace")
-		namespaceName := randomString()
-		configMap := createConfigMapWithPolicy(configMapNamespace, configMapName,
-			fmt.Sprintf(namespace, namespaceName))
-		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
-		currentConfigMap := &corev1.ConfigMap{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-
-		Byf("Getting client to access the workload cluster")
-		workloadClient, err := getKindWorkloadClusterKubeconfig()
-		Expect(err).To(BeNil())
-		Expect(workloadClient).ToNot(BeNil())
-
-		Byf("Verifying proper Namespace in the ConfigMap.Data is created in the workload cluster")
-		Eventually(func() error {
-			currentNamespace := &corev1.Namespace{}
-			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: namespaceName}, currentNamespace)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
-
-		policies := []policy{
-			{kind: "Namespace", name: namespaceName, namespace: "", group: ""},
-		}
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
-			policies, nil)
-
-		deleteClusterProfile(clusterProfile)
-
-		currentNs := &corev1.Namespace{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: configMapNamespace}, currentNs)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
-	})
 })

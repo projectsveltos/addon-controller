@@ -24,7 +24,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -34,8 +33,8 @@ var _ = Describe("ClusterSet", func() {
 		namePrefix = "clusterset-"
 	)
 
-	It("ClusterSet picks matching clusters", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterSet matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("ClusterSet picks matching clusters", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterSet matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterSet := getClusterSet(namePrefix, map[string]string{key: value})
 		clusterSet.Spec.MaxReplicas = 1
 		Expect(k8sClient.Create(context.TODO(), clusterSet)).To(Succeed())
@@ -47,12 +46,13 @@ var _ = Describe("ClusterSet", func() {
 			types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)).To(Succeed())
 		Expect(currentClusterSet.Status.SelectedClusterRefs).ToNot(BeNil())
 		Expect(len(currentClusterSet.Status.SelectedClusterRefs)).To(Equal(1))
+
 		Expect(currentClusterSet.Status.SelectedClusterRefs).To(ContainElement(
 			corev1.ObjectReference{
-				Kind:       "Cluster",
-				APIVersion: clusterv1.GroupVersion.String(),
-				Namespace:  kindWorkloadCluster.Namespace,
-				Name:       kindWorkloadCluster.Name,
+				Kind:       kindWorkloadCluster.GetKind(),
+				APIVersion: kindWorkloadCluster.GetAPIVersion(),
+				Namespace:  kindWorkloadCluster.GetNamespace(),
+				Name:       kindWorkloadCluster.GetName(),
 			}))
 
 		By("Update ClusterSet MaxReplicas to 0")

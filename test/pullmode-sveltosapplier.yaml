@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: projectsveltos
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager
+  namespace: projectsveltos
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sveltos-applier-manager-role
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sveltos-applier-manager-role
+subjects:
+- kind: ServiceAccount
+  name: sveltos-applier-manager
+  namespace: projectsveltos
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-metrics-service
+  namespace: projectsveltos
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: sveltos-applier
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: sveltos-applier
+  name: sveltos-applier-manager
+  namespace: projectsveltos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sveltos-applier
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: controller
+      labels:
+        app.kubernetes.io/name: sveltos-applier
+    spec:
+      containers:
+      - args:
+        - --diagnostics-address=:8443
+        - --cluster-namespace=default
+        - --cluster-name=clusterapi-workload
+        - --cluster-type=sveltos
+        - --secret-with-kubeconfig=clusterapi-workload-sveltos-kubeconfig
+        - --v=5
+        - --version=pull-mode
+        command:
+        - /manager
+        env:
+        - name: GOMEMLIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: docker.io/projectsveltos/sveltos-applier:main
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: healthz
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: controller
+        ports:
+        - containerPort: 8443
+          name: metrics
+          protocol: TCP
+        - containerPort: 9440
+          name: healthz
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: healthz
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts: []
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: sveltos-applier-manager
+      terminationGracePeriodSeconds: 10
+      volumes: []

@@ -74,8 +74,8 @@ var _ = Describe("Feature", func() {
 	)
 
 	// This Helm release contains corev1.List. Verify those are expanded so drift-detection can watch for configuration drift
-	It("Expand corev1List in helm charts", Label("NEW-FV"), func() {
-		Byf("Get a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Expand corev1List in helm charts", Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
+		Byf("Get a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		Byf("Create ClusterProfile %s to deploy kube-prometheus-stack helm chart", clusterProfile.Name)
 		clusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
@@ -96,7 +96,7 @@ var _ = Describe("Feature", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -110,16 +110,18 @@ var _ = Describe("Feature", func() {
 				types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "kube-prometheus-stack", ChartVersion: "70.3.0", Namespace: "kube-prometheus-stack"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "kube-prometheus-stack", ChartVersion: "70.3.0", Namespace: "kube-prometheus-stack"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
 
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
-
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		deleteClusterProfile(clusterProfile)
 

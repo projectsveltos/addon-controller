@@ -48,20 +48,20 @@ var _ = Describe("Feature", Serial, func() {
 		namePrefix = "paused-"
 	)
 
-	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV", "EXTENDED"), func() {
+	It("Pause and unpause cluster. Policies are deployed only when unpaused", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Setting Cluster as paused")
 		setClusterPausedField(true)
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		devNamespaceName := randomString()
 		Byf("Create a configMap with a Namespace")
@@ -89,9 +89,9 @@ var _ = Describe("Feature", Serial, func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName, currentClusterProfile.Name,
+			&currentClusterProfile.Spec, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+			getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -115,16 +115,15 @@ var _ = Describe("Feature", Serial, func() {
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		Byf("Changing clusterprofile to not reference configmap anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, currentClusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {
@@ -139,9 +138,17 @@ var _ = Describe("Feature", Serial, func() {
 })
 
 func setClusterPausedField(paused bool) {
-	cluster := &clusterv1.Cluster{}
-	Expect(k8sClient.Get(context.TODO(),
-		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name}, cluster)).To(Succeed())
-	cluster.Spec.Paused = paused
-	Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		cluster := &libsveltosv1beta1.SveltosCluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()}, cluster)).To(Succeed())
+		cluster.Spec.Paused = paused
+		Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
+	} else {
+		cluster := &clusterv1.Cluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()}, cluster)).To(Succeed())
+		cluster.Spec.Paused = paused
+		Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
+	}
 }

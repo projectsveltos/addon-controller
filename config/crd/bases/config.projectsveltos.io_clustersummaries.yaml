@@ -1274,6 +1274,7 @@ spec:
                       - FailedNonRetriable
                       - Removing
                       - Removed
+                      - AgentRemoving
                       type: string
                   required:
                   - featureID
@@ -1322,6 +1323,13 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
+              nextReconcileTime:
+                description: |-
+                  NextReconcileTime is the earliest time when this resource should be reconciled again.
+                  Controller skips reconciliation if current time is before this timestamp.
+                  If not set, reconciliations will happen as usual.
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

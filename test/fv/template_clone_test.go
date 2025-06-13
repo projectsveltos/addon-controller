@@ -38,7 +38,7 @@ var _ = Describe("Template with copy", func() {
 		namePrefix = "template-copy"
 	)
 
-	It("Template copy function", Label("FV", "EXTENDED"), func() {
+	It("Template copy function", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
@@ -69,7 +69,7 @@ var _ = Describe("Template with copy", func() {
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		// ClusterProfile fetches the Secret created above and reference it with ExternalSecret ID
 		clusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
@@ -97,10 +97,10 @@ var _ = Describe("Template with copy", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for resources", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name,
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
 			libsveltosv1beta1.FeatureResources)
 
 		Byf("Getting client to access the workload cluster")

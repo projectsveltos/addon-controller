@@ -19,13 +19,13 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sort"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -84,13 +84,14 @@ func deployResources(ctx context.Context, c client.Client,
 	localResourceReports, remoteResourceReports, deployError := deployPolicyRefs(ctx, c, remoteRestConfig, remoteClient,
 		clusterSummary, featureHandler, logger)
 
+	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
 	return postProcessDeployedResources(ctx, remoteRestConfig, remoteClient, clusterSummary, localResourceReports,
-		remoteResourceReports, deployError, isPullMode, logger)
+		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
 }
 
 func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
 	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport,
-	deployError error, isPullMode bool, logger logr.Logger) error {
+	deployError error, isPullMode bool, configurationHash []byte, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 	featureHandler := getHandlersForFeature(libsveltosv1beta1.FeatureResources)
@@ -164,7 +165,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	}
 
 	if isPullMode {
-		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureResources, profileRef)
+		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureResources, profileRef, configurationHash)
 
 		err = pullmode.CommitStagedResourcesForDeployment(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
@@ -354,16 +355,15 @@ func undeployResources(ctx context.Context, c client.Client,
 	}
 
 	// Undeploy from management cluster
-	if _, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, libsveltosv1beta1.FeatureResources,
+	_, localUndeployErr := undeployStaleResources(ctx, true, getManagementClusterConfig(), c, libsveltosv1beta1.FeatureResources,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, libsveltosv1beta1.FeatureResources),
-		map[string]libsveltosv1beta1.Resource{}, logger); err != nil {
-		return err
-	}
+		map[string]libsveltosv1beta1.Resource{}, logger)
 
 	if isPullMode {
-		err = pullModeUndeployResources(ctx, c, clusterSummary, logger)
-		if err != nil {
-			return err
+		err = pullModeUndeployResources(ctx, c, clusterSummary, libsveltosv1beta1.FeatureResources, logger)
+		combinedErr := errors.Join(localUndeployErr, err)
+		if combinedErr != nil {
+			return combinedErr
 		}
 	} else {
 		remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
@@ -386,8 +386,9 @@ func undeployResources(ctx context.Context, c client.Client,
 			libsveltosv1beta1.FeatureResources, clusterSummary,
 			getDeployedGroupVersionKinds(clusterSummary, libsveltosv1beta1.FeatureResources),
 			map[string]libsveltosv1beta1.Resource{}, logger)
-		if err != nil {
-			return err
+		combinedErr := errors.Join(localUndeployErr, err)
+		if combinedErr != nil {
+			return combinedErr
 		}
 
 		profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
@@ -425,28 +426,28 @@ func undeployResources(ctx context.Context, c client.Client,
 	return nil
 }
 
-func pullModeUndeployResources(ctx context.Context, c client.Client,
-	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
+func pullModeUndeployResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	fID libsveltosv1beta1.FeatureID, logger logr.Logger) error {
 
 	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
 	if err != nil {
 		return err
 	}
 
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureResources, profileRef)
+	setters := prepareSetters(clusterSummary, fID, profileRef, nil)
 
 	// discard all previous staged resources. This will instruct agent to undeploy
 	err = pullmode.RemoveDeployedResources(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureResources), logger, setters...)
+		string(fID), logger, setters...)
 	if err != nil {
 		return err
 	}
 
 	// Get result. If agent has undeployed eveything status is set to FeatureStatusRemoved
-	status, err := pullmode.GetResourceRemoveStatus(ctx, c, clusterSummary.Spec.ClusterNamespace,
+	status, err := pullmode.GetRemoveStatus(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureResources), logger)
+		string(fID), logger)
 	if err != nil {
 		return err
 	}
@@ -459,8 +460,7 @@ func pullModeUndeployResources(ctx context.Context, c client.Client,
 		return errors.New(msg)
 	}
 
-	return pullmode.TerminateDeploymentTracking(ctx, c, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), logger)
+	return nil
 }
 
 // resourcesHash returns the hash of all the ClusterSummary referenced ResourceRefs.

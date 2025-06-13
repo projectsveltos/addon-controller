@@ -37,3 +37,4 @@ version.txt
 
 # Test Kubernetes config files
 test/.kube
+test/pullmode-kubeconfig_data.tmp

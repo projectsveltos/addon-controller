@@ -81,9 +81,9 @@ var _ = Describe("Reloader", func() {
 		namePrefix = "reloader-"
 	)
 
-	It("Deploy ClusterProfile with Reloader knob set", Label("FV", "EXTENDED"), func() {
+	It("Deploy ClusterProfile with Reloader knob set", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile with Reloader knob set matching Cluster %s/%s",
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterProfile.Spec.Reloader = true
@@ -91,9 +91,8 @@ var _ = Describe("Reloader", func() {
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		ns := randomString()
 		deploymentName := randomString()
@@ -130,12 +129,12 @@ var _ = Describe("Reloader", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName, currentClusterProfile.Name,
+			&currentClusterProfile.Spec, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+			getClusterType())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name,
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
 			libsveltosv1beta1.FeatureResources)
 
 		Byf("Getting client to access the workload cluster")

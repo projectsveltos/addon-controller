@@ -71,7 +71,7 @@ var _ = Describe("Feature", func() {
 		namePrefix = "autoscaler-"
 	)
 
-	It("Deploy resources in the management cluster and the managed cluster", Label("FV", "EXTENDED"), func() {
+	It("Deploy resources in the management cluster and the managed cluster", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Extend sveltos addon-controller permission in the management cluster")
 
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -85,7 +85,7 @@ var _ = Describe("Feature", func() {
 		})
 		Expect(err).To(BeNil())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -93,7 +93,7 @@ var _ = Describe("Feature", func() {
 		verifyClusterProfileMatches(clusterProfile)
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		configMapNs := defaultNamespace
 
@@ -161,13 +161,14 @@ var _ = Describe("Feature", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name,
-			&currentClusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			&currentClusterProfile.Spec, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+			getClusterType())
 
 		Byf("Verifying autoscaler serviceAccount has been created into management cluster")
 		Eventually(func() error {
 			currentServiceAccount := &corev1.ServiceAccount{}
 			return k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-" + autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName() + "-" + autoscaler},
 				currentServiceAccount)
 		}, timeout, pollingInterval).Should(BeNil())
 
@@ -175,13 +176,13 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentSecret := &corev1.Secret{}
 			return k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 				currentSecret)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		mgmtCurrentSecret := &corev1.Secret{}
 		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 			mgmtCurrentSecret)).To(Succeed())
 
 		Byf("Getting client to access the workload cluster")
@@ -193,13 +194,13 @@ var _ = Describe("Feature", func() {
 		Eventually(func() error {
 			currentSecret := &corev1.Secret{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 				currentSecret)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		workloadCurrentSecret := &corev1.Secret{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 			workloadCurrentSecret)).To(Succeed())
 
 		Expect(mgmtCurrentSecret.Data).ToNot(BeNil())
@@ -209,7 +210,7 @@ var _ = Describe("Feature", func() {
 		Expect(workloadCurrentSecret.Data["ca.crt"]).To(Equal(mgmtCurrentSecret.Data["ca.crt"]))
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		deleteClusterProfile(clusterProfile)
 
@@ -217,7 +218,7 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentServiceAccount := &corev1.ServiceAccount{}
 			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name + "-" + autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName() + "-" + autoscaler},
 				currentServiceAccount)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -226,16 +227,16 @@ var _ = Describe("Feature", func() {
 		Eventually(func() bool {
 			currentSecret := &corev1.Secret{}
 			err = k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 				currentSecret)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Byf("Verifying Secret is created removed from the workload cluster")
+		Byf("Verifying Secret is removed from the workload cluster")
 		Eventually(func() bool {
 			currentSecret := &corev1.Secret{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: autoscaler},
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: autoscaler},
 				currentSecret)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

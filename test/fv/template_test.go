@@ -67,7 +67,7 @@ var _ = Describe("Template", func() {
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
@@ -84,7 +84,7 @@ var _ = Describe("Template", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -94,7 +94,7 @@ var _ = Describe("Template", func() {
 		By("Get CAPI cluster")
 		currentCluster := &clusterv1.Cluster{}
 		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()},
 			currentCluster)).To(Succeed())
 
 		Byf("Verifying policy containined in the referenced configMap is present with correct value")
@@ -107,7 +107,7 @@ var _ = Describe("Template", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for resources", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		Byf("Changing clusterprofile to not reference configmap anymore")
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
@@ -117,7 +117,7 @@ var _ = Describe("Template", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying policy is removed in the workload cluster")
 		Eventually(func() bool {

@@ -33,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -260,14 +259,15 @@ func randomString() string {
 }
 
 func getClusterSummary(ctx context.Context,
-	profileLabelKey, profileName, clusterNamespace, clusterName string) (*configv1beta1.ClusterSummary, error) {
+	profileLabelKey, profileName, clusterNamespace, clusterName, clusterType string,
+) (*configv1beta1.ClusterSummary, error) {
 
 	listOptions := []client.ListOption{
 		client.InNamespace(clusterNamespace),
 		client.MatchingLabels{
 			profileLabelKey:                profileName,
 			configv1beta1.ClusterNameLabel: clusterName,
-			configv1beta1.ClusterTypeLabel: string(libsveltosv1beta1.ClusterTypeCapi),
+			configv1beta1.ClusterTypeLabel: clusterType,
 		},
 	}
 
@@ -289,20 +289,28 @@ func getClusterSummary(ctx context.Context,
 	return &clusterSummaryList.Items[0], nil
 }
 
+func getClusterType() string {
+	clusterType := string(libsveltosv1beta1.ClusterTypeCapi)
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterType = string(libsveltosv1beta1.ClusterTypeSveltos)
+	}
+	return clusterType
+}
+
 func verifyClusterSummary(profileLabelKey, profileName string,
 	profileSpec *configv1beta1.Spec,
-	clusterNamespace, clusterName string) *configv1beta1.ClusterSummary {
+	clusterNamespace, clusterName, clusterType string) *configv1beta1.ClusterSummary {
 
 	Byf("Verifying ClusterSummary is created")
 	Eventually(func() bool {
 		clusterSummary, err := getClusterSummary(context.TODO(),
-			profileLabelKey, profileName, clusterNamespace, clusterName)
+			profileLabelKey, profileName, clusterNamespace, clusterName, clusterType)
 		return err == nil &&
 			clusterSummary != nil
 	}, timeout, pollingInterval).Should(BeTrue())
 
 	clusterSummary, err := getClusterSummary(context.TODO(),
-		profileLabelKey, profileName, clusterNamespace, clusterName)
+		profileLabelKey, profileName, clusterNamespace, clusterName, clusterType)
 	Expect(err).To(BeNil())
 	Expect(clusterSummary).ToNot(BeNil())
 
@@ -316,7 +324,7 @@ func verifyClusterSummary(profileLabelKey, profileName string,
 	Eventually(func() error {
 		var currentClusterSummary *configv1beta1.ClusterSummary
 		currentClusterSummary, err = getClusterSummary(context.TODO(),
-			profileLabelKey, profileName, clusterNamespace, clusterName)
+			profileLabelKey, profileName, clusterNamespace, clusterName, clusterType)
 		if err != nil {
 			return err
 		}
@@ -336,6 +344,11 @@ func verifyClusterSummary(profileLabelKey, profileName string,
 
 			return fmt.Errorf("policyRefs do not match")
 		}
+		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterProfileSpec.SyncMode,
+			profileSpec.SyncMode) {
+
+			return fmt.Errorf("syncMode does not match")
+		}
 		if !reflect.DeepEqual(currentClusterSummary.Spec.ClusterNamespace, clusterNamespace) {
 			return fmt.Errorf("clusterNamespace does not match")
 		}
@@ -346,7 +359,7 @@ func verifyClusterSummary(profileLabelKey, profileName string,
 	}, timeout, pollingInterval).Should(BeNil())
 
 	clusterSummary, err = getClusterSummary(context.TODO(),
-		profileLabelKey, profileName, clusterNamespace, clusterName)
+		profileLabelKey, profileName, clusterNamespace, clusterName, clusterType)
 	Expect(err).To(BeNil())
 	Expect(clusterSummary).ToNot(BeNil())
 
@@ -355,7 +368,7 @@ func verifyClusterSummary(profileLabelKey, profileName string,
 
 func verifyClusterProfileMatches(clusterProfile *configv1beta1.ClusterProfile) {
 	Byf("Verifying Cluster %s/%s is a match for ClusterProfile %s",
-		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterProfile.Name)
+		kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), clusterProfile.Name)
 	Eventually(func() bool {
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
@@ -363,9 +376,9 @@ func verifyClusterProfileMatches(clusterProfile *configv1beta1.ClusterProfile) {
 			return false
 		}
 		for i := range currentClusterProfile.Status.MatchingClusterRefs {
-			if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
-				currentClusterProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+			if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.GetNamespace() &&
+				currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.GetName() &&
+				currentClusterProfile.Status.MatchingClusterRefs[i].Kind == kindWorkloadCluster.GetKind() {
 
 				return true
 			}
@@ -376,7 +389,7 @@ func verifyClusterProfileMatches(clusterProfile *configv1beta1.ClusterProfile) {
 
 func verifyProfileMatches(profile *configv1beta1.Profile) {
 	Byf("Verifying Cluster %s/%s is a match for Profile %s/%s",
-		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name,
+		kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
 		profile.Namespace, profile.Name)
 	Eventually(func() bool {
 		currentProfile := &configv1beta1.Profile{}
@@ -387,9 +400,9 @@ func verifyProfileMatches(profile *configv1beta1.Profile) {
 			return false
 		}
 		for i := range currentProfile.Status.MatchingClusterRefs {
-			if currentProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
-				currentProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
-				currentProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+			if currentProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.GetNamespace() &&
+				currentProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.GetName() &&
+				currentProfile.Status.MatchingClusterRefs[i].Kind == kindWorkloadCluster.GetKind() {
 
 				return true
 			}
@@ -400,7 +413,7 @@ func verifyProfileMatches(profile *configv1beta1.Profile) {
 
 func verifyClusterSetMatches(clusterSet *libsveltosv1beta1.ClusterSet) {
 	Byf("Verifying Cluster %s/%s is a match for ClusterSet %s",
-		kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterSet.Name)
+		kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), clusterSet.Name)
 	Eventually(func() bool {
 		currentClusterSet := &libsveltosv1beta1.ClusterSet{}
 		err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterSet.Name}, currentClusterSet)
@@ -408,9 +421,9 @@ func verifyClusterSetMatches(clusterSet *libsveltosv1beta1.ClusterSet) {
 			return false
 		}
 		for i := range currentClusterSet.Status.MatchingClusterRefs {
-			if currentClusterSet.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
-				currentClusterSet.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
-				currentClusterSet.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
+			if currentClusterSet.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.GetNamespace() &&
+				currentClusterSet.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.GetName() &&
+				currentClusterSet.Status.MatchingClusterRefs[i].Kind == kindWorkloadCluster.GetKind() {
 
 				return true
 			}
@@ -479,12 +492,17 @@ func verifyClusterConfiguration(profileKind, profileName, clusterNamespace, clus
 	featureID libsveltosv1beta1.FeatureID, expectedPolicies []policy, expectedCharts []configv1beta1.Chart) {
 
 	Byf("Verifying ClusterConfiguration %s/%s", clusterNamespace, clusterName)
+	prefix := "capi--"
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		prefix = "sveltos--"
+	}
+
 	Eventually(func() bool {
 		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
 		err := k8sClient.Get(context.TODO(),
 			types.NamespacedName{
 				Namespace: clusterNamespace,
-				Name:      "capi--" + clusterName,
+				Name:      prefix + clusterName,
 			}, currentClusterConfiguration)
 		if err != nil {
 			return false
@@ -550,6 +568,7 @@ func verifyClusterConfigurationPolicies(deployedFeatures []configv1beta1.Feature
 	for i := range expectedPolicies {
 		policy := expectedPolicies[i]
 		found := false
+		By(fmt.Sprintf("Verifying %s %s %s/%s", policy.kind, policy.group, policy.namespace, policy.name))
 		for j := range deployedFeatures[index].Resources {
 			r := deployedFeatures[index].Resources[j]
 			if r.Namespace == policy.namespace &&

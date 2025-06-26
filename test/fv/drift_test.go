@@ -97,8 +97,8 @@ const (
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
 	cleanupControllerDeplName   = "kyverno-cleanup-controller"
-	cleanupImage                = "ghcr.io/kyverno/cleanup-controller:v1.12.5"
-	admissionImage              = "ghcr.io/kyverno/kyverno:v1.12.5"
+	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.14.1"
+	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.14.1"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -108,16 +108,17 @@ var _ = Describe("Helm", Serial, func() {
 		kyvernoCleanupImageName   = "controller"
 	)
 
-	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		livenessPeriodSecond := int32(31)
 		readinessPeriodSecond := int32(11)
@@ -162,7 +163,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    "https://kyverno.github.io/kyverno/",
 					RepositoryName:   "kyverno",
 					ChartName:        "kyverno/kyverno",
-					ChartVersion:     "v3.2.6",
+					ChartVersion:     "v3.4.2",
 					ReleaseName:      "kyverno-latest",
 					ReleaseNamespace: "kyverno",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -232,7 +233,7 @@ reportsController:
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -248,7 +249,7 @@ reportsController:
 			if err != nil {
 				return false
 			}
-			if !isDeplLabelCorrect(depl.Labels, clusterKey, kindWorkloadCluster.Name) {
+			if !isDeplLabelCorrect(depl.Labels, clusterKey, kindWorkloadCluster.GetName()) {
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
@@ -266,8 +267,8 @@ reportsController:
 				listOptions := []client.ListOption{
 					client.MatchingLabels(
 						map[string]string{
-							"cluster-name":      kindWorkloadCluster.Name,
-							"cluster-namespace": kindWorkloadCluster.Namespace,
+							"cluster-name":      kindWorkloadCluster.GetName(),
+							"cluster-namespace": kindWorkloadCluster.GetNamespace(),
 						},
 					),
 				}
@@ -296,15 +297,17 @@ reportsController:
 		}
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.6", Namespace: "kyverno"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		if isAgentLessMode() {
 			verifyResourceSummary(k8sClient, clusterSummary)
@@ -335,7 +338,7 @@ reportsController:
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-cleanup-controller"}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-				By("Kyverno image is set to v1.11.0")
+				By("Kyverno image is set to v1.14.1")
 				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(cleanupImage))
 			}
 		}
@@ -350,12 +353,12 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "ghcr.io/kyverno/cleanup-controller:v1.12.5"
+					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.14.2"
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.12.5")
+		By("Kyverno image is reset to v1.14.2")
 
 		// Change Kyverno image for admission controller
 		Expect(workloadClient.Get(context.TODO(),
@@ -374,7 +377,7 @@ reportsController:
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
-				By("Kyverno image is set to v1.11.0")
+				By("Kyverno image is set to v1.14.1")
 				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(admissionImage))
 			}
 		}
@@ -394,7 +397,7 @@ reportsController:
 			}
 			return false
 		}, timeout/4, pollingInterval).Should(BeTrue())
-		By("Kyverno image is NOT reset to v1.12.5")
+		By("Kyverno image is NOT reset to v1.14.2")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
@@ -405,7 +408,7 @@ reportsController:
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.2.6",
+				ChartVersion:     "v3.4.1",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

@@ -128,13 +128,14 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	localResourceReports, remoteResourceReports, deployError := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
 		clusterSummary, logger)
 
+	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
 	return processKustomizeDeployment(ctx, remoteRestConfig, remoteClient, clusterSummary, localResourceReports,
-		remoteResourceReports, deployError, isPullMode, logger)
+		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
 }
 
 func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
 	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport,
-	deployError error, isPullMode bool, logger logr.Logger) error {
+	deployError error, isPullMode bool, configurationHash []byte, logger logr.Logger) error {
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace
 	clusterName := clusterSummary.Spec.ClusterName
@@ -208,11 +209,11 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	}
 
 	if isPullMode {
-		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureKustomize, profileRef)
+		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureKustomize, profileRef, configurationHash)
 
 		err = pullmode.CommitStagedResourcesForDeployment(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
-			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureKustomize),
 			logger, setters...)
 		if err != nil {
 			return err
@@ -266,9 +267,6 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	if err != nil {
 		return err
 	}
-	if isPullMode {
-		return nil
-	}
 
 	clusterSummary, err := configv1beta1.GetClusterSummary(ctx, c, clusterNamespace, applicant)
 	if err != nil {
@@ -296,7 +294,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 	}
 
 	if isPullMode {
-		err = pullModeUndeployResources(ctx, c, clusterSummary, logger)
+		err = pullModeUndeployResources(ctx, c, clusterSummary, libsveltosv1beta1.FeatureKustomize, logger)
 		if err != nil {
 			return err
 		}
@@ -784,7 +782,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		}
 	}
 
-	objectsToDeployLocally, objectsToDeployRemotely, mgmtResources, err :=
+	objectsToDeployLocally, objectsToDeployRemotely, _, err :=
 		getKustomizedResources(ctx, c, clusterSummary, kustomizationRef.DeploymentType, resMap,
 			kustomizationRef, logger)
 	if err != nil {
@@ -797,10 +795,21 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
-		ref, libsveltosv1beta1.FeatureKustomize, clusterSummary, mgmtResources, []string{}, logger)
+		ref, libsveltosv1beta1.FeatureKustomize, clusterSummary, []string{}, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
 		return localReports, nil, err
+	}
+
+	// Only for SveltosCluster in pull mode and when the content must be deployed in the managed cluster
+	if remoteRestConfig == nil {
+		bundleResources := make(map[string][]unstructured.Unstructured)
+		key := fmt.Sprintf("%s-%s-%s", ref.Kind, ref.Namespace, ref.Name)
+		bundleResources[key] = convertPointerSliceToValueSlice(objectsToDeployRemotely)
+
+		return localReports, nil, pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureKustomize), bundleResources, false, logger)
 	}
 
 	remoteClient, err := client.New(remoteRestConfig, client.Options{})
@@ -809,7 +818,7 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
-		ref, libsveltosv1beta1.FeatureKustomize, clusterSummary, mgmtResources, []string{}, logger)
+		ref, libsveltosv1beta1.FeatureKustomize, clusterSummary, []string{}, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))
 		return localReports, remoteReports, err

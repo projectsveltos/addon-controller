@@ -28,6 +28,9 @@ import (
 	"github.com/TwiN/go-color"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -44,7 +47,7 @@ import (
 var (
 	k8sClient           client.Client
 	scheme              *runtime.Scheme
-	kindWorkloadCluster *clusterv1.Cluster // This is the name of the kind workload cluster, in the form namespace/name
+	kindWorkloadCluster *unstructured.Unstructured // This is the name of the kind workload cluster, in the form namespace/name
 )
 
 const (
@@ -92,61 +95,33 @@ var _ = BeforeSuite(func() {
 	Expect(libsveltosv1beta1.AddToScheme(scheme)).To(Succeed())
 	Expect(configv1beta1.AddToScheme(scheme)).To(Succeed())
 	Expect(sourcev1.AddToScheme(scheme)).To(Succeed())
+	Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
 
-	clusterList := &clusterv1.ClusterList{}
-	listOptions := []client.ListOption{
-		client.MatchingLabels(
-			map[string]string{clusterv1.ClusterNameLabel: "clusterapi-workload"},
-		),
+	if isCAPIInstalled(context.TODO(), k8sClient) {
+		verifyCAPICluster()
+	} else {
+		verifySveltosCluster()
 	}
+})
 
-	Expect(k8sClient.List(context.TODO(), clusterList, listOptions...)).To(Succeed())
-	Expect(len(clusterList.Items)).To(Equal(1))
-	kindWorkloadCluster = &clusterList.Items[0]
+// isCAPIInstalled returns true if CAPI is installed, false otherwise
+func isCAPIInstalled(ctx context.Context, c client.Client) bool {
+	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
 
-	Byf("Wait for machine in cluster %s/%s to be ready", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-	Eventually(func() bool {
-		machineList := &clusterv1.MachineList{}
-		listOptions = []client.ListOption{
-			client.InNamespace(kindWorkloadCluster.Namespace),
-			client.MatchingLabels{clusterv1.ClusterNameLabel: kindWorkloadCluster.Name},
-		}
-		err = k8sClient.List(context.TODO(), machineList, listOptions...)
-		if err != nil {
+	err := c.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, clusterCRD)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
 			return false
 		}
-		for i := range machineList.Items {
-			m := machineList.Items[i]
-			if m.Status.Phase == string(clusterv1.MachinePhaseRunning) {
-				return true
-			}
-		}
-		return false
-	}, timeout, pollingInterval).Should(BeTrue())
+		Expect(err).To(BeNil())
+	}
 
-	Byf("Set Cluster %s:%s unpaused and add label %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, key, value)
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentCluster := &clusterv1.Cluster{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
-			currentCluster)).To(Succeed())
-
-		currentLabels := currentCluster.Labels
-		if currentLabels == nil {
-			currentLabels = make(map[string]string)
-		}
-		currentLabels[key] = value
-		currentCluster.Labels = currentLabels
-		currentCluster.Spec.Paused = false
-
-		return k8sClient.Update(context.TODO(), currentCluster)
-	})
-	Expect(err).To(BeNil())
-})
+	return true
+}
 
 func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error {
 	gvks, _, err := scheme.ObjectKinds(obj)
@@ -166,4 +141,114 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error
 	}
 
 	return nil
+}
+
+func verifyCAPICluster() {
+	clusterList := &clusterv1.ClusterList{}
+	listOptions := []client.ListOption{
+		client.MatchingLabels(
+			map[string]string{clusterv1.ClusterNameLabel: "clusterapi-workload"},
+		),
+	}
+
+	Expect(k8sClient.List(context.TODO(), clusterList, listOptions...)).To(Succeed())
+	Expect(len(clusterList.Items)).To(Equal(1))
+	unstructuredMap, err :=
+		runtime.DefaultUnstructuredConverter.ToUnstructured(&clusterList.Items[0])
+	Expect(err).To(BeNil())
+
+	kindWorkloadCluster = &unstructured.Unstructured{Object: unstructuredMap}
+
+	Byf("Wait for machine in cluster %s/%s to be ready", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+	Eventually(func() bool {
+		machineList := &clusterv1.MachineList{}
+		listOptions = []client.ListOption{
+			client.InNamespace(kindWorkloadCluster.GetNamespace()),
+			client.MatchingLabels{clusterv1.ClusterNameLabel: kindWorkloadCluster.GetName()},
+		}
+		err = k8sClient.List(context.TODO(), machineList, listOptions...)
+		if err != nil {
+			return false
+		}
+		for i := range machineList.Items {
+			m := machineList.Items[i]
+			if m.Status.Phase == string(clusterv1.MachinePhaseRunning) {
+				return true
+			}
+		}
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	Byf("Set Cluster %s:%s unpaused and add label %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), key, value)
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentCluster := &clusterv1.Cluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()},
+			currentCluster)).To(Succeed())
+
+		currentLabels := currentCluster.Labels
+		if currentLabels == nil {
+			currentLabels = make(map[string]string)
+		}
+		currentLabels[key] = value
+		currentCluster.Labels = currentLabels
+		currentCluster.Spec.Paused = false
+
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
+}
+
+func verifySveltosCluster() {
+	clusterList := &libsveltosv1beta1.SveltosClusterList{}
+	listOptions := []client.ListOption{
+		client.MatchingLabels(
+			map[string]string{"cluster-name": "clusterapi-workload"}, // This label is added by Makefile
+		),
+	}
+
+	Expect(k8sClient.List(context.TODO(), clusterList, listOptions...)).To(Succeed())
+	Expect(len(clusterList.Items)).To(Equal(1))
+	unstructuredMap, err :=
+		runtime.DefaultUnstructuredConverter.ToUnstructured(&clusterList.Items[0])
+	Expect(err).To(BeNil())
+
+	kindWorkloadCluster = &unstructured.Unstructured{Object: unstructuredMap}
+
+	Byf("Set Cluster %s:%s unpaused and add label %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), key, value)
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentCluster := &libsveltosv1beta1.SveltosCluster{}
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()},
+			currentCluster)).To(Succeed())
+
+		currentLabels := currentCluster.Labels
+		if currentLabels == nil {
+			currentLabels = make(map[string]string)
+		}
+		currentLabels[key] = value
+		currentCluster.Labels = currentLabels
+		currentCluster.Spec.Paused = false
+
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
+}
+
+func isPullMode() bool {
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		clusterList := &libsveltosv1beta1.SveltosClusterList{}
+		listOptions := []client.ListOption{
+			client.MatchingLabels(
+				map[string]string{"cluster-name": "clusterapi-workload"}, // This label is added by Makefile
+			),
+		}
+
+		Expect(k8sClient.List(context.TODO(), clusterList, listOptions...)).To(Succeed())
+		Expect(len(clusterList.Items)).To(Equal(1))
+
+		return clusterList.Items[0].Spec.PullMode
+	}
+
+	return false
 }

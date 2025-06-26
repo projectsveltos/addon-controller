@@ -157,6 +157,12 @@ type ClusterSummaryStatus struct {
 	// +listType=atomic
 	// +optional
 	HelmReleaseSummaries []HelmChartSummary `json:"helmReleaseSummaries,omitempty"`
+
+	// NextReconcileTime is the earliest time when this resource should be reconciled again.
+	// Controller skips reconciliation if current time is before this timestamp.
+	// If not set, reconciliations will happen as usual.
+	// +optional
+	NextReconcileTime *metav1.Time `json:"nextReconcileTime,omitempty"`
 }
 
 //nolint: lll // marker

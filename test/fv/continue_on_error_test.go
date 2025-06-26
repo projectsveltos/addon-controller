@@ -72,7 +72,7 @@ var _ = Describe("Feature", Serial, func() {
 		namePrefix = "continue-on-error-"
 	)
 
-	It("With ContinueOnError set, Sveltos keeps deploying after an error", Label("NEW-FV"), func() {
+	It("With ContinueOnError set, Sveltos keeps deploying after an error", Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
 		configMapNs := randomString()
 		Byf("Create configMap's namespace %s", configMapNs)
 		ns := &corev1.Namespace{
@@ -92,7 +92,7 @@ var _ = Describe("Feature", Serial, func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		maxConsecutiveFailures := uint(3)
@@ -102,7 +102,8 @@ var _ = Describe("Feature", Serial, func() {
 		verifyClusterProfileMatches(clusterProfile)
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.GetNamespace(),
+			kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Update ClusterProfile %s to deploy helm charts and referencing ConfigMap %s/%s",
 			clusterProfile.Name, configMap.Namespace, configMap.Name)
@@ -167,18 +168,19 @@ var _ = Describe("Feature", Serial, func() {
 			currentClusterProfile)).To(Succeed())
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
-			{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
+				{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		policies := []policy{
 			{kind: "Namespace", name: resourceNamespace, namespace: "", group: ""},
@@ -200,7 +202,7 @@ var _ = Describe("Feature", Serial, func() {
 			}
 			for i := range currentClusterSummary.Status.FeatureSummaries {
 				fs := &currentClusterSummary.Status.FeatureSummaries[i]
-				if fs.FeatureID == libsveltosv1beta1.FeatureHelm {
+				if fs.FeatureID == libsveltosv1beta1.FeatureResources {
 					return fs.FailureMessage != nil &&
 						*fs.FailureMessage == "the maximum number of consecutive errors has been reached"
 				}

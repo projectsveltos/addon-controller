@@ -55,9 +55,9 @@ var _ = Describe("Profile", func() {
 		namePrefix = "profile-"
 	)
 
-	It("Deploy Profile", Label("FV", "EXTENDED"), func() {
+	It("Deploy Profile", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Create a Profile matching Cluster %s/%s",
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		profile := getProfile(defaultNamespace, namePrefix, map[string]string{key: value})
 		profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 
@@ -65,9 +65,8 @@ var _ = Describe("Profile", func() {
 
 		verifyProfileMatches(profile)
 
-		verifyClusterSummary(clusterops.ProfileLabelName,
-			profile.Name, &profile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ProfileLabelName, profile.Name, &profile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		ns := randomString()
 		jobName := randomString()
@@ -97,9 +96,8 @@ var _ = Describe("Profile", func() {
 		}
 		Expect(k8sClient.Update(context.TODO(), currentProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(clusterops.ProfileLabelName,
-			currentProfile.Name, &currentProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterops.ProfileLabelName, currentProfile.Name, &currentProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()

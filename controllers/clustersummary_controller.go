@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -60,9 +61,11 @@ import (
 )
 
 const (
-	// deleteRequeueAfter is how long to wait before checking again to see if the cluster still has
-	// children during deletion.
+	// deleteRequeueAfter is how long to wait before checking again during delete
 	deleteRequeueAfter = 10 * time.Second
+
+	// deleteHandOverRequeueAfter is how long to wait before checking again during an hand over
+	deleteHandOverRequeueAfter = 2 * time.Minute
 
 	// normalRequeueAfter is how long to wait before checking again to see if the cluster can be moved
 	// to ready after or workload features (for instance ingress or reporter) have failed
@@ -104,6 +107,8 @@ type ClusterSummaryReconciler struct {
 	ctrl              controller.Controller
 
 	eventRecorder record.EventRecorder
+
+	DeletedInstances map[types.NamespacedName]time.Time
 }
 
 // If the drift-detection component is deployed in the management cluster, the addon-controller will deploy ResourceSummaries within the same cluster,
@@ -182,6 +187,11 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
+	if r.skipReconciliation(clusterSummaryScope, req) {
+		logger.V(logs.LogInfo).Info("ignore update")
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+	}
+
 	var isMatch bool
 	isMatch, err = r.isClusterAShardMatch(ctx, clusterSummary, logger)
 	if err != nil {
@@ -231,6 +241,16 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return r.reconcileNormal(ctx, clusterSummaryScope, logger)
 }
 
+func (r *ClusterSummaryReconciler) updateDeletedInstancs(clusterSummaryScope *scope.ClusterSummaryScope) {
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	r.DeletedInstances[types.NamespacedName{
+		Namespace: clusterSummaryScope.Namespace(),
+		Name:      clusterSummaryScope.Name(),
+	}] = time.Now()
+}
+
 func (r *ClusterSummaryReconciler) reconcileDelete(
 	ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope,
@@ -238,6 +258,8 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 ) (reconcile.Result, error) {
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
+
+	r.updateDeletedInstancs(clusterSummaryScope)
 
 	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
 	if err != nil {
@@ -279,6 +301,11 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 				logger.V(logs.LogInfo).Error(err, "failed to undeploy")
 				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 			}
+
+			var nonRetriableError *configv1beta1.NonRetriableError
+			if errors.As(err, &nonRetriableError) {
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+			}
 		}
 
 		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
@@ -289,25 +316,8 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	// If cluster is not present anymore or is it marked for deletion
 	if !isPresent || isDeleted {
-		// in case cleanup operations were already queued, before removing ClusterSummary
-		// remove those
-		r.cleanupQueuedCleanOperations(clusterSummaryScope.ClusterSummary)
-
-		logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
-		cs := clusterSummaryScope.ClusterSummary
-
-		err = removeStaleResourceSummary(ctx, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+		err = r.handleDeletedCluster(ctx, clusterSummaryScope, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(
-				fmt.Sprintf("failed to remove resourceSummary instances from management cluster: %v", err))
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-		}
-
-		err := removeDriftDetectionManagerFromManagementCluster(ctx,
-			cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(
-				fmt.Sprintf("failed to remove drift-detection-manager resources from management cluster: %v", err))
 			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
@@ -462,6 +472,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
+	r.DeletedInstances = make(map[types.NamespacedName]time.Time)
 	r.eventRecorder = mgr.GetEventRecorderFor("event-recorder")
 	r.ctrl = c
 
@@ -1390,4 +1401,58 @@ func (r *ClusterSummaryReconciler) resetFeatureStatusToProvisioning(clusterSumma
 			fs.Status = status
 		}
 	}
+}
+
+func (r *ClusterSummaryReconciler) skipReconciliation(clusterSummaryScope *scope.ClusterSummaryScope,
+	req ctrl.Request) bool {
+
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	cs := clusterSummaryScope.ClusterSummary
+	if !cs.DeletionTimestamp.IsZero() {
+		// Skip and requeue deleted ClusterSummary if too soon.
+		v := r.DeletedInstances[req.NamespacedName]
+		thresholdTime := v.Add(deleteRequeueAfter)
+		if !time.Now().After(thresholdTime) {
+			return true
+		}
+	}
+
+	// Checking if reconciliation should happen
+	if cs.Status.NextReconcileTime != nil && time.Now().Before(cs.Status.NextReconcileTime.Time) {
+		return true
+	}
+
+	cs.Status.NextReconcileTime = nil
+
+	return false
+}
+
+func (r *ClusterSummaryReconciler) handleDeletedCluster(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+
+	// in case cleanup operations were already queued, before removing ClusterSummary
+	// remove those
+	r.cleanupQueuedCleanOperations(clusterSummaryScope.ClusterSummary)
+
+	logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
+	cs := clusterSummaryScope.ClusterSummary
+
+	err := removeStaleResourceSummary(ctx, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to remove resourceSummary instances from management cluster: %v", err))
+		return err
+	}
+
+	err = removeDriftDetectionManagerFromManagementCluster(ctx,
+		cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("failed to remove drift-detection-manager resources from management cluster: %v", err))
+		return err
+	}
+
+	return nil
 }

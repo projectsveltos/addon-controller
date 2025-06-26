@@ -639,8 +639,9 @@ var _ = Describe("ClustersummaryController", func() {
 		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
 
 		// In SyncMode DryRun even if config is same (input for ShouldRedeploy) result is redeploy
-		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+		redeploy := controllers.ShouldRedeploy(reconciler, context.TODO(), clusterSummaryScope, f, true,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(redeploy).To(BeTrue())
 
 		clusterSummaryName := client.ObjectKey{
 			Name:      clusterSummary.Name,
@@ -656,8 +657,9 @@ var _ = Describe("ClustersummaryController", func() {
 
 		clusterSummaryScope.ClusterSummary = currentClusterSummary
 		// In SyncMode != DryRun and if config is same (input for ShouldRedeploy) result is do not redeploy
-		Expect(controllers.ShouldRedeploy(reconciler, clusterSummaryScope, f, true,
-			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
+		redeploy = controllers.ShouldRedeploy(reconciler, context.TODO(), clusterSummaryScope, f, true,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(redeploy).To(BeFalse())
 	})
 
 	It("canRemoveFinalizer in DryRun returns true when ClusterSummary and ClusterProfile are deleted", func() {

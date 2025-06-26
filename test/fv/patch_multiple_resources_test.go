@@ -37,17 +37,17 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 		namePrefix = "patches-"
 	)
 
-	It("Deploy and patches multiple resources contained in a referenced ConfigMap", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Deploy and patches multiple resources contained in a referenced ConfigMap", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		// install-flux ConfigMap is created by Makefile. Contains all Flux resources
 		cmNamespace := "default"
@@ -89,9 +89,9 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName, currentClusterProfile.Name,
+			&currentClusterProfile.Spec, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+			getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -115,7 +115,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		Byf("Changing clusterprofile to not reference configmap/secret anymore")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -124,7 +124,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying  Namespace is removed in the workload cluster")
 		Eventually(func() bool {

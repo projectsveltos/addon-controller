@@ -55,7 +55,7 @@ var _ = Describe("ConfigMap with Lua", func() {
 		namePrefix = "lua-"
 	)
 
-	It("Instantiate Lua code and deploy it", Label("FV", "EXTENDED"), func() {
+	It("Instantiate Lua code and deploy it", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		envKey := randomString()
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +70,7 @@ var _ = Describe("ConfigMap with Lua", func() {
 
 		Expect(addTypeInformationToObject(scheme, ns)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -79,7 +79,7 @@ var _ = Describe("ConfigMap with Lua", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Create a configMap with a Lua code (with annotation projectsveltos.io/lua)")
 		configMap := createConfigMapWithPolicy(ns.Name, namePrefix+randomString(), luaCode)
@@ -124,10 +124,10 @@ var _ = Describe("ConfigMap with Lua", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name,
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
 			libsveltosv1beta1.FeatureResources)
 
 		Byf("Getting client to access the workload cluster")

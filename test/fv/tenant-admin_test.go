@@ -77,151 +77,162 @@ var _ = Describe("Feature", func() {
 
 	// In this test, tenant is given permission to create Deployment but not to create Secret.
 	// When a ClusterProfile is created by this tenant, deployment will fail because of missing permissions.
-	It("Tenant created ClusterProfile: Deploy resources in the management cluster fails", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ServiceAccount representing tenant")
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
-
-		tenantServiceAccount := &corev1.ServiceAccount{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: ns.Name,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), tenantServiceAccount)).To(Succeed())
-
-		Byf("Create a ClusterRole that has permission to create Deployment")
-		clusterRole := &rbacv1.ClusterRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			Rules: []rbacv1.PolicyRule{
-				{
-					APIGroups: []string{"apps"},
-					Resources: []string{"deployments"},
-					Verbs:     []string{"*"},
+	It("Tenant created ClusterProfile: Deploy resources in the management cluster fails",
+		Label("FV", "PULLMODE", "EXTENDED"), func() {
+			Byf("Create a ServiceAccount representing tenant")
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randomString(),
 				},
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), clusterRole)).To(Succeed())
+			}
+			Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
-		Byf("Create a ClusterRoleBinding that associate ServiceAccount %s/%s to ClusterRole %s",
-			tenantServiceAccount.Namespace, tenantServiceAccount.Name, clusterRole.Name)
-		clusterRoleBinding := &rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
-			},
-			RoleRef: rbacv1.RoleRef{
-				APIGroup: "rbac.authorization.k8s.io",
-				Kind:     "ClusterRole",
-				Name:     clusterRole.Name,
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Kind:      "ServiceAccount",
-					Namespace: tenantServiceAccount.Namespace,
-					Name:      tenantServiceAccount.Name,
+			tenantServiceAccount := &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      randomString(),
+					Namespace: ns.Name,
 				},
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), clusterRoleBinding)).To(Succeed())
+			}
+			Expect(k8sClient.Create(context.TODO(), tenantServiceAccount)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
-		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+			Byf("Create a ClusterRole that has permission to create Deployment")
+			clusterRole := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randomString(),
+				},
+				Rules: []rbacv1.PolicyRule{
+					{
+						APIGroups: []string{"apps"},
+						Resources: []string{"deployments"},
+						Verbs:     []string{"*"},
+					},
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), clusterRole)).To(Succeed())
 
-		verifyClusterProfileMatches(clusterProfile)
+			Byf("Create a ClusterRoleBinding that associate ServiceAccount %s/%s to ClusterRole %s",
+				tenantServiceAccount.Namespace, tenantServiceAccount.Name, clusterRole.Name)
+			clusterRoleBinding := &rbacv1.ClusterRoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randomString(),
+				},
+				RoleRef: rbacv1.RoleRef{
+					APIGroup: "rbac.authorization.k8s.io",
+					Kind:     "ClusterRole",
+					Name:     clusterRole.Name,
+				},
+				Subjects: []rbacv1.Subject{
+					{
+						Kind:      "ServiceAccount",
+						Namespace: tenantServiceAccount.Namespace,
+						Name:      tenantServiceAccount.Name,
+					},
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), clusterRoleBinding)).To(Succeed())
 
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+			clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+			Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
-		resourceName := randomString()
+			verifyClusterProfileMatches(clusterProfile)
 
-		configMapNs := defaultNamespace
-		configMapName := namePrefix + randomString()
+			verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				clusterProfile.Name, &clusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		Byf("Create a configMap with a Deployment and a Secret")
-		configMap := createConfigMapWithPolicy(configMapNs, configMapName, fmt.Sprintf(deplAndSecret, resourceName, resourceName))
-		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+			resourceName := randomString()
 
-		Byf("Update ClusterProfile %s to reference ConfigMap and add Tenant admin labels", clusterProfile.Name)
-		currentClusterProfile := &configv1beta1.ClusterProfile{}
+			configMapNs := defaultNamespace
+			configMapName := namePrefix + randomString()
 
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Byf("Create a configMap with a Deployment and a Secret")
+			configMap := createConfigMapWithPolicy(configMapNs, configMapName, fmt.Sprintf(deplAndSecret, resourceName, resourceName))
+			Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+
+			Byf("Update ClusterProfile %s to reference ConfigMap and add Tenant admin labels", clusterProfile.Name)
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
+
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				Expect(k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+				currentClusterProfile.Labels = map[string]string{
+					libsveltosv1beta1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
+					libsveltosv1beta1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
+				}
+				currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: configMapNs,
+						Name:      configMapName,
+						// Deploy content of this configMap into management cluster
+						DeploymentType: configv1beta1.DeploymentTypeLocal,
+					},
+				}
+				return k8sClient.Update(context.TODO(), currentClusterProfile)
+			})
+			Expect(err).To(BeNil())
+
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-			currentClusterProfile.Labels = map[string]string{
-				libsveltosv1beta1.ServiceAccountNameLabel:      tenantServiceAccount.Name,
-				libsveltosv1beta1.ServiceAccountNamespaceLabel: tenantServiceAccount.Namespace,
-			}
-			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-				{
-					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-					Namespace: configMapNs,
-					Name:      configMapName,
-					// Deploy content of this configMap into management cluster
-					DeploymentType: configv1beta1.DeploymentTypeLocal,
-				},
-			}
-			return k8sClient.Update(context.TODO(), currentClusterProfile)
+
+			verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				currentClusterProfile.Name, &currentClusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+			Byf("Verifying deployment has been created into management cluster")
+			Eventually(func() error {
+				currentDeployment := &appsv1.Deployment{}
+				return k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: defaultNamespace, Name: resourceName},
+					currentDeployment)
+			}, timeout, pollingInterval).Should(BeNil())
+
+			Byf("Verifying ClusterSummary reports an error")
+			Eventually(func() bool {
+				clusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
+					clusterProfile.Name, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+					getClusterType())
+				if err != nil ||
+					clusterSummary == nil {
+					return false
+				}
+				if clusterSummary.Status.FeatureSummaries == nil {
+					return false
+				}
+				if len(clusterSummary.Status.FeatureSummaries) != 1 {
+					return false
+				}
+				if clusterSummary.Status.FeatureSummaries[0].FailureMessage == nil {
+					return false
+				}
+				return strings.Contains(*clusterSummary.Status.FeatureSummaries[0].FailureMessage,
+					"is forbidden")
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Byf("Verifying secret has not been created into management cluster")
+			Eventually(func() bool {
+				currentSecret := &corev1.Secret{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: defaultNamespace, Name: resourceName},
+					currentSecret)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			// Give ClusterRole all permissions so delete works
+			currentClusterRole := &rbacv1.ClusterRole{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)).To(Succeed())
+			currentClusterRole.Rules = append(currentClusterRole.Rules, rbacv1.PolicyRule{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"*"},
+			})
+
+			deleteClusterProfile(clusterProfile)
+
+			currentNs := &corev1.Namespace{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name}, currentNs)).To(Succeed())
+			Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
 		})
-		Expect(err).To(BeNil())
-
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-
-		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-
-		Byf("Verifying deployment has been created into management cluster")
-		Eventually(func() error {
-			currentDeployment := &appsv1.Deployment{}
-			return k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: defaultNamespace, Name: resourceName},
-				currentDeployment)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying ClusterSummary reports an error")
-		Eventually(func() bool {
-			clusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
-				clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-			if err != nil ||
-				clusterSummary == nil {
-				return false
-			}
-			if clusterSummary.Status.FeatureSummaries == nil {
-				return false
-			}
-			if len(clusterSummary.Status.FeatureSummaries) != 1 {
-				return false
-			}
-			if clusterSummary.Status.FeatureSummaries[0].FailureMessage == nil {
-				return false
-			}
-			return strings.Contains(*clusterSummary.Status.FeatureSummaries[0].FailureMessage,
-				"is forbidden")
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		Byf("Verifying secret has not been created into management cluster")
-		Eventually(func() bool {
-			currentSecret := &corev1.Secret{}
-			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: defaultNamespace, Name: resourceName},
-				currentSecret)
-			return err != nil && apierrors.IsNotFound(err)
-		}, timeout, pollingInterval).Should(BeTrue())
-
-		deleteClusterProfile(clusterProfile)
-
-		currentNs := &corev1.Namespace{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: ns.Name}, currentNs)).To(Succeed())
-		Expect(k8sClient.Delete(context.TODO(), currentNs)).To(Succeed())
-	})
 })

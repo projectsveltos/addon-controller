@@ -38,8 +38,8 @@ var _ = Describe("HelmOptions", func() {
 		namePrefix = "helm-options-"
 	)
 
-	It("Deploy and updates helm charts with options correctly", Label("FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+	It("Deploy and updates helm charts with options correctly", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -47,7 +47,8 @@ var _ = Describe("HelmOptions", func() {
 		verifyClusterProfileMatches(clusterProfile)
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			clusterProfile.Name, &clusterProfile.Spec, kindWorkloadCluster.GetNamespace(),
+			kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
@@ -60,7 +61,7 @@ var _ = Describe("HelmOptions", func() {
 					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
 					RepositoryName:   "external-dns",
 					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.14.5",
+					ChartVersion:     "1.17.0",
 					ReleaseName:      "external-dns",
 					ReleaseNamespace: "external-dns",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -82,7 +83,7 @@ var _ = Describe("HelmOptions", func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -101,15 +102,17 @@ var _ = Describe("HelmOptions", func() {
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)).To(Succeed())
 		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
-		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.14.2"))
+		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.17.0"))
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "external-dns", ChartVersion: "1.14.5", Namespace: "external-dns"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "external-dns", ChartVersion: "1.17.0", Namespace: "external-dns"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		Byf("Update ClusterProfile %s to upgrade external-dns helm charts", clusterProfile.Name)
 
@@ -144,7 +147,7 @@ var _ = Describe("HelmOptions", func() {
 
 		verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying external-dns deployment is upgraded in the workload cluster")
 		Eventually(func() bool {

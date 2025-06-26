@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -164,12 +165,13 @@ var _ = AfterSuite(func() {
 
 func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
 	return &controllers.ClusterSummaryReconciler{
-		Client:       c,
-		Scheme:       scheme,
-		Deployer:     dep,
-		ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
-		PolicyMux:    sync.Mutex{},
+		Client:           c,
+		Scheme:           scheme,
+		Deployer:         dep,
+		ClusterMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap:     make(map[corev1.ObjectReference]*libsveltosset.Set),
+		DeletedInstances: make(map[types.NamespacedName]time.Time),
+		PolicyMux:        sync.Mutex{},
 	}
 }
 

@@ -47,7 +47,7 @@ metadata:
     name: fv`
 	)
 
-	It("deploymentType Local only allows resources to be created in the same namespace", Label("FV", "EXTENDED"), func() {
+	It("deploymentType Local only allows resources to be created in the same namespace", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		By("Grant addon-controller permission to create/delete ServiceAccount in the management cluster")
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clusterRole := &rbacv1.ClusterRole{}
@@ -64,7 +64,7 @@ metadata:
 		Expect(err).To(BeNil())
 
 		Byf("Create a Profile matching Cluster %s/%s",
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 
 		profile := getProfile(defaultNamespace, namePrefix, map[string]string{key: value})
 		profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
@@ -75,7 +75,7 @@ metadata:
 
 		verifyClusterSummary(clusterops.ProfileLabelName,
 			profile.Name, &profile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		cmName := randomString()
 		Byf("Create a configMap with a sa %s/%s", defaultNamespace, cmName)
@@ -111,7 +111,7 @@ metadata:
 
 		clusterSummary := verifyClusterSummary(clusterops.ProfileLabelName,
 			currentProfile.Name, &currentProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying ClusterSummary %s/%s reports an error", clusterSummary.Namespace, clusterSummary.Name)
 		Eventually(func() bool {
@@ -164,9 +164,8 @@ metadata:
 		}
 		Expect(k8sClient.Update(context.TODO(), currentProfile)).To(Succeed())
 
-		clusterSummary = verifyClusterSummary(clusterops.ProfileLabelName,
-			currentProfile.Name, &currentProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		clusterSummary = verifyClusterSummary(clusterops.ProfileLabelName, currentProfile.Name, &currentProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying ClusterSummary %s/%s is Provisioned", clusterSummary.Namespace, clusterSummary.Name)
 		Eventually(func() bool {

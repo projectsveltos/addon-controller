@@ -55,109 +55,111 @@ var _ = Describe("SyncMode one time", func() {
 		namePrefix = "one-time-"
 	)
 
-	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once", Label("FV", "EXTENDED"), func() {
-		oneTimeNamespaceName := randomString()
+	It("ClusterProfile with SyncMode oneTime. Policies are deployed only once",
+		Label("FV", "PULLMODE", "EXTENDED"), func() {
+			oneTimeNamespaceName := randomString()
 
-		configMapNs := randomString()
-		Byf("Create configMap's namespace %s", configMapNs)
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
-
-		Byf("Create a configMap with a Namespace")
-		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
-			fmt.Sprintf(oneTimeNamespace, oneTimeNamespaceName))
-
-		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
-
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
-		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
-				Name:      configMap.Name,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
-
-		verifyClusterProfileMatches(clusterProfile)
-
-		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, &clusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-
-		Byf("Getting client to access the workload cluster")
-		workloadClient, err := getKindWorkloadClusterKubeconfig()
-		Expect(err).To(BeNil())
-		Expect(workloadClient).ToNot(BeNil())
-
-		Byf("Verifying proper Namespace is created in the workload cluster")
-		Eventually(func() error {
-			currentNamespace := &corev1.Namespace{}
-			return workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
-		}, timeout, pollingInterval).Should(BeNil())
-
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
-
-		policies := []policy{
-			{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
-		}
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
-			policies, nil)
-
-		By("Updating content of policy in ConfigMap")
-		currentConfigMap := &corev1.ConfigMap{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, fmt.Sprintf(modifiedOneTimeNamespace, oneTimeNamespaceName))
-		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
-
-		Byf("Verifying Namespace is not updated in the workload cluster")
-		Consistently(func() bool {
-			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
-			if err != nil ||
-				currentNamespace.Labels == nil {
-				return false
+			configMapNs := randomString()
+			Byf("Create configMap's namespace %s", configMapNs)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapNs,
+				},
 			}
-			// env is the new label added in the policy contained in the
-			// referenced ConfigMap. Since SyncMode is OneTime this change should not be reflected in the
-			// CAPI Cluster
-			_, ok := currentNamespace.Labels["env"]
-			return !ok
-		}, timeout/2, pollingInterval).Should(BeTrue())
+			Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
-		Byf("Changing clusterprofile to not reference configmap anymore")
-		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{}
-		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+			Byf("Create a configMap with a Namespace")
+			configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
+				fmt.Sprintf(oneTimeNamespace, oneTimeNamespaceName))
 
-		// Since SyncMode is OneTime ClusterProfile's changes are not propagated to already existing ClusterSummary.
-		Byf("Verifying ClusterSummary still references the ConfigMap")
-		currentClusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
-			clusterProfile.Name, kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
-		Expect(err).To(BeNil())
-		Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).ToNot(BeNil())
-		Expect(len(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs)).To(Equal(1))
+			Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
-		deleteClusterProfile(clusterProfile)
-
-		Byf("Verifying Namespace is removed in the workload cluster")
-		Eventually(func() bool {
-			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
-			if err != nil {
-				return apierrors.IsNotFound(err)
+			Byf("Create a ClusterProfile matching Cluster %s/%s",
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+			clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
+			clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
 			}
-			return !currentNamespace.DeletionTimestamp.IsZero()
-		}, timeout, pollingInterval).Should(BeTrue())
-	})
+			Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+
+			verifyClusterProfileMatches(clusterProfile)
+
+			clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				clusterProfile.Name, &clusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+			Byf("Getting client to access the workload cluster")
+			workloadClient, err := getKindWorkloadClusterKubeconfig()
+			Expect(err).To(BeNil())
+			Expect(workloadClient).ToNot(BeNil())
+
+			Byf("Verifying proper Namespace is created in the workload cluster")
+			Eventually(func() error {
+				currentNamespace := &corev1.Namespace{}
+				return workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
+			}, timeout, pollingInterval).Should(BeNil())
+
+			Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
+			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
+			policies := []policy{
+				{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
+				policies, nil)
+
+			By("Updating content of policy in ConfigMap")
+			currentConfigMap := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+			currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, fmt.Sprintf(modifiedOneTimeNamespace, oneTimeNamespaceName))
+			Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
+
+			Byf("Verifying Namespace is not updated in the workload cluster")
+			Consistently(func() bool {
+				currentNamespace := &corev1.Namespace{}
+				err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
+				if err != nil ||
+					currentNamespace.Labels == nil {
+					return false
+				}
+				// env is the new label added in the policy contained in the
+				// referenced ConfigMap. Since SyncMode is OneTime this change should not be reflected in the
+				// CAPI Cluster
+				_, ok := currentNamespace.Labels["env"]
+				return !ok
+			}, timeout/2, pollingInterval).Should(BeTrue())
+
+			Byf("Changing clusterprofile to not reference configmap anymore")
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{}
+			Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+			// Since SyncMode is OneTime ClusterProfile's changes are not propagated to already existing ClusterSummary.
+			Byf("Verifying ClusterSummary still references the ConfigMap")
+			currentClusterSummary, err := getClusterSummary(context.TODO(), clusterops.ClusterProfileLabelName,
+				clusterProfile.Name, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+			Expect(err).To(BeNil())
+			Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).ToNot(BeNil())
+			Expect(len(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs)).To(Equal(1))
+
+			deleteClusterProfile(clusterProfile)
+
+			Byf("Verifying Namespace is removed in the workload cluster")
+			Eventually(func() bool {
+				currentNamespace := &corev1.Namespace{}
+				err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: oneTimeNamespaceName}, currentNamespace)
+				if err != nil {
+					return apierrors.IsNotFound(err)
+				}
+				return !currentNamespace.DeletionTimestamp.IsZero()
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
 })

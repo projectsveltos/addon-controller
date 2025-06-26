@@ -61,7 +61,7 @@ var _ = Describe("Helm", Serial, func() {
 	})
 
 	It("Onboards CAPI Cluster with onboard annotation", Label("NEW-FV", "EXTENDED"), func() {
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
@@ -97,7 +97,7 @@ var _ = Describe("Helm", Serial, func() {
 		// Addon-controller is set to only onboard CAPI cluster with onboard-capi annotation
 		// CAPI cluster does not have onboard annotation
 		Byf("Verifying Cluster %s/%s is NOT a match for ClusterProfile %s",
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name, clusterProfile.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), clusterProfile.Name)
 		Consistently(func() bool {
 			err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
 			if err != nil {
@@ -107,8 +107,8 @@ var _ = Describe("Helm", Serial, func() {
 				return true
 			}
 			for i := range currentClusterProfile.Status.MatchingClusterRefs {
-				if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.Namespace &&
-					currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.Name &&
+				if currentClusterProfile.Status.MatchingClusterRefs[i].Namespace == kindWorkloadCluster.GetNamespace() &&
+					currentClusterProfile.Status.MatchingClusterRefs[i].Name == kindWorkloadCluster.GetName() &&
 					currentClusterProfile.Status.MatchingClusterRefs[i].APIVersion == clusterv1.GroupVersion.String() {
 
 					return false
@@ -124,7 +124,7 @@ var _ = Describe("Helm", Serial, func() {
 		Byf("Add onboard annotation on CAPI cluster")
 		currentCluster := &clusterv1.Cluster{}
 		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()},
 			currentCluster)).To(Succeed())
 		annotations := currentCluster.Annotations
 		if annotations == nil {
@@ -138,19 +138,22 @@ var _ = Describe("Helm", Serial, func() {
 
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.Namespace, kindWorkloadCluster.Name)
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
+			libsveltosv1beta1.FeatureHelm)
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
+		if !isPullMode() {
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+				{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
+			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 		}
-
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 	})
@@ -193,7 +196,7 @@ func removeAnnotationFromCluster(onboardAnnotation string) {
 	Byf("Remove %s annotation from capi cluster", onboardAnnotation)
 	currentCluster := &clusterv1.Cluster{}
 	Expect(k8sClient.Get(context.TODO(),
-		types.NamespacedName{Namespace: kindWorkloadCluster.Namespace, Name: kindWorkloadCluster.Name},
+		types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()},
 		currentCluster)).To(Succeed())
 	annotations := currentCluster.Annotations
 	if annotations != nil {

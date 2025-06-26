@@ -375,67 +375,6 @@ func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 	return nil
 }
 
-func deployResourceSummaryInstance(ctx context.Context, clusterClient client.Client,
-	resources []libsveltosv1beta1.Resource, kustomizeResources []libsveltosv1beta1.Resource,
-	helmResources []libsveltosv1beta1.HelmResources, namespace, name string,
-	lbls, annotations map[string]string, driftExclusions []libsveltosv1beta1.DriftExclusion, logger logr.Logger,
-) error {
-
-	logger.V(logs.LogDebug).Info("deploy resourceSummary instance")
-
-	patches := deployer.TransformDriftExclusionsToPatches(driftExclusions)
-
-	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
-	err := clusterClient.Get(ctx,
-		types.NamespacedName{Namespace: namespace, Name: name},
-		currentResourceSummary)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present. creating it.")
-			toDeployResourceSummary := &libsveltosv1beta1.ResourceSummary{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        name,
-					Namespace:   namespace,
-					Labels:      lbls,
-					Annotations: annotations,
-				},
-			}
-			if resources != nil {
-				toDeployResourceSummary.Spec.Resources = resources
-			}
-			if kustomizeResources != nil {
-				toDeployResourceSummary.Spec.KustomizeResources = kustomizeResources
-			}
-			if helmResources != nil {
-				toDeployResourceSummary.Spec.ChartResources = helmResources
-			}
-			toDeployResourceSummary.Spec.Patches = patches
-
-			return clusterClient.Create(ctx, toDeployResourceSummary)
-		}
-		return err
-	}
-
-	if resources != nil {
-		currentResourceSummary.Spec.Resources = resources
-	}
-	if kustomizeResources != nil {
-		currentResourceSummary.Spec.KustomizeResources = kustomizeResources
-	}
-	if helmResources != nil {
-		currentResourceSummary.Spec.ChartResources = helmResources
-	}
-	if currentResourceSummary.Labels == nil {
-		currentResourceSummary.Labels = map[string]string{}
-	}
-	currentResourceSummary.Spec.Patches = patches
-	currentResourceSummary.Labels = lbls
-	currentResourceSummary.Annotations = annotations
-
-	logger.V(logsettings.LogDebug).Info("resourceSummary instance already present. updating it.")
-	return clusterClient.Update(ctx, currentResourceSummary)
-}
-
 func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clusterName, applicant string,
 	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) error {
 

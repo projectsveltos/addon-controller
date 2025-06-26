@@ -23,3 +23,11 @@ type NonRetriableError struct {
 func (r *NonRetriableError) Error() string {
 	return r.Message
 }
+
+type HandOverError struct {
+	Message string
+}
+
+func (r *HandOverError) Error() string {
+	return r.Message
+}

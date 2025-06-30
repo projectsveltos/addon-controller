@@ -468,34 +468,31 @@ func (r *ClusterSummaryReconciler) processUndeployResultInPullMode(ctx context.C
 		}
 		errorMsg := err.Error()
 		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
-		return err
-	}
-
-	if agentStatus != nil {
-		if agentStatus.DeploymentStatus != nil && *agentStatus.DeploymentStatus == libsveltosv1beta1.FeatureStatusRemoved {
-			logger.V(logs.LogDebug).Info("agent removed content")
-			err = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
-			if err != nil {
-				return err
+	} else {
+		if agentStatus != nil {
+			if agentStatus.DeploymentStatus != nil && *agentStatus.DeploymentStatus == libsveltosv1beta1.FeatureStatusRemoved {
+				logger.V(logs.LogDebug).Info("agent removed content")
+				err = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+					clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+				if err != nil {
+					return err
+				}
+				removed := libsveltosv1beta1.FeatureStatusRemoved
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &removed, nil, nil, logger)
+				return nil
+			} else if agentStatus.FailureMessage != nil {
+				clusterSummaryScope.SetFailureMessage(f.id, agentStatus.FailureMessage)
+			} else {
+				// Verified agent is removing
+				agentRemoving := libsveltosv1beta1.FeatureStatusAgentRemoving
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &agentRemoving, nil, nil, logger)
+				return nil
 			}
-			removed := libsveltosv1beta1.FeatureStatusRemoved
-			r.updateFeatureStatus(clusterSummaryScope, f.id, &removed, nil, nil, logger)
-			return nil
-		} else if agentStatus.FailureMessage != nil {
-			clusterSummaryScope.SetFailureMessage(f.id, agentStatus.FailureMessage)
 		} else {
-			// Verified agent is removing
-			agentRemoving := libsveltosv1beta1.FeatureStatusAgentRemoving
-			r.updateFeatureStatus(clusterSummaryScope, f.id, &agentRemoving, nil, nil, logger)
-			return nil
+			logger.V(logs.LogDebug).Info("no result is available. mark status as removing")
+			removing := libsveltosv1beta1.FeatureStatusRemoving
+			r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, nil, logger)
 		}
-	}
-
-	if agentStatus == nil {
-		logger.V(logs.LogDebug).Info("no result is available. mark status as removing")
-		removing := libsveltosv1beta1.FeatureStatusRemoving
-		r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, nil, logger)
 	}
 
 	logger.V(logs.LogDebug).Info("queueing request to un-deploy")

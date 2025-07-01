@@ -2499,34 +2499,116 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 	return helmResources, nil
 }
 
+func isHookRelevantForPreInstallUpgrade(hook *release.Hook) bool {
+	for _, event := range hook.Events {
+		switch event {
+		case release.HookPreInstall,
+			release.HookPreUpgrade:
+			return true
+		case release.HookTest,
+			release.HookPreDelete,
+			release.HookPostDelete,
+			release.HookPreRollback,
+			release.HookPostRollback,
+			release.HookPostInstall,
+			release.HookPostUpgrade:
+			return false
+		}
+	}
+	return false
+}
+
+func isHookRelevantForPostInstallUpgrade(hook *release.Hook) bool {
+	for _, event := range hook.Events {
+		switch event {
+		case release.HookPostInstall,
+			release.HookPostUpgrade:
+			return true
+		case release.HookTest,
+			release.HookPreDelete,
+			release.HookPostDelete,
+			release.HookPreRollback,
+			release.HookPostRollback,
+			release.HookPreInstall,
+			release.HookPreUpgrade:
+			return false
+		}
+	}
+	return false
+}
+
 func collectHelmContent(result *release.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
-	elements, err := deployer.CustomSplit(result.Manifest)
+	resources := make([]*unstructured.Unstructured, 0)
+
+	// Parse pre install/upgrade hook manifests
+	for _, hook := range result.Hooks {
+		// Skip hooks not relevant for install/upgrade
+		if !isHookRelevantForPreInstallUpgrade(hook) {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre install/upgrade Hook Kind: %s ", hook.Kind))
+
+		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
+		if err != nil {
+			logger.Error(err, "failed to parse hook manifest")
+			return nil, err
+		}
+		resources = append(resources, hookResources...)
+	}
+
+	// Parse regular manifest
+	mainResources, err := parseAndAppendResources(result.Manifest, logger)
+	if err != nil {
+		return nil, err
+	}
+	resources = append(resources, mainResources...)
+
+	// Parse hook manifests
+	for _, hook := range result.Hooks {
+		// Skip hooks not relevant for install/upgrade
+		if !isHookRelevantForPostInstallUpgrade(hook) {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Post install/upgrade Hook Kind: %s ", hook.Kind))
+
+		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
+		if err != nil {
+			logger.Error(err, "failed to parse hook manifest")
+			return nil, err
+		}
+		resources = append(resources, hookResources...)
+	}
+
+	return resources, nil
+}
+
+func parseAndAppendResources(yamlStr string, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	objs, err := deployer.CustomSplit(yamlStr)
 	if err != nil {
 		return nil, err
 	}
 
-	resources := make([]*unstructured.Unstructured, 0, len(elements))
+	var resources []*unstructured.Unstructured
 
-	for i := range elements {
-		policy, err := k8s_utils.GetUnstructured([]byte(elements[i]))
+	for _, obj := range objs {
+		policy, err := k8s_utils.GetUnstructured([]byte(obj))
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", elements[i]))
+			logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", obj))
 			return nil, err
 		}
 
-		// If object is corev1.List, expand it here
 		if policy.GetKind() == "List" && policy.GetAPIVersion() == "v1" {
 			list := &corev1.List{}
-			err := runtime.DefaultUnstructuredConverter.FromUnstructured(policy.Object, list)
-			if err != nil {
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(policy.Object, list); err != nil {
 				return nil, err
 			}
 
 			for _, item := range list.Items {
-				// Convert raw extension to unstructured
 				unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&item)
 				if err != nil {
-					logger.Error(err, fmt.Sprintf("failed to get unstructure from corev1.List %.100s", item))
+					logger.Error(err, fmt.Sprintf("failed to convert item from corev1.List %.100s", item))
 					return nil, err
 				}
 				u := &unstructured.Unstructured{}

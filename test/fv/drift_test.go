@@ -360,6 +360,9 @@ reportsController:
 		}, timeout, pollingInterval).Should(BeTrue())
 		By("Kyverno image is reset to v1.14.2")
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
 		// Change Kyverno image for admission controller
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
@@ -373,14 +376,23 @@ reportsController:
 		Expect(imageChanged).To(BeTrue())
 		Expect(workloadClient.Update(context.TODO(), depl)).To(Succeed())
 
-		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)).To(Succeed())
-		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
-				By("Kyverno image is set to v1.14.1")
-				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(admissionImage))
+		Eventually(func() bool {
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+			if err != nil {
+				return false
 			}
-		}
+			for i := range depl.Spec.Template.Spec.Containers {
+				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
+					By("Kyverno image is set to v1.14.1")
+					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		Byf("Verifying Sveltos does not reacts to drift configuration change as admission controller has ignore annotation")
 		Consistently(func() bool {

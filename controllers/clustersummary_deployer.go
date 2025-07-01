@@ -584,6 +584,8 @@ func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Cont
 		}
 		errorMsg := err.Error()
 		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+	} else if status.FailureMessage != nil {
+		clusterSummaryScope.SetFailureMessage(f.id, status.FailureMessage)
 	}
 
 	return status.DeploymentStatus
@@ -712,8 +714,10 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	case libsveltosv1beta1.FeatureStatusFailed, libsveltosv1beta1.FeatureStatusFailedNonRetriable:
 		failed := true
 		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash, &failed)
-		err := statusError.Error()
-		clusterSummaryScope.SetFailureMessage(featureID, &err)
+		if statusError != nil {
+			err := statusError.Error()
+			clusterSummaryScope.SetFailureMessage(featureID, &err)
+		}
 		clusterSummaryScope.SetLastAppliedTime(featureID, &now)
 	}
 }

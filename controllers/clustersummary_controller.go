@@ -157,28 +157,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		)
 	}
 
-	// Fetch the (Cluster)Profile.
-	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
-	if err != nil {
-		logger.Error(err, "Failed to get owner clusterProfile")
-		return reconcile.Result{}, fmt.Errorf(
-			"failed to get owner clusterProfile for %s: %w",
-			req.NamespacedName, err,
-		)
-	}
-	if profile == nil {
-		logger.Error(err, "Failed to get owner (Cluster)Profile")
-		return reconcile.Result{}, fmt.Errorf("failed to get owner (Cluster)Profile for %s",
-			req.NamespacedName)
-	}
-
-	clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
-		Client:         r.Client,
-		Logger:         logger,
-		ClusterSummary: clusterSummary,
-		Profile:        profile,
-		ControllerName: "clustersummary",
-	})
+	clusterSummaryScope, err := r.getClusterSummaryScope(ctx, clusterSummary, logger)
 	if err != nil {
 		logger.Error(err, "Failed to create clusterProfileScope")
 		return reconcile.Result{}, fmt.Errorf(
@@ -195,6 +174,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var isMatch bool
 	isMatch, err = r.isClusterAShardMatch(ctx, clusterSummary, logger)
 	if err != nil {
+		msg := err.Error()
+		logger.Error(err, msg)
+		clusterSummary.Status.FailureMessage = &msg
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	} else if !isMatch {
 		// This addon-controller pod is not a shard match, yet we need to refresh internal state by:
@@ -206,6 +188,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	err = r.updateClusterShardPair(ctx, clusterSummary, logger)
 	if err != nil {
+		msg := err.Error()
+		logger.Error(err, msg)
+		clusterSummary.Status.FailureMessage = &msg
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -224,6 +209,9 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	isReady, err := r.isReady(ctx, clusterSummary, logger)
 	if err != nil {
+		msg := err.Error()
+		logger.Error(err, msg)
+		clusterSummary.Status.FailureMessage = &msg
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 	if !isReady {
@@ -236,6 +224,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 		return reconcile.Result{}, nil
 	}
+
+	clusterSummary.Status.FailureMessage = nil
 
 	// Handle non-deleted clusterSummary
 	return r.reconcileNormal(ctx, clusterSummaryScope, logger)
@@ -1455,4 +1445,36 @@ func (r *ClusterSummaryReconciler) handleDeletedCluster(ctx context.Context,
 	}
 
 	return nil
+}
+
+func (r *ClusterSummaryReconciler) getClusterSummaryScope(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger,
+) (*scope.ClusterSummaryScope, error) {
+
+	// Fetch the (Cluster)Profile.
+	profile, _, err := configv1beta1.GetProfileOwnerAndTier(ctx, r.Client, clusterSummary)
+	if err != nil {
+		logger.Error(err, "Failed to get owner clusterProfile")
+		return nil, fmt.Errorf(
+			"failed to get owner clusterProfile for %s/%s: %w",
+			clusterSummary.Namespace, clusterSummary.Name, err,
+		)
+	}
+	if profile == nil {
+		msg := "Failed to get owner (Cluster)Profile"
+		logger.Error(err, msg)
+		clusterSummary.Status.FailureMessage = &msg
+		return nil, fmt.Errorf("failed to get owner (Cluster)Profile for %s/%s",
+			clusterSummary.Namespace, clusterSummary.Name)
+	}
+
+	clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+		Client:         r.Client,
+		Logger:         logger,
+		ClusterSummary: clusterSummary,
+		Profile:        profile,
+		ControllerName: "clustersummary",
+	})
+
+	return clusterSummaryScope, err
 }

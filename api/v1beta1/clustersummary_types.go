@@ -163,6 +163,11 @@ type ClusterSummaryStatus struct {
 	// If not set, reconciliations will happen as usual.
 	// +optional
 	NextReconcileTime *metav1.Time `json:"nextReconcileTime,omitempty"`
+
+	// FailureMessage reports any error encountered during the reconciliation of the ClusterSummary
+	// instance itself, *excluding* errors related to the deployment of individual features.
+	// +optional
+	FailureMessage *string `json:"failureMessage,omitempty"`
 }
 
 //nolint: lll // marker

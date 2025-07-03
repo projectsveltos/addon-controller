@@ -329,7 +329,10 @@ func setupChecks(mgr ctrl.Manager) {
 }
 
 // capiCRDHandler restarts process if a CAPI CRD is updated
-func capiCRDHandler(gvk *schema.GroupVersionKind) {
+func capiCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
+	if action == crd.Modify {
+		return
+	}
 	if gvk.Group == clusterv1.GroupVersion.Group {
 		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
 			panic("kill -TERM failed")
@@ -353,7 +356,10 @@ func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
 }
 
 // fluxCRDHandler restarts process if a Flux CRD is updated
-func fluxCRDHandler(gvk *schema.GroupVersionKind) {
+func fluxCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
+	if action == crd.Modify {
+		return
+	}
 	if gvk.Group == sourcev1.GroupVersion.Group {
 		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
 			panic("kill -TERM failed")

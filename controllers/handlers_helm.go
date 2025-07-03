@@ -313,7 +313,12 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("undeployHelmCharts (pullMode %t)", isPullMode))
 
 	if isPullMode {
-		return undeployHelmChartsInPullMode(ctx, c, clusterSummary, logger)
+		mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+		if err != nil {
+			return err
+		}
+
+		return undeployHelmChartsInPullMode(ctx, c, clusterSummary, mgmtResources, logger)
 	}
 
 	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterNamespace, clusterName,
@@ -332,7 +337,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 }
 
 func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	logger logr.Logger) error {
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("undeployHelmCharts in pullmode")
 
@@ -344,18 +349,67 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		return err
 	}
 
+	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
+	if err != nil {
+		return err
+	}
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil)
+
+	// If charts have pre/post delete hooks, those need to be deployed. A ConfigurationGroup to deploy those
+	// is created. If this does not exist yet assume we still have to deploy those.
+	status, err := pullmode.GetDeploymentStatus(ctx, c, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+		string(libsveltosv1beta1.FeatureHelm), logger)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	} else {
+		// if the status is deployed it means pre/post delete hooks have been deployed. So proceed undeploying
+		if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned {
+			if isLeavePolicies(clusterSummary, logger) {
+				logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
+			}
+
+			return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+				string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+		}
+	}
+
+	// Walks all helm charts, if any pre/post delete hook is present, Sveltos asks applier to deploy those
+	err = walkAndUndeployHelmChartsInPullMode(ctx, c, clusterSummary, mgmtResources, logger)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
+
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
 		return err
 	}
 	requeued := false
+
 	// If this ClusterSummary is currently managing Helm charts that other ClusterProfiles are also attempting to
 	// manage, it should not uninstall them. Instead, it should change its tier to allow the other ClusterProfiles to take
 	// over management.
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		l := logger.WithValues("chart", fmt.Sprintf("%s %s", currentChart.ChartName, currentChart.ReleaseNamespace))
-		canManage, err := determineChartOwnership(ctx, c, clusterSummary, currentChart, logger)
+
+		instantiatedChart, err := getInstantiatedChart(ctx, clusterSummary, currentChart, mgmtResources, logger)
+		if err != nil {
+			return err
+		}
+
+		l := logger.WithValues("chart", fmt.Sprintf("%s/%s", instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName))
+		l.V(logs.LogDebug).Info(fmt.Sprintf("Deploying chart: %v", instantiatedChart))
+
+		canManage, err := determineChartOwnership(ctx, c, clusterSummary, instantiatedChart, l)
 		if err != nil {
 			return err
 		}
@@ -364,9 +418,9 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 			// Let the other ClusterSummary take it over.
 			otherRegisteredClusterSummaries := chartManager.GetRegisteredClusterSummariesForChart(
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-				clusterSummary.Spec.ClusterType, currentChart)
+				clusterSummary.Spec.ClusterType, instantiatedChart)
 			if len(otherRegisteredClusterSummaries) > 1 {
-				// Set an artificial high tier. this allows other CLusterSummary to take over the
+				// Set an artificial high tier. this allows other ClusterSummary to take over the
 				// management of helm chart
 
 				if clusterSummary.Spec.ClusterProfileSpec.Tier != math.MaxInt32 {
@@ -374,33 +428,36 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 					clusterSummary.Spec.ClusterProfileSpec.Tier = math.MaxInt32
 					err = c.Update(ctx, clusterSummary)
 					if err != nil {
-						logger.V(logs.LogInfo).Error(err, "Failed to update adjust tier", "chart",
-							currentChart.ChartName)
+						l.V(logs.LogInfo).Error(err, "Failed to update adjust tier")
 						return err
 					}
 				}
 
-				err = handleCharts(ctx, clusterSummary, c, nil, "", true, nil, logger)
+				_, _, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, "", true, l)
 				if err != nil {
-					logger.V(logs.LogInfo).Error(err, "Failed to handle charts after tier adjustment", "chart",
-						currentChart.ChartName)
+					l.V(logs.LogInfo).Error(err, "Failed to handle charts after tier adjustment")
 					return err
 				}
 
 				l.V(logs.LogDebug).Info("unregister as chart manager")
 				// Immediately unregister so next inline ClusterSummary can take this over
-				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+				chartManager.UnregisterClusterSummaryForChart(clusterSummary, instantiatedChart)
 
 				// Requeue all other ClusterSummaries
 				l.V(logs.LogDebug).Info("requeue conflicting clusterSummaries for this chart")
 				err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
-					otherRegisteredClusterSummaries, logger)
+					otherRegisteredClusterSummaries, l)
 				if err != nil {
-					logger.V(logs.LogInfo).Error(err, "Failed to requeue other ClusterSummaries during conflict resolution",
-						"chart", currentChart.ChartName)
+					l.V(logs.LogInfo).Error(err, "Failed to requeue other ClusterSummaries during conflict resolution")
 					return err
 				}
 				requeued = true
+			} else {
+				_, _, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, "", true, l)
+				if err != nil {
+					l.V(logs.LogInfo).Error(err, "Failed to handle chart delete")
+					return err
+				}
 			}
 		}
 	}
@@ -414,22 +471,12 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		return &configv1beta1.HandOverError{Message: msg}
 	}
 
-	if isLeavePolicies(clusterSummary, logger) {
-		logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
-	}
-
-	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
+	err = commitStagedResourcesForDeployment(ctx, clusterSummary, nil, logger)
 	if err != nil {
 		return err
 	}
 
-	// Helm Charts are deployed as set of Kubernetes resources. Resetting the tier and requeing conflicting CLusterSummary
-	// allowed those to take over. Yet some stake resources might be present on the cluster. Remove those.
-
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil)
-	return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+	return nil
 }
 
 func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
@@ -779,7 +826,8 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 			return releaseReports, chartDeployed, err
 		}
 
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying chart %s/%s", instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName))
+		l := logger.WithValues("chart", fmt.Sprintf("%s/%s", instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName))
+		l.V(logs.LogDebug).Info(fmt.Sprintf("Deploying chart: %v", instantiatedChart))
 
 		// Eventual conflicts are already resolved before this method is called (in updateStatusForeferencedHelmReleases)
 		// So it is safe to call CanManageChart here
@@ -1276,7 +1324,7 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 	return nil
 }
 
-// installRelease installs helm release in the CAPI cluster.
+// installRelease installs helm release in the Cluster.
 // No action in DryRun mode.
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, settings *cli.EnvSettings,
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
@@ -1401,7 +1449,7 @@ func checkDependencies(chartRequested *chart.Chart, installClient *action.Instal
 	return nil
 }
 
-// uninstallRelease removes helm release from a CAPI Cluster.
+// uninstallRelease removes helm release from a managed Cluster.
 // No action in DryRun mode.
 func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
@@ -1885,7 +1933,7 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1beta1.
 	return true
 }
 
-// doInstallRelease installs helm release in the CAPI Cluster.
+// doInstallRelease installs helm release in the Cluster.
 // No action in DryRun mode.
 func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
@@ -1925,7 +1973,7 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	return release, nil
 }
 
-// doUninstallRelease uninstalls helm release from the CAPI Cluster.
+// doUninstallRelease uninstalls helm release from the Cluster.
 // No action in DryRun mode.
 func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
@@ -1945,7 +1993,7 @@ func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Clust
 		kubeconfig, registryOptions, requestedChart, logger)
 }
 
-// doUpgradeRelease upgrades helm release in the CAPI Cluster.
+// doUpgradeRelease upgrades helm release in the Cluster.
 // No action in DryRun mode.
 func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
@@ -2066,8 +2114,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 			}
 
 			if err := uninstallRelease(ctx, clusterSummary, managedHelmReleases[i].Name,
-				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil,
-				logger); err != nil {
+				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil, logger); err != nil {
 				return nil, err
 			}
 
@@ -2478,7 +2525,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 				return nil, err
 			}
 
-			resources, err := collectHelmContent(results, logger)
+			resources, err := collectHelmContent(results, true, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -2537,8 +2584,85 @@ func isHookRelevantForPostInstallUpgrade(hook *release.Hook) bool {
 	return false
 }
 
-func collectHelmContent(result *release.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+func isHookRelevantForPreDelete(hook *release.Hook) bool {
+	for _, event := range hook.Events {
+		switch event {
+		case release.HookPreDelete:
+			return true
+		case release.HookTest,
+			release.HookPostInstall,
+			release.HookPostUpgrade,
+			release.HookPostDelete,
+			release.HookPreRollback,
+			release.HookPostRollback,
+			release.HookPreInstall,
+			release.HookPreUpgrade:
+			return false
+		}
+	}
+	return false
+}
+
+func isHookRelevantForPostDelete(hook *release.Hook) bool {
+	for _, event := range hook.Events {
+		switch event {
+		case release.HookPostDelete:
+			return true
+		case release.HookTest,
+			release.HookPreDelete,
+			release.HookPostInstall,
+			release.HookPostUpgrade,
+			release.HookPreRollback,
+			release.HookPostRollback,
+			release.HookPreInstall,
+			release.HookPreUpgrade:
+			return false
+		}
+	}
+	return false
+}
+
+// hasHookDeletePolicy checks if the resource has the helm.sh/hook-delete-policy annotation.
+func hasHookDeletePolicy(obj *unstructured.Unstructured) bool {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	_, exists := annotations["helm.sh/hook-delete-policy"]
+	return exists
+}
+
+func collectHelmContent(result *release.Release, install bool, logger logr.Logger,
+) ([]*unstructured.Unstructured, error) {
+
 	resources := make([]*unstructured.Unstructured, 0)
+	if !install {
+		// Parse regular manifest
+		mainResources, err := parseAndAppendResources(result.Manifest, logger)
+		if err != nil {
+			return nil, err
+		}
+		for i := range mainResources {
+			if hasHookDeletePolicy(mainResources[i]) {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("resource %s %s/%s has helm.sh/hook-delete-policy",
+					mainResources[i].GetKind(), mainResources[i].GetNamespace(), mainResources[i].GetName()))
+				resources = append(resources, mainResources[i])
+			}
+		}
+
+		// if we are uninstalling, just send pre/post delete hook.
+		// when pre/post delete hook resources are present, sveltos-applier
+		// will: 1. apply pre delete resources, 2. wait for those to complete,
+		// 3. apply post delete resources, 4. wait for those to compete,
+		// 5. remove eveything else (as those non delete hook resources are not sent)
+		deleteHookResources, err := collectHelmDeleteHooks(result, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		resources = append(resources, deleteHookResources...)
+		return resources, nil
+	}
 
 	// Parse pre install/upgrade hook manifests
 	for _, hook := range result.Hooks {
@@ -2562,7 +2686,14 @@ func collectHelmContent(result *release.Release, logger logr.Logger) ([]*unstruc
 	if err != nil {
 		return nil, err
 	}
-	resources = append(resources, mainResources...)
+	for i := range mainResources {
+		if hasHookDeletePolicy(mainResources[i]) {
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("resource %s %s/%s has helm.sh/hook-delete-policy",
+				mainResources[i].GetKind(), mainResources[i].GetNamespace(), mainResources[i].GetName()))
+			continue
+		}
+		resources = append(resources, mainResources[i])
+	}
 
 	// Parse hook manifests
 	for _, hook := range result.Hooks {
@@ -2572,6 +2703,47 @@ func collectHelmContent(result *release.Release, logger logr.Logger) ([]*unstruc
 		}
 
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Post install/upgrade Hook Kind: %s ", hook.Kind))
+
+		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
+		if err != nil {
+			logger.Error(err, "failed to parse hook manifest")
+			return nil, err
+		}
+		resources = append(resources, hookResources...)
+	}
+
+	return resources, nil
+}
+
+func collectHelmDeleteHooks(result *release.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	resources := make([]*unstructured.Unstructured, 0)
+
+	// Parse pre delete hook manifests
+	for _, hook := range result.Hooks {
+		// Skip hooks not relevant for install/upgrade
+		if !isHookRelevantForPreDelete(hook) {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre delete Hook Kind: %s", hook.Kind))
+
+		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
+		if err != nil {
+			logger.Error(err, "failed to parse hook manifest")
+			return nil, err
+		}
+
+		resources = append(resources, hookResources...)
+	}
+
+	// Parse post delete hook manifests
+	for _, hook := range result.Hooks {
+		// Skip hooks not relevant for install/upgrade
+		if !isHookRelevantForPostDelete(hook) {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Post delete Hook Kind: %s ", hook.Kind))
 
 		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
 		if err != nil {
@@ -2920,7 +3092,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get management cluster Kubernetes version", err)
 		}
-		// We simply wantnto get list of resources that would be deployed. This is to prepare
+		// We simply want to get list of resources that would be deployed. This is to prepare
 		// what agent for a SveltosCluster in pull mode needs to deploy
 		installClient.DryRun = true
 		installClient.ClientOnly = true
@@ -3017,7 +3189,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		return err
 	}
 
-	resources, err := collectHelmContent(results, logger)
+	resources, err := collectHelmContent(results, true, logger)
 	if err != nil {
 		return err
 	}
@@ -3637,21 +3809,6 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	logger = logger.WithValues("chart", fmt.Sprintf("%s/%s", currentChart.ReleaseNamespace, currentChart.ReleaseName))
 
-	if currentChart.HelmChartAction == configv1beta1.HelmChartActionUninstall {
-		logger.V(logs.LogDebug).Info("uninstall chart in pull mode")
-		releaseReport := &configv1beta1.ReleaseReport{
-			ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
-			Action: string(configv1beta1.UninstallHelmAction), ChartVersion: currentChart.ChartVersion,
-		}
-
-		// Since this is Uninstall, prepare a single ConfigurationBundle with no resources
-		// After walking on all charts ConfigurationGroup is created
-		return nil, releaseReport, pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
-			clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm), nil, false, logger)
-	}
-
-	logger.V(logs.LogDebug).Info("install chart in pull mode")
 	// In pull mode always treat it as an install. This will allow us to get list of resources helm would install (equivalent
 	// of helm template). Those resources will be made available for the agent inside ConfigurationBundles.
 	release, _, err := handleInstall(ctx, clusterSummary, mgmtResources, currentChart, "", registryOptions, true, true, logger)
@@ -3672,14 +3829,33 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 		Values:           release.Config,
 	}
 
-	releaseReport := &configv1beta1.ReleaseReport{
-		ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
-		Action: string(configv1beta1.UpgradeHelmAction),
+	install := true
+	var releaseReport *configv1beta1.ReleaseReport
+	if currentChart.HelmChartAction == configv1beta1.HelmChartActionUninstall ||
+		!clusterSummary.DeletionTimestamp.IsZero() {
+
+		logger.V(logs.LogDebug).Info("uninstall chart in pull mode")
+		install = false
+		releaseReport = &configv1beta1.ReleaseReport{
+			ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
+			Action: string(configv1beta1.UninstallHelmAction), ChartVersion: currentChart.ChartVersion,
+		}
+	} else {
+		logger.V(logs.LogDebug).Info("install chart in pull mode")
+		releaseReport = &configv1beta1.ReleaseReport{
+			ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
+			Action: string(configv1beta1.UpgradeHelmAction),
+		}
 	}
 
-	resources, err := collectHelmContent(release, logger)
-	if err != nil {
-		return nil, nil, err
+	var resources []*unstructured.Unstructured
+	if !install && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		// if action is install=false and syncMode is dryRun, return empty resources.
+	} else {
+		resources, err = collectHelmContent(release, install, logger)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
@@ -3689,17 +3865,46 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 		return nil, nil, err
 	}
 
-	// Do not call CommitStagedResourcesForDeployment now. Walk all charts only then call CommitStagedResourcesForDeployment
+	// Do not call CommitStagedResourcesForDeployment now.
+	// Walk all charts only then call CommitStagedResourcesForDeployment
+
 	return rInfo, releaseReport, nil
 }
 
+func appendResources(result [][]*unstructured.Unstructured,
+	resources []*unstructured.Unstructured) [][]*unstructured.Unstructured {
+
+	const limit = 15
+	for i := 0; i < len(resources); i += limit {
+		end := i + limit
+		if end > len(resources) {
+			end = len(resources)
+		}
+		result = append(result, resources[i:end])
+	}
+
+	return result
+}
+
 // splitResources returns a slice of slice of resources according to those rules:
-// 1. Each CRD instance is in its own group with no other resources
-// 2. no more than 10 resources are put in the same group
+// 1. pre install/upgrade are stored in their own subgroups before anything else
+// 2. then pre delete are stored in their own subgroups
+// 3. then each CRD instance is in its own group with no other resources
+// 4. then other resources (not hook ones) no more than 10 resources are put in the same group
+// 5. then post install/upgrade are stored in their own subgroups
+// 6. then post delete are stored in their own subgroups
+// If operation is install there are no pre/post delete resources
+// If operation is a delete only pre/post delete resources are present
 func splitResources(resources []*unstructured.Unstructured, releaseNamespace string,
 ) [][]*unstructured.Unstructured {
 
 	var crdInstances []*unstructured.Unstructured
+	var preInstallHooks []*unstructured.Unstructured
+	var postInstallHooks []*unstructured.Unstructured
+	var preRollbackHooks []*unstructured.Unstructured
+	var postRollbackHooks []*unstructured.Unstructured
+	var preDeleteHooks []*unstructured.Unstructured
+	var postDeleteHooks []*unstructured.Unstructured
 	var otherResources []*unstructured.Unstructured
 
 	// Separate CRD instances from other resources
@@ -3708,6 +3913,30 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 			resource.GetKind() == "CustomResourceDefinition" {
 
 			crdInstances = append(crdInstances, resource)
+		} else if isHookResource(resource, "pre-install") {
+			resource.SetNamespace(releaseNamespace)
+			preInstallHooks = append(preInstallHooks, resource)
+		} else if isHookResource(resource, "pre-upgrade") {
+			resource.SetNamespace(releaseNamespace)
+			preInstallHooks = append(preInstallHooks, resource)
+		} else if isHookResource(resource, "post-install") {
+			resource.SetNamespace(releaseNamespace)
+			postInstallHooks = append(postInstallHooks, resource)
+		} else if isHookResource(resource, "post-upgrade") {
+			resource.SetNamespace(releaseNamespace)
+			postInstallHooks = append(postInstallHooks, resource)
+		} else if isHookResource(resource, "pre-rollback") {
+			resource.SetNamespace(releaseNamespace)
+			preRollbackHooks = append(preRollbackHooks, resource)
+		} else if isHookResource(resource, "post-rollback") {
+			resource.SetNamespace(releaseNamespace)
+			postRollbackHooks = append(postRollbackHooks, resource)
+		} else if isHookResource(resource, "pre-delete") || hasHookDeletePolicy(resource) {
+			resource.SetNamespace(releaseNamespace)
+			preDeleteHooks = append(preDeleteHooks, resource)
+		} else if isHookResource(resource, "post-delete") || hasHookDeletePolicy(resource) {
+			resource.SetNamespace(releaseNamespace)
+			postDeleteHooks = append(postDeleteHooks, resource)
 		} else {
 			// resources collected do not have the namespace set, even though release namespace is defined
 			// Irrespective of whether resources are namespaced or not, set namespace to be the release namespace
@@ -3717,20 +3946,33 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 		}
 	}
 
-	// Put each CRD instance in its own subgroup
 	var result [][]*unstructured.Unstructured
+
+	// Put pre install instances in subgroups of no more than 15
+	result = appendResources(result, preInstallHooks)
+
+	// Put pre rollback instances in subgroups of no more than 15
+	result = appendResources(result, preRollbackHooks)
+
+	// Put pre delete instances in subgroups of no more than 15
+	result = appendResources(result, preDeleteHooks)
+
+	// Put each CRD instance in its own subgroup
 	for _, crd := range crdInstances {
 		result = append(result, []*unstructured.Unstructured{crd})
 	}
 
 	// Split other resources into subgroups of no more than 15
-	for i := 0; i < len(otherResources); i += 15 {
-		end := i + 15
-		if end > len(otherResources) {
-			end = len(otherResources)
-		}
-		result = append(result, otherResources[i:end])
-	}
+	result = appendResources(result, otherResources)
+
+	// Put post install instances in subgroups of no more than 15
+	result = appendResources(result, postInstallHooks)
+
+	// Put post rollback instances in subgroups of no more than 15
+	result = appendResources(result, postRollbackHooks)
+
+	// Put post delete instances in subgroups of no more than 15
+	result = appendResources(result, postDeleteHooks)
 
 	return result
 }
@@ -3773,4 +4015,27 @@ func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *con
 	return pullmode.CommitStagedResourcesForDeployment(ctx, getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
 		clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+}
+
+func isHookResource(u *unstructured.Unstructured, hookType string) bool {
+	annotations := u.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+
+	hook, found := annotations["helm.sh/hook"]
+	if !found {
+		return false
+	}
+
+	// Helm allows multiple hooks separated by commas, e.g. "pre-delete,post-install"
+	hooks := strings.Split(hook, ",")
+	for _, h := range hooks {
+		h = strings.TrimSpace(h)
+		if h == hookType {
+			return true
+		}
+	}
+
+	return false
 }

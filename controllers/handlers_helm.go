@@ -1066,7 +1066,10 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 			if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil {
 				err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 				if err != nil {
-					return nil, nil, err
+					// Ignore release not found error
+					if !(errors.Is(err, driver.ErrReleaseNotFound) || strings.Contains(err.Error(), "release: not found")) {
+						return nil, nil, err
+					}
 				}
 			}
 		}

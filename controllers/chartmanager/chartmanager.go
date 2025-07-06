@@ -64,6 +64,10 @@ type instance struct {
 	// - helm chart needs to be withdrawn if no other ClusterSummary is trying to manage it.
 	perClusterChartMap map[string]map[string][]string
 
+	// This map contains per cluster/helm chart the current deployed version.
+	// This is used to determine current version in pull mode cluster
+	perClusterChartVersionMap map[string]map[string]string
+
 	// list of tracked clusters
 	clusters *libsveltosset.Set
 }
@@ -89,11 +93,16 @@ func GetChartManagerInstance(ctx context.Context, c client.Client) (*instance, e
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &instance{
-				perClusterChartMap: make(map[string]map[string][]string),
-				chartMux:           sync.Mutex{},
+				perClusterChartMap:        make(map[string]map[string][]string),
+				perClusterChartVersionMap: make(map[string]map[string]string),
+				chartMux:                  sync.Mutex{},
 			}
 			managerInstance.clusters = &libsveltosset.Set{}
 			if err := managerInstance.rebuildRegistrations(ctx, c); err != nil {
+				managerInstance = nil
+				return nil, err
+			}
+			if err := managerInstance.rebuildChartVersions(ctx, c); err != nil {
 				managerInstance = nil
 				return nil, err
 			}
@@ -127,6 +136,61 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1beta1
 		m.addClusterEntry(clusterKey)
 		m.addReleaseEntry(clusterKey, releaseKey)
 		m.addClusterSummaryEntry(clusterKey, releaseKey, clusterSummaryKey)
+	}
+}
+
+// RegisterVersionForChart registers the current version of given helm chart in a given cluster
+func (m *instance) RegisterVersionForChart(clusterNamespace, clusterName string,
+	chart *configv1beta1.HelmChart) {
+
+	// Only SveltosCLuster can be in pull mode
+	clusterType := libsveltosv1beta1.ClusterTypeSveltos
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+
+	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+
+	chartVersion := chart.ChartVersion
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	m.setChartVersion(clusterKey, releaseKey, chartVersion)
+}
+
+// GetVersionForChart returns current version of an helm chart in a given cluster
+func (m *instance) GetVersionForChart(clusterNamespace, clusterName string,
+	chart *configv1beta1.HelmChart) string {
+
+	// Only SveltosCLuster can be in pull mode
+	clusterType := libsveltosv1beta1.ClusterTypeSveltos
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+
+	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	version, _ := m.getChartVersion(clusterKey, releaseKey)
+	return version
+}
+
+// UnregisterVersionForChart removes the registered version of a Helm chart for a given cluster
+func (m *instance) UnregisterVersionForChart(clusterNamespace, clusterName, releaseNamespace, releaseName string) {
+	// Only SveltosCLuster can be in pull mode
+	clusterType := libsveltosv1beta1.ClusterTypeSveltos
+	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
+	releaseKey := m.GetReleaseKey(releaseNamespace, releaseName)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	if _, ok := m.perClusterChartVersionMap[clusterKey]; ok {
+		delete(m.perClusterChartVersionMap[clusterKey], releaseKey)
+
+		// Clean up cluster entry if it's now empty
+		if len(m.perClusterChartVersionMap[clusterKey]) == 0 {
+			delete(m.perClusterChartVersionMap, clusterKey)
+		}
 	}
 }
 
@@ -487,6 +551,21 @@ func (m *instance) addClusterSummaryEntry(clusterKey, releaseKey, clusterSummary
 	m.perClusterChartMap[clusterKey][releaseKey] = append(m.perClusterChartMap[clusterKey][releaseKey], clusterSummaryKey)
 }
 
+func (m *instance) setChartVersion(clusterKey, releaseKey, version string) {
+	if _, ok := m.perClusterChartVersionMap[clusterKey]; !ok {
+		m.perClusterChartVersionMap[clusterKey] = make(map[string]string)
+	}
+	m.perClusterChartVersionMap[clusterKey][releaseKey] = version
+}
+
+func (m *instance) getChartVersion(clusterKey, releaseKey string) (string, bool) {
+	if charts, ok := m.perClusterChartVersionMap[clusterKey]; ok {
+		version, exists := charts[releaseKey]
+		return version, exists
+	}
+	return "", false
+}
+
 // isClusterSummaryAlreadyRegistered returns true if a given ClusterSummary is already present in the slice
 func isClusterSummaryAlreadyRegistered(clusterSummaries []string, clusterSummaryKey string) bool {
 	for i := range clusterSummaries {
@@ -525,6 +604,28 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 	return nil
 }
 
+// rebuildChartVersions rebuilds internal structures to identify current helm versions
+// deployed in pull mode clusetrs
+// Relies completely on ClusterSummary.Status
+func (m *instance) rebuildChartVersions(ctx context.Context, c client.Client) error {
+	// Lock here
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+	err := c.List(ctx, clusterSummaryList)
+	if err != nil {
+		return err
+	}
+
+	for i := range clusterSummaryList.Items {
+		cs := &clusterSummaryList.Items[i]
+		m.addHelmVersions(cs)
+	}
+
+	return nil
+}
+
 // addManagers walks clusterSummary's status and registers it for each helm chart currently managed
 func (m *instance) addManagers(clusterSummary *configv1beta1.ClusterSummary) {
 	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -558,4 +659,34 @@ func (m *instance) addNonManagers(clusterSummary *configv1beta1.ClusterSummary) 
 			m.addClusterSummaryEntry(clusterKey, releaseKey, clusterSummaryKey)
 		}
 	}
+}
+
+// addHelmVersions walks clusterSummary's status and register helm versions for each chart managed
+func (m *instance) addHelmVersions(clusterSummary *configv1beta1.ClusterSummary) {
+	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType)
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if summary.Status == configv1beta1.HelmChartStatusManaging {
+			chartVersion := m.getVersion(clusterSummary, summary.ReleaseNamespace, summary.ReleaseName)
+			releaseKey := m.GetReleaseKey(summary.ReleaseNamespace, summary.ReleaseName)
+			m.setChartVersion(clusterKey, releaseKey, chartVersion)
+		}
+	}
+}
+
+func (m *instance) getVersion(clusterSummary *configv1beta1.ClusterSummary,
+	releaseNamespace, releaseName string) string {
+
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		hc := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		if hc.ReleaseNamespace == releaseNamespace &&
+			hc.ReleaseName == releaseName {
+
+			return hc.ChartVersion
+		}
+	}
+
+	return ""
 }

@@ -160,6 +160,12 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		}
 	}
 
+	// Get all clusters where deployment is required based on dependent ClusterProfile instances
+	depManager, err := dependencymanager.GetManagerInstance()
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+	}
+
 	// Get all clusters matching clusterSelector and ClusterRefs
 	matchingCluster, err := getMatchingClusters(ctx, r.Client, "", profileScope.GetSelector(),
 		profileScope.GetSpec().ClusterRefs, logger)
@@ -174,11 +180,6 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	}
 	matchingCluster = append(matchingCluster, clusterSetClusters...)
 
-	// Get all clusters where deployment is required based on dependent ClusterProfile instances
-	depManager, err := dependencymanager.GetManagerInstance()
-	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
-	}
 	profileRef := getKeyFromObject(r.Scheme, profileScope.Profile)
 	depClusters := depManager.GetClusterDeployments(profileRef)
 	matchingCluster = append(matchingCluster, depClusters...)

@@ -200,7 +200,6 @@ func InitializeManagerInstance(ctx context.Context, c client.Client, enabled boo
 			if enabled {
 				atomic.StoreInt32(&managerInstance.initialized, 0)
 				go managerInstance.rebuildState(ctx, c, logger)
-				go managerInstance.updateProfiles(ctx, c, logger)
 			} else {
 				atomic.StoreInt32(&managerInstance.initialized, 1)
 			}
@@ -476,9 +475,6 @@ func (m *instance) updateClusterProfile(ctx context.Context, c client.Client, cl
 
 func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger logr.Logger) {
 	for {
-		const interval = 30 * time.Second
-		time.Sleep(interval)
-
 		m.chartMux.Lock()
 
 		for profile := range m.profileToBeUpdated {
@@ -491,6 +487,9 @@ func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger l
 		}
 
 		m.chartMux.Unlock()
+
+		const interval = 30 * time.Second
+		time.Sleep(interval)
 	}
 }
 
@@ -504,6 +503,17 @@ func (m *instance) rebuildState(ctx context.Context, c client.Client, logger log
 		}
 		break
 	}
+
+	for profile := range m.profileToBeUpdated {
+		clusters := m.profileClusterRequests.getClusterDeployments(&profile)
+		logger.V(logsettings.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
+		err := m.updateProfileInstance(ctx, c, &profile, clusters)
+		if err == nil {
+			delete(m.profileToBeUpdated, profile)
+		}
+	}
+
+	go managerInstance.updateProfiles(ctx, c, logger)
 
 	atomic.StoreInt32(&managerInstance.initialized, 1)
 }
@@ -545,7 +555,7 @@ func (m *instance) rebuildStateWithClusterProfiles(ctx context.Context, c client
 		clusterProfileRef := &corev1.ObjectReference{Kind: configv1beta1.ClusterProfileKind,
 			APIVersion: configv1beta1.GroupVersion.String(), Name: clusterProfile.Name}
 		m.UpdateDependencies(clusterProfileRef, clusterProfile.Status.MatchingClusterRefs,
-			getPrerequesites(configv1beta1.ProfileKind, "", clusterProfile.Spec.DependsOn), logger)
+			getPrerequesites(configv1beta1.ClusterProfileKind, "", clusterProfile.Spec.DependsOn), logger)
 	}
 
 	return nil

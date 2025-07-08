@@ -1219,7 +1219,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName",
 		currentChart.ReleaseName, "version", currentChart.ChartVersion)
 
-	if currentChart.RegistryCredentialsConfig != nil {
+	if currentChart.RegistryCredentialsConfig != nil && currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
 		err = doLogin(registryOptions, currentChart.ReleaseNamespace, currentChart.RepositoryURL)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to login %v", err))

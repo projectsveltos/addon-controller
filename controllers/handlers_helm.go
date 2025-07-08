@@ -853,6 +853,12 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 	registryOptions.plainHTTP = getPlainHTTP(currentChart)
 	registryOptions.skipTLSVerify = getInsecureSkipTLSVerify(currentChart)
 
+	parsedURL, err := url.Parse(currentChart.RepositoryURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse registry URL '%s': %w", currentChart.RepositoryURL, err)
+	}
+	registryOptions.hostname = parsedURL.Host
+
 	if currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
 		credentialSecretNamespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -872,14 +878,13 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 			return registryOptions, err
 		}
 
-		username, password, hostname, err := getUsernameAndPasswordFromSecret(currentChart.RepositoryURL, secret)
+		username, password, err := getUsernameAndPasswordFromSecret(parsedURL.Host, secret)
 		if err != nil {
 			return registryOptions, err
 		}
 
 		registryOptions.username = username
 		registryOptions.password = password
-		registryOptions.hostname = hostname
 	}
 
 	return registryOptions, nil
@@ -912,7 +917,7 @@ func handleChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSumma
 	logger = logger.WithValues("releaseNamespace", currentChart.ReleaseNamespace, "releaseName",
 		currentChart.ReleaseName, "version", currentChart.ChartVersion)
 
-	if currentChart.RegistryCredentialsConfig != nil {
+	if currentChart.RegistryCredentialsConfig != nil && currentChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
 		err = doLogin(registryOptions, currentChart.ReleaseNamespace, currentChart.RepositoryURL)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to login %v", err))
@@ -3020,28 +3025,23 @@ func doLogin(registryOptions *registryClientOptions, releaseNamespace, registryU
 // a corev1.DockerConfigJsonKey field with a complete Docker configuration. If both, "username" and "password" are
 // empty a nil error will be returned.
 // Credit to https://github.com/kubepack/lib-helm
-func getUsernameAndPasswordFromSecret(registryURL string, secret *corev1.Secret) (username, password, host string, err error) {
-	parsedURL, err := url.Parse(registryURL)
-	if err != nil {
-		return "", "", "", fmt.Errorf("unable to parse registry URL '%s' while reconciling Secret '%s': %w",
-			registryURL, secret.Name, err)
-	}
+func getUsernameAndPasswordFromSecret(hostname string, secret *corev1.Secret) (username, password string, err error) {
 	if secret.Type == corev1.SecretTypeDockerConfigJson {
 		dockerCfg, err := dockerconfig.LoadFromReader(bytes.NewReader(secret.Data[corev1.DockerConfigJsonKey]))
 		if err != nil {
-			return "", "", "", fmt.Errorf("unable to load Docker config from Secret '%s': %w", secret.Name, err)
+			return "", "", fmt.Errorf("unable to load Docker config from Secret '%s': %w", secret.Name, err)
 		}
-		authConfig, err := dockerCfg.GetAuthConfig(parsedURL.Host)
+		authConfig, err := dockerCfg.GetAuthConfig(hostname)
 		if err != nil {
-			return "", "", "", fmt.Errorf("unable to get authentication data from Secret '%s': %w", secret.Name, err)
+			return "", "", fmt.Errorf("unable to get authentication data from Secret '%s': %w", secret.Name, err)
 		}
 
 		// Make sure that the obtained auth config is for the requested host.
 		// When the docker config does not contain the credentials for a host,
 		// the credential store returns an empty auth config.
 		// Refer: https://github.com/docker/cli/blob/v20.10.16/cli/config/credentials/file_store.go#L44
-		if credentials.ConvertToHostname(authConfig.ServerAddress) != parsedURL.Host {
-			return "", "", "", fmt.Errorf("no auth config for '%s' in the docker-registry Secret '%s'", parsedURL.Host, secret.Name)
+		if credentials.ConvertToHostname(authConfig.ServerAddress) != hostname {
+			return "", "", fmt.Errorf("no auth config for '%s' in the docker-registry Secret '%s'", hostname, secret.Name)
 		}
 		username = authConfig.Username
 		password = authConfig.Password
@@ -3050,11 +3050,11 @@ func getUsernameAndPasswordFromSecret(registryURL string, secret *corev1.Secret)
 	}
 	switch {
 	case username == "" && password == "":
-		return "", "", "", nil
+		return "", "", nil
 	case username == "" || password == "":
-		return "", "", "", fmt.Errorf("invalid '%s' secret data: required fields 'username' and 'password'", secret.Name)
+		return "", "", fmt.Errorf("invalid '%s' secret data: required fields 'username' and 'password'", secret.Name)
 	}
-	return username, password, parsedURL.Host, nil
+	return username, password, nil
 }
 
 func requeueAllOtherClusterSummaries(ctx context.Context, c client.Client,

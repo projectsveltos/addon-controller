@@ -286,6 +286,9 @@ var _ = Describe("Helm", func() {
 				nil, charts)
 		}
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
 		deleteClusterProfile(clusterProfile)
 
 		Byf("Verifying kyverno deployment is removed from workload cluster")

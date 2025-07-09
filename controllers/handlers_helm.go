@@ -446,7 +446,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 			if len(otherRegisteredClusterSummaries) > 1 {
 				// Set an artificial high tier. this allows other ClusterSummary to take over the
 				// management of helm chart
-
+				logger.V(logs.LogInfo).Info("can manage but other profiles wants to take it over")
 				if clusterSummary.Spec.ClusterProfileSpec.Tier != math.MaxInt32 {
 					l.V(logs.LogDebug).Info("adjust tier for chart")
 					clusterSummary.Spec.ClusterProfileSpec.Tier = math.MaxInt32

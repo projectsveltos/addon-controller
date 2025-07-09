@@ -60,6 +60,9 @@ var _ = Describe("Helm with conflicts", func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
 		Expect(err).To(BeNil())
@@ -90,12 +93,34 @@ var _ = Describe("Helm with conflicts", func() {
 		addSparkHelmChart(clusterProfile2.Name, sparkVersion)
 
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile2.Name}, currentClusterProfile)).To(Succeed())
-		clusterSummary = verifyClusterSummary(clusterops.ClusterProfileLabelName,
+		clusterSummary2 := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
+		Byf("Verify ClusterSummary %s reports error confict", clusterSummary2.Name)
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary2.Namespace, Name: clusterSummary2.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+
+			for i := range currentClusterSummary.Status.FeatureSummaries {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+					return currentClusterSummary.Status.FeatureSummaries[i].Status ==
+						libsveltosv1beta1.FeatureStatusFailedNonRetriable
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		Byf("Deleting clusterProfile %s", clusterProfile.Name)
 		deleteClusterProfile(clusterProfile)
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary2.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary2.Name, libsveltosv1beta1.FeatureHelm)
 
 		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
 			// In pull-mode handing over to old conflicting profile is a best effort try.

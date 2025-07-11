@@ -102,6 +102,8 @@ github.com/fluxcd/pkg/apis/meta v1.12.0 h1:XW15TKZieC2b7MN8VS85stqZJOx+/b8jATQ/x
 github.com/fluxcd/pkg/apis/meta v1.12.0/go.mod h1:+son1Va60x2eiDcTwd7lcctbI6C+K3gM7R+ULmEq1SI=
 github.com/fluxcd/pkg/http/fetch v0.16.0 h1:XzhBTSK5HNdAPEnEGMJHwtoN2LfqQ9QFDsu3DGzl908=
 github.com/fluxcd/pkg/http/fetch v0.16.0/go.mod h1:+A+yrOzwA5436ufD8NPeCCQFNzk4metoPUgRVCozvzw=
+github.com/fluxcd/pkg/http/fetch v0.17.0 h1:U/Fuh+H1cRL2d/EOfdsjJPaPDPtL3pFanPSE3HtVU1s=
+github.com/fluxcd/pkg/http/fetch v0.17.0/go.mod h1:nMozZtiSKtPGwMrR5wGjIJoQmhvFqZ5P4UsM/Lqza2I=
 github.com/fluxcd/pkg/tar v0.12.0 h1:og6F+ivnWNRbNJSq0ukCTVs7YrGIlzjxSVZU+E8NprM=
 github.com/fluxcd/pkg/tar v0.12.0/go.mod h1:Ra5Cj++MD5iCy7bZGKJJX3GpOeMPv+ZDkPO9bBwpDeU=
 github.com/fluxcd/pkg/tar v0.13.0 h1:AS3FdsoJfweNQ+hZQQ3AgNPBeEEd4kKFQpR0c3lCF24=
@@ -189,6 +191,8 @@ github.com/hashicorp/go-multierror v1.1.1 h1:H5DkEtf6CXdFp0N0Em5UCwQpXMWke8IA0+l
 github.com/hashicorp/go-multierror v1.1.1/go.mod h1:iw975J/qwKPdAO1clOe2L8331t/9/fmwbPZ6JB6eMoM=
 github.com/hashicorp/go-retryablehttp v0.7.7 h1:C8hUCYzor8PIfXHa4UrZkU4VvK8o9ISHxT2Q8+VepXU=
 github.com/hashicorp/go-retryablehttp v0.7.7/go.mod h1:pkQpWZeYWskR+D1tR2O5OcBFOxfA7DoAO6xtkuQnHTk=
+github.com/hashicorp/go-retryablehttp v0.7.8 h1:ylXZWnqa7Lhqpk0L1P1LzDtGcCR0rPVUrx/c8Unxc48=
+github.com/hashicorp/go-retryablehttp v0.7.8/go.mod h1:rjiScheydd+CxvumBsIrFKlx3iS0jrZ7LvzFGFmuKbw=
 github.com/hashicorp/golang-lru/arc/v2 v2.0.5 h1:l2zaLDubNhW4XO3LnliVj0GXO3+/CGNJAg1dcN2Fpfw=
 github.com/hashicorp/golang-lru/arc/v2 v2.0.5/go.mod h1:ny6zBSQZi2JxIeYcv7kt2sH2PXJtirBN7RDhRpxPkxU=
 github.com/hashicorp/golang-lru/v2 v2.0.5 h1:wW7h1TG88eUIJ2i69gaE3uNVtEPIagzhGvHgwfx2Vm4=

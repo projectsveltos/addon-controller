@@ -9,7 +9,7 @@ require (
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v28.3.2+incompatible
 	github.com/fluxcd/pkg/http/fetch v0.16.0
-	github.com/fluxcd/pkg/tar v0.12.0
+	github.com/fluxcd/pkg/tar v0.13.0
 	github.com/fluxcd/source-controller/api v1.6.2
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.3
@@ -163,7 +163,7 @@ require (
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.29.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect

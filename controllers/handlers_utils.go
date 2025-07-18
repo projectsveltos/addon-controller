@@ -237,7 +237,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 
 	// Only for SveltosCluster in pull mode and when the content must be deployed in the managed cluster
 	// If deployingToMgmtCluster is true, we are deploying to the management cluster so proceed with deployUnstructured
-	if destClient == nil && !deployingToMgmtCluster {
+	if destConfig == nil && !deployingToMgmtCluster {
 		bundleResources := make(map[string][]unstructured.Unstructured)
 		key := fmt.Sprintf("%s-%s-%s", ref.Kind, ref.Namespace, ref.Name)
 		bundleResources[key] = convertPointerSliceToValueSlice(resources)
@@ -1380,6 +1380,11 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 	}
 	if clusterSummary.Spec.ClusterProfileSpec.StopMatchingBehavior == configv1beta1.LeavePolicies {
 		setters = append(setters, pullmode.WithLeavePolicies())
+	}
+
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+	if adminName != "" {
+		setters = append(setters, pullmode.WithServiceAccount(adminNamespace, adminName))
 	}
 
 	setters = append(setters, pullmode.WithRequestorHash(configurationHash))

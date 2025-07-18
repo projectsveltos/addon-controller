@@ -175,6 +175,7 @@ func (m *clusterCache) GetKubernetesClient(ctx context.Context, mgmtClient clien
 	if err != nil {
 		return nil, err
 	}
+
 	logger.V(logs.LogVerbose).Info("return new client")
 	return client.New(config, client.Options{Scheme: mgmtClient.Scheme()})
 }

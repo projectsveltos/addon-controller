@@ -85,11 +85,11 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterSummary, featureHandler, logger)
 
 	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
-	return postProcessDeployedResources(ctx, remoteRestConfig, remoteClient, clusterSummary, localResourceReports,
+	return postProcessDeployedResources(ctx, remoteRestConfig, clusterSummary, localResourceReports,
 		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
 }
 
-func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
+func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Config,
 	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport,
 	deployError error, isPullMode bool, configurationHash []byte, logger logr.Logger) error {
 
@@ -146,8 +146,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	// Agent in the managed cluster will take care of this for SveltosClusters in pull mode. We still need to
 	// clean stale resources deployed in the management cluster
 	var undeployed []libsveltosv1beta1.ResourceReport
-	_, undeployed, err = cleanStaleResources(ctx, remoteRestConfig, remoteClient, clusterSummary,
-		localResourceReports, remoteResourceReports, logger)
+	_, undeployed, err = cleanStaleResources(ctx, clusterSummary, localResourceReports, remoteResourceReports, logger)
 	if err != nil {
 		return err
 	}
@@ -191,9 +190,25 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 		libsveltosv1beta1.FeatureResources, logger)
 }
 
-func cleanStaleResources(ctx context.Context, remoteRestConfig *rest.Config, remoteClient client.Client,
-	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport,
-	logger logr.Logger) (localUndeployed, remoteUndeployed []libsveltosv1beta1.ResourceReport, err error) {
+func cleanStaleResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport, logger logr.Logger,
+) (localUndeployed, remoteUndeployed []libsveltosv1beta1.ResourceReport, err error) {
+
+	// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
+	// use cluster-admin account to do the removal
+	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType,
+		logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cacheMgr := clustercache.GetManager()
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Clean stale resources in the management cluster
 	localUndeployed, err = cleanPolicyRefResources(ctx, true, getManagementClusterConfig(), getManagementClusterClient(),
@@ -366,15 +381,17 @@ func undeployResources(ctx context.Context, c client.Client,
 			return combinedErr
 		}
 	} else {
+		// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
+		// use cluster-admin account to do the removal
 		remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
-			adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+			"", "", clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
 			return err
 		}
 
 		cacheMgr := clustercache.GetManager()
 		remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-			adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+			"", "", clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
 			return err
 		}

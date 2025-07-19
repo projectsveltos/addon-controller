@@ -363,6 +363,9 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		string(libsveltosv1beta1.FeatureHelm), logger)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			_ = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+				string(libsveltosv1beta1.FeatureHelm), logger)
 			return err
 		}
 	} else {
@@ -4043,7 +4046,7 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
 
-	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, action, logger)
+	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, action, rInfo, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -4180,19 +4183,19 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 
 func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	currentChart *configv1beta1.HelmChart, resources []*unstructured.Unstructured,
-	action helmAction, logger logr.Logger) error {
+	action helmAction, rInfo *releaseInfo, logger logr.Logger) error {
 
 	baseKey := fmt.Sprintf("%s-%s-%s", currentChart.ReleaseNamespace, currentChart.ReleaseName,
 		currentChart.RepositoryName)
-	bundleResources := make(map[string][]unstructured.Unstructured)
 
 	bundles := splitResources(resources, currentChart.ReleaseNamespace)
 
 	for i := range bundles {
 		key := fmt.Sprintf("%s-%d", baseKey, i)
+		bundleResources := make(map[string][]unstructured.Unstructured)
 		bundleResources[key] = convertPointerSliceToValueSlice(bundles[i])
 
-		setters := prepareBundleSetters(currentChart, action == uninstall, i == len(bundles)-1)
+		setters := prepareBundleSetters(currentChart, action == uninstall, i == len(bundles)-1, rInfo)
 
 		err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -4207,13 +4210,16 @@ func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *config
 	return nil
 }
 
-func prepareBundleSetters(currentChart *configv1beta1.HelmChart, isUninstall, isLast bool) []pullmode.BundleOption {
+func prepareBundleSetters(currentChart *configv1beta1.HelmChart, isUninstall, isLast bool,
+	rInfo *releaseInfo) []pullmode.BundleOption {
+
 	setters := make([]pullmode.BundleOption, 0)
 
 	timeout := getTimeoutValue(currentChart.Options)
 	setters = append(setters,
 		pullmode.WithTimeout(&timeout),
-		pullmode.WithReleaseInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName, isUninstall, isLast))
+		pullmode.WithReleaseInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName,
+			currentChart.RepositoryURL, rInfo.ChartVersion, rInfo.Icon, isUninstall, isLast))
 
 	return setters
 }

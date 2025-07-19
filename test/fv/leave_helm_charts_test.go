@@ -103,15 +103,13 @@ var _ = Describe("Helm", func() {
 			Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-			if !isPullMode() {
-				charts := []configv1beta1.Chart{
-					{ReleaseName: minioReleaseName, ChartVersion: "7.1.1", Namespace: minioNamespace},
-				}
-
-				verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-					clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-					nil, charts)
+			charts := []configv1beta1.Chart{
+				{ReleaseName: minioReleaseName, ChartVersion: "7.1.1", Namespace: minioNamespace},
 			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 
 			Byf("Changing clusterprofile ClusterSelector so Cluster is not a match anymore")
 			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())

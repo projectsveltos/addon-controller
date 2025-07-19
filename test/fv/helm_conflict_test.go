@@ -75,14 +75,12 @@ var _ = Describe("Helm with conflicts", func() {
 				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
-			}
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		By("Creating a second ClusterProfile which conflicts with first ClusterProfile")
 		clusterProfile2 := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -142,14 +140,12 @@ var _ = Describe("Helm with conflicts", func() {
 			}, timeout/2, pollingInterval).Should(BeNil())
 		}
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
-			}
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
 		}
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Deleting clusterProfile %s", clusterProfile2.Name)
 		deleteClusterProfile(clusterProfile2)

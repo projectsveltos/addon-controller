@@ -148,16 +148,14 @@ var _ = Describe("Helm", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.3.4", Namespace: "kyverno"},
-				{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.4", Namespace: "kyverno"},
+			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for kyverno and update extra labels")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -220,16 +218,14 @@ var _ = Describe("Helm", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
-				{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
+			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Verifying kyverno deployment has proper labels/annotations")
 		Expect(workloadClient.Get(context.TODO(),
@@ -276,15 +272,13 @@ var _ = Describe("Helm", func() {
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)

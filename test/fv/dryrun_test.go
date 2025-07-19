@@ -157,15 +157,13 @@ var _ = Describe("DryRun", func() {
 
 			verifyDeployedGroupVersionKind(clusterProfile.Name)
 
-			if !isPullMode() {
-				charts := []configv1beta1.Chart{
-					{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
-				}
-
-				verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-					clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-					nil, charts)
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
 			}
+
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 
 			policies := []policy{
 				{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},

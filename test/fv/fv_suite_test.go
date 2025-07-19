@@ -234,21 +234,3 @@ func verifySveltosCluster() {
 	})
 	Expect(err).To(BeNil())
 }
-
-func isPullMode() bool {
-	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
-		clusterList := &libsveltosv1beta1.SveltosClusterList{}
-		listOptions := []client.ListOption{
-			client.MatchingLabels(
-				map[string]string{"cluster-name": "clusterapi-workload"}, // This label is added by Makefile
-			),
-		}
-
-		Expect(k8sClient.List(context.TODO(), clusterList, listOptions...)).To(Succeed())
-		Expect(len(clusterList.Items)).To(Equal(1))
-
-		return clusterList.Items[0].Spec.PullMode
-	}
-
-	return false
-}

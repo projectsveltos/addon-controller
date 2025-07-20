@@ -83,7 +83,7 @@ var _ = Describe("Feature", func() {
 				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
 				RepositoryName:   "prometheus-community",
 				ChartName:        "prometheus-community/kube-prometheus-stack",
-				ChartVersion:     "70.3.0",
+				ChartVersion:     "75.9.0",
 				ReleaseName:      "kube-prometheus-stack",
 				ReleaseNamespace: "kube-prometheus-stack",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -98,6 +98,17 @@ var _ = Describe("Feature", func() {
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "kube-prometheus-stack", ChartVersion: "75.9.0", Namespace: "kube-prometheus-stack"},
+		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
+
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
 		Expect(err).To(BeNil())
@@ -109,19 +120,6 @@ var _ = Describe("Feature", func() {
 			return workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
-
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kube-prometheus-stack", ChartVersion: "70.3.0", Namespace: "kube-prometheus-stack"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
-		}
-
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		deleteClusterProfile(clusterProfile)
 

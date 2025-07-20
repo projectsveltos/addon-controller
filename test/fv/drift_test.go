@@ -299,15 +299,13 @@ reportsController:
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		if isAgentLessMode() {
 			verifyResourceSummary(k8sClient, clusterSummary)

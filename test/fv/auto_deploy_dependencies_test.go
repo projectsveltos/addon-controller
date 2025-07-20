@@ -165,14 +165,12 @@ var _ = Describe("Feature", func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
-			}
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
-				helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
 		}
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
+			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		policies := []policy{
 			{kind: "ClusterPolicy", name: "disallow-latest-tag", namespace: "", group: "kyverno.io"},

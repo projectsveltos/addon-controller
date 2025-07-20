@@ -92,15 +92,13 @@ var _ = Describe("Helm", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "vault", ChartVersion: "1.6.0", Namespace: "vault"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "vault", ChartVersion: "1.6.0", Namespace: "vault"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile requiring different chart version for vault")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -131,15 +129,13 @@ var _ = Describe("Helm", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "vault", ChartVersion: "1.5.0", Namespace: "vault"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "vault", ChartVersion: "1.5.0", Namespace: "vault"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 

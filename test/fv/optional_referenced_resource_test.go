@@ -129,15 +129,13 @@ metadata:
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		policies := []policy{
 			{kind: "Namespace", name: resourceNamespace, namespace: "", group: ""},

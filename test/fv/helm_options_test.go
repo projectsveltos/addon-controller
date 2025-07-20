@@ -104,15 +104,13 @@ var _ = Describe("HelmOptions", func() {
 		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
 		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.17.0"))
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "external-dns", ChartVersion: "1.17.0", Namespace: "external-dns"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "external-dns", ChartVersion: "1.17.0", Namespace: "external-dns"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Update ClusterProfile %s to upgrade external-dns helm charts", clusterProfile.Name)
 

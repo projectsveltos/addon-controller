@@ -144,16 +144,14 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
 			libsveltosv1beta1.FeatureHelm)
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
-				{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 	})

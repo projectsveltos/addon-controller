@@ -171,16 +171,14 @@ var _ = Describe("Feature", Serial, func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		if !isPullMode() {
-			charts := []configv1beta1.Chart{
-				{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
-				{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts := []configv1beta1.Chart{
+			{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
+			{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		policies := []policy{
 			{kind: "Namespace", name: resourceNamespace, namespace: "", group: ""},

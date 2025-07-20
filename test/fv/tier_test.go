@@ -118,11 +118,9 @@ var _ = Describe("Helm", Serial, func() {
 			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
 
-		if !isPullMode() {
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
-		}
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Creating another ClusterProfile matching the cluster")
 		newClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -164,11 +162,9 @@ var _ = Describe("Helm", Serial, func() {
 			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusConflict
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		if !isPullMode() {
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
-		}
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		Byf("Changing ClusterProfile %s tier", newClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -193,24 +189,22 @@ var _ = Describe("Helm", Serial, func() {
 			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusManaging
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		if !isPullMode() {
-			charts = []configv1beta1.Chart{
-				{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
-				{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
-
-			charts = []configv1beta1.Chart{
-				{ReleaseName: "kyverno-latest", ChartVersion: "3.2.5", Namespace: "kyverno"},
-			}
-
-			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
-				newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-				nil, charts)
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
+
+		charts = []configv1beta1.Chart{
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.2.5", Namespace: "kyverno"},
+		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
+			newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
 
 		deleteClusterProfile(clusterProfile)
 		deleteClusterProfile(newClusterProfile)

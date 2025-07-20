@@ -22,6 +22,9 @@ Sveltos allows you to represent add-ons and applications as templates. Before de
 Sveltos provides precise control over add-on deployment order. Add-ons within a Profile/ClusterProfile are deployed in the exact order they appear, ensuring a predictable and controlled rollout. Furthermore, ClusterProfiles can depend on others, guaranteeing that dependent add-ons only deploy after their dependencies are fully operational. Finally Sveltos' event-driven framework offers additional flexibility. This framework allows for deploying add-ons and applications in response to specific events, enabling dynamic and adaptable deployments based on your needs.
 
 👉 To get updates [⭐️ star](https://github.com/projectsveltos/addon-controller/stargazers) this repository.
+[![Star History Chart](https://api.star-history.com/svg?repos=projectsveltos/addon-controller&type=Date)](https://www.star-history.com/#projectsveltos/addon-controller&Date)
+
+## Sveltos Dashboard Demo
 
 [![Sveltos Dashboard](https://img.youtube.com/vi/GspTTGAmQwk/0.jpg)](https://www.youtube.com/watch?v=GspTTGAmQwk)
 

@@ -311,8 +311,6 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("undeployHelmCharts (pullMode %t)", isPullMode))
-
 	if isPullMode {
 		mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 		if err != nil {
@@ -363,9 +361,6 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		string(libsveltosv1beta1.FeatureHelm), logger)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			_ = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-				string(libsveltosv1beta1.FeatureHelm), logger)
 			return err
 		}
 	} else {
@@ -509,6 +504,8 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 
 func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kubeconfig string, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("undeployHelmChartResources")
 
 	releaseReports, err := uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
@@ -2937,6 +2934,7 @@ func collectHelmDeleteHooks(result *release.Release, logger logr.Logger) ([]*uns
 			logger.Error(err, "failed to parse hook manifest")
 			return nil, err
 		}
+
 		resources = append(resources, hookResources...)
 	}
 
@@ -4094,7 +4092,7 @@ func appendResources(result [][]*unstructured.Unstructured,
 // 1. pre install/upgrade are stored in their own subgroups before anything else
 // 2. then pre delete are stored in their own subgroups
 // 3. then each CRD instance is in its own group with no other resources
-// 4. then other resources (not hook ones) no more than 10 resources are put in the same group
+// 4. then other resources (not hook ones) no more than 15 resources are put in the same group
 // 5. then post install/upgrade are stored in their own subgroups
 // 6. then post delete are stored in their own subgroups
 // If operation is install there are no pre/post delete resources
@@ -4102,14 +4100,17 @@ func appendResources(result [][]*unstructured.Unstructured,
 func splitResources(resources []*unstructured.Unstructured, releaseNamespace string,
 ) [][]*unstructured.Unstructured {
 
-	var crdInstances []*unstructured.Unstructured
-	var preInstallHooks []*unstructured.Unstructured
-	var postInstallHooks []*unstructured.Unstructured
-	var preRollbackHooks []*unstructured.Unstructured
-	var postRollbackHooks []*unstructured.Unstructured
-	var preDeleteHooks []*unstructured.Unstructured
-	var postDeleteHooks []*unstructured.Unstructured
-	var otherResources []*unstructured.Unstructured
+	var (
+		crdInstances          []*unstructured.Unstructured
+		preInstallHooks       []*unstructured.Unstructured
+		postInstallHooks      []*unstructured.Unstructured
+		preRollbackHooks      []*unstructured.Unstructured
+		postRollbackHooks     []*unstructured.Unstructured
+		preDeleteHooks        []*unstructured.Unstructured
+		postDeleteHooks       []*unstructured.Unstructured
+		hookDeleteAnnotations []*unstructured.Unstructured
+		otherResources        []*unstructured.Unstructured
+	)
 
 	// Separate CRD instances from other resources
 	for _, resource := range resources {
@@ -4135,12 +4136,15 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 		} else if isHookResource(resource, "post-rollback") {
 			resource.SetNamespace(releaseNamespace)
 			postRollbackHooks = append(postRollbackHooks, resource)
-		} else if isHookResource(resource, "pre-delete") || hasHookDeleteAnnotation(resource) {
+		} else if isHookResource(resource, "pre-delete") {
 			resource.SetNamespace(releaseNamespace)
 			preDeleteHooks = append(preDeleteHooks, resource)
-		} else if isHookResource(resource, "post-delete") || hasHookDeleteAnnotation(resource) {
+		} else if isHookResource(resource, "post-delete") {
 			resource.SetNamespace(releaseNamespace)
 			postDeleteHooks = append(postDeleteHooks, resource)
+		} else if hasHookDeleteAnnotation(resource) {
+			resource.SetNamespace(releaseNamespace)
+			hookDeleteAnnotations = append(hookDeleteAnnotations, resource)
 		} else {
 			// resources collected do not have the namespace set, even though release namespace is defined
 			// Irrespective of whether resources are namespaced or not, set namespace to be the release namespace
@@ -4157,6 +4161,9 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 
 	// Put pre rollback instances in subgroups of no more than 15
 	result = appendResources(result, preRollbackHooks)
+
+	// Put hookDeleteAnnotations instances in subgroups of no more than 15
+	result = appendResources(result, hookDeleteAnnotations)
 
 	// Put pre delete instances in subgroups of no more than 15
 	result = appendResources(result, preDeleteHooks)

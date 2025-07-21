@@ -42,7 +42,7 @@ spec:
   - repositoryURL:    https://projectcalico.docs.tigera.io/charts
     repositoryName:   projectcalico
     chartName:        projectcalico/tigera-operator
-    chartVersion:     v3.30.1
+    chartVersion:     v3.30.2
     releaseName:      calico
     releaseNamespace: tigera-operator
     helmChartAction:  Install

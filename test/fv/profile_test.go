@@ -99,6 +99,10 @@ var _ = Describe("Profile", func() {
 		clusterSummary := verifyClusterSummary(clusterops.ProfileLabelName, currentProfile.Name, &currentProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
+			libsveltosv1beta1.FeatureResources)
+
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
 		Expect(err).To(BeNil())

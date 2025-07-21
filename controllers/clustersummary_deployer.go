@@ -353,6 +353,17 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 		return err
 	}
 
+	if isPullMode {
+		// In general:
+		// - an undeploy creates a ConfigurationGroup with Action: Remove and result is fetched via GetRemoveStatus
+		// - a deploy creates a ConfigurationGroup with Action: Deploy and result if fetched via GetDeploymentStatus
+		// but in case of helm, undeploy first creates a ConfigurationGroup with Action: Deploy so that delete
+		// hooks can be installed. Cleaning this makes sure we dont confuse ConfigurationGroup.
+		if err := cleanPreviousActiveTracking(ctx, clusterSummary, f, logger); err != nil {
+			return err
+		}
+	}
+
 	return r.processUndeployResult(ctx, clusterSummaryScope, f, isPullMode, logger)
 }
 
@@ -435,6 +446,34 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 	}
 
 	return fmt.Errorf("cleanup request is queued")
+}
+
+func cleanPreviousActiveTracking(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, f feature,
+	logger logr.Logger) error {
+
+	// If a ConfigurationGroup exists and was previously managed by this ClusterSummary, remove it.
+	// This is done when the source ClusterSummary is no longer in a "deleted" state,
+	// indicating a need to clean up an older, potentially obsolete ConfigurationGroup.
+	sourceStatus, err := pullmode.GetSourceStatus(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+		string(f.id), logger)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	if sourceStatus != nil && *sourceStatus == libsveltosv1beta1.SourceStatusActive {
+		logger.V(logs.LogInfo).Info("configurationGroup sourceStatus was active. Remove it.")
+		err = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+			string(f.id), logger)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) processUndeployResultInPullMode(ctx context.Context,

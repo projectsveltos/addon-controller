@@ -1382,6 +1382,12 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		setters = append(setters, pullmode.WithLeavePolicies())
 	}
 
+	if !clusterSummary.DeletionTimestamp.IsZero() {
+		setters = append(setters, pullmode.WithSourceStatus(libsveltosv1beta1.SourceStatusDeleted))
+	} else {
+		setters = append(setters, pullmode.WithSourceStatus(libsveltosv1beta1.SourceStatusActive))
+	}
+
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	if adminName != "" {
 		setters = append(setters, pullmode.WithServiceAccount(adminNamespace, adminName))

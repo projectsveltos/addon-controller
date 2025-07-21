@@ -8,7 +8,7 @@
 # Both ConfigMaps contain templates.
 # serviceaccount-autoscaler will create in the management cluster, in the
 # cluster namespace a ServiceAccount and a Secret. This very same Secret
-# will then be fecthed and used to instantiate the content of the secret-autoscaler
+# will then be fetched and used to instantiate the content of the secret-autoscaler
 # ConfigMap.
 # This essentially will create a ServiceAccount in the management cluster
 # for autoscaler. Then pass corresponding token/ca.crt to the managed cluster

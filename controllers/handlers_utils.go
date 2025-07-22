@@ -205,6 +205,25 @@ func getSubresources(referencedObject client.Object) []string {
 	return nil
 }
 
+// return a slice of ResourceReports. Only Resource is set within each report
+func prepareReports(resources []*unstructured.Unstructured) []libsveltosv1beta1.ResourceReport {
+	reports := make([]libsveltosv1beta1.ResourceReport, len(resources))
+
+	for i := range reports {
+		reports[i] = libsveltosv1beta1.ResourceReport{
+			Resource: libsveltosv1beta1.Resource{
+				Name:      resources[i].GetName(),
+				Namespace: resources[i].GetNamespace(),
+				Kind:      resources[i].GetKind(),
+				Group:     resources[i].GroupVersionKind().Group,
+				Version:   resources[i].GroupVersionKind().Version,
+			},
+		}
+	}
+
+	return reports
+}
+
 // deployContent deploys policies contained in a ConfigMap/Secret.
 // data might have one or more keys. Each key might contain a single policy
 // or multiple policies separated by '---'
@@ -242,9 +261,14 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		key := fmt.Sprintf("%s-%s-%s", ref.Kind, ref.Namespace, ref.Name)
 		bundleResources[key] = convertPointerSliceToValueSlice(resources)
 
-		return nil, pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-			string(libsveltosv1beta1.FeatureResources), bundleResources, false, logger)
+		// In pull mode we return reports with action Create. Those will only be used to update deployed GVK.
+		// sveltos-applier will take care of sending proper reports
+
+		return prepareReports(resources),
+			pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
+				bundleResources, false, logger)
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref,

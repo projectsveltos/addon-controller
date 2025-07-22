@@ -4042,6 +4042,15 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 		}
 	}
 
+	// Update Deployed GVK. In case ClusterSummary is deleted while applier is still deploying this content,
+	// we know what needs to be deleted
+	currentReports := prepareReports(resources)
+	_, err = updateDeployedGroupVersionKind(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm,
+		nil, currentReports, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
 
 	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, action, rInfo, logger)

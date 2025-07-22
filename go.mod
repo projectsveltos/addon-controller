@@ -19,7 +19,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v0.57.3-0.20250721190813-905d5d400e56
 	github.com/prometheus/client_golang v1.22.0
-	github.com/spf13/pflag v1.0.6
+	github.com/spf13/pflag v1.0.7
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.27.0
 	gopkg.in/yaml.v3 v3.0.1

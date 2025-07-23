@@ -4817,6 +4817,7 @@ rules:
   - events
   verbs:
   - create
+  - patch
   - update
 - apiGroups:
   - '*'

@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -462,7 +463,8 @@ func (m *manager) notifyConsumer(consumer *corev1.ObjectReference) {
 			currentRequestor.Namespace, currentRequestor.Name))
 		// reset hash
 		for i := range currentRequestor.Status.FeatureSummaries {
-			currentRequestor.Status.FeatureSummaries[i].Hash = nil
+			const length = 20
+			currentRequestor.Status.FeatureSummaries[i].Hash = []byte(util.RandomString(length))
 		}
 		return m.Status().Update(context.TODO(), currentRequestor)
 	})

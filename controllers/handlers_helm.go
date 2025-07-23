@@ -611,7 +611,9 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 
 	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
-		return nil, err
+		if !apierrors.IsNotFound(err) {
+			return nil, err
+		}
 	}
 
 	releaseReports := make([]configv1beta1.ReleaseReport, 0)

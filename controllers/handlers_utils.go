@@ -720,6 +720,10 @@ func deployReferencedObjects(ctx context.Context, c client.Client, remoteConfig 
 	var mgmtResources map[string]*unstructured.Unstructured
 	mgmtResources, err = collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			logger.V(logs.LogInfo).Info(err.Error())
+			return nil, nil, &configv1beta1.NonRetriableError{Message: err.Error()}
+		}
 		return nil, nil, err
 	}
 

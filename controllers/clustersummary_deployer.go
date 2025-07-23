@@ -97,7 +97,9 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Get hash of current configuration (at this very precise moment)
 	currentHash, err := f.currentHash(ctx, r.Client, clusterSummary, logger)
 	if err != nil {
-		return err
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
 	}
 	storedHash := r.getHash(clusterSummaryScope, f.id)
 

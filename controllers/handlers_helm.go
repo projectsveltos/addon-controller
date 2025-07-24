@@ -1335,26 +1335,8 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 		logger.V(logs.LogInfo).Info("non OCI. Download index file.")
 		_, err = chartRepo.DownloadIndexFile()
 		if err != nil {
-			// Check if error is "no chart version found for"
-			if strings.Contains(err.Error(), "no chart version found for") {
-				logger.V(logs.LogInfo).Info("Chart version not found, cleaning repository cache", "repo", entry.Name)
-
-				// Create the cache path for this repository
-				repoCache := filepath.Join(settings.RepositoryCache, helmpath.CacheIndexFile(entry.Name))
-
-				// Remove the cache file
-				if err := os.Remove(repoCache); err != nil {
-					logger.V(logs.LogDebug).Error(err, "Failed to remove repository cache")
-				}
-
-				// Try downloading again after clearing cache
-				_, err = chartRepo.DownloadIndexFile()
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-
+			logger.V(logs.LogDebug).Info(
+				fmt.Sprintf("Failed to download repository index: %v", err))
 			return err
 		}
 	}
@@ -1413,7 +1395,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	cp, err := installClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
-		logger.V(logs.LogDebug).Info("LocateChart failed")
+		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
 	}
 
@@ -1598,6 +1580,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	cp, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
 	if err != nil {
+		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
 	}
 
@@ -4323,4 +4306,54 @@ func getHelmActionInPullMode(ctx context.Context, clusterSummary *configv1beta1.
 		// In case same version, treat it as an upgrade
 		return upgrade, nil
 	}
+}
+
+func handleLocateChartError(settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
+	registryOptions *registryClientOptions, err error, logger logr.Logger) {
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("LocateChart failed %v", err))
+
+	if strings.Contains(err.Error(), "no chart version found for") {
+		logger.V(logs.LogInfo).Info("Chart version not found, cleaning repository cache",
+			"repo", requestedChart.RepositoryName)
+		removeCachedData(settings, requestedChart.RepositoryName, requestedChart.RepositoryURL,
+			registryOptions, logger)
+	}
+}
+
+func removeCachedData(settings *cli.EnvSettings, name, repoURL string, registryOptions *registryClientOptions,
+	logger logr.Logger) {
+
+	logger = logger.WithValues("repoURL", repoURL, "repoName", name)
+
+	entry := &repo.Entry{Name: name, URL: repoURL, Username: registryOptions.username, Password: registryOptions.password,
+		InsecureSkipTLSverify: registryOptions.skipTLSVerify}
+	chartRepo, err := repo.NewChartRepository(entry, getter.All(settings))
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get new chartRepository: %v", err))
+		return
+	}
+
+	chartRepo.CachePath = settings.RepositoryCache
+
+	if !storage.Has(entry.Name) {
+		return
+	}
+
+	// Remove from in-memory storage first
+	storage.Remove(entry.Name)
+
+	logger.V(logs.LogDebug).Info("repository name already exists")
+
+	if !registry.IsOCI(entry.URL) {
+		// Create the cache path for this repository
+		repoCache := filepath.Join(settings.RepositoryCache, helmpath.CacheIndexFile(entry.Name))
+
+		// Remove the cache file
+		if err := os.Remove(repoCache); err != nil {
+			logger.V(logs.LogDebug).Error(err, "Failed to remove repository cache")
+		}
+	}
+
+	_ = repoAddOrUpdate(settings, name, repoURL, registryOptions, logger)
 }

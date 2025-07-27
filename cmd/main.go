@@ -191,6 +191,7 @@ func main() {
 
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
+	controllers.NewSveltosClusterManager()
 
 	if shardKey == "" && !disableTelemetry {
 		err = telemetry.StartCollecting(ctx, mgr.GetClient(), version)
@@ -587,6 +588,13 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 	var err error
 
 	//+kubebuilder:scaffold:builder
+	if err = (&controllers.SveltosClusterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SveltosCluster")
+		os.Exit(1)
+	}
 
 	watchersForCAPI := make([]watcherForCAPI, 0)
 	watchersForFlux := make([]watcherForFlux, 0)

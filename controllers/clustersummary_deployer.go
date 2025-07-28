@@ -467,12 +467,11 @@ func cleanPreviousActiveTracking(ctx context.Context, clusterSummary *configv1be
 
 	if sourceStatus != nil && *sourceStatus == libsveltosv1beta1.SourceStatusActive {
 		logger.V(logs.LogInfo).Info("configurationGroup sourceStatus was active. Remove it.")
-		err = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+		_ = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
 			clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
 			string(f.id), logger)
-		if err != nil {
-			return err
-		}
+		// Return an error to make sure cache is synced by next
+		return errors.New("provisioning ConfigurationGroup (active source) was still present")
 	}
 
 	return nil

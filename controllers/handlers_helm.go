@@ -361,6 +361,7 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		string(libsveltosv1beta1.FeatureHelm), logger)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to GetDeploymentStatus: %v", err))
 			return err
 		}
 	} else {
@@ -381,6 +382,12 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		} else if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioning {
 			logger.V(logs.LogInfo).Info("Applier is handling delete hooks")
 			return nil
+		} else if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusFailed {
+			msg := "Applier failed."
+			if status.FailureMessage != nil {
+				msg += fmt.Sprintf("Failure message: %s", *status.FailureMessage)
+			}
+			logger.V(logs.LogInfo).Info(msg)
 		}
 	}
 

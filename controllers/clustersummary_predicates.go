@@ -28,6 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -319,4 +321,75 @@ func isArtifactSame(oldArtifact, newArtifact *sourcev1.Artifact) bool {
 	}
 
 	return reflect.DeepEqual(oldArtifact.Digest, newArtifact.Digest)
+}
+
+// ClusterSummaryStatusPredicate is a custom predicate that filters ClusterSummary s events
+type ClusterSummaryPredicate struct {
+	Logger logr.Logger
+}
+
+func (p ClusterSummaryPredicate) Create(e event.CreateEvent) bool {
+	// Always reconcile on creation
+	return true
+}
+
+func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
+	newClusterSummary := e.ObjectNew.(*configv1beta1.ClusterSummary)
+	oldClusterSummary := e.ObjectOld.(*configv1beta1.ClusterSummary)
+	log := p.Logger.WithValues("predicate", "updateCLusterSummary",
+		"clusterSummary", newClusterSummary.Name,
+	)
+
+	if oldClusterSummary == nil {
+		log.V(logs.LogVerbose).Info("Old ClusterSummary is nil. Reconcile ClusterSummary.")
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClusterSummary.DeletionTimestamp, newClusterSummary.DeletionTimestamp) {
+		return true
+	}
+
+	if !reflect.DeepEqual(oldClusterSummary.Spec, newClusterSummary.Spec) {
+		log.V(logs.LogVerbose).Info(
+			"ClusterSummary Spec changed. Will attempt to reconcile ClusterSummary.",
+		)
+		return true
+	}
+
+	oldFS := getFeatureSummaryForFeatureID(oldClusterSummary, libsveltosv1beta1.FeatureHelm)
+	newFS := getFeatureSummaryForFeatureID(newClusterSummary, libsveltosv1beta1.FeatureHelm)
+	if !isFeatureSummarySame(oldFS, newFS) {
+		return true
+	}
+	oldFS = getFeatureSummaryForFeatureID(oldClusterSummary, libsveltosv1beta1.FeatureKustomize)
+	newFS = getFeatureSummaryForFeatureID(newClusterSummary, libsveltosv1beta1.FeatureKustomize)
+	if !isFeatureSummarySame(oldFS, newFS) {
+		return true
+	}
+	oldFS = getFeatureSummaryForFeatureID(oldClusterSummary, libsveltosv1beta1.FeatureResources)
+	newFS = getFeatureSummaryForFeatureID(newClusterSummary, libsveltosv1beta1.FeatureResources)
+	return !isFeatureSummarySame(oldFS, newFS)
+}
+
+func (p ClusterSummaryPredicate) Delete(e event.DeleteEvent) bool {
+	// Always reconcile on deletion
+	return true
+}
+
+func (p ClusterSummaryPredicate) Generic(e event.GenericEvent) bool {
+	// Ignore generic
+	return false
+}
+
+func isFeatureSummarySame(oldFS, newFS *configv1beta1.FeatureSummary) bool {
+	if oldFS == nil && newFS == nil {
+		// Both are nil
+		return true
+	} else if oldFS != nil && newFS != nil {
+		// Both are non-nil, compare hash
+		return reflect.DeepEqual(oldFS.Hash, newFS.Hash)
+	} else {
+		// One is nil and the other is not (out of sync)
+		return false
+	}
 }

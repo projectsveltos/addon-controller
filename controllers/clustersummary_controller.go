@@ -53,6 +53,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	license "github.com/projectsveltos/libsveltos/lib/licenses"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
@@ -335,11 +336,8 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	return reconcile.Result{}, nil
 }
 
-func (r *ClusterSummaryReconciler) reconcileNormal(
-	ctx context.Context,
-	clusterSummaryScope *scope.ClusterSummaryScope,
-	logger logr.Logger,
-) (reconcile.Result, error) {
+func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
 
 	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary")
 
@@ -355,7 +353,17 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		return reconcile.Result{}, nil
 	}
 
-	err := r.updateMaps(ctx, clusterSummaryScope, logger)
+	isEligible, err := r.verifyPullModeEligibility(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if !isEligible {
+		r.updateStatusWithMissingLicenseError(clusterSummaryScope, logger)
+		return reconcile.Result{}, nil
+	}
+
+	err = r.updateMaps(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -397,7 +405,13 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 		}
 	}
 
-	err = r.deploy(ctx, clusterSummaryScope, logger)
+	return r.proceedDeployingClusterSummary(ctx, clusterSummaryScope, logger)
+}
+
+func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
+
+	err := r.deploy(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		var conflictErr *deployer.ConflictError
 		ok := errors.As(err, &conflictErr)
@@ -423,7 +437,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1beta1.ClusterSummary{}).
+		For(&configv1beta1.ClusterSummary{}, builder.WithPredicates(ClusterSummaryPredicate{})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
@@ -1477,4 +1491,66 @@ func (r *ClusterSummaryReconciler) getClusterSummaryScope(ctx context.Context,
 	})
 
 	return clusterSummaryScope, err
+}
+
+func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (bool, error) {
+
+	cs := clusterSummaryScope.ClusterSummary
+
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, cs.Spec.ClusterNamespace,
+		cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		msg := fmt.Sprintf("failed to verify if Cluster is in pull mode: %v", err)
+		logger.V(logs.LogDebug).Info(msg)
+		return false, err
+	}
+
+	if !isPullMode {
+		return true, nil
+	}
+
+	// Pull mode requires a valid license
+	publicKey, err := license.GetPublicKey()
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get public key: %v", err))
+		return false, err
+	}
+
+	result := license.VerifyLicenseSecret(ctx, r.Client, publicKey, logger)
+	maxClusters := 0
+	if result.Payload != nil {
+		maxClusters = result.Payload.MaxClusters
+	}
+	if result.Message != "" {
+		logger.V(logs.LogDebug).Info(result.Message)
+	}
+
+	sveltosClusterManagerInstance := GetSveltosClusterManager()
+
+	if result.IsValid || result.IsInGracePeriod {
+		if maxClusters == 0 {
+			// Customer can have unlimited number of clusters in pull mode
+			return true, nil
+		}
+		// License is valid only for maxClusters in pull mode
+		return sveltosClusterManagerInstance.IsInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxClusters), nil
+	}
+
+	// Without license, 2 clusters in pull mode are still managed for free
+	const maxFreeClusters = 2
+	return sveltosClusterManagerInstance.IsInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxFreeClusters), nil
+}
+
+func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
+
+	notEligibleError := errors.New("License is required to manage SveltosCluster in pull mode")
+	failed := libsveltosv1beta1.FeatureStatusFailed
+	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureHelm, &failed, nil,
+		notEligibleError, logger)
+	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureKustomize, &failed, nil,
+		notEligibleError, logger)
+	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureResources, &failed, nil,
+		notEligibleError, logger)
 }

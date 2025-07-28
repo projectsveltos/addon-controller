@@ -99,4 +99,9 @@ resources:
   kind: Profile
   path: github.com/projectsveltos/addon-controller/api/v1beta1
   version: v1beta1
+- controller: true
+  domain: projectsveltos.io
+  group: lib
+  kind: SveltosCluster
+  version: v1beta1
 version: "3"

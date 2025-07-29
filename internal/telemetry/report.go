@@ -27,7 +27,11 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -38,9 +42,13 @@ import (
 	libsveltostelemetry "github.com/projectsveltos/libsveltos/lib/telemetry"
 )
 
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventtriggers,verbs=get;list;watch
+//+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=clusterhealthchecks,verbs=get;list;watch
+
 type instance struct {
 	version string
 	client.Client
+	config *rest.Config
 }
 
 var (
@@ -53,7 +61,7 @@ const (
 	domain          = "http://telemetry.projectsveltos.io/"
 )
 
-func StartCollecting(ctx context.Context, c client.Client, sveltosVersion string) error {
+func StartCollecting(ctx context.Context, config *rest.Config, c client.Client, sveltosVersion string) error {
 	if telemetryInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
@@ -61,6 +69,7 @@ func StartCollecting(ctx context.Context, c client.Client, sveltosVersion string
 			telemetryInstance = &instance{
 				Client:  c,
 				version: sveltosVersion,
+				config:  config,
 			}
 
 			go telemetryInstance.reportData(ctx)
@@ -143,6 +152,9 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 		if sveltosClusters.Items[i].Status.Ready {
 			data.ReadySveltosClusters++
 		}
+		if sveltosClusters.Items[i].Spec.PullMode {
+			data.PullModeSveltosClusters++
+		}
 	}
 
 	clusterProfiles, profiles, clusterSummaries, err := m.collectConfigurationData(ctx)
@@ -153,6 +165,14 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 	data.ClusterProfiles = clusterProfiles
 	data.Profiles = profiles
 	data.ClusterSummaries = clusterSummaries
+
+	et, chc, err := m.collectEventData(ctx)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Sveltos configuration data: %v", err))
+	} else {
+		data.EventTriggers = et
+		data.ClusterHealthChecks = chc
+	}
 
 	return &data, nil
 }
@@ -182,6 +202,45 @@ func (m *instance) collectConfigurationData(ctx context.Context) (cpInstances, p
 	csInstances = len(clusterSummaries.Items)
 
 	return
+}
+
+func (m *instance) collectEventData(ctx context.Context) (eventTriggers, clusterHealthChecks int, err error) {
+	logger := log.FromContext(ctx)
+
+	d, err := dynamic.NewForConfig(m.config)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Count EventTriggers
+	eventTriggerGVR := schema.GroupVersionResource{
+		Group:    "lib.projectsveltos.io",
+		Version:  "v1beta1",
+		Resource: "eventtriggers",
+	}
+
+	eventTriggerList, err := d.Resource(eventTriggerGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	if err == nil {
+		eventTriggers = len(eventTriggerList.Items)
+	} else {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect EventTriggers: %v", err))
+	}
+
+	// Count ClusterHealthChecks
+	chcGVR := schema.GroupVersionResource{
+		Group:    "lib.projectsveltos.io",
+		Version:  "v1beta1",
+		Resource: "clusterhealthchecks",
+	}
+
+	chcList, err := d.Resource(chcGVR).Namespace("").List(ctx, metav1.ListOptions{})
+	if err == nil {
+		clusterHealthChecks = len(chcList.Items)
+	} else {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClusterHealthChecks: %v", err))
+	}
+
+	return eventTriggers, clusterHealthChecks, nil
 }
 
 func (m *instance) sendData(ctx context.Context, payload *libsveltostelemetry.Cluster) {

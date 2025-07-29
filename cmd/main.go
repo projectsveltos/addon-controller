@@ -194,7 +194,7 @@ func main() {
 	controllers.NewSveltosClusterManager()
 
 	if shardKey == "" && !disableTelemetry {
-		err = telemetry.StartCollecting(ctx, mgr.GetClient(), version)
+		err = telemetry.StartCollecting(ctx, mgr.GetConfig(), mgr.GetClient(), version)
 		if err != nil {
 			setupLog.Error(err, "failed starting telemetry client")
 		}

@@ -152,6 +152,19 @@ rules:
 - apiGroups:
   - lib.projectsveltos.io
   resources:
+  - clusterhealthchecks
+  - configurationgroups/status
+  - debuggingconfigurations
+  - eventtriggers
+  - sveltosclusters
+  - sveltosclusters/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - lib.projectsveltos.io
+  resources:
   - clustersets
   - configurationbundles
   - configurationgroups
@@ -190,17 +203,6 @@ rules:
   - get
   - list
   - update
-  - watch
-- apiGroups:
-  - lib.projectsveltos.io
-  resources:
-  - configurationgroups/status
-  - debuggingconfigurations
-  - sveltosclusters
-  - sveltosclusters/status
-  verbs:
-  - get
-  - list
   - watch
 - apiGroups:
   - lib.projectsveltos.io

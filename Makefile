@@ -446,7 +446,7 @@ set-manifest-pull-policy:
 ##@ Build
 
 .PHONY: build
-build: drift-detection-manager generate fmt vet ## Build manager binary.
+build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 .PHONY: run
@@ -497,18 +497,33 @@ undeploy: s $(KUSTOMIZE) ## Undeploy controller from the K8s cluster specified i
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 
-define get-digest
+define get-digest-drift-detection
 $(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/drift-detection-manager:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
+endef
+
+define get-digest-sveltos-applier
+$(shell skopeo inspect --format '{{.Digest}}' "docker://projectsveltos/sveltos-applier:${TAG}" --override-os="linux" --override-arch="amd64" --override-variant="v8" 2>/dev/null)
 endef
 
 drift-detection-manager:
 	@echo "Downloading drift detection manager yaml"
-	$(eval digest :=$(call get-digest))
-	@echo "image digest is $(digest)"
+	$(eval digest :=$(call get-digest-drift-detection))
+	@echo "image digest is $(get-digest-drift-detection)"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/manifest.yaml -o ./pkg/drift-detection/drift-detection-manager.yaml
-	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager.yaml
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_manifest.yaml -o ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
-	sed -i'' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/drift-detection-manager:${TAG}#image: docker.io/projectsveltos/drift-detection-manager@${digest}#g" ./pkg/drift-detection/drift-detection-manager-in-mgmt-cluster.yaml
 	cd pkg/drift-detection; go generate
 	@echo "Downloading drift detection manager common yaml for agentless fv"
 	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/drift-detection-manager/$(TAG)/manifest/mgmt_cluster_common_manifest.yaml -o ./test/drift-detection-mgmt_cluster_common_manifest.yaml
+
+sveltos-applier:
+	@echo "Downloading sveltos applier yaml"
+	$(eval digest :=$(call get-digest-sveltos-applier))
+	@echo "image digest is $(get-digest-sveltos-applier)"
+	curl -L -H "Authorization: token $$GITHUB_PAT" https://raw.githubusercontent.com/projectsveltos/sveltos-applier/$(TAG)/manifest/manifest.yaml -o ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#image: docker.io/projectsveltos/sveltos-applier:${TAG}#image: docker.io/projectsveltos/sveltos-applier@${digest}#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-namespace=#cluster-namespace=default#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-name=#cluster-name=clusterapi-workload#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#cluster-type=#cluster-type=sveltos#g" ./test/pullmode-sveltosapplier.yaml
+	sed -i '' -e "s#secret-with-kubeconfig=#secret-with-kubeconfig=clusterapi-workload-sveltos-kubeconfig#g" ./test/pullmode-sveltosapplier.yaml

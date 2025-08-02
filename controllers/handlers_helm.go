@@ -4089,6 +4089,15 @@ func appendResources(result [][]*unstructured.Unstructured,
 	return result
 }
 
+func setNamespace(resource *unstructured.Unstructured, releaseNamespace string) *unstructured.Unstructured {
+	if resource.GetNamespace() == "" {
+		// Irrespective of whether resources are namespaced or not, set namespace to be the release namespace
+		// sveltos-applier adjustNamespace will unset Namespace for cluster wide resources
+		resource.SetNamespace(releaseNamespace)
+	}
+	return resource
+}
+
 // splitResources returns a slice of slice of resources according to those rules:
 // 1. pre install/upgrade are stored in their own subgroups before anything else
 // 2. then pre delete are stored in their own subgroups
@@ -4120,37 +4129,34 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 
 			crdInstances = append(crdInstances, resource)
 		} else if isHookResource(resource, "pre-install") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			preInstallHooks = append(preInstallHooks, resource)
 		} else if isHookResource(resource, "pre-upgrade") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			preInstallHooks = append(preInstallHooks, resource)
 		} else if isHookResource(resource, "post-install") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			postInstallHooks = append(postInstallHooks, resource)
 		} else if isHookResource(resource, "post-upgrade") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			postInstallHooks = append(postInstallHooks, resource)
 		} else if isHookResource(resource, "pre-rollback") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			preRollbackHooks = append(preRollbackHooks, resource)
 		} else if isHookResource(resource, "post-rollback") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			postRollbackHooks = append(postRollbackHooks, resource)
 		} else if isHookResource(resource, "pre-delete") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			preDeleteHooks = append(preDeleteHooks, resource)
 		} else if isHookResource(resource, "post-delete") {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			postDeleteHooks = append(postDeleteHooks, resource)
 		} else if hasHookDeleteAnnotation(resource) {
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			hookDeleteAnnotations = append(hookDeleteAnnotations, resource)
 		} else {
-			// resources collected do not have the namespace set, even though release namespace is defined
-			// Irrespective of whether resources are namespaced or not, set namespace to be the release namespace
-			// sveltos-applier adjustNamespace will unset Namespace for cluster wide resources
-			resource.SetNamespace(releaseNamespace)
+			resource = setNamespace(resource, releaseNamespace)
 			otherResources = append(otherResources, resource)
 		}
 	}

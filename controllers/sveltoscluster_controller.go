@@ -58,9 +58,9 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if !sveltosCluster.DeletionTimestamp.IsZero() || !sveltosCluster.Spec.PullMode {
 		sveltosClusterManagerInstance.RemoveCluster(req.Namespace, req.Name)
+	} else {
+		sveltosClusterManagerInstance.AddCluster(sveltosCluster)
 	}
-
-	sveltosClusterManagerInstance.AddCluster(sveltosCluster)
 
 	return ctrl.Result{}, nil
 }

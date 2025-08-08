@@ -168,8 +168,13 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		return err
+	}
+
 	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
-	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, isPullMode, configurationHash, logger)
+	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, isPullMode, configurationHash, mgmtResources, logger)
 	if err != nil {
 		return err
 	}
@@ -178,11 +183,11 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	return postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, logger)
+	return postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, mgmtResources, logger)
 }
 
 func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	kubeconfig string, logger logr.Logger) error {
+	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 
@@ -196,7 +201,8 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 		clusterSummary.Spec.ClusterProfileSpec.Reloader {
 
 		var err error
-		helmResources, err = collectResourcesFromManagedHelmChartsForDriftDetection(ctx, c, clusterSummary, kubeconfig, logger)
+		helmResources, err = collectResourcesFromManagedHelmChartsForDriftDetection(ctx, c, clusterSummary, kubeconfig,
+			mgmtResources, logger)
 		if err != nil {
 			return err
 		}
@@ -758,13 +764,10 @@ func getHelmRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.P
 }
 
 func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, c, remoteClient client.Client,
-	kubeconfig string, isPullMode bool, configurationHash []byte, logger logr.Logger) error {
+	kubeconfig string, isPullMode bool, configurationHash []byte, mgmtResources map[string]*unstructured.Unstructured,
+	logger logr.Logger) error {
 
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
-	if err != nil {
-		return err
-	}
-
+	var err error
 	// Before any helm release, managed by this ClusterSummary, is deployed, update ClusterSummary
 	// Status. Order is important. If pod is restarted, it needs to rebuild internal state keeping
 	// track of which ClusterSummary was managing which helm release.
@@ -782,8 +785,9 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 
 	// If there was an helm release previous managed by this ClusterSummary and currently not referenced
 	// anymore, such helm release has been successfully remove at this point. So
-	clusterSummary, err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary)
+	clusterSummary, err = updateStatusForNonReferencedHelmReleases(ctx, c, clusterSummary, mgmtResources, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("handleCharts failed %v", err))
 		return err
 	}
 
@@ -808,6 +812,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 		var undeployedReports []configv1beta1.ReleaseReport
 		undeployedReports, err = undeployStaleReleases(ctx, c, clusterSummary, kubeconfig, logger)
 		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("undeployStaleReleases failed %v", err))
 			return err
 		}
 		releaseReports = append(releaseReports, undeployedReports...)
@@ -1076,7 +1081,10 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 				err := doUninstallRelease(ctx, clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 				if err != nil {
 					// Ignore release not found error
-					if !(errors.Is(err, driver.ErrReleaseNotFound) || strings.Contains(err.Error(), "release: not found")) {
+					if errors.Is(err, driver.ErrReleaseNotFound) || strings.Contains(err.Error(), "release: not found") {
+						logger.V(logs.LogInfo).Info("Release not found, ignoring error")
+					} else {
+						logger.V(logs.LogInfo).Info(fmt.Sprintf("handleInstall failed %v", err))
 						return nil, nil, err
 					}
 				}
@@ -1088,6 +1096,7 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 
 	release, err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, templateOnly, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("doInstallRelease error %v", err))
 		return nil, nil, err
 	}
 	report = &configv1beta1.ReleaseReport{
@@ -2272,18 +2281,12 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 // Removes any entry pointing to a helm release currently not referenced by ClusterSummary.
 // No action in DryRun mode.
 func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Client,
-	clusterSummary *configv1beta1.ClusterSummary) (*configv1beta1.ClusterSummary, error) {
+	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
+	logger logr.Logger) (*configv1beta1.ClusterSummary, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return clusterSummary, nil
-	}
-
-	currentClusterSummary := &configv1beta1.ClusterSummary{}
-	err := c.Get(ctx,
-		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
-	if err != nil {
-		return clusterSummary, err
 	}
 
 	helmInfo := func(releaseNamespace, releaseName string) string {
@@ -2294,7 +2297,11 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		currentlyReferenced[helmInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
+		instantiatedChart, err := getInstantiatedChart(ctx, clusterSummary, &currentChart, mgmtResources, logger)
+		if err != nil {
+			return clusterSummary, err
+		}
+		currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
 	}
 
 	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(clusterSummary.Status.HelmReleaseSummaries))
@@ -2308,6 +2315,13 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 	if len(helmReleaseSummaries) == len(clusterSummary.Status.HelmReleaseSummaries) {
 		// Nothing has changed
 		return clusterSummary, nil
+	}
+
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
+	err := c.Get(ctx,
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
+	if err != nil {
+		return clusterSummary, err
 	}
 
 	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
@@ -2515,8 +2529,8 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 // ClusterProfile instance.
 // Resources with "projectsveltos.io/driftDetectionIgnore" annotation won't be included
 func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context, c client.Client,
-	clusterSummary *configv1beta1.ClusterSummary, kubeconfig string, logger logr.Logger,
-) ([]libsveltosv1beta1.HelmResources, error) {
+	clusterSummary *configv1beta1.ClusterSummary, kubeconfig string, mgmtResources map[string]*unstructured.Unstructured,
+	logger logr.Logger) ([]libsveltosv1beta1.HelmResources, error) {
 
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
@@ -2527,11 +2541,17 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		l := logger.WithValues("chart", currentChart.ChartName, "releaseNamespace", currentChart.ReleaseNamespace)
+
+		instantiatedChart, err := getInstantiatedChart(ctx, clusterSummary, currentChart, mgmtResources, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		l := logger.WithValues("chart", instantiatedChart.ChartName, "releaseNamespace", instantiatedChart.ReleaseNamespace)
 		l.V(logs.LogDebug).Info("collecting resources for helm chart")
 		// Conflicts are already resolved by the time this is invoked. So it is safe to call CanManageChart
-		if chartManager.CanManageChart(clusterSummary, currentChart) {
-			credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c, clusterSummary, currentChart)
+		if chartManager.CanManageChart(clusterSummary, instantiatedChart) {
+			credentialsPath, caPath, err := getCredentialsAndCAFiles(ctx, c, clusterSummary, instantiatedChart)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to process credentials %v", err))
 				return nil, err
@@ -2539,12 +2559,12 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 
 			registryOptions := &registryClientOptions{
 				credentialsPath: credentialsPath, caPath: caPath,
-				skipTLSVerify: getInsecureSkipTLSVerify(currentChart),
-				plainHTTP:     getPlainHTTP(currentChart),
+				skipTLSVerify: getInsecureSkipTLSVerify(instantiatedChart),
+				plainHTTP:     getPlainHTTP(instantiatedChart),
 			}
 
-			actionConfig, err := actionConfigInit(currentChart.ReleaseNamespace, kubeconfig, registryOptions,
-				getEnableClientCacheValue(currentChart.Options))
+			actionConfig, err := actionConfigInit(instantiatedChart.ReleaseNamespace, kubeconfig, registryOptions,
+				getEnableClientCacheValue(instantiatedChart.Options))
 			if credentialsPath != "" {
 				os.Remove(credentialsPath)
 			}
@@ -2556,7 +2576,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 			}
 
 			statusObject := action.NewStatus(actionConfig)
-			results, err := statusObject.Run(currentChart.ReleaseName)
+			results, err := statusObject.Run(instantiatedChart.ReleaseName)
 			if err != nil {
 				return nil, err
 			}
@@ -2569,9 +2589,9 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 			l.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
 
 			helmInfo := libsveltosv1beta1.HelmResources{
-				ChartName:        currentChart.ChartName,
-				ReleaseName:      currentChart.ReleaseName,
-				ReleaseNamespace: currentChart.ReleaseNamespace,
+				ChartName:        instantiatedChart.ChartName,
+				ReleaseName:      instantiatedChart.ReleaseName,
+				ReleaseNamespace: instantiatedChart.ReleaseNamespace,
 				Resources:        unstructuredToSveltosResources(resources),
 			}
 

@@ -102,8 +102,14 @@ var _ = Describe("Template instantiation", func() {
     controller:
       name: "{{ .Cluster.metadata.name }}-test"`
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 	})
@@ -132,8 +138,13 @@ var _ = Describe("Template instantiation", func() {
 			"Deployment": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		value, err := strconv.Atoi(strings.ReplaceAll(result, "\n", ""))
 		Expect(err).To(BeNil())
@@ -164,8 +175,13 @@ var _ = Describe("Template instantiation", func() {
 			"Deployment": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("replicas: 7"))
 
@@ -175,7 +191,7 @@ var _ = Describe("Template instantiation", func() {
 
 		values = `{{ setField "Deployment" "spec.paused" false }}`
 		result, err = controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("paused: false"))
 
@@ -186,7 +202,7 @@ var _ = Describe("Template instantiation", func() {
 		values = fmt.Sprintf(`{{ setField "Deployment" "metadata.namespace" %q }}`, namespace)
 
 		result, err = controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("namespace: %s", namespace)))
 
@@ -239,8 +255,13 @@ var _ = Describe("Template instantiation", func() {
 			"Deployment": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 
 		modifiedDepl := &appsv1.Deployment{}
@@ -275,8 +296,13 @@ var _ = Describe("Template instantiation", func() {
 			"ConfigMap": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).ToNot(ContainSubstring("replicas"))
 
@@ -311,8 +337,13 @@ var _ = Describe("Template instantiation", func() {
 			"Deployment": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).ToNot(ContainSubstring("replicas"))
 
@@ -362,8 +393,13 @@ var _ = Describe("Template instantiation", func() {
 			"Deployment": u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring("replicas: 5"))
 		Expect(result).To(ContainSubstring(fmt.Sprintf("namespace: %s", cluster.Namespace)))
@@ -384,11 +420,16 @@ var _ = Describe("Template instantiation", func() {
 		values := `valuesTemplate: |
     controller:
       name: "{{ .Cluster.metadata.name }}-test"
-	  cidrs: {{ index .Cluster.spec.clusterNetwork.pods.cidrBlocks 0 }} 
+	  cidrs: {{ index .Cluster.spec.clusterNetwork.pods.cidrBlocks 0 }}
 	  `
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(fmt.Sprintf("%s-test", cluster.Name)))
 		Expect(result).To(ContainSubstring(cluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0]))
@@ -434,8 +475,13 @@ valuesTemplate: |
 			"Secret": &u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})
@@ -482,8 +528,13 @@ valuesTemplate: |
 			"Secret": &u,
 		}
 
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+		Expect(err).To(BeNil())
+
 		result, err := controllers.InstantiateTemplateValues(context.TODO(), testEnv.Config, testEnv.GetClient(),
-			clusterSummary, randomString(), values, mgmtResources, textlogger.NewLogger(textlogger.NewConfig()))
+			clusterSummary, randomString(), values, objects, mgmtResources, logger)
 		Expect(err).To(BeNil())
 		Expect(result).To(ContainSubstring(pwd))
 	})

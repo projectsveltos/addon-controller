@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"text/template"
 
@@ -155,15 +156,72 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	return result, nil
 }
 
-func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client, //nolint: funlen,maintidx // adding few closures
-	clusterSummary *configv1beta1.ClusterSummary, requestorName, values string,
-	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
+// instantiateGenericField is a helper function to instantiate a single field, regardless of type.
+func instantiateGenericField(ctx context.Context, config *rest.Config, c client.Client,
+	field interface{}, clusterSummary *configv1beta1.ClusterSummary, objects *currentClusterObjects,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (interface{}, error) {
 
-	objects, err := fecthClusterObjects(ctx, config, c, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	// Marshal the field's value to a YAML string.
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	err := encoder.Encode(field)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to marshal field: %w", err)
 	}
+
+	// Instantiate the YAML string with the template engine.
+	instantiatedString, err := instantiateTemplateValues(ctx, config, c,
+		clusterSummary, "chart-name", buf.String(), objects, mgmtResources, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate field: %w", err)
+	}
+
+	// Unmarshal the instantiated string back into a new variable of the same type as the original field.
+	result := reflect.New(reflect.TypeOf(field)).Interface()
+	err = yaml.Unmarshal([]byte(instantiatedString), result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal instantiated field: %w", err)
+	}
+
+	return result, nil
+}
+
+// instantiateStructFields is a recursive helper function to instantiate all string fields in a struct.
+func instantiateStructFields(ctx context.Context, config *rest.Config, c client.Client, s interface{},
+	clusterSummary *configv1beta1.ClusterSummary, objects *currentClusterObjects,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
+
+	value := reflect.ValueOf(s)
+
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+
+	if value.Kind() != reflect.Struct {
+		return nil
+	}
+
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Field(i)
+
+		if field.CanSet() {
+			// Use the generic instantiation helper for all fields that can be set.
+			instantiatedValue, err := instantiateGenericField(ctx, config, c, field.Interface(), clusterSummary,
+				objects, mgmtResources, logger)
+			if err != nil {
+				return fmt.Errorf("failed to instantiate field '%s': %w", value.Type().Field(i).Name, err)
+			}
+
+			// Set the instantiated value back to the field.
+			field.Set(reflect.ValueOf(instantiatedValue).Elem())
+		}
+	}
+	return nil
+}
+
+func instantiateTemplateValues(ctx context.Context, config *rest.Config, c client.Client, //nolint: funlen // adding few closures
+	clusterSummary *configv1beta1.ClusterSummary, requestorName, values string, objects *currentClusterObjects,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (string, error) {
 
 	if mgmtResources != nil {
 		objects.MgmtResources = make(map[string]map[string]interface{})

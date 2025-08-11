@@ -493,9 +493,15 @@ func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *c
 
 	requestorName := clusterSummary.Namespace + clusterSummary.Name + "kustomize"
 
+	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	instantiatedValue, err :=
 		instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			clusterSummary, requestorName, stringifiedValues, mgmtResources, logger)
+			clusterSummary, requestorName, stringifiedValues, objects, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate values %v", err))
 		return nil, err
@@ -566,9 +572,15 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	defer os.RemoveAll(tmpDir)
 
+	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Path can be expressed as a template and instantiate using Cluster fields.
 	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		clusterSummary, clusterSummary.GetName(), kustomizationRef.Path, nil, logger)
+		clusterSummary, clusterSummary.GetName(), kustomizationRef.Path, objects, nil, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1024,7 +1036,8 @@ func extractTarGz(src, dest string) error {
 func instantiateResourceWithSubstituteValues(templateName string, resource []byte,
 	substituteValues map[string]string, useTxtFuncMap bool, logger logr.Logger) ([]byte, error) {
 
-	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap(useTxtFuncMap)).Parse(string(resource))
+	tmpl, err := template.New(templateName).Option("missingkey=error").Funcs(funcmap.SveltosFuncMap(useTxtFuncMap)).
+		Parse(string(resource))
 	if err != nil {
 		return nil, err
 	}

@@ -2426,8 +2426,14 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 	mgmtConfig := getManagementClusterConfig()
 	mgmtClient := getManagementClusterClient()
 
+	objects, err := fecthClusterObjects(ctx, mgmtConfig, mgmtClient, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	instantiatedValues, err := instantiateTemplateValues(ctx, mgmtConfig, mgmtClient,
-		clusterSummary, requestedChart.ChartName, requestedChart.Values, mgmtResources, logger)
+		clusterSummary, requestedChart.ChartName, requestedChart.Values, objects, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -2446,7 +2452,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 
 	for k := range valuesFrom {
 		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, mgmtConfig, mgmtClient,
-			clusterSummary, requestedChart.ChartName, valuesFrom[k], mgmtResources, logger)
+			clusterSummary, requestedChart.ChartName, valuesFrom[k], objects, mgmtResources, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -3924,25 +3930,22 @@ func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.Clu
 	currentChart *configv1beta1.HelmChart, mgmtResources map[string]*unstructured.Unstructured,
 	logger logr.Logger) (*configv1beta1.HelmChart, error) {
 
-	// Marshal the struct to YAML
-	jsonData, err := yaml.Marshal(*currentChart)
+	// Create a deep copy of the chart to avoid modifying the original.
+	instantiatedChart := currentChart.DeepCopy()
+
+	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	instantiatedChartString, err := instantiateTemplateValues(ctx, getManagementClusterConfig(),
-		getManagementClusterClient(), clusterSummary, currentChart.ChartName, string(jsonData), mgmtResources, logger)
-	if err != nil {
+	// Call the new recursive helper function to instantiate all fields.
+	if err := instantiateStructFields(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		instantiatedChart, clusterSummary, objects, mgmtResources, logger); err != nil {
 		return nil, err
 	}
 
-	var instantiatedChart configv1beta1.HelmChart
-	err = yaml.Unmarshal([]byte(instantiatedChartString), &instantiatedChart)
-	if err != nil {
-		return nil, err
-	}
-
-	return &instantiatedChart, nil
+	return instantiatedChart, nil
 }
 
 func canManageChart(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,

@@ -518,11 +518,11 @@ var _ = Describe("HandlersHelm", func() {
 			RepositoryName: randomString(), HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
-		helmChart.ChartVersion = `{{$version := index .Cluster.metadata.labels "k8s-version" }}{{if eq $version "1.20"}}23.4.0
-{{else if eq $version "1.22"}}24.1.0
-{{else if eq $version "1.25"}}25.0.2
-{{ else }}23.4.0
-{{end}}`
+		helmChart.ChartVersion = `{{$version := index .Cluster.metadata.labels "k8s-version" }}{{- if eq $version "1.20"}}23.4.0
+{{- else if eq $version "1.22"}}24.1.0
+{{- else if eq $version "1.25"}}25.0.2
+{{- else }}23.4.0
+{{- end}}`
 
 		clusterSummary.Namespace = defaulNamespace
 		clusterSummary.Spec.ClusterNamespace = defaulNamespace

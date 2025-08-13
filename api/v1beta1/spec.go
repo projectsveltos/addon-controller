@@ -469,6 +469,7 @@ type KustomizationRef struct {
 
 	// DeploymentType indicates whether resources need to be deployed
 	// into the management cluster (local) or the managed cluster (remote)
+	// NOTE: DeploymentType Local cannot be used when the matching cluster is the management cluster itself.
 	// +kubebuilder:default:=Remote
 	// +optional
 	DeploymentType DeploymentType `json:"deploymentType,omitempty"`

@@ -912,6 +912,15 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 		if isMgmtCluster {
 			skipAnnotationValue = getClusterSummaryAnnotationValue(clusterSummary)
 			skipAnnotationKey = clusterSummaryAnnotation
+		} else {
+			// When resources are deployed to management cluster, this annotation is added.
+			// If deploymentType: Local is used when Sveltos is matching the management cluster
+			// Sveltos will create the resource but when removing stale remote resource will consider
+			// it as stale and remove it. By verifying this annotation is not present when removing
+			// remote stale resources, this problem is solved.
+			// postfix is important
+			skipAnnotationKey = clusterSummaryAnnotation
+			skipAnnotationValue = getClusterSummaryAnnotationValue(clusterSummary) + "postfix"
 		}
 
 		for j := range list.Items {

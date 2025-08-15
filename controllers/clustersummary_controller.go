@@ -437,7 +437,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1beta1.ClusterSummary{}, builder.WithPredicates(ClusterSummaryPredicate{})).
+		For(&configv1beta1.ClusterSummary{}, builder.WithPredicates(ClusterSummaryPredicate{Logger: r.Logger.WithName("clusterSummaryPredicate")})).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).
@@ -755,7 +755,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 	logger.V(logs.LogDebug).Info("update policy map")
 	currentReferences, err := r.getCurrentReferences(ctx, clusterSummaryScope)
 	if err != nil {
-		logger.V(logs.LogInfo).Info("failed to get current references: %v", err)
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current references: %v", err))
 		return err
 	}
 

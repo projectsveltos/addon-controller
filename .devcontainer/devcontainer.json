@@ -8,7 +8,7 @@
     "dockerfile": "${localWorkspaceFolder}/.devcontainer/Dockerfile",
     "context": "${localWorkspaceFolder}",
     "args": {
-      "GO_VERSION": "1.24.4",
+      "GO_VERSION": "1.24.6",
       "KUBECTX_VERSION": "0.9.5",
       "SVELTOSCTL_VERSION": "0.53.0"
     }

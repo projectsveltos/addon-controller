@@ -312,6 +312,29 @@ var _ = Describe("HandlersHelm", func() {
 		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
 			HelmCharts: []configv1beta1.HelmChart{*contourChart},
 		}
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: cluster.Namespace,
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
 		// List a helm chart non referenced anymore as managed
 		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
 			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
@@ -324,29 +347,46 @@ var _ = Describe("HandlersHelm", func() {
 			},
 		}
 
-		initObjects := []client.Object{
-			clusterSummary,
-		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		Eventually(func() bool {
+			currentlClusterSummary := &configv1beta1.ClusterSummary{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Name: clusterSummary.Name, Namespace: clusterSummary.Namespace},
+				currentlClusterSummary)
+			if err != nil {
+				return false
+			}
+			return len(currentlClusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 1 &&
+				len(currentlClusterSummary.Status.HelmReleaseSummaries) == 2
+		}, timeout, pollingInterval).Should(BeTrue())
 
-		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
 		Expect(err).To(BeNil())
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
-		clusterSummary, err = controllers.UpdateStatusForNonReferencedHelmReleases(context.TODO(), c, clusterSummary)
+		clusterSummary, err = controllers.UpdateStatusForNonReferencedHelmReleases(context.TODO(), testEnv.Client,
+			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		currentClusterSummary := &configv1beta1.ClusterSummary{}
-		Expect(c.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-			currentClusterSummary)).To(Succeed())
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries).ToNot(BeNil())
-		Expect(len(currentClusterSummary.Status.HelmReleaseSummaries)).To(Equal(1))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(Equal(configv1beta1.HelmChartStatusManaging))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName).To(Equal(contourChart.ReleaseName))
-		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace).To(Equal(contourChart.ReleaseNamespace))
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			if len(currentClusterSummary.Status.HelmReleaseSummaries) == 1 &&
+				currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusManaging &&
+				currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseName == contourChart.ReleaseName &&
+				currentClusterSummary.Status.HelmReleaseSummaries[0].ReleaseNamespace == contourChart.ReleaseNamespace {
+				return true
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("updateChartsInClusterConfiguration updates ClusterConfiguration with deployed helm releases", func() {
@@ -478,11 +518,11 @@ var _ = Describe("HandlersHelm", func() {
 			RepositoryName: randomString(), HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
-		helmChart.ChartVersion = `{{$version := index .Cluster.metadata.labels "k8s-version" }}{{if eq $version "1.20"}}23.4.0
-{{else if eq $version "1.22"}}24.1.0
-{{else if eq $version "1.25"}}25.0.2
-{{ else }}23.4.0
-{{end}}`
+		helmChart.ChartVersion = `{{$version := index .Cluster.metadata.labels "k8s-version" }}{{- if eq $version "1.20"}}23.4.0
+{{- else if eq $version "1.22"}}24.1.0
+{{- else if eq $version "1.25"}}25.0.2
+{{- else }}23.4.0
+{{- end}}`
 
 		clusterSummary.Namespace = defaulNamespace
 		clusterSummary.Spec.ClusterNamespace = defaulNamespace
@@ -644,7 +684,7 @@ var _ = Describe("HandlersHelm", func() {
 		// helm chart. So expect action for Install will be install, and the action for Uninstall will be no action as
 		// such release has never been installed.
 		err = controllers.HandleCharts(context.TODO(), clusterSummary, testEnv.Client, testEnv.Client, kubeconfig,
-			false, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			false, nil, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 
 		var druRunError *configv1beta1.DryRunReconciliationError

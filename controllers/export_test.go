@@ -122,6 +122,7 @@ var (
 	GetInstantiatedChart                     = getInstantiatedChart
 
 	InstantiateTemplateValues = instantiateTemplateValues
+	FecthClusterObjects       = fecthClusterObjects
 
 	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
 	IsNamespaced               = isNamespaced

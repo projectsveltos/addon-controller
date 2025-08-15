@@ -124,7 +124,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://charts.konghq.com",
 					RepositoryName:   "kong",
 					ChartName:        "kong/kong",
-					ChartVersion:     "2.46.0",
+					ChartVersion:     "2.51.0",
 					ReleaseName:      "kong",
 					ReleaseNamespace: "kong",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -145,7 +145,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://helm.nginx.com/stable/",
 					RepositoryName:   "nginx-stable",
 					ChartName:        "nginx-stable/nginx-ingress",
-					ChartVersion:     "1.3.1",
+					ChartVersion:     "2.2.1",
 					ReleaseName:      "nginx-latest",
 					ReleaseNamespace: "nginx",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -172,8 +172,8 @@ var _ = Describe("Feature", Serial, func() {
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kong", ChartVersion: "2.46.0", Namespace: "kong"},
-			{ReleaseName: "nginx-latest", ChartVersion: "1.3.1", Namespace: "nginx"},
+			{ReleaseName: "kong", ChartVersion: "2.51.0", Namespace: "kong"},
+			{ReleaseName: "nginx-latest", ChartVersion: "2.2.1", Namespace: "nginx"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

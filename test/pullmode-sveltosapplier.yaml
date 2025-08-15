@@ -83,7 +83,7 @@ spec:
         - --cluster-type=sveltos
         - --secret-with-kubeconfig=clusterapi-workload-sveltos-kubeconfig
         - --v=5
-        - --version=v1.0.0-beta.0
+        - --version=main
         command:
         - /manager
         env:
@@ -99,7 +99,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/sveltos-applier@sha256:70bd749f6760072e705c000e1b566d0fefc255271b0be3bcc5652bcf5f9ab0dd
+        image: docker.io/projectsveltos/sveltos-applier@sha256:2de74461dd6b1e434b30e23cda4af80b2413cf370c03f54782bc55a6c1364c3a
         livenessProbe:
           failureThreshold: 3
           httpGet:

@@ -8,7 +8,7 @@ spec:
       env: fv
   helmCharts:
   - chartName: cilium/cilium
-    chartVersion: 1.18.0
+    chartVersion: 1.18.1
     helmChartAction: Install
     releaseName: cilium
     releaseNamespace: kube-system

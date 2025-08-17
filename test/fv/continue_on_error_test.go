@@ -145,10 +145,13 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://helm.nginx.com/stable/",
 					RepositoryName:   "nginx-stable",
 					ChartName:        "nginx-stable/nginx-ingress",
-					ChartVersion:     "2.2.1",
+					ChartVersion:     "2.2.2",
 					ReleaseName:      "nginx-latest",
 					ReleaseNamespace: "nginx",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Options: &configv1beta1.HelmOptions{
+						SkipSchemaValidation: true,
+					},
 				},
 			}
 			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
@@ -173,7 +176,7 @@ var _ = Describe("Feature", Serial, func() {
 
 		charts := []configv1beta1.Chart{
 			{ReleaseName: "kong", ChartVersion: "2.51.0", Namespace: "kong"},
-			{ReleaseName: "nginx-latest", ChartVersion: "2.2.1", Namespace: "nginx"},
+			{ReleaseName: "nginx-latest", ChartVersion: "2.2.2", Namespace: "nginx"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

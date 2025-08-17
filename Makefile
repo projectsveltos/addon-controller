@@ -219,8 +219,6 @@ quickstart:  ## start kind cluster; install all cluster api components; create a
 
 	@echo "Start projectsveltos"
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/manifest.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/default-classifier.yaml
-	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltos/$(TAG)/manifest/sveltosctl_manifest.yaml
 
 	sleep 5
 

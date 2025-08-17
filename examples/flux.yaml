@@ -8,7 +8,7 @@ spec:
       env: fv
   helmCharts:
   - chartName: flux2/flux2
-    chartVersion: 2.16.3
+    chartVersion: 2.16.4
     helmChartAction: Install
     releaseName: flux2
     releaseNamespace: flux2

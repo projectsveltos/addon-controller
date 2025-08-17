@@ -78,6 +78,14 @@ spec:
     targetPort: http-web-svc
 `
 
+	serviceAccountTemplate = `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service0
+  namespace: %s
+  labels:
+    %s: %s`
+
 	deplTemplate = `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -335,6 +343,75 @@ var _ = Describe("HandlersUtils", func() {
 				currentDeployment)
 			return err == nil &&
 				*currentDeployment.Spec.Replicas == newReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("updateResource and DriftExclusions with non matching targets", func() {
+		key := randomString()
+		value := randomString()
+		serviceAccount := fmt.Sprintf(serviceAccountTemplate, namespace, key, value)
+		u, err := k8s_utils.GetUnstructured([]byte(serviceAccount))
+		Expect(err).To(BeNil())
+
+		dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config, u.GroupVersionKind(), u.GetNamespace())
+		Expect(err).To(BeNil())
+
+		isDryRun := false
+		isDriftDetection := true
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		currentServiceAccount := &corev1.ServiceAccount{}
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentServiceAccount)
+			return err == nil && currentServiceAccount.Labels != nil &&
+				currentServiceAccount.Labels[key] == value
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
+			{
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind:    "Deployment",
+					Group:   "apps",
+					Version: "v1",
+				},
+				Paths: []string{"/spec/replicas"},
+			},
+		}
+
+		// Update deployment.spec.replicas
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+			currentServiceAccount)).To(Succeed())
+		currentServiceAccount.Labels = map[string]string{
+			randomString(): randomString(),
+			randomString(): randomString(),
+		}
+		Expect(testEnv.Update(context.TODO(), currentServiceAccount)).To(Succeed())
+
+		// Wait cache to sync
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentServiceAccount)
+			return err == nil && len(currentServiceAccount.Labels) == 2
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// New deploy will not override replicas
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		Consistently(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentServiceAccount)
+			return err == nil && currentServiceAccount.Labels != nil &&
+				currentServiceAccount.Labels[key] == value
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 

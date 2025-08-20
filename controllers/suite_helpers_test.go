@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -229,7 +229,7 @@ func addTypeInformationToObject(scheme *runtime.Scheme, obj client.Object) error
 // - secret containing kubeconfig to access CAPI Cluster
 // - clusterProfile/clusterSummary/clusterConfiguration
 // - adds ClusterProfile as OwnerReference for both ClusterSummary and ClusterConfiguration
-func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
+func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint: funlen // preparing for ut
 	clusterSummary *configv1beta1.ClusterSummary,
 	cluster *clusterv1.Cluster) {
 
@@ -289,8 +289,20 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile,
 	Expect(testEnv.Client.Get(context.TODO(),
 		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 		&currentCluster)).To(Succeed())
-	currentCluster.Status.ControlPlaneReady = true
+	initialized := true
+	currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 	Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+
+	Eventually(func() bool {
+		err := testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			&currentCluster)
+		if err != nil {
+			return false
+		}
+		return currentCluster.Status.Initialization.ControlPlaneInitialized != nil &&
+			*currentCluster.Status.Initialization.ControlPlaneInitialized
+	}, timeout, pollingInterval).Should(BeTrue())
 
 	// This method is invoked by different tests in parallel, all touching same clusterConfiguration.
 	// So add this logic in a Retry

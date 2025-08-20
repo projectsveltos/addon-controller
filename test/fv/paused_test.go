@@ -27,7 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -148,7 +148,7 @@ func setClusterPausedField(paused bool) {
 		cluster := &clusterv1.Cluster{}
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: kindWorkloadCluster.GetName()}, cluster)).To(Succeed())
-		cluster.Spec.Paused = paused
+		cluster.Spec.Paused = &paused
 		Expect(k8sClient.Update(context.TODO(), cluster)).To(Succeed())
 	}
 }

@@ -31,7 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -58,6 +58,7 @@ var _ = Describe("ClustersummaryController", func() {
 	BeforeEach(func() {
 		namespace = randomString()
 
+		initialized := true
 		clusterName = randomString()
 		cluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -68,7 +69,9 @@ var _ = Describe("ClustersummaryController", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: true,
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
 			},
 		}
 
@@ -103,26 +106,16 @@ var _ = Describe("ClustersummaryController", func() {
 
 		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
-		cluster.Status.ControlPlaneReady = true
+		cluster.Status.Initialization.ControlPlaneInitialized = &initialized
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, clusterSummary)).To(Succeed())
 	})
 
-	It("isReady returns true if CAPI Cluster has Status.ControlPlaneReady set to true", func() {
-		cluster.Status.ControlPlaneReady = true
-
-		initObjects := []client.Object{
-			clusterProfile,
-			clusterSummary,
-			cluster,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
-
+	It("isReady returns true if CAPI Cluster has Initialization.ControlPlaneInitialized set to true", func() {
 		reconciler := &controllers.ClusterSummaryReconciler{
-			Client:       c,
+			Client:       testEnv.Client,
 			Scheme:       scheme,
 			Deployer:     nil,
 			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
@@ -132,8 +125,24 @@ var _ = Describe("ClustersummaryController", func() {
 
 		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeTrue())
 
-		cluster.Status.ControlPlaneReady = false
-		Expect(c.Status().Update(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Client.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+			cluster)).To(Succeed())
+		initialized := false
+		cluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
+
+		Eventually(func() bool {
+			currentCluster := clusterv1.Cluster{}
+			err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
+				&currentCluster)
+			if err != nil {
+				return false
+			}
+			return currentCluster.Status.Initialization.ControlPlaneInitialized != nil &&
+				!*currentCluster.Status.Initialization.ControlPlaneInitialized
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeFalse())
 	})
@@ -158,7 +167,8 @@ var _ = Describe("ClustersummaryController", func() {
 
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
 
-		cluster.Spec.Paused = true
+		paused := true
+		cluster.Spec.Paused = &paused
 		Expect(c.Update(context.TODO(), cluster)).To(Succeed())
 
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
@@ -1186,7 +1196,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
-		currentCluster.Status.ControlPlaneReady = true
+		initialized := true
+		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
@@ -1264,7 +1275,8 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		Expect(testEnv.Client.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
-		currentCluster.Status.ControlPlaneReady = true
+		initialized := true
+		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())

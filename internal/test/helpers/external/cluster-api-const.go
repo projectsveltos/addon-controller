@@ -15,5 +15,5 @@ package external
 
 const (
 	clusterAPIGroup       = "cluster.x-k8s.io"
-	clusterAPITestVersion = "v1beta1"
+	clusterAPITestVersion = "v1beta2"
 )

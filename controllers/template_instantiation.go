@@ -23,20 +23,17 @@ import (
 
 	"github.com/go-logr/logr"
 	"gopkg.in/yaml.v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/controllers/external"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/funcmap"
-	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -47,56 +44,29 @@ type currentClusterObjects struct {
 	MgmtResources          map[string]map[string]interface{}
 }
 
-func fetchResource(ctx context.Context, config *rest.Config, namespace, name, apiVersion, kind string,
-	logger logr.Logger) (*unstructured.Unstructured, error) {
-
-	gv, err := schema.ParseGroupVersion(apiVersion)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to parse apiversion %v", err))
-		return nil, err
-	}
-	gvk := schema.GroupVersionKind{
-		Group:   gv.Group,
-		Version: gv.Version,
-		Kind:    kind,
-	}
-	var dr dynamic.ResourceInterface
-	dr, err = k8s_utils.GetDynamicResourceInterface(config, gvk, namespace)
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch %s: %v", kind, err))
-		return nil, err
-	}
-	var resource *unstructured.Unstructured
-	resource, err = dr.Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch %s %v", kind, err))
-		return nil, err
-	}
-
-	return resource, nil
-}
-
-func fetchInfrastructureProvider(ctx context.Context, config *rest.Config, cluster *clusterv1.Cluster,
-	logger logr.Logger) (*unstructured.Unstructured, error) {
+func fetchInfrastructureProvider(ctx context.Context, cluster *clusterv1.Cluster,
+) (*unstructured.Unstructured, error) {
 
 	var provider *unstructured.Unstructured
 	var err error
-	if cluster.Spec.InfrastructureRef != nil {
-		provider, err = fetchResource(ctx, config, cluster.Namespace, cluster.Spec.InfrastructureRef.Name,
-			cluster.Spec.InfrastructureRef.APIVersion, cluster.Spec.InfrastructureRef.Kind, logger)
+
+	if cluster.Spec.InfrastructureRef.APIGroup != "" && cluster.Spec.InfrastructureRef.Kind != "" {
+		provider, err = external.GetObjectFromContractVersionedRef(ctx, getManagementClusterClient(),
+			cluster.Spec.InfrastructureRef, cluster.Namespace)
 	}
 
 	return provider, err
 }
 
-func fetchKubeadmControlPlane(ctx context.Context, config *rest.Config, cluster *clusterv1.Cluster,
-	logger logr.Logger) (*unstructured.Unstructured, error) {
+func fetchKubeadmControlPlane(ctx context.Context, cluster *clusterv1.Cluster,
+) (*unstructured.Unstructured, error) {
 
 	var kubeadmControlPlane *unstructured.Unstructured
 	var err error
-	if cluster.Spec.ControlPlaneRef != nil {
-		kubeadmControlPlane, err = fetchResource(ctx, config, cluster.Namespace, cluster.Spec.ControlPlaneRef.Name,
-			cluster.Spec.ControlPlaneRef.APIVersion, cluster.Spec.ControlPlaneRef.Kind, logger)
+
+	if cluster.Spec.ControlPlaneRef.APIGroup != "" && cluster.Spec.ControlPlaneRef.Kind != "" {
+		kubeadmControlPlane, err = external.GetObjectFromContractVersionedRef(ctx, getManagementClusterClient(),
+			cluster.Spec.ControlPlaneRef, cluster.Namespace)
 	}
 
 	return kubeadmControlPlane, err
@@ -124,12 +94,12 @@ func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Clie
 	var kubeadmControlPlane *unstructured.Unstructured
 	if clusterType == libsveltosv1beta1.ClusterTypeCapi {
 		cluster = genericCluster.(*clusterv1.Cluster)
-		provider, err = fetchInfrastructureProvider(ctx, config, cluster, logger)
+		provider, err = fetchInfrastructureProvider(ctx, cluster)
 		if err != nil {
 			return nil, err
 		}
 
-		kubeadmControlPlane, err = fetchKubeadmControlPlane(ctx, config, cluster, logger)
+		kubeadmControlPlane, err = fetchKubeadmControlPlane(ctx, cluster)
 		if err != nil {
 			return nil, err
 		}

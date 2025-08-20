@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -412,7 +412,8 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 		currentCluster := &clusterv1.Cluster{}
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster)).To(Succeed())
-		currentCluster.Status.ControlPlaneReady = true
+		initialized := true
+		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		Expect(testEnv.Status().Update(context.TODO(), currentCluster)).To(Succeed())
 
 		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())

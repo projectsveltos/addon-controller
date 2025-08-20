@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -64,6 +64,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		value2 := randomString()
 
 		logger = textlogger.NewLogger(textlogger.NewConfig())
+		initialized := true
 		matchingCluster = &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      upstreamClusterNamePrefix + randomString(),
@@ -74,7 +75,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: true,
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, matchingCluster)).To(Succeed())
@@ -88,7 +91,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: true,
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, nonMatchingCluster)).To(Succeed())
@@ -599,7 +604,8 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		matchingCluster.Status.ControlPlaneReady = false
+		initialized := false
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -637,8 +643,10 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		matchingCluster.Status.ControlPlaneReady = true
-		matchingCluster.Spec.Paused = true
+		initialized := true
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		paused := true
+		matchingCluster.Spec.Paused = &paused
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -665,12 +673,8 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries creates ClusterSummary for each matching CAPI Cluster", func() {
-		matchingCluster.Status.Conditions = []clusterv1.Condition{
-			{
-				Type:   clusterv1.ControlPlaneInitializedCondition,
-				Status: corev1.ConditionTrue,
-			},
-		}
+		initialized := true
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		nonMatchingCluster.Status.Conditions = matchingCluster.Status.Conditions
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
@@ -708,12 +712,8 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("updateClusterSummaries updates existing ClusterSummary for each matching CAPI Cluster", func() {
-		matchingCluster.Status.Conditions = []clusterv1.Condition{
-			{
-				Type:   clusterv1.ControlPlaneInitializedCondition,
-				Status: corev1.ConditionTrue,
-			},
-		}
+		initialized := true
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{

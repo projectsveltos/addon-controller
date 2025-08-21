@@ -2,7 +2,7 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # KUBEBUILDER_ENVTEST_KUBERNETES_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.32.0
+KUBEBUILDER_ENVTEST_KUBERNETES_VERSION = 1.33.0
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -71,11 +71,11 @@ CLUSTERCTL := $(TOOLS_BIN_DIR)/clusterctl
 KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
-GOVULNCHECK_VERSION := "v1.1.3"
-GOLANGCI_LINT_VERSION := "v1.64.7"
+GOVULNCHECK_VERSION := "v1.1.4"
+GOLANGCI_LINT_VERSION := "v2.4.0"
 CLUSTERCTL_VERSION := "v1.11.0"
 
-KUSTOMIZE_VER := v5.3.0
+KUSTOMIZE_VER := v5.7.0
 KUSTOMIZE_BIN := kustomize
 KUSTOMIZE := $(abspath $(TOOLS_BIN_DIR)/$(KUSTOMIZE_BIN)-$(KUSTOMIZE_VER))
 KUSTOMIZE_PKG := sigs.k8s.io/kustomize/kustomize/v5
@@ -98,7 +98,7 @@ $(CONVERSION_GEN_BIN): $(CONVERSION_GEN) ## Build a local copy of conversion-gen
 $(CONVERSION_GEN): # Build conversion-gen from tools folder.
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) $(CONVERSION_GEN_PKG) $(CONVERSION_GEN_BIN) $(CONVERSION_GEN_VER)
 
-SETUP_ENVTEST_VER := release-0.20
+SETUP_ENVTEST_VER := release-0.21
 SETUP_ENVTEST_BIN := setup-envtest
 SETUP_ENVTEST := $(abspath $(TOOLS_BIN_DIR)/$(SETUP_ENVTEST_BIN)-$(SETUP_ENVTEST_VER))
 SETUP_ENVTEST_PKG := sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -173,7 +173,7 @@ vet: ## Run go vet against code.
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) generate ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m
+	$(GOLANGCI_LINT) run -v --max-issues-per-linter 0 --max-same-issues 0 --timeout 5m
 
 .PHONY: govulncheck
 govulncheck: $(GOVULNCHECK)

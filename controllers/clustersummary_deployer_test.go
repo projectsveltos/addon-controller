@@ -371,15 +371,15 @@ var _ = Describe("ClustersummaryDeployer", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
 
 		// Change clusterRole so the configuration that now needs to be deployed does not match
 		// the hash in ClusterSummary Status anymore
 		updateConfigMapWithPolicy(configMap, fmt.Sprintf(modifyClusterRole, clusterRoleName))
-		Expect(testEnv.Client.Update(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Update(context.TODO(), configMap)).To(Succeed())
 		Eventually(func() bool {
 			clusterConfigMap := &corev1.ConfigMap{}
-			err = testEnv.Client.Get(context.TODO(),
+			err = testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, clusterConfigMap)
 			if err != nil {
 				return false

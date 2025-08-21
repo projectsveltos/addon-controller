@@ -42,7 +42,6 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	pullmode "github.com/projectsveltos/libsveltos/lib/pullmode"
@@ -356,7 +355,7 @@ func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err
 		}
 
@@ -366,7 +365,7 @@ func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 
 		_, err = dr.Apply(ctx, policy.GetName(), policy, options)
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to apply policy Kind: %s Name: %s: %v",
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to apply policy Kind: %s Name: %s: %v",
 				policy.GetKind(), policy.GetName(), err))
 			return err
 		}
@@ -398,7 +397,7 @@ func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clus
 		types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(logsettings.LogVerbose).Info("resourceSummary CRD not present.")
+			logger.V(logs.LogVerbose).Info("resourceSummary CRD not present.")
 			return nil
 		}
 		return err
@@ -411,7 +410,7 @@ func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clus
 	err = clusterClient.Get(ctx, resourceSummaryNameInfo, currentResourceSummary)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			logger.V(logsettings.LogDebug).Info("resourceSummary instance not present.")
+			logger.V(logs.LogDebug).Info("resourceSummary instance not present.")
 			return nil
 		}
 
@@ -542,7 +541,7 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
 			return err
 		}
 

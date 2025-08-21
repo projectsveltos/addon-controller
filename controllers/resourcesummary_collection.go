@@ -291,7 +291,8 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 
 		l := logger.WithValues("clusterSummary", clusterSummary.Name)
 		for i := range clusterSummary.Status.FeatureSummaries {
-			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+			switch clusterSummary.Status.FeatureSummaries[i].FeatureID {
+			case libsveltosv1beta1.FeatureHelm:
 				if rs.Status.HelmResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy helm")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
@@ -299,7 +300,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), logger)
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+			case libsveltosv1beta1.FeatureResources:
 				if rs.Status.ResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
@@ -307,7 +308,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), logger)
 				}
-			} else if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureKustomize {
+			case libsveltosv1beta1.FeatureKustomize:
 				if rs.Status.KustomizeResourcesChanged {
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil

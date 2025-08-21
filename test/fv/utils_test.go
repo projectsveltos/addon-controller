@@ -116,12 +116,13 @@ func getClusterSummaryOwnerReference(clusterSummary *configv1beta1.ClusterSummar
 			continue
 		}
 
-		if ref.Kind == configv1beta1.ClusterProfileKind {
+		switch ref.Kind {
+		case configv1beta1.ClusterProfileKind:
 			clusterProfile := &configv1beta1.ClusterProfile{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: ref.Name}, clusterProfile)
 			return clusterProfile, err
-		} else if ref.Kind == configv1beta1.ProfileKind {
+		case configv1beta1.ProfileKind:
 			profile := &configv1beta1.Profile{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: ref.Name},

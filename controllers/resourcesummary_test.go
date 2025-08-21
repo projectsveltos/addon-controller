@@ -200,7 +200,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"value": testEnv.Kubeconfig,
 		},
 	}
-	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
 	By("Create the ConfigMap with drift-detection version")
@@ -213,7 +213,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"version": version,
 		},
 	}
-	err := testEnv.Client.Create(context.TODO(), cm)
+	err := testEnv.Create(context.TODO(), cm)
 	if err != nil {
 		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 	}

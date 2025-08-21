@@ -128,9 +128,9 @@ var _ = Describe("HandlersResource", func() {
 				DeploymentType: configv1beta1.DeploymentTypeRemote,
 			},
 		}
-		Expect(testEnv.Client.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, configMap)).To(Succeed())
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterProfile)).To(Succeed())
@@ -145,11 +145,11 @@ var _ = Describe("HandlersResource", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() error {
 			currentClusterRole := &rbacv1.ClusterRole{}
-			return testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)
+			return testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		currentClusterRole := &rbacv1.ClusterRole{}
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterRoleName}, currentClusterRole)).To(Succeed())
 		// OwnerReference is not set anymore
 		Expect(currentClusterRole.OwnerReferences).To(BeNil())
 		Expect(currentClusterRole.Annotations).ToNot(BeNil())
@@ -197,9 +197,9 @@ var _ = Describe("HandlersResource", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), role0)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), role1)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterRole0)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), role0)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), role1)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterRole0)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterRole0)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, role0, clusterProfile)
 		addOwnerReference(ctx, testEnv.Client, clusterRole0, clusterProfile)
@@ -223,7 +223,7 @@ var _ = Describe("HandlersResource", func() {
 				},
 			},
 		}
-		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Wait for cache to be updated
 		Eventually(func() bool {
@@ -243,12 +243,12 @@ var _ = Describe("HandlersResource", func() {
 
 		currentRole := &rbacv1.Role{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: role1.Namespace, Name: role1.Name}, currentRole)
 			if err != nil {
 				return false
 			}
-			err = testEnv.Client.Get(context.TODO(),
+			err = testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: role0.Namespace, Name: role0.Name}, currentRole)
 			return err != nil &&
 				apierrors.IsNotFound(err)
@@ -256,7 +256,7 @@ var _ = Describe("HandlersResource", func() {
 
 		currentClusterRole := &rbacv1.ClusterRole{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Name: clusterRole0.Name}, currentClusterRole)
 			return err != nil &&
 				apierrors.IsNotFound(err)
@@ -421,9 +421,10 @@ var _ = Describe("Hash methods", func() {
 		}
 		sort.Sort(controllers.SortedCorev1ObjectReference(referencedObjects))
 		for i := range referencedObjects {
-			if referencedObjects[i].Name == configMap1.Name {
+			switch referencedObjects[i].Name {
+			case configMap1.Name:
 				config += controllers.GetStringDataSectionHash(configMap1.Data)
-			} else if referencedObjects[i].Name == configMap2.Name {
+			case configMap2.Name:
 				config += controllers.GetStringDataSectionHash(configMap2.Data)
 			}
 		}

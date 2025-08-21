@@ -326,11 +326,11 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 
 	AfterEach(func() {
 		ns := &corev1.Namespace{}
-		Expect(testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), matchingClusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
-		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
 	It("RequeueClusterProfileForCluster returns correct ClusterProfiles for a CAPI cluster", func() {
@@ -347,11 +347,11 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonMatchingClusterProfile)).To(Succeed())
 
@@ -404,8 +404,8 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
 		// Set Cluster ControlPlaneReady to true
@@ -416,15 +416,15 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		Expect(testEnv.Status().Update(context.TODO(), currentCluster)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), cpMachine)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cpMachine)).To(Succeed())
 		cpMachine.Status.SetTypedPhase(clusterv1.MachinePhaseRunning)
-		Expect(testEnv.Client.Status().Update(context.TODO(), cpMachine)).To(Succeed())
+		Expect(testEnv.Status().Update(context.TODO(), cpMachine)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, cpMachine)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), matchingClusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), nonMatchingClusterProfile)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterConfiguration)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, cpMachine)).To(Succeed())
 

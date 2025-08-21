@@ -125,7 +125,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeTrue())
 
-		Expect(testEnv.Client.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			cluster)).To(Succeed())
 		initialized := false
@@ -134,7 +134,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		Eventually(func() bool {
 			currentCluster := clusterv1.Cluster{}
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 				&currentCluster)
 			if err != nil {
@@ -1168,15 +1168,15 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 	})
 
 	AfterEach(func() {
-		err := testEnv.Client.Delete(context.TODO(), referencingClusterSummary)
+		err := testEnv.Delete(context.TODO(), referencingClusterSummary)
 		if err != nil {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		}
-		err = testEnv.Client.Delete(context.TODO(), nonReferencingClusterSummary)
+		err = testEnv.Delete(context.TODO(), nonReferencingClusterSummary)
 		if err != nil {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		}
-		Expect(testEnv.Client.Delete(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), cluster)).To(Succeed())
 	})
 
 	It("requeueClusterSummaryForConfigMap returns correct ClusterSummary for a ConfigMap", func() {
@@ -1186,23 +1186,23 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 		currentCluster := clusterv1.Cluster{}
-		Expect(testEnv.Client.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
 		initialized := true
 		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
-		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+		Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
 		By(fmt.Sprintf("Creating %s %s/%s", configMap.Kind, configMap.Namespace, configMap.Name))
-		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, configMap)).To(Succeed())
 
 		By(fmt.Sprintf("Configuring ClusterSummary %s reference %s %s/%s",
@@ -1215,11 +1215,11 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
 
-		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 
 		clusterSummaryName := client.ObjectKey{
@@ -1254,7 +1254,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), ns)).To(Succeed())
 	})
 
 	It("requeueClusterSummaryForCluster returns correct ClusterSummary for a CAPI Cluster", func() {
@@ -1264,26 +1264,26 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
 		currentCluster := clusterv1.Cluster{}
-		Expect(testEnv.Client.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
 		initialized := true
 		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
-		Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+		Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), referencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, referencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, referencingClusterSummary, clusterProfile)
 
-		Expect(testEnv.Client.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), nonReferencingClusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, nonReferencingClusterSummary)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, nonReferencingClusterSummary, clusterProfile)
 
@@ -1317,6 +1317,6 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 		}
 		Expect(found).To(BeTrue())
 
-		Expect(testEnv.Client.Delete(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), ns)).To(Succeed())
 	})
 })

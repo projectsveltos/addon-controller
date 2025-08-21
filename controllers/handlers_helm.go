@@ -1094,7 +1094,7 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 
 	var report *configv1beta1.ReleaseReport
 
-	release, err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, templateOnly, logger)
+	helmRelease, err := doInstallRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, templateOnly, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("doInstallRelease error %v", err))
 		return nil, nil, err
@@ -1103,7 +1103,7 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 		ReleaseNamespace: currentChart.ReleaseNamespace, ReleaseName: currentChart.ReleaseName,
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.InstallHelmAction),
 	}
-	return release, report, nil
+	return helmRelease, report, nil
 }
 
 func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -1113,7 +1113,7 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
-	release, err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
+	helmRelease, err := doUpgradeRelease(ctx, clusterSummary, mgmtResources, currentChart, kubeconfig, registryOptions, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1122,12 +1122,12 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	current, err := semver.NewVersion(currentRelease.ChartVersion)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
-		return release, nil, err
+		return helmRelease, nil, err
 	}
 	expected, err := semver.NewVersion(currentChart.ChartVersion)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
-		return release, nil, err
+		return helmRelease, nil, err
 	}
 	if current.Compare(expected) != 0 {
 		message = fmt.Sprintf("Current version: %q. Would move to version: %q",
@@ -1140,7 +1140,7 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 		ChartVersion: currentChart.ChartVersion, Action: string(configv1beta1.UpgradeHelmAction),
 		Message: message,
 	}
-	return release, report, nil
+	return helmRelease, report, nil
 }
 
 func handleUninstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -1409,7 +1409,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, err
 	}
 
-	cp, err := installClient.ChartPathOptions.LocateChart(chartName, settings)
+	cp, err := installClient.LocateChart(chartName, settings)
 	if err != nil {
 		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
@@ -1474,7 +1474,7 @@ func checkDependencies(chartRequested *chart.Chart, installClient *action.Instal
 			if installClient.DependencyUpdate {
 				man := &downloader.Manager{
 					ChartPath:        cp,
-					Keyring:          installClient.ChartPathOptions.Keyring,
+					Keyring:          installClient.Keyring,
 					SkipUpdate:       false,
 					Getters:          getter.All(settings),
 					RepositoryConfig: settings.RepositoryConfig,
@@ -1594,7 +1594,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, registryOptions, patches)
 
-	cp, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
+	cp, err := upgradeClient.LocateChart(chartName, settings)
 	if err != nil {
 		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
@@ -1620,7 +1620,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
 	defer cancel()
 
-	release, err := upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
+	helmRelease, err := upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
 		currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
@@ -1639,7 +1639,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	logger.V(logs.LogDebug).Info("upgrading release done")
 
-	return release, nil
+	return helmRelease, nil
 }
 
 func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
@@ -2009,13 +2009,13 @@ func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		return nil, err
 	}
 
-	release, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig,
+	helmRelease, err := installRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig,
 		registryOptions, values, mgmtResources, templateOnly, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	return release, nil
+	return helmRelease, nil
 }
 
 // doUninstallRelease uninstalls helm release from the Cluster.
@@ -2782,11 +2782,11 @@ func hasHookDeleteAnnotation(obj *unstructured.Unstructured) bool {
 	return exists
 }
 
-func collectHelmContent(result *release.Release, action helmAction, logger logr.Logger,
+func collectHelmContent(result *release.Release, helmActionVar helmAction, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
-	if action == uninstall {
+	if helmActionVar == uninstall {
 		// Parse regular manifest
 		mainResources, err := parseAndAppendResources(result.Manifest, logger)
 		if err != nil {
@@ -2814,7 +2814,7 @@ func collectHelmContent(result *release.Release, action helmAction, logger logr.
 		return resources, nil
 	}
 
-	preHookResources, err := collectPreHooks(result, action, logger)
+	preHookResources, err := collectPreHooks(result, helmActionVar, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -2834,7 +2834,7 @@ func collectHelmContent(result *release.Release, action helmAction, logger logr.
 		resources = append(resources, mainResources[i])
 	}
 
-	postHookResources, err := collectPostHooks(result, action, logger)
+	postHookResources, err := collectPostHooks(result, helmActionVar, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -2843,14 +2843,14 @@ func collectHelmContent(result *release.Release, action helmAction, logger logr.
 	return resources, nil
 }
 
-func collectPreHooks(result *release.Release, action helmAction, logger logr.Logger,
+func collectPreHooks(result *release.Release, helmActionVar helmAction, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
 	// Parse pre-install/pre-upgrade/pre-rollback hook manifests
 	for _, hook := range result.Hooks {
 		var relevant bool
-		switch action {
+		switch helmActionVar {
 		case install:
 			relevant = isHookRelevantForPreInstall(hook)
 		case upgrade:
@@ -2867,7 +2867,7 @@ func collectPreHooks(result *release.Release, action helmAction, logger logr.Log
 			continue
 		}
 
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre %s Hook Kind: %s", action, hook.Kind))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre %s Hook Kind: %s", helmActionVar, hook.Kind))
 
 		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
 		if err != nil {
@@ -2880,14 +2880,14 @@ func collectPreHooks(result *release.Release, action helmAction, logger logr.Log
 	return resources, nil
 }
 
-func collectPostHooks(result *release.Release, action helmAction, logger logr.Logger,
+func collectPostHooks(result *release.Release, helmActionVar helmAction, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
 	// Parse post-install/post-upgrade/post-rollback hook manifests
 	for _, hook := range result.Hooks {
 		var relevant bool
-		switch action {
+		switch helmActionVar {
 		case install:
 			relevant = isHookRelevantForPostInstall(hook)
 		case upgrade:
@@ -2904,7 +2904,7 @@ func collectPostHooks(result *release.Release, action helmAction, logger logr.Lo
 			continue
 		}
 
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre %s Hook Kind: %s", action, hook.Kind))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Pre %s Hook Kind: %s", helmActionVar, hook.Kind))
 
 		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
 		if err != nil {
@@ -3690,7 +3690,7 @@ func getHelmChartAndRepoName(ctx context.Context, requestedChart *configv1beta1.
 		}
 
 		if sourceRef == nil {
-			return "", "", "", fmt.Errorf("Flux Source %v not found", sourceRef)
+			return "", "", "", fmt.Errorf("flux Source %v not found", sourceRef)
 		}
 
 		source, err := getSource(ctx, getManagementClusterClient(), sourceRef.Namespace, sourceRef.Name, sourceRef.Kind)
@@ -4006,25 +4006,26 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	// In pull mode always treat it as an install. This will allow us to get list of resources helm would install (equivalent
 	// of helm template). Those resources will be made available for the agent inside ConfigurationBundles.
-	release, _, err := handleInstall(ctx, clusterSummary, mgmtResources, currentChart, "", registryOptions, true, true, logger)
+	helmRelease, _, err := handleInstall(ctx, clusterSummary, mgmtResources, currentChart, "", registryOptions, true,
+		true, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	rInfo := &releaseInfo{
-		ReleaseName:      release.Name,
-		ReleaseNamespace: release.Namespace,
-		Revision:         strconv.Itoa(release.Version),
-		Status:           release.Info.Status.String(),
-		Chart:            release.Chart.Metadata.Name,
-		ChartVersion:     release.Chart.Metadata.Version,
-		AppVersion:       release.Chart.AppVersion(),
-		ReleaseLabels:    release.Labels,
-		Icon:             release.Chart.Metadata.Icon,
-		Values:           release.Config,
+		ReleaseName:      helmRelease.Name,
+		ReleaseNamespace: helmRelease.Namespace,
+		Revision:         strconv.Itoa(helmRelease.Version),
+		Status:           helmRelease.Info.Status.String(),
+		Chart:            helmRelease.Chart.Metadata.Name,
+		ChartVersion:     helmRelease.Chart.Metadata.Version,
+		AppVersion:       helmRelease.Chart.AppVersion(),
+		ReleaseLabels:    helmRelease.Labels,
+		Icon:             helmRelease.Chart.Metadata.Icon,
+		Values:           helmRelease.Config,
 	}
 
-	action, err := getHelmActionInPullMode(ctx, clusterSummary, currentChart)
+	helmActionVar, err := getHelmActionInPullMode(ctx, clusterSummary, currentChart)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -4034,24 +4035,24 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 		!clusterSummary.DeletionTimestamp.IsZero() {
 
 		logger.V(logs.LogDebug).Info("uninstall chart in pull mode")
-		action = uninstall
+		helmActionVar = uninstall
 		releaseReport = &configv1beta1.ReleaseReport{
-			ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
+			ReleaseNamespace: helmRelease.Namespace, ReleaseName: helmRelease.Name,
 			Action: string(configv1beta1.UninstallHelmAction), ChartVersion: currentChart.ChartVersion,
 		}
 	} else {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("action for helm chart in pull mode: %s", action))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("action for helm chart in pull mode: %s", helmActionVar))
 		releaseReport = &configv1beta1.ReleaseReport{
-			ReleaseNamespace: release.Namespace, ReleaseName: release.Name,
+			ReleaseNamespace: helmRelease.Namespace, ReleaseName: helmRelease.Name,
 			Action: string(configv1beta1.UpgradeHelmAction),
 		}
 	}
 
 	var resources []*unstructured.Unstructured
-	if action == uninstall && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+	if helmActionVar == uninstall && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		// if action is install=false and syncMode is dryRun, return empty resources.
 	} else {
-		resources, err = collectHelmContent(release, action, logger)
+		resources, err = collectHelmContent(helmRelease, helmActionVar, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -4068,7 +4069,7 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
 
-	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, action, rInfo, logger)
+	err = stageHelmResourcesForDeployment(ctx, clusterSummary, currentChart, resources, helmActionVar, rInfo, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -4220,7 +4221,7 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 
 func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	currentChart *configv1beta1.HelmChart, resources []*unstructured.Unstructured,
-	action helmAction, rInfo *releaseInfo, logger logr.Logger) error {
+	helmActionVar helmAction, rInfo *releaseInfo, logger logr.Logger) error {
 
 	baseKey := fmt.Sprintf("%s-%s-%s", currentChart.ReleaseNamespace, currentChart.ReleaseName,
 		currentChart.RepositoryName)
@@ -4232,7 +4233,7 @@ func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *config
 		bundleResources := make(map[string][]unstructured.Unstructured)
 		bundleResources[key] = convertPointerSliceToValueSlice(bundles[i])
 
-		setters := prepareBundleSetters(currentChart, action == uninstall, i == len(bundles)-1, rInfo)
+		setters := prepareBundleSetters(currentChart, helmActionVar == uninstall, i == len(bundles)-1, rInfo)
 
 		err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,

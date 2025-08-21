@@ -125,7 +125,7 @@ func (t *TestEnvironmentConfiguration) Build(s *apimachineryscheme.Scheme) (*Tes
 func (t *TestEnvironment) StartManager(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	t.cancel = cancel
-	return t.Manager.Start(ctx)
+	return t.Start(ctx)
 }
 
 // Stop stops the test environment.

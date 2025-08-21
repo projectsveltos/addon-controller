@@ -147,9 +147,9 @@ var _ = Describe("KustomizeRefs", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), serviceAccount)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterRole)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), serviceAccount)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterRole)).To(Succeed())
 		addOwnerReference(ctx, testEnv.Client, serviceAccount, clusterProfile)
 		addOwnerReference(ctx, testEnv.Client, clusterRole, clusterProfile)
@@ -174,7 +174,7 @@ var _ = Describe("KustomizeRefs", func() {
 				},
 			},
 		}
-		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// Wait for cache to be updated
 		Eventually(func() bool {
@@ -194,7 +194,7 @@ var _ = Describe("KustomizeRefs", func() {
 
 		currentServiceAccount := &corev1.ServiceAccount{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: serviceAccount.Namespace, Name: serviceAccount.Name}, currentServiceAccount)
 			return err != nil &&
 				apierrors.IsNotFound(err)
@@ -202,7 +202,7 @@ var _ = Describe("KustomizeRefs", func() {
 
 		currentClusterRole := &rbacv1.ClusterRole{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)
 			return err != nil &&
 				apierrors.IsNotFound(err)
@@ -210,7 +210,7 @@ var _ = Describe("KustomizeRefs", func() {
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Eventually(func() bool {
-			err := testEnv.Client.Get(context.TODO(),
+			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())

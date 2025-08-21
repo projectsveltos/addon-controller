@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -299,7 +299,7 @@ func (m *instance) registerProfileClusterDependency(prerequisite, cluster, depen
 		l := logger.WithValues("prerequisite", fmt.Sprintf("%s/%s", prerequisite.Namespace, prerequisite.Name)).
 			WithValues("dependent", fmt.Sprintf("%s/%s", dependent.Namespace, dependent.Name)).
 			WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
-		l.V(logsettings.LogDebug).Info("add dependency")
+		l.V(logs.LogDebug).Info("add dependency")
 		m.profileToBeUpdated[*prerequisite] = true
 	}
 	clusterDeployments.addCluster(cluster)
@@ -312,7 +312,7 @@ func (m *instance) registerProfileClusterDependency(prerequisite, cluster, depen
 		l := logger.WithValues("prerequisite", fmt.Sprintf("%s/%s", prerequisite.Namespace, prerequisite.Name)).
 			WithValues("dependent", fmt.Sprintf("%s/%s", dependent.Namespace, dependent.Name)).
 			WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
-		l.V(logsettings.LogDebug).Info("add dependency")
+		l.V(logs.LogDebug).Info("add dependency")
 		m.profileToBeUpdated[*prerequisite] = true
 	}
 	m.profileClusterRequests.addProfile(prerequisite, clusterDeployments)
@@ -380,7 +380,7 @@ func (m *instance) removeDependent(prerequisite, dependent *corev1.ObjectReferen
 
 		requestingProfiles.removeDependent(dependent)
 		if len(requestingProfiles.Dependents) == 0 {
-			l.V(logsettings.LogDebug).Info("remove dependency")
+			l.V(logs.LogDebug).Info("remove dependency")
 			m.profileToBeUpdated[*prerequisite] = true
 			delete(clusterDeployments.Clusters, clusterRef)
 		} else {
@@ -479,7 +479,7 @@ func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger l
 
 		for profile := range m.profileToBeUpdated {
 			clusters := m.profileClusterRequests.getClusterDeployments(&profile)
-			logger.V(logsettings.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
 			err := m.updateProfileInstance(ctx, c, &profile, clusters)
 			if err == nil {
 				delete(m.profileToBeUpdated, profile)
@@ -506,7 +506,7 @@ func (m *instance) rebuildState(ctx context.Context, c client.Client, logger log
 
 	for profile := range m.profileToBeUpdated {
 		clusters := m.profileClusterRequests.getClusterDeployments(&profile)
-		logger.V(logsettings.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
 		err := m.updateProfileInstance(ctx, c, &profile, clusters)
 		if err == nil {
 			delete(m.profileToBeUpdated, profile)
@@ -521,7 +521,7 @@ func (m *instance) rebuildState(ctx context.Context, c client.Client, logger log
 func (m *instance) rebuildStateWithProfiles(ctx context.Context, c client.Client, logger logr.Logger) error {
 	profiles := &configv1beta1.ProfileList{}
 	if err := c.List(ctx, profiles); err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to list profiles: %v", err))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list profiles: %v", err))
 		return err
 	}
 
@@ -542,7 +542,7 @@ func (m *instance) rebuildStateWithProfiles(ctx context.Context, c client.Client
 func (m *instance) rebuildStateWithClusterProfiles(ctx context.Context, c client.Client, logger logr.Logger) error {
 	clusterProfiles := &configv1beta1.ClusterProfileList{}
 	if err := c.List(ctx, clusterProfiles); err != nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to list clusterProfiles: %v", err))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list clusterProfiles: %v", err))
 		return err
 	}
 

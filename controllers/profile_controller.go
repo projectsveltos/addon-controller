@@ -398,7 +398,7 @@ func (r *ProfileReconciler) getClustersFromSets(ctx context.Context, namespace s
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range setRefs {
 		set := &libsveltosv1beta1.Set{}
-		if err := r.Client.Get(ctx,
+		if err := r.Get(ctx,
 			types.NamespacedName{Namespace: namespace, Name: setRefs[i]},
 			set); err != nil {
 			if apierrors.IsNotFound(err) {

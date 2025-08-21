@@ -64,7 +64,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
-	logsettings "github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
@@ -185,7 +185,7 @@ func main() {
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
-	logsettings.RegisterForLogSettings(ctx,
+	logs.RegisterForLogSettings(ctx,
 		libsveltosv1beta1.ComponentAddonManager, ctrl.Log.WithName("log-setter"),
 		ctrl.GetConfigOrDie())
 
@@ -397,15 +397,15 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager, watchersForCAPI []watch
 			retries++
 		} else {
 			if !capiPresent {
-				setupLog.V(logsettings.LogInfo).Info("CAPI currently not present. Starting CRD watcher")
+				setupLog.V(logs.LogInfo).Info("CAPI currently not present. Starting CRD watcher")
 				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), capiCRDHandler, setupLog)
 			} else {
-				setupLog.V(logsettings.LogInfo).Info("CAPI present. Start CAPI watchers")
+				setupLog.V(logs.LogInfo).Info("CAPI present. Start CAPI watchers")
 				for i := range watchersForCAPI {
 					watcher := watchersForCAPI[i]
 					err = watcher.WatchForCAPI(mgr, watcher.GetController())
 					if err != nil {
-						setupLog.V(logsettings.LogInfo).Info(
+						setupLog.V(logs.LogInfo).Info(
 							fmt.Sprintf("failed to start CAPI watcher: %v", err))
 						continue
 					}
@@ -429,10 +429,10 @@ func fluxWatchers(ctx context.Context, mgr ctrl.Manager, watchersForFlux []watch
 			retries++
 		} else {
 			if !fluxPresent {
-				setupLog.V(logsettings.LogInfo).Info("Flux currently not present. Starting CRD watcher")
+				setupLog.V(logs.LogInfo).Info("Flux currently not present. Starting CRD watcher")
 				go crd.WatchCustomResourceDefinition(ctx, mgr.GetConfig(), fluxCRDHandler, setupLog)
 			} else {
-				setupLog.V(logsettings.LogInfo).Info("Flux present. Start Flux watchers")
+				setupLog.V(logs.LogInfo).Info("Flux present. Start Flux watchers")
 				for i := range watchersForFlux {
 					watcher := watchersForFlux[i]
 					err = watcher.WatchForFlux(mgr, watcher.GetController())
@@ -659,7 +659,7 @@ func printMemUsage(logger logr.Logger) {
 			WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
 			WithValues("Sys (MiB)", bToMb(m.Sys)).
 			WithValues("NumGC", m.NumGC)
-		l.V(logsettings.LogInfo).Info("memory stats")
+		l.V(logs.LogInfo).Info("memory stats")
 		runtime.GC()
 	}
 }

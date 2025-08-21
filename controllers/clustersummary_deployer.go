@@ -243,7 +243,8 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 	if pullmodeStatus != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("agent result is available. updating status: %v", *pullmodeStatus))
 
-		if *pullmodeStatus == libsveltosv1beta1.FeatureStatusProvisioned {
+		switch *pullmodeStatus {
+		case libsveltosv1beta1.FeatureStatusProvisioned:
 			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
 			r.eventRecorder.Eventf(clusterSummary, corev1.EventTypeNormal, "sveltos", message)
@@ -253,12 +254,12 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 			clusterSummaryScope.SetLastAppliedTime(f.id, &now)
 			return pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
 				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
-		} else if *pullmodeStatus == libsveltosv1beta1.FeatureStatusProvisioning {
+		case libsveltosv1beta1.FeatureStatusProvisioning:
 			msg := "agent is provisioning the content"
 			logger.V(logs.LogDebug).Info(msg)
 			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
 			return errors.New(msg)
-		} else if *pullmodeStatus == libsveltosv1beta1.FeatureStatusFailed {
+		case libsveltosv1beta1.FeatureStatusFailed:
 			logger.V(logs.LogDebug).Info("agent failed provisioning the content")
 			if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
 				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
@@ -270,6 +271,9 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 			} else {
 				r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
 			}
+		case libsveltosv1beta1.FeatureStatusFailedNonRetriable, libsveltosv1beta1.FeatureStatusRemoving,
+			libsveltosv1beta1.FeatureStatusAgentRemoving, libsveltosv1beta1.FeatureStatusRemoved:
+			logger.V(logs.LogDebug).Info("proceed deploying")
 		}
 	} else {
 		provisioning := libsveltosv1beta1.FeatureStatusProvisioning

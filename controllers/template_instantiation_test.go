@@ -53,7 +53,7 @@ var _ = Describe("Template instantiation", func() {
 				Name: namespace,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
 
 		By("Create the cluster")
@@ -81,7 +81,7 @@ var _ = Describe("Template instantiation", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, cluster)).To(Succeed())
 
 		clusterSummary = &configv1beta1.ClusterSummary{
@@ -444,7 +444,7 @@ var _ = Describe("Template instantiation", func() {
 				Name: namespace,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
 
 		pwd := randomString()
@@ -458,7 +458,7 @@ var _ = Describe("Template instantiation", func() {
 				"password": []byte(pwd),
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 
 		values := `{{ $pwd := printf "%s" (index .MgmtResources "Secret").data.password }}
@@ -497,7 +497,7 @@ valuesTemplate: |
 				Name: namespace,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
 
 		pwd := randomString()
@@ -511,7 +511,7 @@ valuesTemplate: |
 				"password": []byte(pwd),
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 
 		values := `{{ $pwd := printf "%s" (getResource "Secret").data.password }}

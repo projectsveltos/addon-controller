@@ -98,7 +98,7 @@ func (m *instance) reportData(ctx context.Context) {
 
 func (m *instance) retrieveUUID(ctx context.Context) (string, error) {
 	var sveltosNS corev1.Namespace
-	if err := m.Client.Get(ctx, types.NamespacedName{Name: "projectsveltos"}, &sveltosNS); err != nil {
+	if err := m.Get(ctx, types.NamespacedName{Name: "projectsveltos"}, &sveltosNS); err != nil {
 		return "", errors.Wrap(err, "cannot start the telemetry controller")
 	}
 
@@ -134,14 +134,14 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 	}
 
 	var capiClusters clusterv1.ClusterList
-	if err := m.Client.List(ctx, &capiClusters); err != nil {
+	if err := m.List(ctx, &capiClusters); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect CAPI clusters: %v", err))
 		return nil, err
 	}
 	data.ManagedCAPIClusters = len(capiClusters.Items)
 
 	var sveltosClusters libsveltosv1beta1.SveltosClusterList
-	if err := m.Client.List(ctx, &sveltosClusters); err != nil {
+	if err := m.List(ctx, &sveltosClusters); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect sveltosclusters: %v", err))
 		return nil, err
 	}
@@ -181,21 +181,21 @@ func (m *instance) collectConfigurationData(ctx context.Context) (cpInstances, p
 	logger := log.FromContext(ctx)
 
 	var clusterProfiles configv1beta1.ClusterProfileList
-	if err = m.Client.List(ctx, &clusterProfiles); err != nil {
+	if err = m.List(ctx, &clusterProfiles); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusterProfiles: %v", err))
 		return
 	}
 	cpInstances = len(clusterProfiles.Items)
 
 	var profiles configv1beta1.ProfileList
-	if err = m.Client.List(ctx, &profiles); err != nil {
+	if err = m.List(ctx, &profiles); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Profiles: %v", err))
 		return
 	}
 	pInstances = len(profiles.Items)
 
 	var clusterSummaries configv1beta1.ClusterSummaryList
-	if err = m.Client.List(ctx, &clusterSummaries); err != nil {
+	if err = m.List(ctx, &clusterSummaries); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClusterSummaries: %v", err))
 		return
 	}

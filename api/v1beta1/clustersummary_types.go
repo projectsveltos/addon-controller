@@ -263,7 +263,8 @@ func GetProfileOwnerAndTier(ctx context.Context, c client.Client, clusterSummary
 			continue
 		}
 
-		if ref.Kind == ClusterProfileKind {
+		switch ref.Kind {
+		case ClusterProfileKind:
 			clusterProfile := &ClusterProfile{}
 			err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, clusterProfile)
 			if err != nil {
@@ -273,7 +274,7 @@ func GetProfileOwnerAndTier(ctx context.Context, c client.Client, clusterSummary
 				return nil, 0, err
 			}
 			return clusterProfile, clusterProfile.Spec.Tier, nil
-		} else if ref.Kind == ProfileKind {
+		case ProfileKind:
 			profile := &Profile{}
 			err := c.Get(ctx,
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: ref.Name},

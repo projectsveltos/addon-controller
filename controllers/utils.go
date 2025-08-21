@@ -48,7 +48,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
@@ -434,7 +434,7 @@ func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger)
 		driftDetectionDeployments := &appsv1.DeploymentList{}
 		err := c.List(ctx, driftDetectionDeployments, listOptions...)
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to collect driftDetection deployment: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect driftDetection deployment: %v", err))
 			continue
 		}
 
@@ -450,7 +450,7 @@ func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger)
 					continue
 				}
 
-				logger.V(logsettings.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
 					depl.Namespace, depl.Name))
 				_ = c.Delete(ctx, depl)
 			}
@@ -473,7 +473,7 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 	resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
 	err := c.List(ctx, resourceSummaries, rsListOptions...)
 	if err != nil {
-		logger.V(logsettings.LogInfo).Info(
+		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("failed to collect resourceSummary instances: %v", err))
 		return err
 	}
@@ -491,7 +491,7 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 
 		err = c.Delete(ctx, rs)
 		if err != nil {
-			logger.V(logsettings.LogInfo).Info(
+			logger.V(logs.LogInfo).Info(
 				fmt.Sprintf("failed to delete resourceSummary instance: %v", err))
 			return err
 		}
@@ -504,28 +504,28 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
 
 	if depl.Labels == nil {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",
 			depl.Namespace, depl.Name))
 		return true, "", "", ""
 	}
 
 	clusterNamespace, ok := depl.Labels[driftDetectionClusterNamespaceLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterNamespaceLabel))
 		return true, "", "", ""
 	}
 
 	clusterName, ok = depl.Labels[driftDetectionClusterNameLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterNameLabel))
 		return true, "", "", ""
 	}
 
 	clusterTypeString, ok := depl.Labels[driftDetectionClusterTypeLabel]
 	if !ok {
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no %s label",
 			depl.Namespace, depl.Name, driftDetectionClusterTypeLabel))
 		return true, "", "", ""
 	}
@@ -541,7 +541,7 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 		if apierrors.IsNotFound(err) {
 			return false, clusterNamespace, clusterName, clusterType
 		}
-		logger.V(logsettings.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
 			clusterNamespace, clusterName, clusterTypeString, err))
 	}
 

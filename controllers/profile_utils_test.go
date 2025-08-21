@@ -323,7 +323,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(clusterSummaryList.Items[0].Spec.ClusterNamespace).To(Equal(matchingCluster.Namespace))
 		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).To(BeTrue())
 		Expect(len(clusterSummaryList.Items[0].ObjectMeta.OwnerReferences)).To(Equal(1))
-		owner := clusterSummaryList.Items[0].ObjectMeta.OwnerReferences[0]
+		owner := clusterSummaryList.Items[0].OwnerReferences[0]
 		Expect(owner.Name).To(Equal(clusterProfile.Name))
 		Expect(owner.Kind).To(Equal(clusterProfile.Kind))
 	})
@@ -571,10 +571,10 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous

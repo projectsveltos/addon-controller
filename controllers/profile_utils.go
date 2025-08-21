@@ -83,12 +83,12 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	if err := c.List(ctx, clusterSummaryList, listOptions...); err != nil {
-		profileScope.Logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list clustersummaries. err %v", err))
+		profileScope.V(logs.LogInfo).Info(fmt.Sprintf("failed to list clustersummaries. err %v", err))
 		return false
 	}
 
 	if len(clusterSummaryList.Items) > 0 {
-		profileScope.Logger.V(logs.LogInfo).Info("not all clusterSummaries are gone")
+		profileScope.V(logs.LogInfo).Info("not all clusterSummaries are gone")
 	}
 	return len(clusterSummaryList.Items) == 0
 }
@@ -238,7 +238,7 @@ func updateClusterConfigurations(ctx context.Context, c client.Client, profileSc
 		// Create ClusterConfiguration if not already existing.
 		err := createClusterConfiguration(ctx, c, &cluster)
 		if err != nil {
-			profileScope.Logger.Error(err, fmt.Sprintf("failed to create ClusterConfiguration for cluster %s/%s",
+			profileScope.Error(err, fmt.Sprintf("failed to create ClusterConfiguration for cluster %s/%s",
 				cluster.Namespace, cluster.Name))
 			return err
 		}
@@ -246,7 +246,7 @@ func updateClusterConfigurations(ctx context.Context, c client.Client, profileSc
 		// Update ClusterConfiguration
 		err = updateClusterConfigurationWithProfile(ctx, c, profileScope.Profile, &cluster)
 		if err != nil {
-			profileScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterConfiguration for cluster %s/%s",
+			profileScope.Error(err, fmt.Sprintf("failed to update ClusterConfiguration for cluster %s/%s",
 				cluster.Namespace, cluster.Name))
 			return err
 		}
@@ -553,7 +553,7 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 		logger := profileScope.Logger
 		logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
 
-		ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, &cluster, profileScope.Logger)
+		ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, &cluster, logger)
 		if err != nil {
 			return err
 		}
@@ -690,7 +690,7 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 				foundClusterSummaries = true
 				err := c.Delete(ctx, cs)
 				if err != nil {
-					profileScope.Logger.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
+					profileScope.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
 						cs.Namespace, cs.Name))
 					return err
 				}
@@ -739,14 +739,14 @@ func updateClusterReports(ctx context.Context, c client.Client, profileScope *sc
 	if profileScope.IsDryRunSync() {
 		err := createClusterReports(ctx, c, profileScope)
 		if err != nil {
-			profileScope.Logger.Error(err, "failed to create ClusterReports")
+			profileScope.Error(err, "failed to create ClusterReports")
 			return err
 		}
 	} else {
 		// delete all ClusterReports created by this ClusterProfile/Profile instance
 		err := cleanClusterReports(ctx, c, profileScope)
 		if err != nil {
-			profileScope.Logger.Error(err, "failed to delete ClusterReports")
+			profileScope.Error(err, "failed to delete ClusterReports")
 			return err
 		}
 	}
@@ -914,7 +914,7 @@ func getMaxUpdate(profileScope *scope.ProfileScope) int32 {
 		var maxUpdateInt int
 		if _, err := fmt.Sscanf(maxUpdateString, "%d", &maxUpdateInt); err != nil {
 			// There is a validation on format accepted so this should never happen
-			profileScope.Logger.V(logs.LogInfo).Info(fmt.Sprintf("incorrect MaxUpdate %s: %v",
+			profileScope.V(logs.LogInfo).Info(fmt.Sprintf("incorrect MaxUpdate %s: %v",
 				profileScope.GetSpec().MaxUpdate.StrVal, err))
 			return int32(0)
 		}

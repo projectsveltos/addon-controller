@@ -55,11 +55,12 @@ func UpdateClusterReportWithResourceReports(ctx context.Context, c client.Client
 			return err
 		}
 
-		if featureID == libsveltosv1beta1.FeatureResources {
+		switch featureID {
+		case libsveltosv1beta1.FeatureResources:
 			clusterReport.Status.ResourceReports = resourceReports
-		} else if featureID == libsveltosv1beta1.FeatureKustomize {
+		case libsveltosv1beta1.FeatureKustomize:
 			clusterReport.Status.KustomizeResourceReports = resourceReports
-		} else if featureID == libsveltosv1beta1.FeatureHelm {
+		case libsveltosv1beta1.FeatureHelm:
 			clusterReport.Status.HelmResourceReports = resourceReports
 		}
 		return c.Status().Update(ctx, clusterReport)

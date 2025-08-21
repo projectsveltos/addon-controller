@@ -649,7 +649,7 @@ var _ = Describe("HandlersHelm", func() {
 				Name: clusterSummary.Namespace,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 		cluster := &clusterv1.Cluster{
@@ -662,7 +662,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-		Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
 		clusterSummary.OwnerReferences = []metav1.OwnerReference{
 			{
 				Kind:       configv1beta1.ClusterProfileKind,
@@ -671,8 +671,8 @@ var _ = Describe("HandlersHelm", func() {
 				UID:        clusterProfile.UID,
 			},
 		}
-		Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterReport)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterReport)).To(Succeed())
 
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterReport)).To(Succeed())
 

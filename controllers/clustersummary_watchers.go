@@ -38,7 +38,6 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/logsettings"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -329,11 +328,11 @@ func (m *manager) startWatcher(ctx context.Context, gvk *schema.GroupVersionKind
 	logger := m.log.WithValues("gvk", gvk.String())
 
 	if _, ok := m.watchers[*gvk]; ok {
-		logger.V(logsettings.LogDebug).Info("watcher already present")
+		logger.V(logs.LogDebug).Info("watcher already present")
 		return nil
 	}
 
-	logger.V(logsettings.LogInfo).Info("start watcher")
+	logger.V(logs.LogInfo).Info("start watcher")
 	// dynamic informer needs to be told which type to watch
 	dcinformer, err := m.getDynamicInformer(gvk)
 	if err != nil {
@@ -442,7 +441,7 @@ func (m *manager) react(obj client.Object, logger logr.Logger) {
 func (m *manager) notify(consumers *libsveltosset.Set, logger logr.Logger) {
 	requestors := consumers.Items()
 	for i := range requestors {
-		logger.V(logsettings.LogDebug).Info(fmt.Sprintf("got change notification. Notifying %s/%s",
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("got change notification. Notifying %s/%s",
 			requestors[i].Namespace, requestors[i].Name))
 		m.notifyConsumer(&requestors[i])
 	}

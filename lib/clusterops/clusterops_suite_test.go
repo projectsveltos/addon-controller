@@ -139,7 +139,7 @@ var _ = BeforeSuite(func() {
 			Name: "projectsveltos",
 		},
 	}
-	Expect(testEnv.Client.Create(context.TODO(), projectsveltosNs)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), projectsveltosNs)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, projectsveltosNs)).To(Succeed())
 
 	// Wait for synchronization

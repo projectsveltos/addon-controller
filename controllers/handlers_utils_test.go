@@ -504,7 +504,7 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), wrongSecretType)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), wrongSecretType)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, wrongSecretType)).To(Succeed())
 
 		secretName := types.NamespacedName{Namespace: wrongSecretType.Namespace, Name: wrongSecretType.Name}
@@ -517,7 +517,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Create a secret containing two services.
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
 		secretName = types.NamespacedName{Namespace: secret.Namespace, Name: secret.Name}
@@ -533,7 +533,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		// Create a secret containing two services.
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), secret)).To(Succeed())
@@ -565,7 +565,7 @@ var _ = Describe("HandlersUtils", func() {
 			deployer.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
 			deployer.AddAnnotation(policy, deployer.PolicyHash, policyHash)
 			deployer.AddAnnotation(policy, deployer.OwnerTier, "100")
-			Expect(testEnv.Client.Create(context.TODO(), policy))
+			Expect(testEnv.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
 
@@ -640,7 +640,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		secret := createSecretWithPolicy(namespace, randomString(), depl, services)
 
-		Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 
 		Expect(waitForObject(ctx, testEnv.Client, secret)).To(Succeed())
 
@@ -659,7 +659,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), depl, services)
 
-		Expect(testEnv.Client.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
 
 		Expect(waitForObject(ctx, testEnv.Client, configMap)).To(Succeed())
 
@@ -824,9 +824,9 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		Expect(testEnv.Client.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterRole1)).To(Succeed())
-		Expect(testEnv.Client.Create(context.TODO(), clusterRole2)).To(Succeed())
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterRole1)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), clusterRole2)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole2)).To(Succeed())
 
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
@@ -1157,7 +1157,7 @@ status:
 			},
 		}
 
-		Expect(testEnv.Client.Create(context.TODO(), service)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), service)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, service)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
@@ -1179,7 +1179,7 @@ status:
 				serviceOut.Status.LoadBalancer.Ingress != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(testEnv.Client.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: "default", Name: serviceName}, &serviceOut)).To(Succeed())
 
 		// verify status has been updated

@@ -220,11 +220,11 @@ var _ = Describe("Reloader utils", func() {
 		reloaders := &libsveltosv1beta1.ReloaderList{}
 
 		Eventually(func() bool {
-			err := testEnv.Client.List(context.TODO(), reloaders)
+			err := testEnv.List(context.TODO(), reloaders)
 			return err == nil && len(reloaders.Items) == 1
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		Expect(testEnv.Client.List(context.TODO(), reloaders)).To(Succeed())
+		Expect(testEnv.List(context.TODO(), reloaders)).To(Succeed())
 
 		for i := range resources {
 			Expect(reloaders.Items[0].Spec.ReloaderInfo).To(ContainElement(
@@ -240,7 +240,7 @@ var _ = Describe("Reloader utils", func() {
 			libsveltosv1beta1.FeatureResources, nil, true, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		Eventually(func() bool {
-			err := testEnv.Client.List(context.TODO(), reloaders)
+			err := testEnv.List(context.TODO(), reloaders)
 			return err == nil && len(reloaders.Items) == 0
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
@@ -385,7 +385,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"value": testEnv.Kubeconfig,
 		},
 	}
-	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 
 	By("Create the ConfigMap with drift-detection version")
@@ -398,7 +398,7 @@ func prepareCluster() *clusterv1.Cluster {
 			"version": version,
 		},
 	}
-	err := testEnv.Client.Create(context.TODO(), cm)
+	err := testEnv.Create(context.TODO(), cm)
 	if err != nil {
 		Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
 	}

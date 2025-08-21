@@ -175,12 +175,12 @@ func deleteResources(namespace string,
 	clusterSummary *configv1beta1.ClusterSummary) {
 
 	ns := &corev1.Namespace{}
-	err := testEnv.Client.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
+	err := testEnv.Get(context.TODO(), types.NamespacedName{Name: namespace}, ns)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		return
 	}
-	err = testEnv.Client.Delete(context.TODO(), ns)
+	err = testEnv.Delete(context.TODO(), ns)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
@@ -189,16 +189,16 @@ func deleteResources(namespace string,
 		client.InNamespace(namespace),
 	}
 	clusterConfigurationList := &configv1beta1.ClusterConfigurationList{}
-	Expect(testEnv.Client.List(context.TODO(), clusterConfigurationList, listOptions...)).To(Succeed())
+	Expect(testEnv.List(context.TODO(), clusterConfigurationList, listOptions...)).To(Succeed())
 	for i := range clusterConfigurationList.Items {
-		Expect(testEnv.Client.Delete(context.TODO(), &clusterConfigurationList.Items[i])).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), &clusterConfigurationList.Items[i])).To(Succeed())
 	}
 
-	err = testEnv.Client.Delete(context.TODO(), clusterSummary)
+	err = testEnv.Delete(context.TODO(), clusterSummary)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
-	err = testEnv.Client.Delete(context.TODO(), clusterProfile)
+	err = testEnv.Delete(context.TODO(), clusterProfile)
 	if err != nil {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	}
@@ -264,37 +264,37 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 		},
 	}
 
-	Expect(testEnv.Client.Create(context.TODO(), ns)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), clusterSummary)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), clusterConfiguration)).To(Succeed())
-	Expect(testEnv.Client.Create(context.TODO(), clusterProfile)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 	Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
 	currentClusterProfile := &configv1beta1.ClusterProfile{}
-	Expect(testEnv.Client.Get(context.TODO(),
+	Expect(testEnv.Get(context.TODO(),
 		types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 	currentClusterSummary := &configv1beta1.ClusterSummary{}
-	Expect(testEnv.Client.Get(context.TODO(),
+	Expect(testEnv.Get(context.TODO(),
 		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)).To(Succeed())
 
 	By("Set ClusterSummary OwnerReference")
 	addOwnerReference(context.TODO(), testEnv.Client, currentClusterSummary, currentClusterProfile)
 
-	Expect(testEnv.Client.Create(context.TODO(), cluster)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 	currentCluster := clusterv1.Cluster{}
-	Expect(testEnv.Client.Get(context.TODO(),
+	Expect(testEnv.Get(context.TODO(),
 		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 		&currentCluster)).To(Succeed())
 	initialized := true
 	currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
-	Expect(testEnv.Client.Status().Update(ctx, &currentCluster)).To(Succeed())
+	Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 	Eventually(func() bool {
-		err := testEnv.Client.Get(context.TODO(),
+		err := testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)
 		if err != nil {
@@ -309,7 +309,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
 		clusterConfigurationName := controllers.GetClusterConfigurationName(cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
-		err := testEnv.Client.Get(context.TODO(),
+		err := testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: clusterConfigurationName}, currentClusterConfiguration)
 		if err != nil {
 			return err
@@ -317,7 +317,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 		By("Set ClusterConfiguration OwnerReference")
 		addOwnerReference(context.TODO(), testEnv.Client, currentClusterConfiguration, currentClusterProfile)
 
-		err = testEnv.Client.Get(context.TODO(),
+		err = testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: cluster.Namespace, Name: clusterConfigurationName}, currentClusterConfiguration)
 		if err != nil {
 			return err
@@ -332,6 +332,6 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 	})
 	Expect(err).To(BeNil())
 
-	Expect(testEnv.Client.Create(context.TODO(), secret)).To(Succeed())
+	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, secret)).To(Succeed())
 }

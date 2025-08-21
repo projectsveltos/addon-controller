@@ -330,7 +330,7 @@ func (r *ClusterProfileReconciler) getClustersFromClusterSets(ctx context.Contex
 	clusters := make([]corev1.ObjectReference, 0)
 	for i := range clusterSetRefs {
 		clusterSet := &libsveltosv1beta1.ClusterSet{}
-		if err := r.Client.Get(ctx,
+		if err := r.Get(ctx,
 			types.NamespacedName{Name: clusterSetRefs[i]},
 			clusterSet); err != nil {
 			if apierrors.IsNotFound(err) {

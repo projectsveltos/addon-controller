@@ -1545,7 +1545,7 @@ func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context
 func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
 
-	notEligibleError := errors.New("License is required to manage SveltosCluster in pull mode")
+	notEligibleError := errors.New("license is required to manage SveltosCluster in pull mode")
 	failed := libsveltosv1beta1.FeatureStatusFailed
 	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureHelm, &failed, nil,
 		notEligibleError, logger)

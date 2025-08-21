@@ -203,7 +203,6 @@ func main() {
 	startControllersAndWatchers(ctx, mgr)
 
 	setupChecks(mgr)
-	controllers.SetVersion(version)
 
 	setupIndexes(ctx, mgr)
 

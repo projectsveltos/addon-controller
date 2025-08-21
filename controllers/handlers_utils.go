@@ -1348,9 +1348,10 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 	config += fmt.Sprintf("%t", clusterProfileSpec.ContinueOnConflict)
 
 	if clusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-		// Use the version. This will cause drift-detection, Sveltos CRDs
-		// to be redeployed on upgrade
-		config += getVersion()
+		// Drift detection is now upgraded on its own. v1.0.1 was last release triggering
+		// the upgrade via ClusterSummary redeployment. v1.0.1 is still added here to make
+		// sure hash does not change
+		config += "v1.0.1"
 	}
 
 	mgmtResourceHash, err := getTemplateResourceRefHash(ctx, clusterSummary)

@@ -27,7 +27,6 @@ import (
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
-	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -44,6 +43,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"

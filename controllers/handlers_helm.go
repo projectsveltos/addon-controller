@@ -44,7 +44,6 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -71,6 +70,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
@@ -3880,6 +3880,7 @@ func printMap(obj map[string]interface{}, w io.Writer) error {
 	if obj == nil {
 		return nil
 	}
+
 	data, err := yaml.Marshal(obj)
 	if err != nil {
 		return err

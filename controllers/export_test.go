@@ -175,3 +175,7 @@ var (
 	RemoveStaleResourceSummary = removeStaleResourceSummary
 	RemoveDuplicates           = removeDuplicates
 )
+
+var (
+	GetListOfClustersWithDriftDetection = getListOfClustersWithDriftDetection
+)

@@ -1,30 +1,31 @@
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: ClusterClass
 metadata:
   name: quick-start
   namespace: default
 spec:
   controlPlane:
-    machineHealthCheck:
-      unhealthyConditions:
-      - status: Unknown
-        timeout: 300s
-        type: Ready
-      - status: "False"
-        timeout: 300s
-        type: Ready
+    healthCheck:
+      checks:
+        unhealthyNodeConditions:
+        - status: Unknown
+          timeoutSeconds: 300
+          type: Ready
+        - status: "False"
+          timeoutSeconds: 300
+          type: Ready
     machineInfrastructure:
-      ref:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      templateRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: DockerMachineTemplate
         name: quick-start-control-plane
-    ref:
-      apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    templateRef:
+      apiVersion: controlplane.cluster.x-k8s.io/v1beta2
       kind: KubeadmControlPlaneTemplate
       name: quick-start-control-plane
   infrastructure:
-    ref:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    templateRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
       kind: DockerClusterTemplate
       name: quick-start-cluster
   patches:
@@ -35,7 +36,7 @@ spec:
         valueFrom:
           variable: imageRepository
       selector:
-        apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
         kind: KubeadmControlPlaneTemplate
         matchResources:
           controlPlane: true
@@ -51,11 +52,12 @@ spec:
             local:
               imageTag: {{ .etcdImageTag }}
       selector:
-        apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
         kind: KubeadmControlPlaneTemplate
         matchResources:
           controlPlane: true
     description: Sets tag to use for the etcd image in the KubeadmControlPlane.
+    enabledIf: '{{ ne .etcdImageTag "" }}'
     name: etcdImageTag
   - definitions:
     - jsonPatches:
@@ -65,11 +67,12 @@ spec:
           template: |
             imageTag: {{ .coreDNSImageTag }}
       selector:
-        apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
         kind: KubeadmControlPlaneTemplate
         matchResources:
           controlPlane: true
     description: Sets tag to use for the etcd image in the KubeadmControlPlane.
+    enabledIf: '{{ ne .coreDNSImageTag "" }}'
     name: coreDNSImageTag
   - definitions:
     - jsonPatches:
@@ -79,7 +82,7 @@ spec:
           template: |
             kindest/node:{{ .builtin.machineDeployment.version | replace "+" "_" }}
       selector:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: DockerMachineTemplate
         matchResources:
           machineDeploymentClass:
@@ -92,7 +95,7 @@ spec:
           template: |
             kindest/node:{{ .builtin.machinePool.version | replace "+" "_" }}
       selector:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: DockerMachinePoolTemplate
         matchResources:
           machinePoolClass:
@@ -105,7 +108,7 @@ spec:
           template: |
             kindest/node:{{ .builtin.controlPlane.version | replace "+" "_" }}
       selector:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
         kind: DockerMachineTemplate
         matchResources:
           controlPlane: true
@@ -117,7 +120,8 @@ spec:
       - op: add
         path: /spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs
         value:
-          admission-control-config-file: /etc/kubernetes/kube-apiserver-admission-pss.yaml
+        - name: admission-control-config-file
+          value: /etc/kubernetes/kube-apiserver-admission-pss.yaml
       - op: add
         path: /spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraVolumes
         value:
@@ -136,7 +140,7 @@ spec:
                 plugins:
                 - name: PodSecurity
                   configuration:
-                    apiVersion: pod-security.admission.config.k8s.io/v1{{ if semverCompare "< v1.25" .builtin.controlPlane.version }}beta1{{ end }}
+                    apiVersion: pod-security.admission.config.k8s.io/v1{{ if semverCompare "< v1.25-0" .builtin.controlPlane.version }}beta1{{ end }}
                     kind: PodSecurityConfiguration
                     defaults:
                       enforce: "{{ .podSecurityStandard.enforce }}"
@@ -151,7 +155,7 @@ spec:
                       namespaces: [kube-system]
               path: /etc/kubernetes/kube-apiserver-admission-pss.yaml
       selector:
-        apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+        apiVersion: controlplane.cluster.x-k8s.io/v1beta2
         kind: KubeadmControlPlaneTemplate
         matchResources:
           controlPlane: true
@@ -212,41 +216,40 @@ spec:
         type: object
   workers:
     machineDeployments:
-    - class: default-worker
-      machineHealthCheck:
-        unhealthyConditions:
-        - status: Unknown
-          timeout: 300s
-          type: Ready
-        - status: "False"
-          timeout: 300s
-          type: Ready
-      template:
-        bootstrap:
-          ref:
-            apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-            kind: KubeadmConfigTemplate
-            name: quick-start-default-worker-bootstraptemplate
-        infrastructure:
-          ref:
-            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-            kind: DockerMachineTemplate
-            name: quick-start-default-worker-machinetemplate
+    - bootstrap:
+        templateRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+          kind: KubeadmConfigTemplate
+          name: quick-start-default-worker-bootstraptemplate
+      class: default-worker
+      healthCheck:
+        checks:
+          unhealthyNodeConditions:
+          - status: Unknown
+            timeoutSeconds: 300
+            type: Ready
+          - status: "False"
+            timeoutSeconds: 300
+            type: Ready
+      infrastructure:
+        templateRef:
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: DockerMachineTemplate
+          name: quick-start-default-worker-machinetemplate
     machinePools:
-    - class: default-worker
-      template:
-        bootstrap:
-          ref:
-            apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
-            kind: KubeadmConfigTemplate
-            name: quick-start-default-worker-bootstraptemplate
-        infrastructure:
-          ref:
-            apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-            kind: DockerMachinePoolTemplate
-            name: quick-start-default-worker-machinepooltemplate
+    - bootstrap:
+        templateRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+          kind: KubeadmConfigTemplate
+          name: quick-start-default-worker-bootstraptemplate
+      class: default-worker
+      infrastructure:
+        templateRef:
+          apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+          kind: DockerMachinePoolTemplate
+          name: quick-start-default-worker-machinepooltemplate
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerClusterTemplate
 metadata:
   name: quick-start-cluster
@@ -255,7 +258,7 @@ spec:
   template:
     spec: {}
 ---
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlaneTemplate
 metadata:
   name: quick-start-control-plane
@@ -272,11 +275,17 @@ spec:
             - 0.0.0.0
             - host.docker.internal
         initConfiguration:
-          nodeRegistration: {}
+          nodeRegistration:
+            kubeletExtraArgs:
+            - name: eviction-hard
+              value: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
         joinConfiguration:
-          nodeRegistration: {}
+          nodeRegistration:
+            kubeletExtraArgs:
+            - name: eviction-hard
+              value: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerMachineTemplate
 metadata:
   name: quick-start-control-plane
@@ -288,7 +297,7 @@ spec:
       - containerPath: /var/run/docker.sock
         hostPath: /var/run/docker.sock
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerMachineTemplate
 metadata:
   name: quick-start-default-worker-machinetemplate
@@ -300,7 +309,7 @@ spec:
       - containerPath: /var/run/docker.sock
         hostPath: /var/run/docker.sock
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: DockerMachinePoolTemplate
 metadata:
   name: quick-start-default-worker-machinepooltemplate
@@ -310,7 +319,7 @@ spec:
     spec:
       template: {}
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfigTemplate
 metadata:
   name: quick-start-default-worker-bootstraptemplate
@@ -319,9 +328,12 @@ spec:
   template:
     spec:
       joinConfiguration:
-        nodeRegistration: {}
+        nodeRegistration:
+          kubeletExtraArgs:
+          - name: eviction-hard
+            value: nodefs.available<0%,nodefs.inodesFree<0%,imagefs.available<0%
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
   name: clusterapi-workload
@@ -338,9 +350,9 @@ spec:
       cidrBlocks:
       - 10.225.0.0/16
   topology:
-    class: quick-start
+    classRef:
+      name: quick-start
     controlPlane:
-      metadata: {}
       replicas: 1
     variables:
     - name: imageRepository

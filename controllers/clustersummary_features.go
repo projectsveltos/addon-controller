@@ -54,14 +54,15 @@ func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
 func creatFeatureHandlerMaps() {
 	featuresHandlers = make(map[libsveltosv1beta1.FeatureID]feature)
 
-	featuresHandlers[libsveltosv1beta1.FeatureResources] = feature{id: libsveltosv1beta1.FeatureResources, currentHash: resourcesHash,
-		deploy: deployResources, undeploy: undeployResources, getRefs: getResourceRefs}
+	featuresHandlers[libsveltosv1beta1.FeatureResources] = feature{id: libsveltosv1beta1.FeatureResources,
+		currentHash: resourcesHash, deploy: deployResources, undeploy: undeployResources, getRefs: getResourceRefs}
 
-	featuresHandlers[libsveltosv1beta1.FeatureHelm] = feature{id: libsveltosv1beta1.FeatureHelm, currentHash: helmHash,
-		deploy: deployHelmCharts, undeploy: undeployHelmCharts, getRefs: getHelmRefs}
+	featuresHandlers[libsveltosv1beta1.FeatureHelm] = feature{id: libsveltosv1beta1.FeatureHelm,
+		currentHash: helmHash, deploy: deployHelmCharts, undeploy: undeployHelmCharts, getRefs: getHelmRefs}
 
-	featuresHandlers[libsveltosv1beta1.FeatureKustomize] = feature{id: libsveltosv1beta1.FeatureKustomize, currentHash: kustomizationHash,
-		deploy: deployKustomizeRefs, undeploy: undeployKustomizeRefs, getRefs: getKustomizationRefs}
+	featuresHandlers[libsveltosv1beta1.FeatureKustomize] = feature{id: libsveltosv1beta1.FeatureKustomize,
+		currentHash: kustomizationHash, deploy: deployKustomizeRefs, undeploy: undeployKustomizeRefs,
+		getRefs: getKustomizationRefs}
 }
 
 func getHandlersForFeature(featureID libsveltosv1beta1.FeatureID) feature {

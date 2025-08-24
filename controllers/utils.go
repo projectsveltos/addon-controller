@@ -64,10 +64,6 @@ const (
 	clusterKind   = "Cluster"
 )
 
-var (
-	version string
-)
-
 func InitScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(s); err != nil {
@@ -212,14 +208,6 @@ func isCluterSummaryProvisioned(clusterSumary *configv1beta1.ClusterSummary) boo
 	}
 
 	return true
-}
-
-func SetVersion(v string) {
-	version = v
-}
-
-func getVersion() string {
-	return version
 }
 
 func isNamespaced(r *unstructured.Unstructured, config *rest.Config) (bool, error) {
@@ -501,7 +489,7 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 }
 
 func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *appsv1.Deployment,
-	logger logr.Logger) (exist bool, clusterName, clusterNamespace string, clusterType libsveltosv1beta1.ClusterType) {
+	logger logr.Logger) (exist bool, clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType) {
 
 	if depl.Labels == nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("driftDetection %s/%s has no label",

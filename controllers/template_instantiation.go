@@ -22,13 +22,13 @@ import (
 	"text/template"
 
 	"github.com/go-logr/logr"
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/controllers/external"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -132,16 +132,15 @@ func instantiateGenericField(ctx context.Context, config *rest.Config, c client.
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (interface{}, error) {
 
 	// Marshal the field's value to a YAML string.
-	var buf bytes.Buffer
-	encoder := yaml.NewEncoder(&buf)
-	err := encoder.Encode(field)
+	// We use the cluster-api/util/yaml.Marshal function.
+	yamlBytes, err := yaml.Marshal(field)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal field: %w", err)
 	}
 
 	// Instantiate the YAML string with the template engine.
 	instantiatedString, err := instantiateTemplateValues(ctx, config, c,
-		clusterSummary, "chart-name", buf.String(), objects, mgmtResources, logger)
+		clusterSummary, "chart-name", string(yamlBytes), objects, mgmtResources, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to instantiate field: %w", err)
 	}

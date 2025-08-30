@@ -116,6 +116,34 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(addTypeInformationToObject(scheme, clusterProfile)).To(Succeed())
 	})
 
+	It("isProfilePaused returns true when profile has paused annotation", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.IsProfilePaused(profileScope)).To(BeFalse())
+
+		clusterProfile.Annotations = map[string]string{
+			configv1beta1.ProfilePausedAnnotation: "true",
+		}
+
+		profileScope, err = scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.IsProfilePaused(profileScope)).To(BeTrue())
+	})
+
 	It("getMatchingCluster considers both ClusterSelector and ClusterRefs", func() {
 		clusterCRD := external.TestClusterCRD.DeepCopy()
 

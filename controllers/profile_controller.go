@@ -143,6 +143,11 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		return reconcile.Result{}, fmt.Errorf("unable to create profile scope for %s: %w", req.NamespacedName, err)
 	}
 
+	if isProfilePaused(profileScope) {
+		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
+		return reconcile.Result{}, nil
+	}
+
 	// Always close the scope when exiting this function so we can persist any Profile
 	// changes.
 	defer func() {

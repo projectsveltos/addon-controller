@@ -27,6 +27,7 @@ var (
 	UpdateClusterSummarySyncMode          = updateClusterSummarySyncMode
 	UpdateClusterReports                  = updateClusterReports
 	GetMatchingClusters                   = getMatchingClusters
+	IsProfilePaused                       = isProfilePaused
 	GetMaxUpdate                          = getMaxUpdate
 	ReviseUpdatedAndUpdatingClusters      = reviseUpdatedAndUpdatingClusters
 	GetUpdatedAndUpdatingClusters         = getUpdatedAndUpdatingClusters

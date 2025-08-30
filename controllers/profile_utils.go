@@ -991,6 +991,10 @@ func addFinalizer(ctx context.Context, profileScope *scope.ProfileScope, finaliz
 	return nil
 }
 
+func isProfilePaused(profileScope *scope.ProfileScope) bool {
+	return hasAnnotation(profileScope.Profile, configv1beta1.ProfilePausedAnnotation)
+}
+
 func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
 	finalizer string, logger logr.Logger) error {
 

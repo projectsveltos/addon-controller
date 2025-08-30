@@ -454,10 +454,11 @@ spec:
                 type: boolean
               dependsOn:
                 description: |-
-                  DependsOn specifies a list of other ClusterProfiles that this instance depends on.
-                  In any managed cluster that matches this ClusterProfile, the add-ons and applications
-                  defined in this instance will not be deployed until all add-ons and applications in the
-                  ClusterProfiles listed as dependencies are deployed.
+                  DependsOn specifies a list of other profiles that this instance depends on.
+                  A ClusterProfile can only depend on other ClusterProfiles, and a Profile can
+                  only depend on other Profiles.
+                  The add-ons and applications defined in this instance will not be deployed
+                  until all add-ons and applications in the profiles listed as dependencies are deployed.
                 items:
                   type: string
                 type: array
@@ -2120,10 +2121,11 @@ spec:
                     type: boolean
                   dependsOn:
                     description: |-
-                      DependsOn specifies a list of other ClusterProfiles that this instance depends on.
-                      In any managed cluster that matches this ClusterProfile, the add-ons and applications
-                      defined in this instance will not be deployed until all add-ons and applications in the
-                      ClusterProfiles listed as dependencies are deployed.
+                      DependsOn specifies a list of other profiles that this instance depends on.
+                      A ClusterProfile can only depend on other ClusterProfiles, and a Profile can
+                      only depend on other Profiles.
+                      The add-ons and applications defined in this instance will not be deployed
+                      until all add-ons and applications in the profiles listed as dependencies are deployed.
                     items:
                       type: string
                     type: array
@@ -3428,10 +3430,11 @@ spec:
                 type: boolean
               dependsOn:
                 description: |-
-                  DependsOn specifies a list of other ClusterProfiles that this instance depends on.
-                  In any managed cluster that matches this ClusterProfile, the add-ons and applications
-                  defined in this instance will not be deployed until all add-ons and applications in the
-                  ClusterProfiles listed as dependencies are deployed.
+                  DependsOn specifies a list of other profiles that this instance depends on.
+                  A ClusterProfile can only depend on other ClusterProfiles, and a Profile can
+                  only depend on other Profiles.
+                  The add-ons and applications defined in this instance will not be deployed
+                  until all add-ons and applications in the profiles listed as dependencies are deployed.
                 items:
                   type: string
                 type: array

@@ -36,6 +36,10 @@ const (
 	// - ClusterConfiguration instances created by a ClusterProfile instance for a given cluster;
 	// - ClusterReport instances created by a ClusterProfile instance for a given cluster;
 	ClusterTypeLabel = "projectsveltos.io/cluster-type"
+
+	// ProfilePausedAnnotation is the annotation that, when set on a Profile or ClusterProfile,
+	// will pause reconciliation, preventing any changes from being propagated to clusters.
+	ProfilePausedAnnotation = "profile.projectsveltos.io/paused"
 )
 
 type DryRunReconciliationError struct{}
@@ -694,10 +698,11 @@ type Spec struct {
 	// +optional
 	TemplateResourceRefs []TemplateResourceRef `json:"templateResourceRefs,omitempty" patchStrategy:"merge" patchMergeKey:"identifier"`
 
-	// DependsOn specifies a list of other ClusterProfiles that this instance depends on.
-	// In any managed cluster that matches this ClusterProfile, the add-ons and applications
-	// defined in this instance will not be deployed until all add-ons and applications in the
-	// ClusterProfiles listed as dependencies are deployed.
+	// DependsOn specifies a list of other profiles that this instance depends on.
+	// A ClusterProfile can only depend on other ClusterProfiles, and a Profile can
+	// only depend on other Profiles.
+	// The add-ons and applications defined in this instance will not be deployed
+	// until all add-ons and applications in the profiles listed as dependencies are deployed.
 	DependsOn []string `json:"dependsOn,omitempty"`
 
 	// PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources

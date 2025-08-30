@@ -121,6 +121,11 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}()
 
+	if isProfilePaused(profileScope) {
+		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
+		return reconcile.Result{}, nil
+	}
+
 	// Handle deleted clusterProfile
 	if !clusterProfile.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, profileScope), nil

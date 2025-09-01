@@ -19,7 +19,6 @@ package controllers_test
 import (
 	"context"
 	"sync"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -67,15 +66,11 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("Adds finalizer", func() {
-		initObjects := []client.Object{
-			clusterProfile,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
-			WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:          c,
+			Client:          testEnv,
 			Scheme:          scheme,
 			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
@@ -93,7 +88,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
+		err = testEnv.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(
 			controllerutil.ContainsFinalizer(
@@ -182,33 +177,50 @@ var _ = Describe("Profile: Reconciler", func() {
 	})
 
 	It("Reconciliation of deleted ClusterProfile removes finalizer only when all ClusterSummaries are gone", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   clusterProfileNamePrefix + randomString(),
-				Labels: map[string]string{clusterops.ClusterProfileLabelName: clusterProfile.Name},
+				Name:      clusterProfileNamePrefix + randomString(),
+				Namespace: ns.Name,
+				Labels:    map[string]string{clusterops.ClusterProfileLabelName: clusterProfile.Name},
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
 				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
 			},
 		}
-
 		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		now := metav1.NewTime(time.Now())
-		clusterProfile.DeletionTimestamp = &now
 		controllerutil.AddFinalizer(clusterProfile, configv1beta1.ClusterProfileFinalizer)
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
 
-		initObjects := []client.Object{
-			clusterProfile,
-			clusterSummary,
-		}
+		addOwnerReference(ctx, testEnv.Client, clusterSummary, clusterProfile)
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
+		Expect(testEnv.Delete(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		addOwnerReference(ctx, c, clusterSummary, clusterProfile)
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name},
+				currentClusterProfile)
+			if err != nil {
+				return false
+			}
+			return !currentClusterProfile.DeletionTimestamp.IsZero()
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		reconciler := &controllers.ClusterProfileReconciler{
-			Client:          c,
+			Client:          testEnv,
 			Scheme:          scheme,
 			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
 			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
@@ -233,21 +245,23 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(err).To(BeNil())
 		Expect(result.RequeueAfter).ToNot(BeZero())
 
-		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
+		err = testEnv.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Remove ClusterSummary finalizer
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
-		Expect(c.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 			currentClusterSummary)).To(Succeed())
 		controllerutil.RemoveFinalizer(currentClusterSummary, configv1beta1.ClusterSummaryFinalizer)
-		Expect(c.Update(context.TODO(), currentClusterSummary)).To(Succeed())
-		err = c.Get(context.TODO(),
-			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
-			currentClusterSummary)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(testEnv.Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		Eventually(func() bool {
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		// Reconcile ClusterProfile again. Since all associated ClusterSummaries are
 		// gone, this reconciliation will remove finalizer and remove ClusterProfile
@@ -257,9 +271,10 @@ var _ = Describe("Profile: Reconciler", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		err = c.Get(context.TODO(), clusterProfileName, currentClusterProfile)
-		Expect(err).To(HaveOccurred())
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Eventually(func() bool {
+			err = testEnv.Get(context.TODO(), clusterProfileName, currentClusterProfile)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })
 

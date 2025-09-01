@@ -3066,6 +3066,14 @@ func getSkipCRDsHelmValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
+func getPassCredentialsToAllValue(options *configv1beta1.HelmOptions) bool {
+	if options != nil {
+		return options.PassCredentialsAll
+	}
+
+	return false
+}
+
 func getAtomicHelmValue(options *configv1beta1.HelmOptions) bool {
 	if options != nil {
 		return options.Atomic
@@ -3278,6 +3286,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	installClient.Replace = getReplaceValue(requestedChart.Options)
 	installClient.Labels = getLabelsValue(requestedChart.Options)
 	installClient.Description = getDescriptionValue(requestedChart.Options)
+	installClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	if actionConfig.RegistryClient != nil {
 		installClient.SetRegistryClient(actionConfig.RegistryClient)
 	}
@@ -3337,6 +3346,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.InsecureSkipTLSverify = registryOptions.skipTLSVerify
 	upgradeClient.PlainHTTP = registryOptions.plainHTTP
 	upgradeClient.CaFile = registryOptions.caPath
+	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 
 	if actionConfig.RegistryClient != nil {
 		upgradeClient.SetRegistryClient(actionConfig.RegistryClient)

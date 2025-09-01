@@ -219,6 +219,10 @@ type HelmOptions struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 
+	// PassCredentialsAll is the flag to pass credentials to all domains
+	// +optional
+	PassCredentialsAll bool `json:"passCredentialsAll,omitempty"`
+
 	// HelmInstallOptions are options specific to helm install
 	// +optional
 	InstallOptions HelmInstallOptions `json:"installOptions,omitempty"`

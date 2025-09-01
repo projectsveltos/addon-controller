@@ -329,6 +329,10 @@ spec:
                             type: string
                           description: Labels that would be added to release metadata.
                           type: object
+                        passCredentialsAll:
+                          description: PassCredentialsAll is the flag to pass credentials
+                            to all domains
+                          type: boolean
                         skipCRDs:
                           default: false
                           description: |-

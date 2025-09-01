@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -234,6 +235,8 @@ var _ = Describe("Profile: Reconciler", func() {
 				Name: namespace,
 			},
 		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, ns)).To(Succeed())
 
 		clusterConfiguration := &configv1beta1.ClusterConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
@@ -241,20 +244,17 @@ var _ = Describe("Profile: Reconciler", func() {
 				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi),
 			},
 		}
+		Expect(testEnv.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterConfiguration)).To(Succeed())
 
-		initObjects := []client.Object{
-			clusterProfile,
-			ns,
-			clusterConfiguration,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterProfile)).To(Succeed())
 
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(c.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
 		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
-		Expect(c.Get(context.TODO(),
+		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{
 				Namespace: clusterConfiguration.Namespace,
 				Name:      clusterConfiguration.Name,
@@ -278,44 +278,77 @@ var _ = Describe("Profile: Reconciler", func() {
 			},
 		}
 
-		Expect(c.Update(context.TODO(), clusterConfiguration)).To(Succeed())
+		Expect(testEnv.Update(context.TODO(), clusterConfiguration)).To(Succeed())
 
-		Expect(c.Get(context.TODO(),
-			types.NamespacedName{
-				Namespace: clusterConfiguration.Namespace,
-				Name:      clusterConfiguration.Name,
-			},
-			currentClusterConfiguration)).To(Succeed())
-
-		currentClusterConfiguration.Status =
-			configv1beta1.ClusterConfigurationStatus{
-				ClusterProfileResources: []configv1beta1.ClusterProfileResource{
-					{
-						ClusterProfileName: clusterProfile.Name,
-					},
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
 				},
+				currentClusterConfiguration)
+			if err != nil {
+				return err
 			}
 
-		Expect(c.Status().Update(context.TODO(), currentClusterConfiguration)).To(Succeed())
+			currentClusterConfiguration.Status =
+				configv1beta1.ClusterConfigurationStatus{
+					ClusterProfileResources: []configv1beta1.ClusterProfileResource{
+						{
+							ClusterProfileName: clusterProfile.Name,
+						},
+					},
+				}
+			return testEnv.Status().Update(context.TODO(), currentClusterConfiguration)
+		})
+		Expect(err).To(BeNil())
 
-		Expect(controllers.CleanClusterConfiguration(context.TODO(), c, currentClusterProfile,
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
+				},
+				currentClusterConfiguration)
+			if err != nil {
+				return false
+			}
+			return currentClusterConfiguration.Status.ClusterProfileResources != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.CleanClusterConfiguration(context.TODO(), testEnv, currentClusterProfile,
 			currentClusterConfiguration)).To(Succeed())
 
-		Expect(c.Get(context.TODO(),
-			types.NamespacedName{
-				Namespace: clusterConfiguration.Namespace,
-				Name:      clusterConfiguration.Name,
-			},
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
+				},
+				currentClusterConfiguration)
+			if err != nil {
+				return false
+			}
+			return len(currentClusterConfiguration.OwnerReferences) == 1 &&
+				len(currentClusterConfiguration.Status.ClusterProfileResources) == 0
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.CleanClusterConfiguration(context.TODO(), testEnv, currentClusterProfile,
 			currentClusterConfiguration)).To(Succeed())
 
-		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
-
-		Expect(controllers.CleanClusterConfiguration(context.TODO(), c, currentClusterProfile,
-			currentClusterConfiguration)).To(Succeed())
-
-		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
-		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(0))
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
+				},
+				currentClusterConfiguration)
+			if err != nil {
+				return false
+			}
+			return len(currentClusterConfiguration.OwnerReferences) == 1 &&
+				len(currentClusterConfiguration.Status.ClusterProfileResources) == 0
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("CreateClusterSummary creates ClusterSummary with proper fields", func() {
@@ -482,6 +515,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 
 		Expect(c.Update(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, clusterProfile)).To(Succeed())
 
 		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
 			Client:         c,
@@ -1373,6 +1407,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		// Reset MaxUpdate to 2
 		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: 2}
 		Expect(c.Update(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, clusterProfile)).To(Succeed())
 
 		Expect(controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)).To(BeNil())
 

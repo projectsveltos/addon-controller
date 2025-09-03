@@ -36,7 +36,7 @@ import (
 func UpdateClusterConfiguration(ctx context.Context, c client.Client, isDryRun, clean bool,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	profileRef *corev1.ObjectReference, featureID libsveltosv1beta1.FeatureID,
-	policyDeployed []libsveltosv1beta1.Resource, chartDeployed []configv1beta1.Chart) error {
+	policyDeployed []configv1beta1.DeployedResource, chartDeployed []configv1beta1.Chart) error {
 
 	// No-op in DryRun mode
 	if isDryRun {
@@ -85,7 +85,7 @@ func getClusterConfigurationName(clusterName string, clusterType libsveltosv1bet
 
 func updateClusterProfileResources(ctx context.Context, c client.Client, profileRef *corev1.ObjectReference,
 	clusterConfiguration *configv1beta1.ClusterConfiguration, index int,
-	featureID libsveltosv1beta1.FeatureID, policyDeployed []libsveltosv1beta1.Resource,
+	featureID libsveltosv1beta1.FeatureID, policyDeployed []configv1beta1.DeployedResource,
 	chartDeployed []configv1beta1.Chart) error {
 
 	isPresent := false
@@ -122,7 +122,7 @@ func updateClusterProfileResources(ctx context.Context, c client.Client, profile
 
 func updateProfileResources(ctx context.Context, c client.Client, profileRef *corev1.ObjectReference,
 	clusterConfiguration *configv1beta1.ClusterConfiguration, index int,
-	featureID libsveltosv1beta1.FeatureID, policyDeployed []libsveltosv1beta1.Resource,
+	featureID libsveltosv1beta1.FeatureID, policyDeployed []configv1beta1.DeployedResource,
 	chartDeployed []configv1beta1.Chart) error {
 
 	isPresent := false

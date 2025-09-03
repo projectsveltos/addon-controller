@@ -110,6 +110,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	}
 
 	remoteDeployed := make([]libsveltosv1beta1.Resource, len(remoteResourceReports))
+	resourceDeployed := make([]configv1beta1.DeployedResource, len(remoteResourceReports)+len(localResourceReports))
 
 	if !isPullMode {
 		remoteResources := clusterops.ConvertResourceReportsToObjectReference(remoteResourceReports)
@@ -121,6 +122,12 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 
 		for i := range remoteResourceReports {
 			remoteDeployed[i] = remoteResourceReports[i].Resource
+			resourceDeployed[i] = *resourceToDeployedResource(&remoteResourceReports[i].Resource,
+				configv1beta1.DeploymentTypeRemote)
+		}
+		for i := range localResourceReports {
+			resourceDeployed[len(remoteResourceReports)+i] = *resourceToDeployedResource(&localResourceReports[i].Resource,
+				configv1beta1.DeploymentTypeLocal)
 		}
 
 		isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
@@ -128,13 +135,11 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 		// If SveltosCluster is in pull mode, once the agent has deployed the resources, as soon as the addon controller
 		// sees the status as provisioned, will update the ClusterConfiguration.
 		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, clean, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, profileRef, featureHandler.id, remoteDeployed,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, profileRef, featureHandler.id, resourceDeployed,
 			nil)
 		if err != nil {
 			return err
 		}
-
-		// TODO: track resource deployed in the management cluster
 	}
 
 	// If a deployment error happened, do not try to clean stale resources. Because of the error potentially
@@ -421,7 +426,7 @@ func undeployResources(ctx context.Context, c client.Client,
 
 		isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, true, clusterNamespace, clusterName,
-			clusterType, profileRef, libsveltosv1beta1.FeatureResources, []libsveltosv1beta1.Resource{}, nil)
+			clusterType, profileRef, libsveltosv1beta1.FeatureResources, []configv1beta1.DeployedResource{}, nil)
 		if err != nil {
 			return err
 		}

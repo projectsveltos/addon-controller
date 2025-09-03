@@ -56,13 +56,41 @@ type Chart struct {
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime"`
 }
 
+type DeployedResource struct {
+	// Name of the resource deployed in the Cluster.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// Namespace of the resource deployed in the Cluster.
+	// Empty for resources scoped at cluster level.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+
+	// Group of the resource deployed in the Cluster.
+	Group string `json:"group"`
+
+	// Kind of the resource deployed in the Cluster.
+	// +kubebuilder:validation:MinLength=1
+	Kind string `json:"kind"`
+
+	// Version of the resource deployed in the Cluster.
+	// +kubebuilder:validation:MinLength=1
+	Version string `json:"version"`
+
+	// DeploymentType indicates whether resources is deployed
+	// into the management cluster (local) or the managed cluster (remote)
+	// +kubebuilder:default:=Remote
+	// +optional
+	DeploymentType DeploymentType `json:"deploymentType,omitempty"`
+}
+
 type Feature struct {
 	// FeatureID is an indentifier of the feature whose status is reported
 	FeatureID libsveltosv1beta1.FeatureID `json:"featureID"`
 
 	// Resources is a list of resources deployed in the Cluster.
 	// +optional
-	Resources []libsveltosv1beta1.Resource `json:"resources,omitempty"`
+	Resources []DeployedResource `json:"resources,omitempty"`
 
 	// Charts is a list of helm charts deployed in the Cluster.
 	// +optional

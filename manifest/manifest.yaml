@@ -116,26 +116,23 @@ spec:
                               in the Cluster.
                             items:
                               properties:
+                                deploymentType:
+                                  default: Remote
+                                  description: |-
+                                    DeploymentType indicates whether resources is deployed
+                                    into the management cluster (local) or the managed cluster (remote)
+                                  enum:
+                                  - Local
+                                  - Remote
+                                  type: string
                                 group:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
-                                ignoreForConfigurationDrift:
-                                  default: false
-                                  description: |-
-                                    IgnoreForConfigurationDrift indicates to not track resource
-                                    for configuration drift detection.
-                                    This field has a meaning only when mode is ContinuousWithDriftDetection
-                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
                                   minLength: 1
-                                  type: string
-                                lastAppliedTime:
-                                  description: LastAppliedTime identifies when this
-                                    resource was last applied to the cluster.
-                                  format: date-time
                                   type: string
                                 name:
                                   description: Name of the resource deployed in the
@@ -242,26 +239,23 @@ spec:
                               in the Cluster.
                             items:
                               properties:
+                                deploymentType:
+                                  default: Remote
+                                  description: |-
+                                    DeploymentType indicates whether resources is deployed
+                                    into the management cluster (local) or the managed cluster (remote)
+                                  enum:
+                                  - Local
+                                  - Remote
+                                  type: string
                                 group:
                                   description: Group of the resource deployed in the
                                     Cluster.
                                   type: string
-                                ignoreForConfigurationDrift:
-                                  default: false
-                                  description: |-
-                                    IgnoreForConfigurationDrift indicates to not track resource
-                                    for configuration drift detection.
-                                    This field has a meaning only when mode is ContinuousWithDriftDetection
-                                  type: boolean
                                 kind:
                                   description: Kind of the resource deployed in the
                                     Cluster.
                                   minLength: 1
-                                  type: string
-                                lastAppliedTime:
-                                  description: LastAppliedTime identifies when this
-                                    resource was last applied to the cluster.
-                                  format: date-time
                                   type: string
                                 name:
                                   description: Name of the resource deployed in the

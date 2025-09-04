@@ -137,9 +137,6 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	clusterSummary *configv1beta1.ClusterSummary, localResourceReports, remoteResourceReports []libsveltosv1beta1.ResourceReport,
 	deployError error, isPullMode bool, configurationHash []byte, logger logr.Logger) error {
 
-	clusterNamespace := clusterSummary.Spec.ClusterNamespace
-	clusterName := clusterSummary.Spec.ClusterName
-	clusterType := clusterSummary.Spec.ClusterType
 	featureHandler := getHandlersForFeature(libsveltosv1beta1.FeatureKustomize)
 	c := getManagementClusterClient()
 
@@ -157,6 +154,7 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	}
 
 	remoteDeployed := make([]libsveltosv1beta1.Resource, len(remoteResourceReports))
+	resourceDeployed := make([]configv1beta1.DeployedResource, len(remoteResourceReports)+len(localResourceReports))
 
 	if !isPullMode {
 		remoteResources := clusterops.ConvertResourceReportsToObjectReference(remoteResourceReports)
@@ -169,13 +167,19 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 		// If we are here there are no conflicts (and error would have been returned by deployKustomizeRef)
 		for i := range remoteResourceReports {
 			remoteDeployed[i] = remoteResourceReports[i].Resource
+			resourceDeployed[i] = *resourceToDeployedResource(&remoteResourceReports[i].Resource,
+				configv1beta1.DeploymentTypeRemote)
+		}
+		for i := range localResourceReports {
+			resourceDeployed[len(remoteResourceReports)+i] = *resourceToDeployedResource(&localResourceReports[i].Resource,
+				configv1beta1.DeploymentTypeLocal)
 		}
 
 		// TODO: track resource deployed in the management cluster
 		isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		clean := !clusterSummary.DeletionTimestamp.IsZero()
-		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, clean, clusterNamespace, clusterName,
-			clusterType, profileRef, featureHandler.id, remoteDeployed, nil)
+		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, clean, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, profileRef, featureHandler.id, resourceDeployed, nil)
 		if err != nil {
 			return err
 		}
@@ -224,14 +228,10 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 		return deployError
 	}
 
-	err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-		clusterType, remoteDeployed, logger)
+	err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, remoteDeployed, logger)
 	if err != nil {
 		return err
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		return &configv1beta1.DryRunReconciliationError{}
 	}
 
 	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
@@ -352,7 +352,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 
 		isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, true, clusterNamespace, clusterName, clusterType,
-			profileRef, libsveltosv1beta1.FeatureKustomize, []libsveltosv1beta1.Resource{}, nil)
+			profileRef, libsveltosv1beta1.FeatureKustomize, []configv1beta1.DeployedResource{}, nil)
 		if err != nil {
 			return err
 		}

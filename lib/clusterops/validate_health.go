@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/restmapper"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/cel"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	sveltoslua "github.com/projectsveltos/libsveltos/lib/lua"
 )
@@ -83,17 +84,30 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 	}
 
 	for i := range list.Items {
-		l = l.WithValues("resource", fmt.Sprintf("%s/%s", list.Items[i].GetNamespace(), list.Items[i].GetName()))
+		errorMsg := fmt.Sprintf("resource %s %s/%s is not healthy",
+			list.Items[i].GetKind(), list.Items[i].GetNamespace(), list.Items[i].GetName())
+
+		l = l.WithValues("resource", fmt.Sprintf("%s %s/%s",
+			list.Items[i].GetKind(), list.Items[i].GetNamespace(), list.Items[i].GetName()))
+
 		l.V(logs.LogDebug).Info("examing resource's health")
 		var healthy bool
 		var msg string
-		healthy, msg, err = isHealthy(&list.Items[i], check.Script, logger)
+		healthy, msg, err = isHealthyBasedOnLua(&list.Items[i], check.Script, logger)
 		if err != nil {
 			return err
 		}
 		if !healthy {
-			l.V(logs.LogInfo).Info("resource is not healthy")
-			return fmt.Errorf("%s", msg)
+			l.V(logs.LogInfo).Info(errorMsg)
+			return fmt.Errorf("%s %q", errorMsg, msg)
+		}
+		healthy, err = isHealthyBasedOnCELRules(&list.Items[i], check.EvaluateCEL, logger)
+		if err != nil {
+			return err
+		}
+		if !healthy {
+			l.V(logs.LogInfo).Info(errorMsg)
+			return fmt.Errorf("%s", errorMsg)
 		}
 	}
 
@@ -180,8 +194,20 @@ func addLabelFilters(labelFilters []libsveltosv1beta1.LabelFilter) string {
 	return labelFilter
 }
 
-// isHealthy verifies whether resource is healthy according to Lua script
-func isHealthy(resource *unstructured.Unstructured, script string, logger logr.Logger,
+// isHealthyBasedOnCELRules verifies whether resource is healthy according to CEL rules
+func isHealthyBasedOnCELRules(resource *unstructured.Unstructured, rules []libsveltosv1beta1.CELRule, logger logr.Logger,
+) (healthy bool, err error) {
+
+	if len(rules) == 0 {
+		return true, nil
+	}
+
+	healthy, err = cel.EvaluateRules(resource, rules, logger)
+	return healthy, err
+}
+
+// isHealthyBasedOnLua verifies whether resource is healthy according to Lua script
+func isHealthyBasedOnLua(resource *unstructured.Unstructured, script string, logger logr.Logger,
 ) (healthy bool, msg string, err error) {
 
 	if script == "" {

@@ -24,6 +24,6 @@ var (
 )
 
 var (
-	IsHealthy      = isHealthy
+	IsHealthy      = isHealthyBasedOnLua
 	FetchResources = fetchResources
 )

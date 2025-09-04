@@ -17,7 +17,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.25.2
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.0.1-0.20250901165130-eecfa7502274
+	github.com/projectsveltos/libsveltos v1.0.1-0.20250904145556-d0a03fffe6ff
 	github.com/prometheus/client_golang v1.23.0
 	github.com/spf13/pflag v1.0.9
 	github.com/yuin/gopher-lua v1.1.1

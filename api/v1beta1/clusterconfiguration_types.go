@@ -77,6 +77,10 @@ type DeployedResource struct {
 	// +kubebuilder:validation:MinLength=1
 	Version string `json:"version"`
 
+	// LastAppliedTime identifies when this resource was last applied to the cluster.
+	// +optional
+	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
+
 	// DeploymentType indicates whether resources is deployed
 	// into the management cluster (local) or the managed cluster (remote)
 	// +kubebuilder:default:=Remote

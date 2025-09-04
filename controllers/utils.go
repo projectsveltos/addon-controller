@@ -561,11 +561,12 @@ func resourceToDeployedResource(resource *libsveltosv1beta1.Resource,
 	deploymentType configv1beta1.DeploymentType) *configv1beta1.DeployedResource {
 
 	return &configv1beta1.DeployedResource{
-		Kind:           resource.Kind,
-		Group:          resource.Group,
-		Version:        resource.Version,
-		DeploymentType: deploymentType,
-		Name:           resource.Name,
-		Namespace:      resource.Namespace,
+		Kind:            resource.Kind,
+		Group:           resource.Group,
+		Version:         resource.Version,
+		DeploymentType:  deploymentType,
+		Name:            resource.Name,
+		Namespace:       resource.Namespace,
+		LastAppliedTime: resource.LastAppliedTime,
 	}
 }

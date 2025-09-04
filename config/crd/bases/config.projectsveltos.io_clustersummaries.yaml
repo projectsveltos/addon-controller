@@ -1102,6 +1102,33 @@ spec:
                       is healthy
                     items:
                       properties:
+                        evaluateCEL:
+                          description: |-
+                            EvaluateCEL contains a list of named CEL (Common Expression Language) rules.
+                            Each rule will be evaluated in order against each object selected based on
+                            the criteria defined above. Each rule's expression must return a boolean value
+                            indicating whether the object is a match.
+
+                            Evaluation stops at the first rule that returns true; subsequent
+                            rules will not be evaluated.
+                          items:
+                            description: CELRule defines a named CEL rule used in
+                              EvaluateCEL.
+                            properties:
+                              name:
+                                description: Name is a human-readable identifier for
+                                  the rule.
+                                type: string
+                              rule:
+                                description: |-
+                                  Rule is the CEL (Common Expression Language) expression to evaluate.
+                                  It must return a bool
+                                type: string
+                            required:
+                            - name
+                            - rule
+                            type: object
+                          type: array
                         featureID:
                           description: |-
                             FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)

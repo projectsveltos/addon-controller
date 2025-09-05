@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -857,11 +858,18 @@ var _ = Describe("ClustersummaryController", func() {
 			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 		}
 
+		cmName := randomString()
+		gitRepositoryName := randomString()
 		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
 			{
 				Namespace: referencedResourceNamespace,
-				Name:      randomString(),
+				Name:      cmName,
 				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+			},
+			{
+				Namespace: referencedResourceNamespace,
+				Name:      gitRepositoryName,
+				Kind:      sourcev1.GitRepositoryKind,
 			},
 		}
 		clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs = []configv1beta1.KustomizationRef{
@@ -885,7 +893,21 @@ var _ = Describe("ClustersummaryController", func() {
 		reconciler := getClusterSummaryReconciler(nil, nil)
 		set, err := controllers.GetCurrentReferences(reconciler, context.TODO(), clusterSummaryScope)
 		Expect(err).To(BeNil())
-		Expect(set.Len()).To(Equal(4))
+		Expect(set.Len()).To(Equal(5))
+
+		Expect(set.Items()).To(ContainElement(corev1.ObjectReference{
+			APIVersion: "v1",
+			Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+			Namespace:  referencedResourceNamespace,
+			Name:       cmName,
+		}))
+
+		Expect(set.Items()).To(ContainElement(corev1.ObjectReference{
+			APIVersion: sourcev1.GroupVersion.String(),
+			Kind:       sourcev1.GitRepositoryKind,
+			Namespace:  referencedResourceNamespace,
+			Name:       gitRepositoryName,
+		}))
 	})
 
 	It("getCurrentReferences collects all ClusterSummary referenced objects using cluster namespace when not set", func() {

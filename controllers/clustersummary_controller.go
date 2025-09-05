@@ -919,14 +919,36 @@ func (r *ClusterSummaryReconciler) getPolicyRefReferences(ctx context.Context,
 			return nil, err
 		}
 
+		var apiVersion, kind string
+		gvk := getPolicyRefGroupVersionKind(&clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i])
+		if gvk != nil {
+			apiVersion, kind = gvk.ToAPIVersionAndKind()
+		}
+
 		currentReferences.Insert(&corev1.ObjectReference{
-			APIVersion: corev1.SchemeGroupVersion.String(), // the only resources that can be referenced are Secret and ConfigMap
-			Kind:       clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+			APIVersion: apiVersion,
+			Kind:       kind,
 			Namespace:  namespace,
 			Name:       referencedName,
 		})
 	}
 	return currentReferences, nil
+}
+
+func getPolicyRefGroupVersionKind(ref *configv1beta1.PolicyRef) *schema.GroupVersionKind {
+	switch ref.Kind {
+	case string(libsveltosv1beta1.SecretReferencedResourceKind),
+		string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
+		return &schema.GroupVersionKind{Group: "", Version: "v1", Kind: ref.Kind}
+	case sourcev1.GitRepositoryKind:
+		return &schema.GroupVersionKind{Group: sourcev1.GroupVersion.Group,
+			Version: sourcev1.GroupVersion.Version, Kind: ref.Kind}
+	case sourcev1b2.BucketKind, sourcev1b2.OCIRepositoryKind:
+		return &schema.GroupVersionKind{Group: sourcev1b2.GroupVersion.Group,
+			Version: sourcev1b2.GroupVersion.Version, Kind: ref.Kind}
+	}
+
+	return nil
 }
 
 // getKustomizationRefReferences get all references considering the KustomizationRef section

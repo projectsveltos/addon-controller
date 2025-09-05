@@ -708,6 +708,10 @@ func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta
 
 	sortedHelmCharts := getSortedHelmCharts(clusterSummary)
 
+	clusterNamespace := clusterSummary.Spec.ClusterNamespace
+	clusterName := clusterSummary.Spec.ClusterName
+	clusterType := clusterSummary.Spec.ClusterType
+
 	for i := range sortedHelmCharts {
 		currentChart := &sortedHelmCharts[i]
 		config += render.AsCode(*currentChart)
@@ -717,7 +721,20 @@ func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta
 			if err != nil {
 				return nil, err
 			}
-			source, err := getSource(ctx, c, sourceRef.Namespace, sourceRef.Name, sourceRef.Kind)
+
+			namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+				clusterNamespace, clusterName, sourceRef.Namespace, clusterType)
+			if err != nil {
+				return nil, err
+			}
+
+			name, err := libsveltostemplate.GetReferenceResourceName(ctx, c,
+				clusterNamespace, clusterName, sourceRef.Name, clusterType)
+			if err != nil {
+				return nil, err
+			}
+
+			source, err := getSource(ctx, c, namespace, name, sourceRef.Kind)
 			if err != nil {
 				return nil, err
 			}
@@ -1382,7 +1399,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace",
 		requestedChart.ReleaseNamespace, "chart", requestedChart.ChartName, "chartVersion", requestedChart.ChartVersion)
 
-	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, requestedChart, logger)
+	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, clusterSummary, requestedChart, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1563,7 +1580,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	logger = logger.WithValues("release", requestedChart.ReleaseName, "releaseNamespace", requestedChart.ReleaseNamespace,
 		"chartVersion", requestedChart.ChartVersion)
 
-	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, requestedChart, logger)
+	tmpDir, chartName, repoURL, err := getHelmChartAndRepoName(ctx, clusterSummary, requestedChart, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -3676,8 +3693,8 @@ func getPlainHTTP(currentChart *configv1beta1.HelmChart) bool {
 }
 
 // getHelmChartAndRepoName returns helm repo URL and chart name
-func getHelmChartAndRepoName(ctx context.Context, requestedChart *configv1beta1.HelmChart, //nolint: gocritic // ignore
-	logger logr.Logger) (string, string, string, error) {
+func getHelmChartAndRepoName(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, //nolint: gocritic // ignore
+	requestedChart *configv1beta1.HelmChart, logger logr.Logger) (string, string, string, error) {
 
 	tmpDir := ""
 	chartName := requestedChart.ChartName
@@ -3693,6 +3710,10 @@ func getHelmChartAndRepoName(ctx context.Context, requestedChart *configv1beta1.
 		repoURL = ""
 	}
 
+	clusterNamespace := clusterSummary.Spec.ClusterNamespace
+	clusterName := clusterSummary.Spec.ClusterName
+	clusterType := clusterSummary.Spec.ClusterType
+
 	if isReferencingFluxSource(requestedChart) {
 		sourceRef, repoPath, err := getReferencedFluxSourceFromURL(requestedChart)
 		if err != nil {
@@ -3703,7 +3724,19 @@ func getHelmChartAndRepoName(ctx context.Context, requestedChart *configv1beta1.
 			return "", "", "", fmt.Errorf("flux Source %v not found", sourceRef)
 		}
 
-		source, err := getSource(ctx, getManagementClusterClient(), sourceRef.Namespace, sourceRef.Name, sourceRef.Kind)
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			clusterNamespace, clusterName, sourceRef.Namespace, clusterType)
+		if err != nil {
+			return "", "", "", fmt.Errorf("failed to instantiate namespace: %w", err)
+		}
+
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			clusterNamespace, clusterName, sourceRef.Name, clusterType)
+		if err != nil {
+			return "", "", "", fmt.Errorf("failed to instantiate name: %w", err)
+		}
+
+		source, err := getSource(ctx, getManagementClusterClient(), namespace, name, sourceRef.Kind)
 		if err != nil {
 			return "", "", "", err
 		}

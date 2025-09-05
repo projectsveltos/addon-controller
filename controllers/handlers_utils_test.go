@@ -383,11 +383,11 @@ var _ = Describe("HandlersUtils", func() {
 			},
 		}
 
-		// Update deployment.spec.replicas
 		Expect(testEnv.Get(context.TODO(),
 			types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
 			currentServiceAccount)).To(Succeed())
 		currentServiceAccount.Labels = map[string]string{
+			randomString(): randomString(),
 			randomString(): randomString(),
 			randomString(): randomString(),
 		}
@@ -398,10 +398,10 @@ var _ = Describe("HandlersUtils", func() {
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
 				currentServiceAccount)
-			return err == nil && len(currentServiceAccount.Labels) == 2
+			return err == nil && len(currentServiceAccount.Labels) == 3
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		// New deploy will not override replicas
+		// New deploy will override labels
 		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())

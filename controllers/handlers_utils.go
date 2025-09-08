@@ -360,13 +360,16 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 	for i := range referencedUnstructured {
 		policy := referencedUnstructured[i]
 
+		errorPrefix := fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v) failed",
+			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster)
+
 		err := adjustNamespace(policy, destConfig)
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("%v", err)
 				continue
 			}
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
 
 		if !isResourceNamespaceValid(profile, policy, deployingToMgmtCluster) {
@@ -383,12 +386,12 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		err = deployer.CreateNamespace(ctx, destClient, clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun,
 			policy.GetNamespace())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
 
 		var resourceInfo *deployer.ResourceInfo
@@ -410,7 +413,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 					return reports, deployer.NewConflictError(conflictErrorMsg)
 				}
 			}
-			return reports, err
+			return reports, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
 
 		deployer.AddMetadata(policy, resourceInfo.GetResourceVersion(), profile,
@@ -432,7 +435,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 				// mode. So what's already deployed stays as it is.
 				err = requeueAllOldOwners(ctx, resourceInfo, featureID, clusterSummary, logger)
 				if err != nil {
-					return reports, err
+					return reports, fmt.Errorf("%s: %w", errorPrefix, err)
 				}
 			}
 		}
@@ -450,7 +453,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 				errorMsg += fmt.Sprintf("%v", err)
 				continue
 			}
-			return reports, err
+			return reports, fmt.Errorf("%s: %w", errorPrefix, err)
 		}
 	}
 

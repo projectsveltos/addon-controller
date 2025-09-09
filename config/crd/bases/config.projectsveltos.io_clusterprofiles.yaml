@@ -633,6 +633,14 @@ spec:
                   be run on those paths and the outcome will be deployed.
                 items:
                   properties:
+                    components:
+                      description: |-
+                        Components is a list of paths to Kustomize components. These paths are relative to the
+                        `Path` field and are included in the Kustomize build to provide reusable configuration logic.
+                        The paths can be static or leverage Go templates for dynamic customization.
+                      items:
+                        type: string
+                      type: array
                     deploymentType:
                       default: Remote
                       description: |-

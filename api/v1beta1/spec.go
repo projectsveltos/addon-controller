@@ -460,6 +460,12 @@ type KustomizationRef struct {
 	// +optional
 	Path string `json:"path,omitempty"`
 
+	// Components is a list of paths to Kustomize components. These paths are relative to the
+	// `Path` field and are included in the Kustomize build to provide reusable configuration logic.
+	// The paths can be static or leverage Go templates for dynamic customization.
+	// +optional
+	Components []string `json:"components,omitempty"`
+
 	// Optional indicates that the referenced resource is not mandatory.
 	// If set to true and the resource is not found, the error will be ignored,
 	// and Sveltos will continue processing other ValueFroms.

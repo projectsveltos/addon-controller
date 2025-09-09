@@ -45,6 +45,7 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 	kustomizetypes "sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
@@ -587,12 +588,68 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("using path %s", instantiatedPath))
 
+	// New: Instantiate components paths
+	var instantiatedComponents []string
+	for _, comp := range kustomizationRef.Components {
+		instantiatedComp, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+			clusterSummary, clusterSummary.GetName(), comp, objects, nil, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+		instantiatedComponents = append(instantiatedComponents, instantiatedComp)
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("using path %s with components %v", instantiatedPath, instantiatedComponents))
+
 	// check build path exists
 	dirPath := filepath.Join(tmpDir, instantiatedPath)
 	_, err = os.Stat(dirPath)
 	if err != nil {
 		err = fmt.Errorf("kustomization path not found: %w", err)
 		return nil, nil, err
+	}
+
+	// Read the existing kustomization.yaml file
+	kustFilePath := filepath.Join(dirPath, "kustomization.yaml")
+	kustData, err := os.ReadFile(kustFilePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read kustomization.yaml: %w", err)
+	}
+
+	// Unmarshal the YAML into a map
+	var existingKust map[string]interface{}
+	if err := yaml.Unmarshal(kustData, &existingKust); err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal kustomization.yaml: %w", err)
+	}
+
+	// Add the new components to the map
+	if len(instantiatedComponents) > 0 {
+		// The components field is a list, so we need to append to it
+		if components, ok := existingKust["components"].([]interface{}); ok {
+			for _, comp := range instantiatedComponents {
+				components = append(components, comp)
+			}
+			existingKust["components"] = components
+		} else {
+			// If the field doesn't exist or is not a list, create a new list
+			var newComponents []interface{}
+			for _, comp := range instantiatedComponents {
+				newComponents = append(newComponents, comp)
+			}
+			existingKust["components"] = newComponents
+		}
+	}
+
+	// Marshal the modified map back to YAML
+	modifiedKustData, err := yaml.Marshal(&existingKust)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal modified kustomization: %w", err)
+	}
+
+	// Write the modified content back to the file
+	err = os.WriteFile(kustFilePath, modifiedKustData, permission0600)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to write modified kustomization.yaml: %w", err)
 	}
 
 	fs := filesys.MakeFsOnDisk()
@@ -756,7 +813,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 	objectsToDeployRemotely = make([]*unstructured.Unstructured, 0, len(resources))
 	for i := range resources {
 		resource := resources[i]
-		yaml, err := resource.AsYAML()
+		resourceYAML, err := resource.AsYAML()
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get resource YAML %v", err))
 			return nil, nil, nil, err
@@ -767,8 +824,9 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 			// All objects coming from Kustomize output can be expressed as template. Those will be instantiated using
 			// substitute values first, and the resource in the management cluster later.
 			templateName := fmt.Sprintf("%s-substitutevalues", clusterSummary.Name)
-			yaml, err = instantiateResourceWithSubstituteValues(templateName, yaml, instantiatedSubstituteValues,
-				funcmap.HasTextTemplateAnnotation(clusterSummary.Annotations), logger)
+			resourceYAML, err = instantiateResourceWithSubstituteValues(templateName, resourceYAML,
+				instantiatedSubstituteValues, funcmap.HasTextTemplateAnnotation(clusterSummary.Annotations),
+				logger)
 			if err != nil {
 				msg := fmt.Sprintf("failed to instantiate resource with substitute values: %v", err)
 				logger.V(logs.LogInfo).Info(msg)
@@ -777,7 +835,7 @@ func getKustomizedResources(ctx context.Context, c client.Client, clusterSummary
 		}
 
 		var u *unstructured.Unstructured
-		u, err = k8s_utils.GetUnstructured(yaml)
+		u, err = k8s_utils.GetUnstructured(resourceYAML)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get unstructured %v", err))
 			return nil, nil, nil, err

@@ -629,6 +629,15 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 		}
 	}
 
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	if len(chartManager.GetManagedHelmReleases(clusterSummary)) == 0 {
+		chartManager.RemoveAllRegistrations(clusterSummary)
+		return nil, nil
+	}
+
 	releaseReports := make([]configv1beta1.ReleaseReport, 0)
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]

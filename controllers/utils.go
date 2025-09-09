@@ -570,3 +570,11 @@ func resourceToDeployedResource(resource *libsveltosv1beta1.Resource,
 		LastAppliedTime: resource.LastAppliedTime,
 	}
 }
+
+type ClusterSummaryDeletedError struct {
+	Message string
+}
+
+func (r *ClusterSummaryDeletedError) Error() string {
+	return r.Message
+}

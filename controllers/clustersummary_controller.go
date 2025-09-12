@@ -1342,7 +1342,8 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 			clusterSummaryScope.ClusterSummary.Spec.ClusterType)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				msg := fmt.Sprintf("ClusterSummary for %s %s not found", profileReference.Kind, profileName)
+				msg := fmt.Sprintf("%s %s is a dependency. The ClusterSummary instance for this profile/cluster was not found",
+					profileReference.Kind, profileName)
 				logger.V(logs.LogInfo).Info(msg)
 				return false, msg, nil
 			}
@@ -1351,7 +1352,8 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 		}
 
 		if !isCluterSummaryProvisioned(cs) {
-			msg := fmt.Sprintf("%s %s is not fully deployed yet", profileReference.Kind, profileName)
+			msg := fmt.Sprintf("%s %s is a dependency and it is not fully deployed yet",
+				profileReference.Kind, profileName)
 			logger.V(logs.LogInfo).Info(msg)
 			return false, msg, nil
 		}

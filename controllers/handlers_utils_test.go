@@ -565,6 +565,8 @@ var _ = Describe("HandlersUtils", func() {
 			deployer.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
 			deployer.AddAnnotation(policy, deployer.PolicyHash, policyHash)
 			deployer.AddAnnotation(policy, deployer.OwnerTier, "100")
+			deployer.AddAnnotation(policy, deployer.OwnerName, clusterProfile.Name)
+			deployer.AddAnnotation(policy, deployer.OwnerKind, configv1beta1.ClusterProfileKind)
 			Expect(testEnv.Create(context.TODO(), policy))
 			Expect(waitForObject(ctx, testEnv.Client, policy)).To(Succeed())
 		}
@@ -629,8 +631,11 @@ var _ = Describe("HandlersUtils", func() {
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
 		for i := range resourceReports {
 			rr := &resourceReports[i]
-			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("Object Service:%s/service%d currently deployed because of %s %s/%s.",
-				namespace, i, secret.Kind, secret.Namespace, secret.Name)))
+
+			Expect(rr.Message).To(ContainSubstring(fmt.Sprintf("A conflict was detected while deploying resource Service:%s/service%d."+
+				" The Sveltos profile currently deploying this resource is ClusterProfile %s;\n"+
+				"This resource is currently deployed because of %s %s/%s.",
+				namespace, i, clusterProfile.Name, secret.Kind, secret.Namespace, secret.Name)))
 		}
 	})
 

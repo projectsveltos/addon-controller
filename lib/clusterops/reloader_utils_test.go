@@ -30,7 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -362,9 +362,7 @@ func prepareCluster() *clusterv1.Cluster {
 
 	initialized := true
 	cluster.Status = clusterv1.ClusterStatus{
-		Initialization: clusterv1.ClusterInitializationStatus{
-			ControlPlaneInitialized: &initialized,
-		},
+		ControlPlaneReady: initialized,
 	}
 	Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
 

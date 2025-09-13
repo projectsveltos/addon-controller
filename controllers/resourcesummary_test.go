@@ -29,7 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -180,7 +180,7 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
 	initialized := true
-	cluster.Status.Initialization.ControlPlaneInitialized = &initialized
+	cluster.Status.ControlPlaneReady = initialized
 	Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
 
 	machine.Status = clusterv1.MachineStatus{

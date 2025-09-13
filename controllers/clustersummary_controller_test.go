@@ -22,17 +22,17 @@ import (
 	"sync"
 	"time"
 
-	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -70,9 +70,7 @@ var _ = Describe("ClustersummaryController", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				Initialization: clusterv1.ClusterInitializationStatus{
-					ControlPlaneInitialized: &initialized,
-				},
+				ControlPlaneReady: initialized,
 			},
 		}
 
@@ -107,7 +105,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 		prepareForDeployment(clusterProfile, clusterSummary, cluster)
 
-		cluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		cluster.Status.ControlPlaneReady = initialized
 
 		// Get ClusterSummary so OwnerReference is set
 		Expect(testEnv.Get(context.TODO(),
@@ -130,7 +128,7 @@ var _ = Describe("ClustersummaryController", func() {
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			cluster)).To(Succeed())
 		initialized := false
-		cluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		cluster.Status.ControlPlaneReady = initialized
 		Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
 
 		Eventually(func() bool {
@@ -141,8 +139,7 @@ var _ = Describe("ClustersummaryController", func() {
 			if err != nil {
 				return false
 			}
-			return currentCluster.Status.Initialization.ControlPlaneInitialized != nil &&
-				!*currentCluster.Status.Initialization.ControlPlaneInitialized
+			return !currentCluster.Status.ControlPlaneReady
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(controllers.IsReady(reconciler, context.TODO(), clusterSummary, logr.Logger{})).To(BeFalse())
@@ -169,7 +166,7 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeFalse())
 
 		paused := true
-		cluster.Spec.Paused = &paused
+		cluster.Spec.Paused = paused
 		Expect(c.Update(context.TODO(), cluster)).To(Succeed())
 
 		Expect(controllers.IsPaused(reconciler, context.TODO(), clusterSummary)).To(BeTrue())
@@ -1219,7 +1216,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
 		initialized := true
-		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		currentCluster.Status.ControlPlaneReady = initialized
 		Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(editClusterRole, randomString()))
@@ -1298,7 +1295,7 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 			&currentCluster)).To(Succeed())
 		initialized := true
-		currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		currentCluster.Status.ControlPlaneReady = initialized
 		Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 		Expect(testEnv.Create(context.TODO(), referencingClusterSummary)).To(Succeed())

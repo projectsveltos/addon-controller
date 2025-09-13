@@ -5295,7 +5295,7 @@ spec:
         - --shard-key=
         - --capi-onboard-annotation=
         - --v=5
-        - --version=main
+        - --version=v1.1.0
         - --agent-in-mgmt-cluster=false
         command:
         - /manager
@@ -5308,7 +5308,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/addon-controller:main
+        image: docker.io/projectsveltos/addon-controller:v1.1.0
         livenessProbe:
           failureThreshold: 3
           httpGet:

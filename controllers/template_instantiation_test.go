@@ -24,14 +24,13 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -68,14 +67,14 @@ var _ = Describe("Template instantiation", func() {
 				},
 			},
 			Spec: clusterv1.ClusterSpec{
-				Topology: &clusterv1.Topology{
+				Topology: clusterv1.Topology{
 					Version: "v1.22.2",
 					ControlPlane: clusterv1.ControlPlaneTopology{
 						Replicas: &replicas,
 					},
 				},
-				ClusterNetwork: &clusterv1.ClusterNetwork{
-					Pods: &clusterv1.NetworkRanges{
+				ClusterNetwork: clusterv1.ClusterNetwork{
+					Pods: clusterv1.NetworkRanges{
 						CIDRBlocks: []string{"192.168.10.1", "192.169.10.1"},
 					},
 				},

@@ -26,10 +26,10 @@ spec:
         - --cluster-type=
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-updates
-        - --version=v1.1.0
+        - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:63c4efea9bdf422a6665c532e5791d75536e60886aa4e379fc2eb390f91e0017
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:7a98338855bcea48af563d0bea83eb3b9b6c103ca3a3c7697f0ede9a387361b2
         livenessProbe:
           failureThreshold: 3
           httpGet:

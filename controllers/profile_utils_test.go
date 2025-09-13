@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -76,7 +76,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: initialized,
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, matchingCluster)).To(Succeed())
@@ -90,7 +92,9 @@ var _ = Describe("Profile: Reconciler", func() {
 				},
 			},
 			Status: clusterv1.ClusterStatus{
-				ControlPlaneReady: initialized,
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, nonMatchingCluster)).To(Succeed())
@@ -663,7 +667,7 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 
 		initialized := false
-		matchingCluster.Status.ControlPlaneReady = initialized
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -702,9 +706,9 @@ var _ = Describe("Profile: Reconciler", func() {
 		}
 
 		initialized := true
-		matchingCluster.Status.ControlPlaneReady = initialized
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		paused := true
-		matchingCluster.Spec.Paused = paused
+		matchingCluster.Spec.Paused = &paused
 
 		initObjects := []client.Object{
 			clusterProfile,
@@ -732,7 +736,7 @@ var _ = Describe("Profile: Reconciler", func() {
 
 	It("updateClusterSummaries creates ClusterSummary for each matching CAPI Cluster", func() {
 		initialized := true
-		matchingCluster.Status.ControlPlaneReady = initialized
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 		nonMatchingCluster.Status.Conditions = matchingCluster.Status.Conditions
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
@@ -771,7 +775,7 @@ var _ = Describe("Profile: Reconciler", func() {
 
 	It("updateClusterSummaries updates existing ClusterSummary for each matching CAPI Cluster", func() {
 		initialized := true
-		matchingCluster.Status.ControlPlaneReady = initialized
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 
 		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
 			{

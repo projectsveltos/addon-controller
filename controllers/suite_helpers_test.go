@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -290,7 +290,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
 		&currentCluster)).To(Succeed())
 	initialized := true
-	currentCluster.Status.ControlPlaneReady = initialized
+	currentCluster.Status.Initialization.ControlPlaneInitialized = &initialized
 	Expect(testEnv.Status().Update(ctx, &currentCluster)).To(Succeed())
 
 	Eventually(func() bool {
@@ -300,7 +300,8 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 		if err != nil {
 			return false
 		}
-		return currentCluster.Status.ControlPlaneReady
+		return currentCluster.Status.Initialization.ControlPlaneInitialized != nil &&
+			*currentCluster.Status.Initialization.ControlPlaneInitialized
 	}, timeout, pollingInterval).Should(BeTrue())
 
 	// This method is invoked by different tests in parallel, all touching same clusterConfiguration.

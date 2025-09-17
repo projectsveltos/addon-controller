@@ -43,6 +43,14 @@ rules:
   - update
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
   - '*'
   resources:
   - '*'
@@ -138,10 +146,10 @@ spec:
         - --cluster-type=
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-updates
-        - --version=v1.1.0
+        - --version=v1.1.1
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:63c4efea9bdf422a6665c532e5791d75536e60886aa4e379fc2eb390f91e0017
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:d4f30e47f2b1e9b996263df96e4841edc017fd54b0ffc5fbb82616beae5920bc
         livenessProbe:
           failureThreshold: 3
           httpGet:

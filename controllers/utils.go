@@ -349,20 +349,6 @@ func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1beta1.ClusterSu
 	return nil
 }
 
-type SortedCorev1ObjectReference []corev1.ObjectReference
-
-func (a SortedCorev1ObjectReference) Len() int      { return len(a) }
-func (a SortedCorev1ObjectReference) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedCorev1ObjectReference) Less(i, j int) bool {
-	if a[i].Kind != a[j].Kind {
-		return a[i].Kind < a[j].Kind
-	}
-	if a[i].Namespace != a[j].Namespace {
-		return a[i].Namespace < a[j].Namespace
-	}
-	return a[i].Name < a[j].Name
-}
-
 type SortedHelmCharts []configv1beta1.HelmChart
 
 func (a SortedHelmCharts) Len() int      { return len(a) }

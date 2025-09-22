@@ -39,6 +39,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -419,7 +420,7 @@ var _ = Describe("Hash methods", func() {
 				Name:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name,
 			}
 		}
-		sort.Sort(controllers.SortedCorev1ObjectReference(referencedObjects))
+		sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
 		for i := range referencedObjects {
 			switch referencedObjects[i].Name {
 			case configMap1.Name:

@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -409,7 +410,15 @@ func calculateHash(data map[corev1.ObjectReference]RequestingProfiles) []byte {
 	h := sha256.New()
 	var config string
 
+	// 1. Extract all keys into a slice.
+	keys := make([]corev1.ObjectReference, 0, len(data))
 	for k := range data {
+		keys = append(keys, k)
+	}
+
+	sort.Sort(SortedCorev1ObjectReference(keys))
+
+	for k := range keys {
 		config += render.AsCode(k)
 	}
 

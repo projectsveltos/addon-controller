@@ -35,6 +35,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -525,7 +526,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		}
 	}
 
-	sort.Sort(SortedCorev1ObjectReference(referencedObjects))
+	sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
 
 	for i := range referencedObjects {
 		reference := &referencedObjects[i]

@@ -248,6 +248,17 @@ var _ = Describe("Profile: Reconciler", func() {
 		err = testEnv.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 		Expect(err).ToNot(HaveOccurred())
 
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			return !currentClusterSummary.DeletionTimestamp.IsZero()
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		// Remove ClusterSummary finalizer
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		Expect(testEnv.Get(context.TODO(),

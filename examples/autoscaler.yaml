@@ -79,7 +79,7 @@ data:
     kind: Secret
     metadata:
       name: autoscaler
-      namespace: {{ (index .MgmtResources "AutoscalerSecret").metadata.namespace }}
+      namespace: {{ (getResource "AutoscalerSecret").metadata.namespace }}
     data:
-      token: {{ (index .MgmtResources "AutoscalerSecret").data.token }}
-      ca.crt: {{ $data:=(index .MgmtResources "AutoscalerSecret").data }} {{ (index $data "ca.crt") }}
+      token: {{ (getResource "AutoscalerSecret").data.token }}
+      ca.crt: {{ $data:=(getResource "AutoscalerSecret").data }} {{ (index $data "ca.crt") }}

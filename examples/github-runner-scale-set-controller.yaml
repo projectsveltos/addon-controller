@@ -1,0 +1,17 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: runner-scale-set-controller
+spec:
+  clusterSelector:
+    matchLabels:
+      env: fv
+  syncMode: Continuous
+  helmCharts:
+  - chartName: gha-runner-scale-set-controller
+    chartVersion: "0.12.1"
+    helmChartAction: Install
+    releaseName: arc
+    releaseNamespace: arc-systems
+    repositoryName: gha-runner-scale-set-controller
+    repositoryURL: oci://ghcr.io/actions/actions-runner-controller-charts

@@ -399,7 +399,7 @@ create-cluster-pullmode: $(KIND) $(KUBECTL) $(ENVSUBST) $(KUSTOMIZE)
 	@echo "Switching to cluster1..."
 	$(KUBECTL) config use-context kind-$(CONTROL_CLUSTER_NAME)
 
-deploy-projectsveltos: $(KUSTOMIZE)
+deploy-projectsveltos: $(KUSTOMIZE) $(KUBECTL) $(ENVSUBST)
 	# Load projectsveltos image into cluster
 	@echo 'Load projectsveltos image into cluster'
 	$(MAKE) load-image

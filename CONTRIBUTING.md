@@ -20,9 +20,9 @@ Always verify your changes locally before pushing a PR:
 
 ## Branches
 
-Projectsveltos repos have three types of branches: the main branch, the dev branch and release-X branches.
+Projectsveltos repos have two types of branches: the main branch and release-X branches.
 
-The dev branch is where development happens. All the latest and greatest code, including breaking changes, happens on dev.
+The main branch is where development happens. All the latest and greatest code, including breaking changes, happens on main.
 
 The release-X branches contain stable, backwards compatible code. On every major or minor release, a new branch is created. It is from these branches that minor and patch releases are tagged. In some cases, it may be necessary to open PRs for bugfixes directly against stable branches, but this should generally not be the case.
 

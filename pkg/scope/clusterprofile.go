@@ -18,6 +18,7 @@ package scope
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -55,7 +56,8 @@ func NewProfileScope(params ProfileScopeParams) (*ProfileScope, error) {
 	if params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1beta1.ClusterProfileKind &&
 		params.Profile.GetObjectKind().GroupVersionKind().Kind != configv1beta1.ProfileKind {
 
-		return nil, errors.Wrap(err, "only ClusterProfile or Profile can be used")
+		return nil, errors.New(fmt.Sprintf("only ClusterProfile or Profile can be used (%q)",
+			params.Profile.GetObjectKind().GroupVersionKind().Kind))
 	}
 
 	return &ProfileScope{

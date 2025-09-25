@@ -8,6 +8,7 @@ require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v28.4.0+incompatible
+	github.com/fluxcd/pkg/apis/meta v1.21.0
 	github.com/fluxcd/pkg/http/fetch v0.19.0
 	github.com/fluxcd/pkg/tar v0.14.0
 	github.com/fluxcd/source-controller/api v1.7.0
@@ -68,7 +69,6 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fluxcd/pkg/apis/acl v0.9.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.21.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect

@@ -289,6 +289,7 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
 	$(KIND) delete cluster --name $(CONTROL_CLUSTER_NAME)
 	$(KIND) delete cluster --name $(WORKLOAD_CLUSTER_NAME)
+	$(KIND) delete cluster --name $(WORKLOAD_CLUSTER_NAME)-2
 
 ### fv helpers
 
@@ -339,6 +340,25 @@ create-workload-cluster: $(KIND) $(KUBECTL)
 
 	@echo wait for calico pod
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
+
+add-workload-cluster: $(KIND) $(KUBECTL)
+	@echo "Create a second workload cluster"
+	$(KUBECTL) apply -f test/clusterapi-cluster2.yaml
+
+	@echo "wait for cluster to be provisioned"
+	$(KUBECTL) wait cluster clusterapi-production -n default --for=jsonpath='{.status.phase}'=Provisioned --timeout=$(TIMEOUT)
+
+	@echo "sleep allowing control plane to be ready"
+	sleep 100
+
+	@echo "get kubeconfig to access workload cluster"
+	$(KIND) get kubeconfig --name clusterapi-production > test/fv/production_kubeconfig
+
+	@echo "install calico on workload cluster"
+	$(KUBECTL) --kubeconfig=./test/fv/production_kubeconfig apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.0/manifests/calico.yaml
+
+	@echo wait for calico pod
+	$(KUBECTL) --kubeconfig=./test/fv/production_kubeconfig wait --for=condition=Available deployment/calico-kube-controllers -n kube-system --timeout=$(TIMEOUT)
 
 create-cluster-pullmode: $(KIND) $(KUBECTL) $(ENVSUBST) $(KUSTOMIZE)
 	docker network rm $(SVELTOS_NETWORK_NAME) 2>/dev/null || true

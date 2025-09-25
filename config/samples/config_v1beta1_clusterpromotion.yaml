@@ -1,0 +1,39 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterPromotion
+metadata:
+  name: test
+spec:
+  profileSpec:
+    syncMode: Continuous
+    helmCharts:
+    - repositoryURL:    https://kyverno.github.io/kyverno/
+      repositoryName:   kyverno
+      chartName:        kyverno/kyverno
+      chartVersion:     3.4.2
+      releaseName:      kyverno-latest
+      releaseNamespace: kyverno
+      helmChartAction:  Install
+      values: |
+        admissionController:
+          replicas: 3
+        backgroundController:
+          replicas: 3
+        cleanupController:
+          replicas: 3
+        reportsController:
+          replicas: 3
+  stages:
+  - name: staging
+    clusterSelector:
+      matchLabels:
+        env: staging
+    trigger:
+      auto:
+        delay: 5m
+  - name: production
+    clusterSelector:
+      matchLabels:
+        env: production
+    trigger:
+      auto:
+        delay: 5m

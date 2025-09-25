@@ -547,9 +547,9 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 }
 
 func (r *ClusterSummaryReconciler) addFinalizer(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope) error {
-	// If the SveltosCluster doesn't have our finalizer, add it.
+	// If the ClusterSummary doesn't have our finalizer, add it.
 	controllerutil.AddFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer)
-	// Register the finalizer immediately to avoid orphaning clusterprofile resources on delete
+	// Register the finalizer immediately to avoid orphaning resources on managed cluster on delete
 	if err := clusterSummaryScope.PatchObject(ctx); err != nil {
 		clusterSummaryScope.Error(err, "Failed to add finalizer")
 		return fmt.Errorf(

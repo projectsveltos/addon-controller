@@ -299,7 +299,7 @@ var _ = Describe("HandlersHelm", func() {
 			RepositoryURL:    "https://charts.bitnami.com/bitnami",
 			RepositoryName:   "bitnami/contour",
 			ChartName:        "bitnami/contour",
-			ChartVersion:     "12.1.0",
+			ChartVersion:     "21.1.4",
 			ReleaseName:      "contour-latest",
 			ReleaseNamespace: "contour",
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -396,7 +396,7 @@ var _ = Describe("HandlersHelm", func() {
 			{
 				RepoURL:      "https://charts.bitnami.com/bitnami",
 				ReleaseName:  "contour-latest",
-				ChartVersion: "12.1.0",
+				ChartVersion: "21.1.4",
 				Namespace:    "projectcontour",
 			},
 		}

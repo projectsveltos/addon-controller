@@ -349,50 +349,6 @@ func getFeatureDeploymentInfoForFeatureID(clusterSummay *configv1beta1.ClusterSu
 	return nil
 }
 
-type SortedHelmCharts []configv1beta1.HelmChart
-
-func (a SortedHelmCharts) Len() int      { return len(a) }
-func (a SortedHelmCharts) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedHelmCharts) Less(i, j int) bool {
-	if a[i].RepositoryURL != a[j].RepositoryURL {
-		return a[i].RepositoryURL < a[j].RepositoryURL
-	}
-	if a[i].ReleaseNamespace != a[j].ReleaseNamespace {
-		return a[i].ReleaseNamespace < a[j].ReleaseNamespace
-	}
-	return a[i].ReleaseName < a[j].ReleaseName
-}
-
-func getSortedHelmCharts(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.HelmChart {
-	sortedHelmCharts := make([]configv1beta1.HelmChart, len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts))
-	copy(sortedHelmCharts, clusterSummary.Spec.ClusterProfileSpec.HelmCharts)
-
-	sort.Sort(SortedHelmCharts(sortedHelmCharts))
-	return sortedHelmCharts
-}
-
-type SortedKustomizationRefs []configv1beta1.KustomizationRef
-
-func (a SortedKustomizationRefs) Len() int      { return len(a) }
-func (a SortedKustomizationRefs) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedKustomizationRefs) Less(i, j int) bool {
-	if a[i].Kind != a[j].Kind {
-		return a[i].Kind < a[j].Kind
-	}
-	if a[i].Namespace != a[j].Namespace {
-		return a[i].Namespace < a[j].Namespace
-	}
-	return a[i].Name < a[j].Name
-}
-
-func getSortedKustomizationRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.KustomizationRef {
-	sortedKustomizationRef := make([]configv1beta1.KustomizationRef, len(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs))
-	copy(sortedKustomizationRef, clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
-
-	sort.Sort(SortedKustomizationRefs(sortedKustomizationRef))
-	return sortedKustomizationRef
-}
-
 // Identifies and removes drift detection deployments that are no longer associated with active clusters
 // Identifies and removes resourceSummary instances from clusters that are no longer existing
 func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger) {

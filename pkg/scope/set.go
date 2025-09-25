@@ -18,6 +18,7 @@ package scope
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -55,7 +56,8 @@ func NewSetScope(params SetScopeParams) (*SetScope, error) {
 	if params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1beta1.ClusterSetKind &&
 		params.Set.GetObjectKind().GroupVersionKind().Kind != libsveltosv1beta1.SetKind {
 
-		return nil, errors.Wrap(err, "only ClusterSet or Set can be used")
+		return nil, errors.New(fmt.Sprintf("only ClusterSet or Set can be used (%q)",
+			params.Set.GetObjectKind().GroupVersionKind().Kind))
 	}
 
 	return &SetScope{

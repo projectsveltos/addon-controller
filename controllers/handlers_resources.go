@@ -499,9 +499,11 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 	var config string
 	config += string(clusterProfileSpecHash)
 
+	sortedPolicyRefs := getSortedPolicyRefs(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
+
 	referencedObjects := make([]corev1.ObjectReference, 0, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
-	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
-		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
+	for i := range sortedPolicyRefs {
+		reference := &sortedPolicyRefs[i]
 		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, reference.Namespace,
 			clusterSummary.Spec.ClusterType)
@@ -522,7 +524,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		}
 
 		referencedObjects = append(referencedObjects, corev1.ObjectReference{
-			Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
+			Kind:      sortedPolicyRefs[i].Kind,
 			Namespace: namespace,
 			Name:      name,
 		})

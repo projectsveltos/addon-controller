@@ -86,8 +86,11 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterprofiles
-  - profiles
+  - clusterpromotions
+  - clustersummaries
   verbs:
+  - create
+  - delete
   - get
   - list
   - patch
@@ -106,6 +109,7 @@ rules:
   - config.projectsveltos.io
   resources:
   - clusterprofiles/status
+  - clusterpromotions/status
   - clustersummaries/status
   - profiles/status
   verbs:
@@ -115,10 +119,14 @@ rules:
 - apiGroups:
   - config.projectsveltos.io
   resources:
-  - clustersummaries
+  - clusterpromotions/finalizers
   verbs:
-  - create
-  - delete
+  - update
+- apiGroups:
+  - config.projectsveltos.io
+  resources:
+  - profiles
+  verbs:
   - get
   - list
   - patch

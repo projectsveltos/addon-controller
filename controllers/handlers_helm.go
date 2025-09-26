@@ -372,7 +372,7 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		}
 	} else {
 		// if the status is deployed it means pre/post delete hooks have been deployed. So proceed undeploying
-		if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned {
+		if status != nil && status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned {
 			if isLeavePolicies(clusterSummary, logger) {
 				logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
 			}
@@ -385,10 +385,10 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 			return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
 				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
 				string(libsveltosv1beta1.FeatureHelm), logger, setters...)
-		} else if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioning {
+		} else if status != nil && status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioning {
 			logger.V(logs.LogInfo).Info("Applier is handling delete hooks")
 			return nil
-		} else if status != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusFailed {
+		} else if status != nil && status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusFailed {
 			msg := "Applier failed."
 			if status.FailureMessage != nil {
 				msg += fmt.Sprintf("Failure message: %s", *status.FailureMessage)

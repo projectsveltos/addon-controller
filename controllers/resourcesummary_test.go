@@ -178,6 +178,8 @@ func prepareCluster() *clusterv1.Cluster {
 	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 	Expect(testEnv.Create(context.TODO(), machine)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, machine)).To(Succeed())
 
 	initialized := true
 	cluster.Status.ControlPlaneReady = initialized

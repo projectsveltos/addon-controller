@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -38,8 +39,8 @@ const (
 func UpdateClusterReportWithResourceReports(ctx context.Context, c client.Client,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, isDryRun bool,
 	profileRef *corev1.ObjectReference, resourceReports []libsveltosv1beta1.ResourceReport,
-	featureID libsveltosv1beta1.FeatureID) error {
-
+	featureID libsveltosv1beta1.FeatureID,
+) error {
 	// This is no-op unless in DryRun mode
 	if !isDryRun {
 		return nil
@@ -69,13 +70,13 @@ func UpdateClusterReportWithResourceReports(ctx context.Context, c client.Client
 }
 
 func GetClusterReportName(profileKind, profileName, clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
-	// TODO: shorten this value
 	prefix := "" // For backward compatibility (before addition of Profile) leave this empty for ClusterProfiles
 	if profileKind == configv1beta1.ProfileKind {
 		prefix = "p--"
 	}
-	return prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
+	name := prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
 		nameSeparator + clusterName
+	return utils.EllipsizeName(name)
 }
 
 // ConvertResourceReportsToObjectReference converts a slice of ResourceReports to

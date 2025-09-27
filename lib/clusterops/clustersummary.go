@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -46,7 +47,8 @@ const (
 // ClusterProfile/Profile for a specific Cluster
 func GetClusterSummary(ctx context.Context, c client.Client,
 	profileKind, profileName string, clusterNamespace, clusterName string,
-	clusterType libsveltosv1beta1.ClusterType) (*configv1beta1.ClusterSummary, error) {
+	clusterType libsveltosv1beta1.ClusterType,
+) (*configv1beta1.ClusterSummary, error) {
 
 	profileLabel := ClusterProfileLabelName
 	if profileKind == configv1beta1.ProfileKind {
@@ -88,12 +90,16 @@ func GetClusterSummaryName(profileKind, profileName, clusterName string, isSvelt
 		clusterType = libsveltosv1beta1.ClusterTypeSveltos
 	}
 	prefix := GetPrefix(clusterType)
+
+	var name string
 	if profileKind == configv1beta1.ClusterProfileKind {
 		// For backward compatibility (code before addition of Profiles) do not change this
-		return fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
+		name = fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
+	} else {
+		name = fmt.Sprintf("p--%s-%s-%s", profileName, prefix, clusterName)
 	}
 
-	return fmt.Sprintf("p--%s-%s-%s", profileName, prefix, clusterName)
+	return utils.EllipsizeName(name)
 }
 
 func GetPrefix(clusterType libsveltosv1beta1.ClusterType) string {

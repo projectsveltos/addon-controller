@@ -56,17 +56,17 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/crd"
-	"github.com/projectsveltos/libsveltos/lib/deployer"
-	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/internal/telemetry"
+	"github.com/projectsveltos/addon-controller/lib/utils"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -182,6 +182,8 @@ func main() {
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+
+	utils.GetNameManager().SetClient(mgr.GetClient())
 
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))

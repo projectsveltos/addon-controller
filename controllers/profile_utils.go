@@ -554,7 +554,12 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 		logger := profileScope.Logger
 		logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", cluster.Kind, cluster.Namespace, cluster.Name))
 
-		tmpSkippedUpdate, err := updateClusterSummaryInstanceForCluster(ctx, c, cluster, profileScope, updatedClusters,
+		if updatedClusters.Has(cluster) {
+			logger.V(logs.LogDebug).Info("Cluster is already updated")
+			continue
+		}
+
+		tmpSkippedUpdate, err := updateClusterSummaryInstanceForCluster(ctx, c, cluster, profileScope,
 			updatingClusters, logger)
 		if err != nil {
 			var clusterSummaryDeletedError *ClusterSummaryDeletedError
@@ -576,9 +581,9 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 				append(profileScope.GetStatus().UpdatingClusters.Clusters,
 					*cluster)
 		}
-
-		profileScope.GetStatus().UpdatingClusters.Hash = currentHash
 	}
+
+	profileScope.GetStatus().UpdatingClusters.Hash = currentHash
 
 	if skippedUpdate {
 		return fmt.Errorf("not all clusters updated yet. %d still being updated",
@@ -599,7 +604,7 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 }
 
 func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
-	profileScope *scope.ProfileScope, updatedClusters, updatingClusters *libsveltosset.Set, logger logr.Logger,
+	profileScope *scope.ProfileScope, updatingClusters *libsveltosset.Set, logger logr.Logger,
 ) (bool, error) {
 
 	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, cluster, logger)
@@ -608,11 +613,6 @@ func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client
 	}
 	if !ready {
 		logger.V(logs.LogDebug).Info("Cluster is not ready yet")
-		return false, nil
-	}
-
-	if updatedClusters.Has(cluster) {
-		logger.V(logs.LogDebug).Info("Cluster is already updated")
 		return false, nil
 	}
 
@@ -905,25 +905,21 @@ func reviseUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope) {
 		matchingCluster.Insert(&cluster)
 	}
 
-	updatedClusters := &libsveltosset.Set{}
 	currentUpdatedClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatedClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatedClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatedClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {
 			currentUpdatedClusters = append(currentUpdatedClusters, *cluster)
-			updatedClusters.Insert(cluster)
 		}
 	}
 
 	profileScope.GetStatus().UpdatedClusters.Clusters = currentUpdatedClusters
 
-	updatingClusters := &libsveltosset.Set{}
 	currentUpdatingClusters := make([]corev1.ObjectReference, 0, len(profileScope.GetStatus().UpdatingClusters.Clusters))
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
 		cluster := &profileScope.GetStatus().UpdatingClusters.Clusters[i]
 		if matchingCluster.Has(cluster) {
 			currentUpdatingClusters = append(currentUpdatingClusters, *cluster)
-			updatingClusters.Insert(cluster)
 		}
 	}
 
@@ -989,25 +985,33 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 		return nil
 	}
 
+	updatedClusters := libsveltosset.Set{}
+	for i := range profileScope.GetStatus().UpdatedClusters.Clusters {
+		updatedClusters.Insert(&profileScope.GetStatus().UpdatedClusters.Clusters[i])
+	}
+
 	// Walk UpdatingClusters:
 	// - if hash is same and cluster is provisioned, moved to UpdatedClusters. Remove from UpdatingClusters
 	// - if hash is different, update ClusterSummary and leave it in UpdatingClusters
 	updatingClusters := []corev1.ObjectReference{}
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
-		cluster := &profileScope.GetStatus().UpdatingClusters.Clusters[i]
-		clusterType := clusterproxy.GetClusterType(cluster)
+		cluster := profileScope.GetStatus().UpdatingClusters.Clusters[i]
+		clusterType := clusterproxy.GetClusterType(&cluster)
 		clusterSumary, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
 			cluster.Namespace, cluster.Name, clusterType)
 		if err != nil {
 			return err
 		}
 		if isCluterSummaryProvisioned(clusterSumary) {
-			profileScope.GetStatus().UpdatedClusters.Clusters =
-				append(profileScope.GetStatus().UpdatedClusters.Clusters, *cluster)
+			if !updatedClusters.Has(&cluster) {
+				profileScope.GetStatus().UpdatedClusters.Clusters =
+					append(profileScope.GetStatus().UpdatedClusters.Clusters, cluster)
+			}
 		} else {
-			updatingClusters = append(updatingClusters, *cluster)
+			updatingClusters = append(updatingClusters, cluster)
 		}
 	}
+
 	profileScope.GetStatus().UpdatingClusters.Clusters = updatingClusters
 
 	return nil

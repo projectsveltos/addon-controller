@@ -78,7 +78,7 @@ var _ = Describe("Helm", func() {
 					RepositoryURL:    "https://kyverno.github.io/kyverno/",
 					RepositoryName:   "kyverno",
 					ChartName:        "kyverno/kyverno",
-					ChartVersion:     "v3.3.4",
+					ChartVersion:     "v3.5.2",
 					ReleaseName:      "kyverno-latest",
 					ReleaseNamespace: "kyverno",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -149,7 +149,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.4", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
 			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
 		}
 
@@ -164,7 +164,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.3.3",
+				ChartVersion:     "v3.5.1",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -219,7 +219,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.1", Namespace: "kyverno"},
 			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
 		}
 
@@ -245,7 +245,7 @@ var _ = Describe("Helm", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.3.3",
+				ChartVersion:     "v3.5.1",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -273,7 +273,7 @@ var _ = Describe("Helm", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.3.3", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.1", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

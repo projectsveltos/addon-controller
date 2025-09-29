@@ -390,6 +390,8 @@ func (m *instance) removeDependent(prerequisite, dependent *corev1.ObjectReferen
 	}
 
 	if len(clusterDeployments.Clusters) == 0 {
+		logger.V(logs.LogDebug).Info("removeProfile", "profile",
+			fmt.Sprintf("%s %s:%s", prerequisite.Kind, prerequisite.Namespace, prerequisite.Name))
 		m.profileClusterRequests.removeProfile(prerequisite)
 	} else {
 		m.profileClusterRequests.addProfile(prerequisite, clusterDeployments)
@@ -407,6 +409,10 @@ func (m *instance) updateProfileInstance(ctx context.Context, c client.Client, p
 }
 
 func calculateHash(data map[corev1.ObjectReference]RequestingProfiles) []byte {
+	if len(data) == 0 {
+		return nil
+	}
+
 	h := sha256.New()
 	var config string
 

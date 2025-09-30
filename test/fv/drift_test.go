@@ -97,8 +97,8 @@ const (
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
 	cleanupControllerDeplName   = "kyverno-cleanup-controller"
-	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.14.1"
-	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.14.1"
+	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.15.1"
+	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.15.1"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -163,7 +163,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    "https://kyverno.github.io/kyverno/",
 					RepositoryName:   "kyverno",
 					ChartName:        "kyverno/kyverno",
-					ChartVersion:     "v3.4.2",
+					ChartVersion:     "v3.5.2",
 					ReleaseName:      "kyverno-latest",
 					ReleaseNamespace: "kyverno",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -300,7 +300,7 @@ reportsController:
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -336,7 +336,7 @@ reportsController:
 			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-cleanup-controller"}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-				By("Kyverno image is set to v1.14.1")
+				By("Kyverno image is set to v1.15.1")
 				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(cleanupImage))
 			}
 		}
@@ -351,12 +351,12 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.14.2"
+					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.15.2"
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.14.2")
+		By("Kyverno image is reset to v1.15.2")
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
@@ -418,7 +418,7 @@ reportsController:
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.4.1",
+				ChartVersion:     "v3.5.1",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

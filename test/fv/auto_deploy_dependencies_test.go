@@ -104,7 +104,7 @@ var _ = Describe("Feature", func() {
 				RepositoryURL:    "https://kyverno.github.io/kyverno/",
 				RepositoryName:   "kyverno",
 				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.4.2",
+				ChartVersion:     "v3.5.2",
 				ReleaseName:      "kyverno-latest",
 				ReleaseNamespace: "kyverno",
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -166,7 +166,7 @@ var _ = Describe("Feature", func() {
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.4.2", Namespace: "kyverno"},
+			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
 			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,

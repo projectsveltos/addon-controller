@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"reflect"
 
 	"github.com/go-logr/logr"
@@ -24,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -94,4 +96,32 @@ func SetPredicates(logger logr.Logger) predicate.Funcs {
 			return false
 		},
 	}
+}
+
+// DependenciesHashChangedPredicate implements a default update predicate function
+// that triggers reconciliation only when the DependenciesHash in the Status changes.
+type DependenciesHashChangedPredicate struct {
+	predicate.Funcs
+}
+
+// getDependenciesHash safely extracts the hash from either a ClusterProfile or a Profile.
+func getDependenciesHash(obj client.Object) []byte {
+	switch o := obj.(type) {
+	case *configv1beta1.ClusterProfile:
+		return o.Status.DependenciesHash
+	case *configv1beta1.Profile:
+		return o.Status.DependenciesHash
+	default:
+		return nil
+	}
+}
+
+// Update implements default UpdateEvent filter for validating DependenciesHash change.
+func (DependenciesHashChangedPredicate) Update(e event.UpdateEvent) bool {
+	oldHash := getDependenciesHash(e.ObjectOld)
+	newHash := getDependenciesHash(e.ObjectNew)
+
+	changed := !bytes.Equal(oldHash, newHash)
+
+	return changed
 }

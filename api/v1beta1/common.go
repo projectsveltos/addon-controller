@@ -31,3 +31,11 @@ type HandOverError struct {
 func (r *HandOverError) Error() string {
 	return r.Message
 }
+
+type TemplateInstantiationError struct {
+	Message string
+}
+
+func (r *TemplateInstantiationError) Error() string {
+	return r.Message
+}

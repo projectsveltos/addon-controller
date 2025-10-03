@@ -334,6 +334,9 @@ func capiCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
 		return
 	}
 	if gvk.Group == clusterv1.GroupVersion.Group {
+		setupLog.V(logs.LogInfo).Info("Initiating graceful restart due to CAPI CRD update",
+			"GVK", gvk.String(), "Action", string(action))
+
 		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
 			panic("kill -TERM failed")
 		}
@@ -360,7 +363,11 @@ func fluxCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
 	if action == crd.Modify {
 		return
 	}
+
 	if gvk.Group == sourcev1.GroupVersion.Group {
+		setupLog.V(logs.LogInfo).Info("Initiating graceful restart due to Flux CRD update",
+			"GVK", gvk.String(), "Action", string(action))
+
 		if killErr := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); killErr != nil {
 			panic("kill -TERM failed")
 		}

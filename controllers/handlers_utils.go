@@ -676,18 +676,20 @@ func collectReferencedObjects(ctx context.Context, controlClusterClient client.C
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, references[i].Namespace,
 			clusterSummary.Spec.ClusterType)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
-				reference.Kind, reference.Namespace, reference.Name, err))
-			return nil, nil, err
+			msg := fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err)
+			logger.V(logs.LogInfo).Info(msg)
+			return nil, nil, &configv1beta1.TemplateInstantiationError{Message: msg}
 		}
 
 		name, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, references[i].Name,
 			clusterSummary.Spec.ClusterType)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
-				reference.Kind, reference.Namespace, reference.Name, err))
-			return nil, nil, err
+			msg := fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err)
+			logger.V(logs.LogInfo).Info(msg)
+			return nil, nil, &configv1beta1.TemplateInstantiationError{Message: msg}
 		}
 
 		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {

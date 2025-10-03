@@ -171,6 +171,12 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
 				return nil
 			}
+			var templateError *configv1beta1.TemplateInstantiationError
+			if errors.As(deployerError, &templateError) {
+				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
+				return nil
+			}
 			if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
 				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 				resultError := errors.New("the maximum number of consecutive errors has been reached")
@@ -408,6 +414,12 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 
 		var nonRetriableError *configv1beta1.NonRetriableError
 		if errors.As(result.Err, &nonRetriableError) {
+			removing := libsveltosv1beta1.FeatureStatusRemoving
+			r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, result.Err, logger)
+			return result.Err
+		}
+		var templateError *configv1beta1.TemplateInstantiationError
+		if errors.As(result.Err, &templateError) {
 			removing := libsveltosv1beta1.FeatureStatusRemoving
 			r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, result.Err, logger)
 			return result.Err

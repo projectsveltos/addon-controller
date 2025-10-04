@@ -958,7 +958,7 @@ func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clus
 		// Deploy drift detection manager first. Have manager up by the time resourcesummary is created
 		err := deployDriftDetectionManagerInCluster(ctx, getManagementClusterClient(), clusterNamespace,
 			clusterName, clusterSummary.Name, string(libsveltosv1beta1.FeatureKustomize), clusterType,
-			startInMgmtCluster, isPullMode, logger)
+			isPullMode, startInMgmtCluster, logger)
 		if err != nil {
 			return err
 		}

@@ -73,14 +73,14 @@ rules:
   `
 )
 
-var _ = Describe("DryRun", func() {
+var _ = Describe("DryRun", Serial, func() {
 	const (
 		namePrefix  = "dry-run-"
 		certManager = "cert-manager"
 	)
 
 	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts",
-		Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Label("NEW-FV", "NEW-FV-PULLMODE", "EXTENDED"), func() {
 			configMapNs := randomString()
 			Byf("Create configMap's namespace %s", configMapNs)
 			ns := &corev1.Namespace{

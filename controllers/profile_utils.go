@@ -72,13 +72,17 @@ func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
 func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) bool {
 	listOptions := []client.ListOption{}
 
-	// Originally only ClusterProfile was present and ClusterProfileLabelName was set.
-	// With the addition of Profiles, different label is set ProfileLabelName
-	if profileScope.Profile.GetObjectKind().GroupVersionKind().Kind == configv1beta1.ClusterProfileKind {
+	// The current Kind being processed (ClusterProfile or Profile)
+	currentKind := profileScope.GetKind()
+
+	// Determine labels based on Kind
+	switch currentKind {
+	case configv1beta1.ClusterProfileKind:
 		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
-	} else {
+	case configv1beta1.ProfileKind: // Explicitly check for ProfileKind
 		listOptions = append(listOptions,
 			client.MatchingLabels{clusterops.ProfileLabelName: profileScope.Name()},
+			// Only Profile (namespaced) requires a namespace match. ClusterProfile (cluster-scoped) does not.
 			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
@@ -92,6 +96,99 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 		profileScope.V(logs.LogInfo).Info("not all clusterSummaries are gone")
 	}
 	return len(clusterSummaryList.Items) == 0
+}
+
+// allClusterSummariesDeployed returns true if all ClusterSummaries owned by a
+// ClusterProfile/Profile instance are provisioned. It also returns a status message
+// and an error if one occurs during API interaction.
+func allClusterSummariesDeployed(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
+	logger logr.Logger) (deployed bool, message string, err error) {
+
+	listOptions := []client.ListOption{}
+
+	// The current Kind being processed (ClusterProfile or Profile)
+	currentKind := profileScope.GetKind()
+
+	// Determine labels based on Kind
+	switch currentKind {
+	case configv1beta1.ClusterProfileKind:
+		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
+	case configv1beta1.ProfileKind: // Explicitly check for ProfileKind
+		listOptions = append(listOptions,
+			client.MatchingLabels{clusterops.ProfileLabelName: profileScope.Name()},
+			// Only Profile (namespaced) requires a namespace match. ClusterProfile (cluster-scoped) does not.
+			client.InNamespace(profileScope.Profile.GetNamespace()))
+	}
+
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+
+	// List ClusterSummaries
+	if errList := c.List(ctx, clusterSummaryList, listOptions...); errList != nil {
+		// Return API error immediately
+		message = fmt.Sprintf("failed to list ClusterSummaries for %s %s. Error: %v", currentKind, profileScope.Name(), errList)
+		profileScope.V(logs.LogInfo).Info(message)
+		return false, message, errList // Use errList instead of shadowing the named 'err'
+	}
+
+	// Check if any ClusterSummaries were found (edge case: selector matched no clusters)
+	if len(clusterSummaryList.Items) == 0 {
+		message = fmt.Sprintf("No matching clusters found for %s %s. Deployment considered complete.",
+			currentKind, profileScope.Name())
+		profileScope.V(logs.LogInfo).Info(message)
+		return true, message, nil
+	}
+
+	// Check provisioning status
+	for i := range clusterSummaryList.Items {
+		// Verify ClusterSummary is in sync
+		deployed, message = isClusterSummarySyncedAndProvisioned(profileScope, &clusterSummaryList.Items[i], logger)
+		if !deployed {
+			return deployed, message, nil
+		}
+	}
+
+	// Success case: all found ClusterSummaries are provisioned
+	return true, "All matching clusters are successfully deployed.", nil
+}
+
+func isClusterSummarySyncedAndProvisioned(profileScope *scope.ProfileScope,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (provisioned bool, message string) {
+
+	// Verify ClusterSummary is in sync
+	if !reflect.DeepEqual(clusterSummary.Spec.ClusterProfileSpec.HelmCharts,
+		profileScope.GetSpec().HelmCharts) {
+
+		message = fmt.Sprintf("ClusterSummary HelmCharts %s is not in sync.",
+			clusterSummary.Name)
+		logger.V(logs.LogDebug).Info(message)
+		return false, message
+	}
+	if !reflect.DeepEqual(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs,
+		profileScope.GetSpec().PolicyRefs) {
+
+		message = fmt.Sprintf("ClusterSummary PolicyRefs %s is not in sync.",
+			clusterSummary.Name)
+		logger.V(logs.LogDebug).Info(message)
+		return false, message
+	}
+	if !reflect.DeepEqual(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs,
+		profileScope.GetSpec().KustomizationRefs) {
+
+		message = fmt.Sprintf("ClusterSummaryKustomizationRefs %s is not in sync.",
+			clusterSummary.Name)
+		logger.V(logs.LogDebug).Info(message)
+		return false, message
+	}
+
+	// The helper should check the status of the individual ClusterSummary
+	if !isCluterSummaryProvisioned(clusterSummary) {
+		// Found one that is not provisioned: return false with a message
+		message = fmt.Sprintf("ClusterSummary %s is not yet provisioned.", clusterSummary.Name)
+		logger.V(logs.LogDebug).Info(message)
+		return false, message
+	}
+
+	return true, ""
 }
 
 // canRemoveFinalizer returns true if there is no ClusterSummary left created by this

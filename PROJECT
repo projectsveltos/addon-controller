@@ -104,4 +104,13 @@ resources:
   group: lib
   kind: SveltosCluster
   version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: projectsveltos.io
+  group: config
+  kind: ClusterPromotion
+  path: github.com/projectsveltos/addon-controller/api/v1beta1
+  version: v1beta1
 version: "3"

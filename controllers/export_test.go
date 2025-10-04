@@ -71,6 +71,25 @@ var (
 )
 
 var (
+	GetProfileSpecHash          = (*ClusterPromotionReconciler).getProfileSpecHash
+	GetStagesHash               = (*ClusterPromotionReconciler).getStagesHash
+	ProfileSpecChanged          = (*ClusterPromotionReconciler).profileSpecChanged
+	StagesChanged               = (*ClusterPromotionReconciler).stagesChanged
+	ReconcileStageProfile       = (*ClusterPromotionReconciler).reconcileStageProfile
+	CheckCurrentStageDeployment = (*ClusterPromotionReconciler).checkCurrentStageDeployment
+	GetNextStage                = (*ClusterPromotionReconciler).getNextStage
+	CanAutoAdvance              = (*ClusterPromotionReconciler).canAutoAdvance
+	CanManualAdvance            = (*ClusterPromotionReconciler).canManualAdvance
+	CleanClusterProfiles        = (*ClusterPromotionReconciler).cleanClusterProfiles
+
+	GetClusterProfileName     = getClusterProfileName
+	ResetStageStatuses        = resetStageStatuses
+	AddStageStatus            = addStageStatus
+	UpdateStageStatus         = updateStageStatus
+	GetClusterPromotionLabels = getClusterPromotionLabels
+)
+
+var (
 	CreatFeatureHandlerMaps = creatFeatureHandlerMaps
 	GetHandlersForFeature   = getHandlersForFeature
 	GenericDeploy           = genericDeploy

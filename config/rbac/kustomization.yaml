@@ -29,4 +29,3 @@ resources:
 - clusterreport_viewer_role.yaml
 - clusterprofile_editor_role.yaml
 - clusterprofile_viewer_role.yaml
-

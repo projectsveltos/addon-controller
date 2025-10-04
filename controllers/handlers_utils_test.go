@@ -482,6 +482,15 @@ var _ = Describe("HandlersUtils", func() {
 			u, []string{"status"}, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
+				currentDeployment)
+			return err == nil &&
+				currentDeployment.Status.AvailableReplicas == int32(availableReplicas) &&
+				currentDeployment.Status.UnavailableReplicas == int32(unavailableReplicas)
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		Consistently(func() bool {
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},

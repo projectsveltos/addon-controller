@@ -734,13 +734,19 @@ func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta
 			namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
 				clusterNamespace, clusterName, sourceRef.Namespace, clusterType)
 			if err != nil {
-				return nil, err
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s: %v",
+					sourceRef.Namespace, err))
+				// Ignore template instantiation error
+				continue
 			}
 
 			name, err := libsveltostemplate.GetReferenceResourceName(ctx, c,
 				clusterNamespace, clusterName, sourceRef.Name, clusterType)
 			if err != nil {
-				return nil, err
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s: %v",
+					sourceRef.Name, err))
+				// Ignore template instantiation error
+				continue
 			}
 
 			source, err := getSource(ctx, c, namespace, name, sourceRef.Kind)
@@ -3989,13 +3995,16 @@ func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.Clu
 	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to fetch resources")
 		return nil, err
 	}
 
 	// Call the new recursive helper function to instantiate all fields.
 	if err := instantiateStructFields(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		instantiatedChart, clusterSummary, objects, mgmtResources, logger); err != nil {
-		return nil, err
+		msg := fmt.Sprintf("failed to instantiated template: %v", err)
+		logger.V(logs.LogInfo).Info(msg)
+		return nil, &configv1beta1.TemplateInstantiationError{Message: msg}
 	}
 
 	return instantiatedChart, nil

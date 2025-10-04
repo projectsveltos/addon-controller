@@ -297,6 +297,11 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 			if errors.As(err, &nonRetriableError) {
 				return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
 			}
+
+			var templateError *configv1beta1.TemplateInstantiationError
+			if errors.As(err, &templateError) {
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+			}
 		}
 
 		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
@@ -363,9 +368,9 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 		return reconcile.Result{}, nil
 	}
 
-	err = r.updateMaps(ctx, clusterSummaryScope, logger)
-	if err != nil {
-		return reconcile.Result{}, err
+	updateMapErrs := r.updateMaps(ctx, clusterSummaryScope, logger)
+	if updateMapErrs != nil {
+		logger.V(logs.LogInfo).Error(updateMapErrs, "failed to get referenced resources")
 	}
 
 	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)

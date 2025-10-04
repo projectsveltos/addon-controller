@@ -499,7 +499,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 	var config string
 	config += string(clusterProfileSpecHash)
 
-	referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+	referencedObjects := make([]corev1.ObjectReference, 0, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
 	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 		reference := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
@@ -508,7 +508,8 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))
-			return nil, err
+			// Ignore template instantiation error
+			continue
 		}
 
 		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
@@ -516,14 +517,15 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				reference.Kind, reference.Namespace, reference.Name, err))
-			return nil, err
+			// Ignore template instantiation error
+			continue
 		}
 
-		referencedObjects[i] = corev1.ObjectReference{
+		referencedObjects = append(referencedObjects, corev1.ObjectReference{
 			Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
 			Namespace: namespace,
 			Name:      name,
-		}
+		})
 	}
 
 	sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))

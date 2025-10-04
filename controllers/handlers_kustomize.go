@@ -399,6 +399,9 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 		if err != nil {
 			return nil, err
 		}
+		if result == nil {
+			continue
+		}
 		config += string(result)
 
 		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummary,
@@ -430,13 +433,19 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
 	if err != nil {
-		return nil, err
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s: %v",
+			kustomizationRef.Namespace, err))
+		// Ignore template instantiation error
+		return nil, nil
 	}
 
 	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
-		return nil, err
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s: %v",
+			kustomizationRef.Name, err))
+		// Ignore template instantiation error
+		return nil, nil
 	}
 
 	if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
@@ -676,13 +685,13 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
 	if err != nil {
-		return "", err
+		return "", &configv1beta1.TemplateInstantiationError{Message: err.Error()}
 	}
 
 	name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, kustomizationRef.Name, clusterSummary.Spec.ClusterType)
 	if err != nil {
-		return "", err
+		return "", &configv1beta1.TemplateInstantiationError{Message: err.Error()}
 	}
 
 	source, err := getSource(ctx, c, namespace, name, kustomizationRef.Kind)

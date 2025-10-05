@@ -89,6 +89,10 @@ const (
 	AgentSendUpdatesNoGateway
 )
 
+const (
+	clusterPausedMessage = "Cluster is paused"
+)
+
 // ClusterSummaryReconciler reconciles a ClusterSummary object
 type ClusterSummaryReconciler struct {
 	*rest.Config
@@ -270,8 +274,14 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		}
 		if paused {
 			logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+			clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = true
+			suspensionReason := clusterPausedMessage
+			clusterSummaryScope.ClusterSummary.Status.SuspensionReason = &suspensionReason
 			return reconcile.Result{}, nil
 		}
+
+		clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
+		clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
 
 		if !isDeleted {
 			// if cluster is marked for deletion do not try to remove ResourceSummaries.
@@ -287,21 +297,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		// in the management cluster and those need to be removed.
 		err = r.undeploy(ctx, clusterSummaryScope, logger)
 		if err != nil {
-			// In DryRun mode it is expected to always get an error back
-			if !clusterSummaryScope.IsDryRunSync() {
-				logger.V(logs.LogInfo).Error(err, "failed to undeploy")
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-			}
-
-			var nonRetriableError *configv1beta1.NonRetriableError
-			if errors.As(err, &nonRetriableError) {
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
-			}
-
-			var templateError *configv1beta1.TemplateInstantiationError
-			if errors.As(err, &templateError) {
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
-			}
+			return r.processUndeployError(clusterSummaryScope, err, logger)
 		}
 
 		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
@@ -319,12 +315,9 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	}
 
 	// Cluster is not present anymore or cleanup succeeded
-	logger.V(logs.LogInfo).Info("Removing finalizer")
-	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer) {
-		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
-			configv1beta1.ClusterSummaryFinalizer); !finalizersUpdated {
-			return reconcile.Result{}, fmt.Errorf("failed to remove finalizer")
-		}
+	err = r.removeFinalizer(clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to remove finalizer")
 	}
 
 	if err := r.deleteChartMap(ctx, clusterSummaryScope, logger); err != nil {
@@ -379,8 +372,14 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 	}
 	if paused {
 		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+		clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = true
+		suspensionReason := clusterPausedMessage
+		clusterSummaryScope.ClusterSummary.Status.SuspensionReason = &suspensionReason
 		return reconcile.Result{}, nil
 	}
+
+	clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
+	clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
 
 	err = r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
@@ -1587,4 +1586,42 @@ func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(
 		notEligibleError, logger)
 	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureResources, &failed, nil,
 		notEligibleError, logger)
+}
+
+// removeFinalizer removes the finalizer
+func (r *ClusterSummaryReconciler) removeFinalizer(clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) error {
+
+	// Remove Finalizer
+	logger.V(logs.LogInfo).Info("Removing finalizer")
+	if controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer) {
+		if finalizersUpdated := controllerutil.RemoveFinalizer(clusterSummaryScope.ClusterSummary,
+			configv1beta1.ClusterSummaryFinalizer); !finalizersUpdated {
+			return fmt.Errorf("failed to remove finalizer")
+		}
+	}
+
+	return nil
+}
+
+func (r *ClusterSummaryReconciler) processUndeployError(clusterSummaryScope *scope.ClusterSummaryScope,
+	undeployError error, logger logr.Logger) (reconcile.Result, error) {
+
+	// In DryRun mode it is expected to always get an error back
+	if !clusterSummaryScope.IsDryRunSync() {
+		logger.V(logs.LogInfo).Error(undeployError, "failed to undeploy")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
+	var nonRetriableError *configv1beta1.NonRetriableError
+	if errors.As(undeployError, &nonRetriableError) {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+	}
+
+	var templateError *configv1beta1.TemplateInstantiationError
+	if errors.As(undeployError, &templateError) {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+	}
+
+	return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 }

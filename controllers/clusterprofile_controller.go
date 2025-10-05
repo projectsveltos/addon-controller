@@ -124,8 +124,14 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if isProfilePaused(profileScope) {
 		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
+		profileScope.GetStatus().ReconciliationSuspended = true
+		suspensionReason := "ClusterProfile is paused"
+		profileScope.GetStatus().SuspensionReason = &suspensionReason
 		return reconcile.Result{}, nil
 	}
+
+	profileScope.GetStatus().ReconciliationSuspended = false
+	profileScope.GetStatus().SuspensionReason = nil
 
 	// Handle deleted clusterProfile
 	if !clusterProfile.DeletionTimestamp.IsZero() {

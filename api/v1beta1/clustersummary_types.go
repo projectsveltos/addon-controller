@@ -168,6 +168,16 @@ type ClusterSummaryStatus struct {
 	// instance itself, *excluding* errors related to the deployment of individual features.
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	// ReconciliationSuspended indicates whether the reconciliation loop for this
+	// ClusterSummary is currently paused due to an external action (e.g., a user annotation).
+	// When true, the status will not be updated unless the pause is lifted.
+	// +optional
+	ReconciliationSuspended bool `json:"reconciliationSuspended,omitempty"`
+
+	// SuspensionReason provides a brief explanation of why the reconciliation is suspended.
+	// +optional
+	SuspensionReason *string `json:"suspensionReason,omitempty"`
 }
 
 //nolint: lll // marker

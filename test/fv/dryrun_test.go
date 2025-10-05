@@ -738,11 +738,6 @@ func verifyResourceReport(clusterReport *configv1beta1.ClusterReport,
 }
 
 func verifyDeployedGroupVersionKind(clusterProfileName string) {
-	Byf("Verifying DeployedGroupVersionKind are set for ClusterProfile %s", clusterProfileName)
-	// Test has been flaky. Rarely it happens that Kong service is not removed
-	// when clusterProfile is.
-	// Adding this extra code to make test fails if at this points, ClusterSummary
-	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
 			clusterops.ClusterProfileLabelName: clusterProfileName,
@@ -751,15 +746,32 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
 	Expect(len(clusterSummaryList.Items)).To(Equal(1))
-	found := false
-	for i := range clusterSummaryList.Items[0].Status.DeployedGVKs {
-		fs := clusterSummaryList.Items[0].Status.DeployedGVKs[i]
-		if fs.FeatureID == libsveltosv1beta1.FeatureResources {
-			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
-			found = true
+
+	Byf("Verifying DeployedGroupVersionKind are set for ClusterSummary %s/%s",
+		clusterSummaryList.Items[0].Namespace, clusterSummaryList.Items[0].Name)
+	// Test has been flaky. Rarely it happens that Kong service is not removed
+	// when clusterProfile is.
+	// Adding this extra code to make test fails if at this points, ClusterSummary
+	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
+
+	Eventually(func() bool {
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterSummaryList.Items[0].Namespace,
+				Name:      clusterSummaryList.Items[0].Name},
+			currentClusterSummary)
+		if err != nil {
+			return false
 		}
-	}
-	Expect(found).To(BeTrue())
+		for i := range currentClusterSummary.Status.DeployedGVKs {
+			fs := currentClusterSummary.Status.DeployedGVKs[i]
+			if fs.FeatureID == libsveltosv1beta1.FeatureResources {
+				return len(fs.DeployedGroupVersionKind) != 0
+			}
+		}
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
 }
 
 func setTier(clusterProfileName string, tier int32) {

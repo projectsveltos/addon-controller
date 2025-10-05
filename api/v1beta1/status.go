@@ -41,4 +41,14 @@ type Status struct {
 	// DependenciesHash is a hash representing the set of clusters where this ClusterProfile
 	// must be deployed, based on the combined configuration of its dependencies.
 	DependenciesHash []byte `json:"dependenciesHash,omitempty"`
+
+	// ReconciliationSuspended indicates whether the reconciliation loop for this
+	// ClusterSummary is currently paused due to an external action (e.g., a user annotation).
+	// When true, the status will not be updated unless the pause is lifted.
+	// +optional
+	ReconciliationSuspended bool `json:"reconciliationSuspended,omitempty"`
+
+	// SuspensionReason provides a brief explanation of why the reconciliation is suspended.
+	// +optional
+	SuspensionReason *string `json:"suspensionReason,omitempty"`
 }

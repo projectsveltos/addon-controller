@@ -1376,6 +1376,16 @@ spec:
                   If not set, reconciliations will happen as usual.
                 format: date-time
                 type: string
+              reconciliationSuspended:
+                description: |-
+                  ReconciliationSuspended indicates whether the reconciliation loop for this
+                  ClusterSummary is currently paused due to an external action (e.g., a user annotation).
+                  When true, the status will not be updated unless the pause is lifted.
+                type: boolean
+              suspensionReason:
+                description: SuspensionReason provides a brief explanation of why
+                  the reconciliation is suspended.
+                type: string
             type: object
         type: object
     served: true

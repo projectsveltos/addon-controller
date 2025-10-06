@@ -146,9 +146,14 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 	if isProfilePaused(profileScope) {
 		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
+		profileScope.GetStatus().ReconciliationSuspended = true
+		suspensionReason := "Profile is paused"
+		profileScope.GetStatus().SuspensionReason = &suspensionReason
 		return reconcile.Result{}, nil
 	}
 
+	profileScope.GetStatus().ReconciliationSuspended = false
+	profileScope.GetStatus().SuspensionReason = nil
 	// Always close the scope when exiting this function so we can persist any Profile
 	// changes.
 	defer func() {

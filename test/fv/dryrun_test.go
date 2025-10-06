@@ -155,8 +155,6 @@ var _ = Describe("DryRun", func() {
 			Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
-			verifyDeployedGroupVersionKind(clusterProfile.Name)
-
 			charts := []configv1beta1.Chart{
 				{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
 			}
@@ -171,6 +169,8 @@ var _ = Describe("DryRun", func() {
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 				policies, nil)
+
+			verifyDeployedGroupVersionKind(clusterProfile.Name)
 
 			Byf("Create a configMap with kong Role")
 			kongRoleConfigMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), kongRole)
@@ -216,7 +216,7 @@ var _ = Describe("DryRun", func() {
 						RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 						RepositoryName:   "mariadb-operator",
 						ChartName:        "mariadb-operator/mariadb-operator",
-						ChartVersion:     "0.36.0",
+						ChartVersion:     "25.8.4",
 						ReleaseName:      "mariadb",
 						ReleaseNamespace: "mariadb",
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -225,7 +225,7 @@ var _ = Describe("DryRun", func() {
 						RepositoryURL:    "https://charts.jetstack.io",
 						RepositoryName:   "jetstack",
 						ChartName:        "jetstack/cert-manager",
-						ChartVersion:     "v1.16.2",
+						ChartVersion:     "v1.18.2",
 						ReleaseName:      certManager,
 						ReleaseNamespace: certManager,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -236,7 +236,7 @@ var _ = Describe("DryRun", func() {
 						RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 						RepositoryName:   "cloudnative-pg",
 						ChartName:        "cloudnative-pg/cloudnative-pg",
-						ChartVersion:     "0.22.1",
+						ChartVersion:     "0.26.0",
 						ReleaseName:      "cnpg",
 						ReleaseNamespace: "cnpg-system",
 						HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -338,7 +338,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 					RepositoryName:   "mariadb-operator",
 					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "0.36.0",
+					ChartVersion:     "25.8.4",
 					ReleaseName:      "mariadb",
 					ReleaseNamespace: "mariadb",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -347,7 +347,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://charts.jetstack.io",
 					RepositoryName:   "jetstack",
 					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.16.2",
+					ChartVersion:     "v1.18.2",
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -358,7 +358,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 					RepositoryName:   "cloudnative-pg",
 					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.22.1",
+					ChartVersion:     "0.26.0",
 					ReleaseName:      "cnpg",
 					ReleaseNamespace: "cnpg-system",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -419,7 +419,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 					RepositoryName:   "mariadb-operator",
 					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "0.36.0",
+					ChartVersion:     "25.8.4",
 					ReleaseName:      "mariadb",
 					ReleaseNamespace: "mariadb",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -430,7 +430,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://charts.jetstack.io",
 					RepositoryName:   "jetstack",
 					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.16.2",
+					ChartVersion:     "v1.18.2",
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -441,7 +441,7 @@ var _ = Describe("DryRun", func() {
 					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 					RepositoryName:   "cloudnative-pg",
 					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.22.1",
+					ChartVersion:     "0.26.0",
 					ReleaseName:      "cnpg",
 					ReleaseNamespace: "cnpg-system",
 					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -738,11 +738,6 @@ func verifyResourceReport(clusterReport *configv1beta1.ClusterReport,
 }
 
 func verifyDeployedGroupVersionKind(clusterProfileName string) {
-	Byf("Verifying DeployedGroupVersionKind are set for ClusterProfile %s", clusterProfileName)
-	// Test has been flaky. Rarely it happens that Kong service is not removed
-	// when clusterProfile is.
-	// Adding this extra code to make test fails if at this points, ClusterSummary
-	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
 			clusterops.ClusterProfileLabelName: clusterProfileName,
@@ -751,15 +746,34 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 	Expect(k8sClient.List(context.TODO(), clusterSummaryList, listOptions...)).To(Succeed())
 	Expect(len(clusterSummaryList.Items)).To(Equal(1))
-	found := false
-	for i := range clusterSummaryList.Items[0].Status.DeployedGVKs {
-		fs := clusterSummaryList.Items[0].Status.DeployedGVKs[i]
-		if fs.FeatureID == libsveltosv1beta1.FeatureResources {
-			Expect(len(fs.DeployedGroupVersionKind)).ToNot(BeZero())
-			found = true
+
+	Byf("Verifying DeployedGroupVersionKind are set for ClusterSummary %s/%s",
+		clusterSummaryList.Items[0].Namespace, clusterSummaryList.Items[0].Name)
+	// Test has been flaky. Rarely it happens that Kong service is not removed
+	// when clusterProfile is.
+	// Adding this extra code to make test fails if at this points, ClusterSummary
+	// has lost list of deployed GVKs (which will cause the cleanup to not happen)
+
+	Eventually(func() bool {
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterSummaryList.Items[0].Namespace,
+				Name:      clusterSummaryList.Items[0].Name},
+			currentClusterSummary)
+		if err != nil {
+			return false
 		}
-	}
-	Expect(found).To(BeTrue())
+		for i := range currentClusterSummary.Status.DeployedGVKs {
+			fs := currentClusterSummary.Status.DeployedGVKs[i]
+			if fs.FeatureID == libsveltosv1beta1.FeatureResources {
+				Byf("currentClusterSummary.Status.DeployedGVKs %v",
+					currentClusterSummary.Status.DeployedGVKs[i])
+				return len(fs.DeployedGroupVersionKind) != 0
+			}
+		}
+		return false
+	}, timeout, pollingInterval).Should(BeTrue())
 }
 
 func setTier(clusterProfileName string, tier int32) {

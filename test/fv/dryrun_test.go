@@ -123,6 +123,25 @@ var _ = Describe("DryRun", Serial, func() {
 			})
 			Expect(err).To(BeNil())
 
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
+			clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				currentClusterProfile.Name, &currentClusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+			Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
+			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
+			policies := []policy{
+				{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
+				policies, nil)
+
+			verifyDeployedGroupVersionKind(clusterProfile.Name)
+
 			Byf("Update ClusterProfile %s to deploy mysql helm chart", clusterProfile.Name)
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				Expect(k8sClient.Get(context.TODO(),
@@ -145,7 +164,7 @@ var _ = Describe("DryRun", Serial, func() {
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 
-			clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+			clusterSummary = verifyClusterSummary(clusterops.ClusterProfileLabelName,
 				currentClusterProfile.Name, &currentClusterProfile.Spec,
 				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
@@ -155,8 +174,6 @@ var _ = Describe("DryRun", Serial, func() {
 			Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
-			verifyDeployedGroupVersionKind(clusterProfile.Name)
-
 			charts := []configv1beta1.Chart{
 				{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
 			}
@@ -165,12 +182,11 @@ var _ = Describe("DryRun", Serial, func() {
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 				nil, charts)
 
-			policies := []policy{
-				{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
-			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 				policies, nil)
+
+			verifyDeployedGroupVersionKind(clusterProfile.Name)
 
 			Byf("Create a configMap with kong Role")
 			kongRoleConfigMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), kongRole)
@@ -216,7 +232,7 @@ var _ = Describe("DryRun", Serial, func() {
 						RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 						RepositoryName:   "mariadb-operator",
 						ChartName:        "mariadb-operator/mariadb-operator",
-						ChartVersion:     "0.36.0",
+						ChartVersion:     "25.8.4",
 						ReleaseName:      "mariadb",
 						ReleaseNamespace: "mariadb",
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -225,7 +241,7 @@ var _ = Describe("DryRun", Serial, func() {
 						RepositoryURL:    "https://charts.jetstack.io",
 						RepositoryName:   "jetstack",
 						ChartName:        "jetstack/cert-manager",
-						ChartVersion:     "v1.16.2",
+						ChartVersion:     "v1.18.2",
 						ReleaseName:      certManager,
 						ReleaseNamespace: certManager,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -236,7 +252,7 @@ var _ = Describe("DryRun", Serial, func() {
 						RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 						RepositoryName:   "cloudnative-pg",
 						ChartName:        "cloudnative-pg/cloudnative-pg",
-						ChartVersion:     "0.22.1",
+						ChartVersion:     "0.26.0",
 						ReleaseName:      "cnpg",
 						ReleaseNamespace: "cnpg-system",
 						HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -338,7 +354,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 					RepositoryName:   "mariadb-operator",
 					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "0.36.0",
+					ChartVersion:     "25.8.4",
 					ReleaseName:      "mariadb",
 					ReleaseNamespace: "mariadb",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -347,7 +363,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://charts.jetstack.io",
 					RepositoryName:   "jetstack",
 					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.16.2",
+					ChartVersion:     "v1.18.2",
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -358,7 +374,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 					RepositoryName:   "cloudnative-pg",
 					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.22.1",
+					ChartVersion:     "0.26.0",
 					ReleaseName:      "cnpg",
 					ReleaseNamespace: "cnpg-system",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -419,7 +435,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
 					RepositoryName:   "mariadb-operator",
 					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "0.36.0",
+					ChartVersion:     "25.8.4",
 					ReleaseName:      "mariadb",
 					ReleaseNamespace: "mariadb",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -430,7 +446,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://charts.jetstack.io",
 					RepositoryName:   "jetstack",
 					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.16.2",
+					ChartVersion:     "v1.18.2",
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -441,7 +457,7 @@ var _ = Describe("DryRun", Serial, func() {
 					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
 					RepositoryName:   "cloudnative-pg",
 					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.22.1",
+					ChartVersion:     "0.26.0",
 					ReleaseName:      "cnpg",
 					ReleaseNamespace: "cnpg-system",
 					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
@@ -764,6 +780,8 @@ func verifyDeployedGroupVersionKind(clusterProfileName string) {
 		if err != nil {
 			return false
 		}
+		Byf("currentClusterSummary.Status.DeployedGVKs %v", currentClusterSummary.Status.DeployedGVKs)
+		Byf("currentClusterSummary.Status.FeatureSummaries %v", currentClusterSummary.Status.FeatureSummaries)
 		for i := range currentClusterSummary.Status.DeployedGVKs {
 			fs := currentClusterSummary.Status.DeployedGVKs[i]
 			if fs.FeatureID == libsveltosv1beta1.FeatureResources {

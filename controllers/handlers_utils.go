@@ -1084,19 +1084,19 @@ func appendDeployedGroupVersionKinds(clusterSummary *configv1beta1.ClusterSummar
 		// Remove duplicates
 		fdi.DeployedGroupVersionKind = unique(fdi.DeployedGroupVersionKind)
 		return
-	}
+	} else {
+		if clusterSummary.Status.DeployedGVKs == nil {
+			clusterSummary.Status.DeployedGVKs = make([]libsveltosv1beta1.FeatureDeploymentInfo, 0)
+		}
 
-	if fdi == nil {
-		clusterSummary.Status.DeployedGVKs = make([]libsveltosv1beta1.FeatureDeploymentInfo, 0)
+		clusterSummary.Status.DeployedGVKs = append(
+			clusterSummary.Status.DeployedGVKs,
+			libsveltosv1beta1.FeatureDeploymentInfo{
+				FeatureID:                featureID,
+				DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
+			},
+		)
 	}
-
-	clusterSummary.Status.DeployedGVKs = append(
-		clusterSummary.Status.DeployedGVKs,
-		libsveltosv1beta1.FeatureDeploymentInfo{
-			FeatureID:                featureID,
-			DeployedGroupVersionKind: tranformGroupVersionKindToString(gvks),
-		},
-	)
 }
 
 func tranformGroupVersionKindToString(gvks []schema.GroupVersionKind) []string {

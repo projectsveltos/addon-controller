@@ -56,16 +56,17 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
-	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
-	"github.com/projectsveltos/addon-controller/internal/telemetry"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
+
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
+	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
+	"github.com/projectsveltos/addon-controller/internal/telemetry"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -593,6 +594,15 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 
 	var err error
 
+	if err := (&controllers.ClusterPromotionReconciler{
+		Client:               mgr.GetClient(),
+		Scheme:               mgr.GetScheme(),
+		Config:               mgr.GetConfig(),
+		ConcurrentReconciles: concurrentReconciles,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 	if err = (&controllers.SveltosClusterReconciler{
 		Client: mgr.GetClient(),

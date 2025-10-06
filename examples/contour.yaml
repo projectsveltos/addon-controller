@@ -1,0 +1,34 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: deploy-contour-override
+spec:
+  syncMode: Continuous
+  reloader: true
+  clusterSelector:
+    matchExpressions:
+    - {key: type, operator: In, values: [eks,gke]}
+    - {key: env, operator: In, values: [fv]}
+  tier: 90
+  helmCharts:
+  - repositoryURL: https://charts.bitnami.com/bitnami
+    repositoryName: bitnami
+    chartName: bitnami/contour
+    chartVersion: 21.1.4
+    releaseName: contour
+    releaseNamespace: contour
+    helmChartAction: Install
+    values: |
+      global:
+        security:
+          allowInsecureImages: true
+      contour:
+        image:
+          registry: ghcr.io
+          repository: projectcontour/contour
+          tag: v1.33.0
+      envoy:
+          image:
+            registry: docker.io
+            repository: envoyproxy/envoy
+            tag: distroless-v1.35.2

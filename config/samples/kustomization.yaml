@@ -9,4 +9,5 @@ resources:
 - config_v1beta1_clustersummary.yaml
 - config_v1beta1_clusterconfiguration.yaml
 - config_v1beta1_profile.yaml
+- config_v1beta1_clusterpromotion.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

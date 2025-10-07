@@ -42,6 +42,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/robfig/cron"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
@@ -753,7 +754,111 @@ func (r *ClusterPromotionReconciler) canAutoAdvance(ctx context.Context,
 		return false, err
 	}
 
+	// Enforce Promotion Window (If Defined)
+	if autoTrigger.PromotionWindow != nil {
+		isOpen, nextOpenTime, err := r.isPromotionWindowOpen(autoTrigger.PromotionWindow, time.Now(), logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to evaluate promotion window")
+			return false, err
+		}
+
+		if !isOpen {
+			// Promotion Window is currently closed. Block advancement.
+			logger.V(logs.LogInfo).Info("Promotion window is currently closed. Waiting for the next window.",
+				"stage", currentStageName,
+				"next_open_time", nextOpenTime.Format(time.RFC3339),
+			)
+
+			return false, nil
+		}
+	}
+
 	return true, nil
+}
+
+func (r *ClusterPromotionReconciler) isPromotionWindowOpen(promotionWindow *configv1beta1.TimeWindow,
+	anchorTime time.Time, logger logr.Logger) (isOpen bool, nextOpenTime *time.Time, err error) {
+
+	schedFrom, err := cron.ParseStandard(promotionWindow.From)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to parse promotionWindow", "from", promotionWindow.From)
+		return false, nil, fmt.Errorf("unparseable schedule %q: %w", promotionWindow.From, err)
+	}
+
+	schedTo, err := cron.ParseStandard(promotionWindow.To)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to parse promotionWindow", "to", promotionWindow.To)
+		return false, nil, fmt.Errorf("unparseable schedule %q: %w", promotionWindow.To, err)
+	}
+
+	// Use the cluster's local time for evaluation
+	now := anchorTime
+
+	// 1. Establish a Robust Historical Reference Point (a year lookback)
+	const safeLookback = 366 * 24 * time.Hour
+	referenceTime := now.Add(-safeLookback)
+
+	// 2. Iterate forward from the reference point to find the latest time <= now.
+	var prevOpenTime time.Time
+
+	t := schedFrom.Next(referenceTime)
+
+	// Loop until the next scheduled open time is in the future (> now).
+	for t.Before(now) || t.Equal(now) {
+		prevOpenTime = t
+		t = schedFrom.Next(t)
+	}
+
+	// 3. Handle Error/Malformity (No 'From' time found in the last year)
+	if prevOpenTime.IsZero() {
+		// Schedule is extremely infrequent or malformed. Block now and schedule for the absolute next open time.
+		nextOpen := schedFrom.Next(now)
+		nextOpenTime = &nextOpen
+		logger.V(logs.LogInfo).Info("Schedule 'From' is too infrequent or malformed, deferring until next absolute open time.",
+			"next_open_time", nextOpenTime.Format(time.RFC3339))
+		return false, nextOpenTime, nil
+	}
+
+	// --- Determine Next Close Time (nextCloseTime) ---
+
+	// 4. Find the next close time relative to the last time the window opened.
+	// This ensures we calculate the end time of the *current* cycle.
+	nextCloseTime := schedTo.Next(prevOpenTime)
+
+	// If nextCloseTime is in the past, advance both nextCloseTime and nextCloseTime
+	if nextCloseTime.Before(now) || nextCloseTime.Equal(now) {
+		prevOpenTime = schedFrom.Next(prevOpenTime)
+		nextCloseTime = schedTo.Next(nextCloseTime)
+	}
+
+	// 5. Handle Wrapping/Short Windows: Ensure nextCloseTime is *after* the current moment if we missed the open.
+	// If the next calculated close time is in the past, step forward until it's in the future.
+	for nextCloseTime.Before(now) || nextCloseTime.Equal(now) {
+		nextCloseTime = schedTo.Next(nextCloseTime)
+	}
+
+	// --- Final Evaluation ---
+
+	// 6. Check if 'now' is within the window: [prevOpenTime, nextCloseTime)
+	if now.After(prevOpenTime) && now.Before(nextCloseTime) {
+		isOpen = true
+		// If open, we requeue the controller when the window closes.
+		nextOpenTime = &nextCloseTime
+	} else {
+		isOpen = false
+		// If closed, we must requeue at the next time the window opens.
+		nextOpen := schedFrom.Next(now)
+		nextOpenTime = &nextOpen
+	}
+
+	logger.V(logs.LogDebug).Info("Promotion window evaluated",
+		"is_open", isOpen,
+		"prev_open", prevOpenTime.Format(time.RFC3339),
+		"next_close", nextCloseTime.Format(time.RFC3339),
+		"next_requeue_time", nextOpenTime.Format(time.RFC3339),
+	)
+
+	return isOpen, nextOpenTime, nil
 }
 
 // reconcilePostDelayHealthChecks updates the ClusterProfile's Spec.ValidateHealths

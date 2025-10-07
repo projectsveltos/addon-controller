@@ -81,6 +81,7 @@ var (
 	CanAutoAdvance              = (*ClusterPromotionReconciler).canAutoAdvance
 	CanManualAdvance            = (*ClusterPromotionReconciler).canManualAdvance
 	CleanClusterProfiles        = (*ClusterPromotionReconciler).cleanClusterProfiles
+	IsPromotionWindowOpen       = (*ClusterPromotionReconciler).isPromotionWindowOpen
 
 	GetClusterProfileName     = getClusterProfileName
 	ResetStageStatuses        = resetStageStatuses

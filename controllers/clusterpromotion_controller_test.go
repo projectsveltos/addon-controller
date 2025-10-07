@@ -929,6 +929,77 @@ var _ = Describe("ClusterPromotionController", func() {
 		Expect(c.List(ctx, clusterProfiles, listOptions...)).To(Succeed())
 		Expect(len(clusterProfiles.Items)).To(BeZero())
 	})
+
+	Context("When the current time is inside the promotion window", func() {
+		// Window: Open 10:00 AM daily, Close 11:00 AM daily
+		openCron := "0 10 * * *"
+		closeCron := "0 11 * * *"
+		var window *configv1beta1.TimeWindow
+
+		It("should return true when anchored 5 minutes after opening", func() {
+			window = &configv1beta1.TimeWindow{From: openCron, To: closeCron}
+
+			// Set 'now' to be exactly 10:05 AM in the local time zone
+			anchorTime := time.Date(2025, time.October, 7, 10, 5, 0, 0, time.Local)
+
+			reconciler := &controllers.ClusterPromotionReconciler{}
+			isOpen, nextTime, err := controllers.IsPromotionWindowOpen(reconciler, window, anchorTime, logger)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isOpen).To(BeTrue())
+
+			// Next scheduled event should be the window close time: 11:00 AM
+			expectedCloseTime := time.Date(2025, time.October, 7, 11, 0, 0, 0, time.Local)
+			Expect(*nextTime).To(BeTemporally("==", expectedCloseTime))
+		})
+	})
+
+	Context("When the current time is outside the promotion window", func() {
+		// Use the same window: Open 10:00 AM, Close 11:00 AM
+		openCron := "0 20 * * *"
+		closeCron := "0 22 * * *"
+		var window *configv1beta1.TimeWindow
+
+		It("should return false and point to the next open time", func() {
+			window = &configv1beta1.TimeWindow{From: openCron, To: closeCron}
+
+			// Set 'now' to be exactly 19:30 PM (before the 10:00 PM opening)
+			anchorTime := time.Date(2025, time.October, 7, 19, 30, 0, 0, time.Local)
+
+			reconciler := &controllers.ClusterPromotionReconciler{}
+			isOpen, nextTime, err := controllers.IsPromotionWindowOpen(reconciler, window, anchorTime, logger)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isOpen).To(BeFalse())
+
+			// Next scheduled event should be the window open time: 10:00 AM
+			expectedOpenTime := time.Date(2025, time.October, 7, 20, 0, 0, 0, time.Local)
+			Expect(*nextTime).To(BeTemporally("==", expectedOpenTime))
+		})
+	})
+
+	Context("When the current time is well before the next promotion window", func() {
+		openCron := "0 10 * * 6"  // Opens Saturday at 10:00 AM (Hour 10, Day of Week 6 = Saturday)
+		closeCron := "0 22 * * 0" // Closes Sunday at 10:00 PM (Hour 22, Day of Week 0 = Sunday)
+		var window *configv1beta1.TimeWindow
+
+		It("should return false and point to the next open time", func() {
+			window = &configv1beta1.TimeWindow{From: openCron, To: closeCron}
+
+			// October, 7th, 2025 is a Tuesday
+			anchorTime := time.Date(2025, time.October, 7, 17, 30, 0, 0, time.Local)
+
+			reconciler := &controllers.ClusterPromotionReconciler{}
+			isOpen, nextTime, err := controllers.IsPromotionWindowOpen(reconciler, window, anchorTime, logger)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isOpen).To(BeFalse())
+
+			// Next scheduled event should be the window open time: 10:00 AM
+			expectedOpenTime := time.Date(2025, time.October, 11, 10, 0, 0, 0, time.Local)
+			Expect(*nextTime).To(BeTemporally("==", expectedOpenTime))
+		})
+	})
 })
 
 func verifyProfileSpecFields(

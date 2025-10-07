@@ -2477,14 +2477,29 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 		return nil, err
 	}
 
-	valuesFrom, err := getHelmChartValuesFrom(ctx, mgmtClient, clusterSummary, requestedChart, logger)
+	valuesFromToInstantiate, valuesFrom, err := getHelmChartValuesFrom(ctx, mgmtClient, clusterSummary,
+		requestedChart, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	for k := range valuesFrom {
+		// Parse to map
+		var instantiatedValuesMap map[string]any
+		err = yaml.Unmarshal([]byte(valuesFrom[k]), &instantiatedValuesMap)
+		if err != nil {
+			return nil, err
+		}
+
+		err = mergo.Merge(&result, instantiatedValuesMap, mergo.WithOverride)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for k := range valuesFromToInstantiate {
 		instantiatedValuesFrom, err := instantiateTemplateValues(ctx, mgmtConfig, mgmtClient,
-			clusterSummary, requestedChart.ChartName, valuesFrom[k], objects, mgmtResources, logger)
+			clusterSummary, requestedChart.ChartName, valuesFromToInstantiate[k], objects, mgmtResources, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -2510,9 +2525,10 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 // getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret.
 // order is
 func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	helmChart *configv1beta1.HelmChart, logger logr.Logger) (values []string, err error) {
+	helmChart *configv1beta1.HelmChart, logger logr.Logger) (valuesToInstantiate, valuesToUse []string, err error) {
 
-	values = []string{}
+	valuesToInstantiate = []string{}
+	valuesToUse = []string{}
 	for i := range helmChart.ValuesFrom {
 		vf := &helmChart.ValuesFrom[i]
 		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
@@ -2521,7 +2537,7 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
 				vf.Kind, vf.Namespace, vf.Name, err))
-			return nil, err
+			return nil, nil, err
 		}
 
 		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
@@ -2529,7 +2545,7 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
 				vf.Kind, vf.Namespace, vf.Name, err))
-			return nil, err
+			return nil, nil, err
 		}
 
 		if vf.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
@@ -2539,11 +2555,17 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 				if err == nil {
 					continue
 				}
-				return nil, err
+				return nil, nil, err
 			}
 
-			for _, value := range configMap.Data {
-				values = append(values, value)
+			if instantiateTemplate(configMap, logger) {
+				for _, value := range configMap.Data {
+					valuesToInstantiate = append(valuesToInstantiate, value)
+				}
+			} else {
+				for _, value := range configMap.Data {
+					valuesToUse = append(valuesToUse, value)
+				}
 			}
 		} else if vf.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
@@ -2552,14 +2574,21 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 				if err == nil {
 					continue
 				}
-				return nil, err
+				return nil, nil, err
 			}
-			for _, value := range secret.Data {
-				values = append(values, string(value))
+
+			if instantiateTemplate(secret, logger) {
+				for _, value := range secret.Data {
+					valuesToInstantiate = append(valuesToInstantiate, string(value))
+				}
+			} else {
+				for _, value := range secret.Data {
+					valuesToUse = append(valuesToUse, string(value))
+				}
 			}
 		}
 	}
-	return values, nil
+	return valuesToInstantiate, valuesToUse, nil
 }
 
 // collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all

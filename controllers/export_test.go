@@ -141,6 +141,7 @@ var (
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
 	GetInstantiatedChart                     = getInstantiatedChart
+	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
 
 	InstantiateTemplateValues = instantiateTemplateValues
 	FecthClusterObjects       = fecthClusterObjects

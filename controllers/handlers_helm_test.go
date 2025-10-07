@@ -26,6 +26,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -729,6 +730,12 @@ var _ = Describe("HandlersHelm", func() {
 })
 
 var _ = Describe("Hash methods", func() {
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig())
+	})
+
 	It("HelmHash returns hash considering all referenced helm charts", func() {
 		kyvernoChart := configv1beta1.HelmChart{
 			RepositoryURL:    "https://kyverno.github.io/kyverno/",
@@ -1058,6 +1065,103 @@ var _ = Describe("Hash methods", func() {
 		Expect(caPath).ToNot(BeEmpty())
 		verifyFileContent(caPath, caByte)
 		Expect(os.Remove(caPath)).To(Succeed())
+	})
+
+	It("getHelmChartValuesFrom returns values to instantiate and the one ready to be used", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+
+		toInstantiate := `customConfig:
+  transforms:
+    flagger_warning_counter:
+      type: log_to_metric
+      inputs: ["flagger_filter"]
+      metrics:
+        - type: counter
+          name: flagger_warnings_total
+          field: "flagger_warning_count"
+          tags:
+            namespace: '{{.target_namespace}}'
+            pod_name: '{{.target_pod_name}}'
+            canary_name: '{{.canary_name}}'
+            event_type: '{{.event_type}}''`
+
+		readyToUse := `installOptions:
+  createNamespace: true`
+
+		configMap1 := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: ns.Name,
+			},
+			Data: map[string]string{
+				"value": readyToUse,
+			},
+		}
+
+		configMap2 := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					"projectsveltos.io/template": "ok",
+				},
+			},
+			Data: map[string]string{
+				"value": toInstantiate,
+			},
+		}
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: ns.Name,
+			},
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: ns.Name,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterName:      cluster.Name,
+				ClusterNamespace: cluster.Namespace,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+
+		helmChart := configv1beta1.HelmChart{
+			ValuesFrom: []configv1beta1.ValueFrom{
+				{
+					Namespace: configMap1.Namespace,
+					Name:      configMap1.Name,
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				},
+				{
+					Namespace: configMap2.Namespace,
+					Name:      configMap2.Name,
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			ns, cluster, configMap1, configMap2, clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		valuesToInstantiate, valuesToUse, err := controllers.GetHelmChartValuesFrom(context.TODO(), c, clusterSummary,
+			&helmChart, logger)
+		Expect(err).To(BeNil())
+		Expect(len(valuesToUse)).To(Equal(1))
+		Expect(valuesToUse[0]).To(Equal(readyToUse))
+		Expect(len(valuesToInstantiate)).To(Equal(1))
+		Expect(valuesToInstantiate[0]).To(Equal(toInstantiate))
 	})
 })
 

@@ -80,8 +80,13 @@ func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, 
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]libsveltosv1beta1.ResourceReport, error) {
 
-	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
+	resourceReports, err := deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
 		clusterSummary, mgmtResources, logger)
+	if err != nil {
+		return resourceReports, fmt.Errorf("processing ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+	}
+
+	return resourceReports, nil
 }
 
 // deployContentOfSecret deploys policies contained in a Secret.
@@ -98,8 +103,13 @@ func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, des
 		data[key] = string(value)
 	}
 
-	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data,
+	resourceReports, err := deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data,
 		clusterSummary, mgmtResources, logger)
+	if err != nil {
+		return resourceReports, fmt.Errorf("processing Secret %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+
+	return resourceReports, nil
 }
 
 func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
@@ -548,8 +558,9 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 			instance, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 				clusterSummary, clusterSummary.GetName(), section, objects, mgmtResources, logger)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
-				return nil, err
+				errorMsg := fmt.Sprintf("failed to instantiate policy from Data %.100s", section)
+				logger.Error(err, errorMsg)
+				return nil, fmt.Errorf("%s: %w", errorMsg, err)
 			}
 
 			section = instance
@@ -558,8 +569,9 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 				section, mgmtResources, logger)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to instantiate policy from Data %.100s", section))
-				return nil, err
+				errorMsg := fmt.Sprintf("failed to instantiate policy from Data %.100s", section)
+				logger.Error(err, errorMsg)
+				return nil, fmt.Errorf("%s: %w", errorMsg, err)
 			}
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("lua output %q", instance))
 			section = instance
@@ -567,8 +579,9 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 		elements, err := deployer.CustomSplit(section)
 		if err != nil {
-			logger.Error(err, fmt.Sprintf("failed to split Data %.100s", section))
-			return nil, err
+			errorMsg := fmt.Sprintf("failed to split Data %.100s", section)
+			logger.Error(err, errorMsg)
+			return nil, fmt.Errorf("%s: %w", errorMsg, err)
 		}
 
 		for i := range elements {
@@ -576,8 +589,9 @@ func collectContent(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 			// Section can contain multiple resources separated by ---
 			policy, err := deployer.GetUnstructured([]byte(section), logger)
 			if err != nil {
-				logger.Error(err, fmt.Sprintf("failed to get policy from Data %.100s", section))
-				return nil, err
+				errorMsg := fmt.Sprintf("failed to get policy from Data %.100s", section)
+				logger.Error(err, errorMsg)
+				return nil, fmt.Errorf("%s: %w", errorMsg, err)
 			}
 
 			if policy == nil {

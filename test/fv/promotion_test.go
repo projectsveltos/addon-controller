@@ -24,10 +24,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -220,7 +220,15 @@ envoy:
 			if err != nil {
 				return false
 			}
-			return len(clusterProfileList.Items) == 0
+			if len(clusterProfileList.Items) == 0 {
+				return true
+			}
+			for i := range clusterProfileList.Items {
+				if clusterProfileList.Items[i].DeletionTimestamp.IsZero() {
+					return false
+				}
+			}
+			return true
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 })

@@ -115,7 +115,9 @@ metadata:
 
 		Byf("Verifying ClusterSummary %s/%s reports an error", clusterSummary.Namespace, clusterSummary.Name)
 		Eventually(func() bool {
-			errorMsg := "profile can only deploy resource in same namespace in the management cluster"
+			errorMsg := fmt.Sprintf(
+				"processing ConfigMap %s/%s: profile can only deploy resource in same namespace in the management cluster",
+				invalidConfigMap.Namespace, invalidConfigMap.Name)
 			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},

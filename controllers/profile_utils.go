@@ -838,6 +838,7 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 						cs.Namespace, cs.Name))
 					return err
 				}
+				utils.GetNameManager().RemoveName(cs.Namespace, cs.Name)
 			}
 		}
 		if err := updateClusterSummarySyncMode(ctx, c, cs, profileScope.GetSpec().SyncMode); err != nil {
@@ -1001,6 +1002,8 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
+		} else {
+			utils.GetNameManager().RemoveName(cr.Namespace, cr.Name)
 		}
 	}
 

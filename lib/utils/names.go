@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -20,13 +21,15 @@ const (
 
 var (
 	nameManager = &NameManager{
-		mu: sync.Mutex{},
+		cache: make(map[string]struct{}),
+		mu:    sync.Mutex{},
 	}
 )
 
 // NameManager handles ClusterSummary name allocation
 type NameManager struct {
 	client client.Client
+	cache  map[string]struct{} // Set of allocated object names (namespace/name)
 	mu     sync.Mutex
 }
 
@@ -38,6 +41,63 @@ func (nm *NameManager) SetClient(c client.Client) {
 	nm.mu.Lock()
 	defer nm.mu.Unlock()
 	nm.client = c
+}
+
+func getCacheKey(namespace, name string) string {
+	return namespace + "/" + name
+}
+
+// RebuildCache rebuilds cache from existing objects on startup
+func (nm *NameManager) RebuildCache(ctx context.Context, listObj client.ObjectList, fullNameAnnotation string) error {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+
+	if nm.client == nil {
+		return fmt.Errorf("client not set")
+	}
+
+	if err := nm.client.List(ctx, listObj); err != nil {
+		return fmt.Errorf("failed to list objects: %w", err)
+	}
+
+	// Extract items from the list using reflection
+	items, err := extractItems(listObj)
+	if err != nil {
+		return err
+	}
+
+	for _, obj := range items {
+		cacheKey := getCacheKey(obj.GetNamespace(), obj.GetName())
+		nm.cache[cacheKey] = struct{}{}
+	}
+
+	return nil
+}
+
+// extractItems extracts items from an ObjectList
+func extractItems(list client.ObjectList) ([]client.Object, error) {
+	items, err := meta.ExtractList(list)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract items: %w", err)
+	}
+
+	objects := make([]client.Object, 0, len(items))
+	for _, item := range items {
+		if obj, ok := item.(client.Object); ok {
+			objects = append(objects, obj)
+		}
+	}
+
+	return objects, nil
+}
+
+// RemoveName removes name from cache to keep cache in sync
+func (nm *NameManager) RemoveName(namespace, name string) {
+	nm.mu.Lock()
+	defer nm.mu.Unlock()
+
+	cacheKey := getCacheKey(namespace, name)
+	delete(nm.cache, cacheKey)
 }
 
 // AllocateName allocates a name with collision handling
@@ -59,12 +119,26 @@ func (nm *NameManager) AllocateName(ctx context.Context, namespace, fullName str
 		return "", err
 	}
 
-	if nm.client != nil && nm.exists(ctx, namespace, ellipsized, obj) {
+	cacheKey := getCacheKey(namespace, ellipsized)
+	if _, exists := nm.cache[cacheKey]; exists {
+		// Conflict in cache, use random suffix
 		ellipsized, err = EllipsizeNameWithRand(ellipsized)
 		if err != nil {
 			return "", err
 		}
+	} else if nm.client != nil {
+		if nm.exists(ctx, namespace, ellipsized, obj) {
+			// Object exists in API, update cache and resolve conflict
+			nm.cache[cacheKey] = struct{}{}
+			ellipsized, err = EllipsizeNameWithRand(ellipsized)
+			if err != nil {
+				return "", err
+			}
+		}
 	}
+
+	cacheKey = getCacheKey(namespace, ellipsized)
+	nm.cache[cacheKey] = struct{}{}
 
 	return ellipsized, nil
 }

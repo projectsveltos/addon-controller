@@ -1248,6 +1248,32 @@ spec:
                                 - version
                                 type: object
                               type: array
+                            promotionWindow:
+                              description: |-
+                                PromotionWindow defines the recurring time window during which the
+                                automatic promotion is permitted. The controller evaluates this window
+                                *only after* the Delay (if defined) has elapsed and all PostDelayHealthChecks
+                                have passed. The controller will then wait until the window defined by From/To
+                                is open before proceeding.
+                              properties:
+                                from:
+                                  description: |-
+                                    From is a cron expression defining the recurring time(s) when the promotion
+                                    window opens. The promotion will be blocked until the time defined by 'From'
+                                    is reached.
+                                  minLength: 1
+                                  type: string
+                                to:
+                                  description: |-
+                                    To is a cron expression defining the recurring time(s) when the promotion
+                                    window closes. If the promotion process is not complete when 'To' is reached,
+                                    the controller should pause and wait for the next 'From' time.
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - from
+                              - to
+                              type: object
                           type: object
                         manual:
                           description: Manual is a manual trigger. When set, promotion

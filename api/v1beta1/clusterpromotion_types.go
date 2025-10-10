@@ -182,6 +182,30 @@ type AutoTrigger struct {
 	// period has elapsed.
 	// +optional
 	PostDelayHealthChecks []libsveltosv1beta1.ValidateHealth `json:"postDelayHealthChecks,omitempty"`
+
+	// PromotionWindow defines the recurring time window during which the
+	// automatic promotion is permitted. The controller evaluates this window
+	// *only after* the Delay (if defined) has elapsed and all PostDelayHealthChecks
+	// have passed. The controller will then wait until the window defined by From/To
+	// is open before proceeding.
+	// +optional
+	PromotionWindow *TimeWindow `json:"promotionWindow,omitempty"`
+}
+
+// TimeWindow defines a recurring time range when an operation is permitted.
+// The time range is defined using cron expressions for the start and end of the window.
+type TimeWindow struct {
+	// From is a cron expression defining the recurring time(s) when the promotion
+	// window opens. The promotion will be blocked until the time defined by 'From'
+	// is reached.
+	// +kubebuilder:validation:MinLength=1
+	From string `json:"from"`
+
+	// To is a cron expression defining the recurring time(s) when the promotion
+	// window closes. If the promotion process is not complete when 'To' is reached,
+	// the controller should pause and wait for the next 'From' time.
+	// +kubebuilder:validation:MinLength=1
+	To string `json:"to"`
 }
 
 // ManualTrigger is a placeholder to represent a manual trigger.

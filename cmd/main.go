@@ -56,17 +56,18 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/crd"
-	"github.com/projectsveltos/libsveltos/lib/deployer"
-	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
-	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
-
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/api/v1beta1/index"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/internal/telemetry"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	"github.com/projectsveltos/addon-controller/lib/utils"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -124,22 +125,7 @@ func main() {
 	pflag.Parse()
 
 	reportMode = controllers.ReportMode(tmpReportMode)
-	disableFor := []client.Object{}
-	byObject := map[client.Object]cache.ByObject{}
-	if disableCaching {
-		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
-		// The default client of the manager won't use the cache for secrets at all.
-		disableFor = []client.Object{
-			&corev1.Secret{},
-			&corev1.ConfigMap{},
-		}
-
-		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
-
-		byObject[&corev1.Secret{}] = cache.ByObject{
-			Field: fieldSelector,
-		}
-	}
+	disableFor, byObject := getCacheConfig()
 
 	ctrl.SetLogger(klog.Background())
 	ctrlOptions := ctrl.Options{
@@ -183,6 +169,10 @@ func main() {
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
 
+	utils.GetNameManager().SetClient(mgr.GetClient())
+
+	rebuildNameCache(ctx)
+
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
@@ -211,6 +201,38 @@ func main() {
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+}
+
+func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]cache.ByObject) {
+	disableFor = []client.Object{}
+	byObject = map[client.Object]cache.ByObject{}
+	if disableCaching {
+		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
+		// The default client of the manager won't use the cache for secrets at all.
+		disableFor = []client.Object{
+			&corev1.Secret{},
+			&corev1.ConfigMap{},
+		}
+
+		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
+
+		byObject[&corev1.Secret{}] = cache.ByObject{
+			Field: fieldSelector,
+		}
+	}
+	return
+}
+
+func rebuildNameCache(ctx context.Context) {
+	// Rebuild name cache from existing ClusterSummary and ClusterReport objects
+	setupLog.Info("Rebuilding name cache from existing ClusterSummary objects")
+	if err := utils.GetNameManager().RebuildCache(ctx, &configv1beta1.ClusterSummaryList{}, clusterops.FullNameAnnotation); err != nil {
+		setupLog.Error(err, "failed to rebuild cache for ClusterSummary")
+	}
+	setupLog.Info("Rebuilding name cache from existing ClusterReport objects")
+	if err := utils.GetNameManager().RebuildCache(ctx, &configv1beta1.ClusterReportList{}, clusterops.FullNameAnnotation); err != nil {
+		setupLog.Error(err, "failed to rebuild cache for ClusterReport")
 	}
 }
 

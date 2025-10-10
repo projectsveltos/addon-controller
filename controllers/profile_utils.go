@@ -41,6 +41,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	"github.com/projectsveltos/addon-controller/lib/utils"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -545,9 +546,16 @@ func updateClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
 	clusterSummary.Spec.ClusterProfileSpec = *profileScope.GetSpec()
 	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
+
+	fullName := clusterops.GetClusterSummaryName(profileScope.GetKind(), profileScope.Name(),
+		cluster.Name, cluster.APIVersion == libsveltosv1beta1.GroupVersion.String())
 	addClusterSummaryLabels(clusterSummary, profileScope, cluster)
 	// Copy annotation. Paused annotation might be set on ClusterProfile.
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
+	if clusterSummary.Annotations == nil {
+		clusterSummary.Annotations = make(map[string]string)
+	}
+	clusterSummary.Annotations[clusterops.FullNameAnnotation] = fullName
 	return c.Update(ctx, clusterSummary)
 }
 
@@ -583,8 +591,12 @@ func addClusterSummaryLabels(clusterSummary *configv1beta1.ClusterSummary, profi
 func createClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
 	cluster *corev1.ObjectReference) error {
 
-	clusterSummaryName := clusterops.GetClusterSummaryName(profileScope.GetKind(), profileScope.Name(),
+	fullName := clusterops.GetClusterSummaryName(profileScope.GetKind(), profileScope.Name(),
 		cluster.Name, cluster.APIVersion == libsveltosv1beta1.GroupVersion.String())
+	clusterSummaryName, err := utils.GetNameManager().AllocateName(ctx, cluster.Namespace, fullName, &configv1beta1.ClusterSummary{})
+	if err != nil {
+		return err
+	}
 
 	clusterSummary := &configv1beta1.ClusterSummary{
 		ObjectMeta: metav1.ObjectMeta{
@@ -612,6 +624,10 @@ func createClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 	addClusterSummaryLabels(clusterSummary, profileScope, cluster)
 	// Copy annotation. Paused annotation might be set on ClusterProfile.
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
+	if clusterSummary.Annotations == nil {
+		clusterSummary.Annotations = make(map[string]string)
+	}
+	clusterSummary.Annotations[clusterops.FullNameAnnotation] = fullName
 
 	return c.Create(ctx, clusterSummary)
 }
@@ -822,6 +838,7 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 						cs.Namespace, cs.Name))
 					return err
 				}
+				utils.GetNameManager().RemoveName(cs.Namespace, cs.Name)
 			}
 		}
 		if err := updateClusterSummarySyncMode(ctx, c, cs, profileScope.GetSpec().SyncMode); err != nil {
@@ -903,6 +920,13 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 
 	clusterType := clusterproxy.GetClusterType(cluster)
 
+	fullName := clusterops.GetClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
+		cluster.Name, clusterType)
+	clusterReportName, err := utils.GetNameManager().AllocateName(ctx, cluster.Namespace, fullName, &configv1beta1.ClusterReport{})
+	if err != nil {
+		return err
+	}
+
 	lbls := map[string]string{
 		configv1beta1.ClusterNameLabel: cluster.Name,
 		configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
@@ -913,12 +937,16 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 		lbls[clusterops.ProfileLabelName] = profile.GetName()
 	}
 
+	annotations := map[string]string{
+		clusterops.FullNameAnnotation: fullName,
+	}
+
 	clusterReport := &configv1beta1.ClusterReport{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: cluster.Namespace,
-			Name: clusterops.GetClusterReportName(profile.GetObjectKind().GroupVersionKind().Kind, profile.GetName(),
-				cluster.Name, clusterType),
-			Labels: lbls,
+			Namespace:   cluster.Namespace,
+			Name:        clusterReportName,
+			Labels:      lbls,
+			Annotations: annotations,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Kind:       profile.GetObjectKind().GroupVersionKind().Kind,
@@ -934,7 +962,7 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 		},
 	}
 
-	err := c.Create(ctx, clusterReport)
+	err = c.Create(ctx, clusterReport)
 	if err != nil {
 		if apierrors.IsAlreadyExists(err) {
 			return nil
@@ -974,6 +1002,8 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 			if !apierrors.IsNotFound(err) {
 				return err
 			}
+		} else {
+			utils.GetNameManager().RemoveName(cr.Namespace, cr.Name)
 		}
 	}
 

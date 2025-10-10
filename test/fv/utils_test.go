@@ -194,7 +194,7 @@ func deleteClusterProfile(clusterProfile *configv1beta1.ClusterProfile) {
 			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, currentClusterSummary)
-			if err == nil || !apierrors.IsNotFound(err) {
+			if err == nil {
 				return false
 			}
 		}
@@ -237,7 +237,7 @@ func deleteProfile(profile *configv1beta1.Profile) {
 			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err := k8sClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, currentClusterSummary)
-			if err == nil || !apierrors.IsNotFound(err) {
+			if err == nil {
 				return false
 			}
 		}

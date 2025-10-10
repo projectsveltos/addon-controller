@@ -715,7 +715,7 @@ func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta
 		return h.Sum(nil), nil
 	}
 
-	sortedHelmCharts := getSortedHelmCharts(clusterSummary)
+	sortedHelmCharts := getSortedHelmCharts(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace
 	clusterName := clusterSummary.Spec.ClusterName

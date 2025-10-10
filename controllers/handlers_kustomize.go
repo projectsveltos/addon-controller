@@ -388,7 +388,7 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 	var config string
 	config += string(clusterProfileSpecHash)
 
-	sortedKustomizationRefs := getSortedKustomizationRefs(clusterSummary)
+	sortedKustomizationRefs := getSortedKustomizationRefs(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 
 	config += render.AsCode(sortedKustomizationRefs)
 	for i := range sortedKustomizationRefs {

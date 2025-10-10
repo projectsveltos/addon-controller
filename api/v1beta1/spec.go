@@ -522,6 +522,18 @@ type KustomizationRef struct {
 	// the actual region retrieved earlier.
 	// +optional
 	ValuesFrom []ValueFrom `json:"valuesFrom,omitempty"`
+
+	// Tier controls the order of deployment for resources coming from different KustomizationRef
+	// within the same ClusterProfile or Profile.
+	// When two KustomizationRef attempt to deploy the same resource, the KustomizationRef with the lowest
+	// Tier value takes priority and deploys/updates the resource.
+	// This priority mechanism is only checked after the parent ClusterProfile has won
+	// the primary conflict resolution against other ClusterProfiles.
+	// Higher Tier values represent lower priority. The default Tier value is 100.
+	// +kubebuilder:default:=100
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Tier int32 `json:"tier,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching
@@ -595,6 +607,18 @@ type PolicyRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	Optional bool `json:"optional,omitempty"`
+
+	// Tier controls the order of deployment for resources coming from different PolicyRefs
+	// within the same ClusterProfile or Profile.
+	// When two PolicyRefs attempt to deploy the same resource, the PolicyRef with the lowest
+	// Tier value takes priority and deploys/updates the resource.
+	// This priority mechanism is only checked after the parent ClusterProfile has won
+	// the primary conflict resolution against other ClusterProfiles.
+	// Higher Tier values represent lower priority. The default Tier value is 100.
+	// +kubebuilder:default:=100
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	Tier int32 `json:"tier,omitempty"`
 }
 
 type Clusters struct {

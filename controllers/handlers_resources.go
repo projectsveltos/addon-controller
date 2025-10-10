@@ -651,15 +651,11 @@ func deployPolicyRefs(ctx context.Context, c client.Client, remoteConfig *rest.C
 
 	refs := featureHandler.getRefs(clusterSummary)
 
-	var objectsToDeployLocally []client.Object
-	var objectsToDeployRemotely []client.Object
+	var objectsToDeployLocally []referencedObject
+	var objectsToDeployRemotely []referencedObject
 	// collect all referenced resources whose content need to be deployed
 	// in the management cluster (local) or manaded cluster (remote)
-	objectsToDeployLocally, objectsToDeployRemotely, err =
-		collectReferencedObjects(ctx, c, clusterSummary, refs, logger)
-	if err != nil {
-		return nil, nil, err
-	}
+	objectsToDeployLocally, objectsToDeployRemotely = collectReferencedObjects(refs)
 
 	return deployReferencedObjects(ctx, c, remoteConfig, remoteClient, clusterSummary,
 		objectsToDeployLocally, objectsToDeployRemotely, logger)

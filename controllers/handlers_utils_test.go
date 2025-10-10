@@ -139,6 +139,8 @@ status:
 )
 
 var _ = Describe("HandlersUtils", func() {
+	const defaultTier = int32(100)
+
 	var clusterSummary *configv1beta1.ClusterSummary
 	var clusterProfile *configv1beta1.ClusterProfile
 	var namespace string
@@ -552,9 +554,8 @@ var _ = Describe("HandlersUtils", func() {
 		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
+			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
 		validateResourceReports(resourceReports, 2, 0, 0, 0)
@@ -584,9 +585,8 @@ var _ = Describe("HandlersUtils", func() {
 		// the secret referenced by ClusterProfile, both obejcts will be reported as no action
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": services}, clusterSummary, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
+			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
 		validateResourceReports(resourceReports, 0, 0, 2, 0)
@@ -622,9 +622,8 @@ var _ = Describe("HandlersUtils", func() {
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
 		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client,
-			secret, map[string]string{"service": newContent}, clusterSummary, nil,
-			textlogger.NewLogger(textlogger.NewConfig()))
+			testEnv.Config, testEnv.Client, secret, map[string]string{"service": newContent},
+			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
 		validateResourceReports(resourceReports, 0, 2, 0, 0)
@@ -634,7 +633,7 @@ var _ = Describe("HandlersUtils", func() {
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
-			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -661,7 +660,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, secret, defaultTier, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
@@ -680,7 +679,7 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
-			testEnv.Config, testEnv.Client, configMap, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, configMap, defaultTier, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
@@ -1180,7 +1179,7 @@ status:
 		configMap.Annotations = map[string]string{
 			"projectsveltos.io/subresources": "status"}
 		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configMap, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			configMap, defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		serviceOut := corev1.Service{}

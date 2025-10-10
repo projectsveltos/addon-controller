@@ -738,6 +738,19 @@ spec:
                           maxLength: 63
                           minLength: 1
                           type: string
+                        tier:
+                          default: 100
+                          description: |-
+                            Tier controls the order of deployment for resources coming from different KustomizationRef
+                            within the same ClusterProfile or Profile.
+                            When two KustomizationRef attempt to deploy the same resource, the KustomizationRef with the lowest
+                            Tier value takes priority and deploys/updates the resource.
+                            This priority mechanism is only checked after the parent ClusterProfile has won
+                            the primary conflict resolution against other ClusterProfiles.
+                            Higher Tier values represent lower priority. The default Tier value is 100.
+                          format: int32
+                          minimum: 1
+                          type: integer
                         values:
                           additionalProperties:
                             type: string
@@ -958,6 +971,19 @@ spec:
                             Defaults to 'None', which translates to the root path of the SourceRef.
                             Used only for GitRepository;OCIRepository;Bucket
                           type: string
+                        tier:
+                          default: 100
+                          description: |-
+                            Tier controls the order of deployment for resources coming from different PolicyRefs
+                            within the same ClusterProfile or Profile.
+                            When two PolicyRefs attempt to deploy the same resource, the PolicyRef with the lowest
+                            Tier value takes priority and deploys/updates the resource.
+                            This priority mechanism is only checked after the parent ClusterProfile has won
+                            the primary conflict resolution against other ClusterProfiles.
+                            Higher Tier values represent lower priority. The default Tier value is 100.
+                          format: int32
+                          minimum: 1
+                          type: integer
                       required:
                       - kind
                       - name

@@ -19,11 +19,9 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -44,12 +42,12 @@ type SveltosClusterReconciler struct {
 func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	sveltosClusterManagerInstance := GetSveltosClusterManager()
+	licenseManagerInstance := GetLicenseManager()
 
 	sveltosCluster := &libsveltosv1beta1.SveltosCluster{}
 	if err := r.Get(ctx, req.NamespacedName, sveltosCluster); err != nil {
 		if apierrors.IsNotFound(err) {
-			sveltosClusterManagerInstance.RemoveCluster(req.Namespace, req.Name)
+			licenseManagerInstance.RemoveCluster(req.Namespace, req.Name)
 			return reconcile.Result{}, nil
 		}
 		logger.Error(err, "Failed to fetch SveltosCluster")
@@ -57,9 +55,9 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if !sveltosCluster.DeletionTimestamp.IsZero() || !sveltosCluster.Spec.PullMode {
-		sveltosClusterManagerInstance.RemoveCluster(req.Namespace, req.Name)
+		licenseManagerInstance.RemoveCluster(req.Namespace, req.Name)
 	} else {
-		sveltosClusterManagerInstance.AddCluster(sveltosCluster)
+		licenseManagerInstance.AddCluster(sveltosCluster)
 	}
 
 	return ctrl.Result{}, nil
@@ -74,88 +72,4 @@ func (r *SveltosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Named("sveltoscluster").
 		Complete(r)
-}
-
-// SveltosClusterManager keeps track of managed SveltosCluster in pull-mode.
-// The order might change if addon controller is restarted. But if more than X clusters
-// are in pull mode without a license, it is an invalid configuration anyway.
-type SveltosClusterManager struct {
-	mu       sync.RWMutex // Read-write mutex to protect access to the clusters slice
-	clusters []types.NamespacedName
-}
-
-var (
-	sveltosClusterManagerInstance *SveltosClusterManager
-)
-
-// NewSveltosClusterManager creates and returns a new initialized SveltosClusterManager.
-func NewSveltosClusterManager() *SveltosClusterManager {
-	sveltosClusterManagerInstance = &SveltosClusterManager{
-		clusters: make([]types.NamespacedName, 0), // Initialize an empty slice
-	}
-
-	return sveltosClusterManagerInstance
-}
-
-func GetSveltosClusterManager() *SveltosClusterManager {
-	return sveltosClusterManagerInstance
-}
-
-// AddCluster adds a SveltosCluster to the manager's collection.
-// It ensures that the cluster is not added if it already exists (based on Name and Namespace).
-// This method is thread-safe.
-func (m *SveltosClusterManager) AddCluster(cluster *libsveltosv1beta1.SveltosCluster) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Check if the cluster already exists to avoid duplicates
-	for i := range m.clusters {
-		if m.clusters[i].Name == cluster.Name && m.clusters[i].Namespace == cluster.Namespace {
-			// Cluster already tracked
-			return
-		}
-	}
-
-	m.clusters = append(m.clusters, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name})
-}
-
-// RemoveCluster removes a SveltosCluster from the manager's collection
-// identified by its name and namespace.
-// This method is thread-safe.
-func (m *SveltosClusterManager) RemoveCluster(namespace, name string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	for i := range m.clusters {
-		if m.clusters[i].Name == name && m.clusters[i].Namespace == namespace {
-			if i == len(m.clusters)-1 {
-				m.clusters = m.clusters[:i]
-			} else {
-				m.clusters = append(m.clusters[:i], m.clusters[i+1:]...)
-			}
-			break
-		}
-	}
-}
-
-// IsInTopX checks if a SveltosCluster, identified by its name and namespace,
-// is among the first 'x' registered clusters in the manager's collection.
-// This method is thread-safe.
-func (m *SveltosClusterManager) IsInTopX(namespace, name string, x int) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	limit := x
-	if limit > len(m.clusters) {
-		return true
-	}
-
-	// Iterate through the first 'limit' clusters
-	for i := 0; i < limit; i++ {
-		if m.clusters[i].Name == name && m.clusters[i].Namespace == namespace {
-			return true
-		}
-	}
-
-	return false
 }

@@ -1559,7 +1559,7 @@ func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context
 		logger.V(logs.LogDebug).Info(result.Message)
 	}
 
-	sveltosClusterManagerInstance := GetSveltosClusterManager()
+	licenseManagerInstance := GetLicenseManager()
 
 	if result.IsValid || result.IsInGracePeriod {
 		if maxClusters == 0 {
@@ -1567,12 +1567,12 @@ func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context
 			return true, nil
 		}
 		// License is valid only for maxClusters in pull mode
-		return sveltosClusterManagerInstance.IsInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxClusters), nil
+		return licenseManagerInstance.IsClusterInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxClusters), nil
 	}
 
 	// Without license, 2 clusters in pull mode are still managed for free
 	const maxFreeClusters = 2
-	return sveltosClusterManagerInstance.IsInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxFreeClusters), nil
+	return licenseManagerInstance.IsClusterInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxFreeClusters), nil
 }
 
 func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(

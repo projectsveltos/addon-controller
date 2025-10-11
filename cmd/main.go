@@ -192,7 +192,7 @@ func main() {
 
 	debug.SetMemoryLimit(gibibytes_per_bytes)
 	go printMemUsage(ctrl.Log.WithName("memory-usage"))
-	controllers.NewSveltosClusterManager()
+	controllers.NewLicenseManager()
 
 	if shardKey == "" && !disableTelemetry {
 		err = telemetry.StartCollecting(ctx, mgr.GetConfig(), mgr.GetClient(), version)

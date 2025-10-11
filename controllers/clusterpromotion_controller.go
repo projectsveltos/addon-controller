@@ -48,6 +48,7 @@ import (
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
+	license "github.com/projectsveltos/libsveltos/lib/licenses"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
@@ -98,6 +99,14 @@ func (r *ClusterPromotionReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if err != nil {
 		logger.Error(err, "Failed to create promotionScope")
 		return reconcile.Result{}, fmt.Errorf("unable to create promotion scope for %s: %w", req.NamespacedName, err)
+	}
+
+	licenseManagerInstance := GetLicenseManager()
+
+	if !clusterPromotion.DeletionTimestamp.IsZero() {
+		licenseManagerInstance.RemoveClusterPromotion(req.Namespace, req.Name)
+	} else {
+		licenseManagerInstance.AddClusterPromotion(clusterPromotion)
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterPromotion
@@ -159,7 +168,18 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 		}
 	}
 
-	err := r.removeStaleClusterProfiles(ctx, promotionScope)
+	isEligible, err := r.verifyStageEligibility(ctx, promotionScope, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+	}
+
+	if !isEligible {
+		logger.V(logs.LogInfo).Info("license is required")
+		r.updateStatusWithMissingLicenseError(promotionScope)
+		return reconcile.Result{}
+	}
+
+	err = r.removeStaleClusterProfiles(ctx, promotionScope)
 	if err != nil {
 		promotionScope.Error(err, "Failed to remove stale ClusterProfiles")
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
@@ -1025,4 +1045,42 @@ func (r *ClusterPromotionReconciler) removeStaleClusterProfiles(ctx context.Cont
 	}
 
 	return nil
+}
+
+func (r *ClusterPromotionReconciler) verifyStageEligibility(ctx context.Context,
+	promotionScope *scope.ClusterPromotionScope, logger logr.Logger) (bool, error) {
+
+	// ClusterPromotion requires a valid license
+	publicKey, err := license.GetPublicKey()
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get public key: %v", err))
+		return false, err
+	}
+
+	result := license.VerifyLicenseSecret(ctx, r.Client, publicKey, logger)
+	if result.Message != "" {
+		logger.V(logs.LogDebug).Info(result.Message)
+	}
+
+	if result.IsValid || result.IsInGracePeriod {
+		return true, nil
+	}
+
+	licenseManagerInstance := GetLicenseManager()
+
+	// Without license, 2 clusterPromotions instances are still free
+	const maxFreeStages = 2
+	return licenseManagerInstance.IsClusterPromotionInTopX("", promotionScope.ClusterPromotion.Name,
+		maxFreeStages), nil
+}
+
+func (r *ClusterPromotionReconciler) updateStatusWithMissingLicenseError(
+	promotionScope *scope.ClusterPromotionScope) {
+
+	notEligibleError := "license is required to manage ClusterPromotion"
+
+	// The minimum length of stages is 1 so accessing the first stage is safe
+	firstStage := promotionScope.ClusterPromotion.Spec.Stages[0]
+	addStageStatus(promotionScope.ClusterPromotion, firstStage.Name)
+	updateStageStatus(promotionScope.ClusterPromotion, firstStage.Name, false, &notEligibleError)
 }

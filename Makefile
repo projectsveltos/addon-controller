@@ -27,7 +27,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.1.1
+TAG ?= v1.2.0-beta.0
 
 .PHONY: all
 all: build
@@ -72,8 +72,8 @@ KIND := $(TOOLS_BIN_DIR)/kind
 KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 
 GOVULNCHECK_VERSION := "v1.1.4"
-GOLANGCI_LINT_VERSION := "v2.4.0"
-CLUSTERCTL_VERSION := "v1.11.0"
+GOLANGCI_LINT_VERSION := "v2.5.0"
+CLUSTERCTL_VERSION := "v1.11.2"
 
 KUSTOMIZE_VER := v5.7.0
 KUSTOMIZE_BIN := kustomize

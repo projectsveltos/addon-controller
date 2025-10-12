@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -180,6 +181,26 @@ var _ = Describe("Stale Resources", func() {
 			fmt.Sprintf(serviceTemplate, configMapNs, service2),
 			fmt.Sprintf(serviceTemplate, configMapNs, service3))
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
+
+		Byf("Verifying ClusterSummary %s/%s reports failure", clusterSummary.Namespace, clusterSummary.Name)
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			for i := range currentClusterSummary.Status.FeatureSummaries {
+				if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+
+					return currentClusterSummary.Status.FeatureSummaries[i].FailureMessage != nil &&
+						strings.Contains(*currentClusterSummary.Status.FeatureSummaries[i].FailureMessage,
+							"error converting YAML to JSON: yaml")
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		for _, serviceName := range []string{service1, service2, service3} {
 			Byf("Verifying Service %s is still in the workload cluster", serviceName)

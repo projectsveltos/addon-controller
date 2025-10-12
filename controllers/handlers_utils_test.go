@@ -408,7 +408,7 @@ var _ = Describe("HandlersUtils", func() {
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		Consistently(func() bool {
+		Eventually(func() bool {
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()},
 				currentServiceAccount)

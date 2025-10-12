@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -298,7 +299,7 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 	It("Update reprocesses when artifact has changed", func() {
 		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
-		gitRepository.Status.Artifact = &sourcev1.Artifact{
+		gitRepository.Status.Artifact = &meta.Artifact{
 			Revision: randomString(),
 		}
 
@@ -318,7 +319,7 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 	It("Update does not reprocess when artifact has not changed", func() {
 		sourcePredicate := controllers.FluxGitRepositoryPredicate{Logger: logger}
 
-		gitRepository.Status.Artifact = &sourcev1.Artifact{
+		gitRepository.Status.Artifact = &meta.Artifact{
 			Revision: randomString(),
 		}
 

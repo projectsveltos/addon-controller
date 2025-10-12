@@ -36,6 +36,9 @@ type LicenseManager struct {
 	mu                sync.RWMutex // Read-write mutex to protect access to the clusters slice
 	clusters          []types.NamespacedName
 	clusterpromotions []types.NamespacedName
+
+	clusterMap          map[types.NamespacedName]struct{}
+	clusterPromotionMap map[types.NamespacedName]struct{}
 }
 
 var (
@@ -47,6 +50,9 @@ func NewLicenseManager() *LicenseManager {
 	licenseManagerInstance = &LicenseManager{
 		clusters:          make([]types.NamespacedName, 0), // Initialize an empty slice
 		clusterpromotions: make([]types.NamespacedName, 0), // Initialize an empty slice
+
+		clusterMap:          map[types.NamespacedName]struct{}{},
+		clusterPromotionMap: map[types.NamespacedName]struct{}{},
 	}
 
 	return licenseManagerInstance
@@ -64,13 +70,12 @@ func (m *LicenseManager) AddCluster(cluster *libsveltosv1beta1.SveltosCluster) {
 	defer m.mu.Unlock()
 
 	// Check if the cluster already exists to avoid duplicates
-	for i := range m.clusters {
-		if m.clusters[i].Name == cluster.Name && m.clusters[i].Namespace == cluster.Namespace {
-			// Cluster already tracked
-			return
-		}
+	_, ok := m.clusterMap[types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}]
+	if ok {
+		return
 	}
 
+	m.clusterMap[types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}] = struct{}{}
 	m.clusters = append(m.clusters, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name})
 }
 
@@ -80,6 +85,11 @@ func (m *LicenseManager) AddCluster(cluster *libsveltosv1beta1.SveltosCluster) {
 func (m *LicenseManager) RemoveCluster(namespace, name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	_, ok := m.clusterMap[types.NamespacedName{Namespace: namespace, Name: name}]
+	if !ok {
+		return
+	}
 
 	for i := range m.clusters {
 		if m.clusters[i].Name == name && m.clusters[i].Namespace == namespace {
@@ -91,6 +101,8 @@ func (m *LicenseManager) RemoveCluster(namespace, name string) {
 			break
 		}
 	}
+
+	delete(m.clusterMap, types.NamespacedName{Namespace: namespace, Name: name})
 }
 
 // IsInTopX checks if a SveltosCluster, identified by its name and namespace,
@@ -106,7 +118,7 @@ func (m *LicenseManager) IsClusterInTopX(namespace, name string, x int) bool {
 	}
 
 	// Iterate through the first 'limit' clusters
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		if m.clusters[i].Name == name && m.clusters[i].Namespace == namespace {
 			return true
 		}
@@ -122,16 +134,14 @@ func (m *LicenseManager) AddClusterPromotion(clusterpromotion *configv1beta1.Clu
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if the cluster already exists to avoid duplicates
-	for i := range m.clusterpromotions {
-		if m.clusterpromotions[i].Name == clusterpromotion.Name {
-			// clusterpromotions already tracked
-			return
-		}
+	// Check if the clusterPromotion already exists to avoid duplicates
+	_, ok := m.clusterPromotionMap[types.NamespacedName{Name: clusterpromotion.Name}]
+	if ok {
+		return
 	}
 
-	m.clusterpromotions = append(m.clusterpromotions,
-		types.NamespacedName{Name: clusterpromotion.Name})
+	m.clusterPromotionMap[types.NamespacedName{Name: clusterpromotion.Name}] = struct{}{}
+	m.clusterpromotions = append(m.clusterpromotions, types.NamespacedName{Name: clusterpromotion.Name})
 }
 
 // RemoveClusterPromotion removes a ClusterPromotion from the manager's collection
@@ -140,6 +150,11 @@ func (m *LicenseManager) AddClusterPromotion(clusterpromotion *configv1beta1.Clu
 func (m *LicenseManager) RemoveClusterPromotion(namespace, name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	_, ok := m.clusterPromotionMap[types.NamespacedName{Name: name}]
+	if !ok {
+		return
+	}
 
 	for i := range m.clusterpromotions {
 		if m.clusterpromotions[i].Name == name && m.clusterpromotions[i].Namespace == namespace {
@@ -151,6 +166,8 @@ func (m *LicenseManager) RemoveClusterPromotion(namespace, name string) {
 			break
 		}
 	}
+
+	delete(m.clusterPromotionMap, types.NamespacedName{Name: name})
 }
 
 // IsClusterPromotionInTopX checks if a ClusterPromotion, identified by its name and namespace,
@@ -166,7 +183,7 @@ func (m *LicenseManager) IsClusterPromotionInTopX(namespace, name string, x int)
 	}
 
 	// Iterate through the first 'limit' clusters
-	for i := 0; i < limit; i++ {
+	for i := range limit {
 		if m.clusterpromotions[i].Name == name && m.clusterpromotions[i].Namespace == namespace {
 			return true
 		}

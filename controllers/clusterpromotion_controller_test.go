@@ -146,6 +146,127 @@ var _ = Describe("ClusterPromotionController", func() {
 		Expect(reflect.DeepEqual(hash, newHash)).To(BeFalse())
 	})
 
+	It("Calculate Stages hash: trigger changes are not included", func() {
+		profileSpec := &configv1beta1.ProfileSpec{}
+
+		notApproved := false
+		stage1 := configv1beta1.Stage{
+			Name: randomString(),
+			ClusterSelector: libsveltosv1beta1.Selector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{randomString(): randomString()},
+				},
+			},
+			Trigger: &configv1beta1.Trigger{
+				Manual: &configv1beta1.ManualTrigger{
+					AutomaticReset: true,
+					Approved:       &notApproved,
+				},
+			},
+		}
+
+		stage2 := configv1beta1.Stage{
+			Name: randomString(),
+			ClusterSelector: libsveltosv1beta1.Selector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{randomString(): randomString()},
+				},
+			},
+			Trigger: &configv1beta1.Trigger{
+				Manual: &configv1beta1.ManualTrigger{
+					AutomaticReset: true,
+					Approved:       &notApproved,
+				},
+			},
+		}
+
+		promotionSpec := &configv1beta1.ClusterPromotionSpec{
+			ProfileSpec: *profileSpec,
+			Stages:      []configv1beta1.Stage{stage1, stage2},
+		}
+
+		reconciler := controllers.ClusterPromotionReconciler{}
+
+		hash, err := controllers.GetStagesHash(&reconciler, promotionSpec)
+		Expect(err).To(BeNil())
+		Expect(hash).ToNot(BeNil())
+
+		// change stage1 trigger
+		approved := true
+		stage1.Trigger.Manual.Approved = &approved
+
+		promotionSpec = &configv1beta1.ClusterPromotionSpec{
+			ProfileSpec: *profileSpec,
+			Stages:      []configv1beta1.Stage{stage1, stage2},
+		}
+
+		newHash, err := controllers.GetStagesHash(&reconciler, promotionSpec)
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(hash, newHash)).To(BeTrue())
+	})
+
+	It("Calculate Stages hash: non trigger changes are included", func() {
+		profileSpec := &configv1beta1.ProfileSpec{}
+
+		notApproved := false
+		stage1 := configv1beta1.Stage{
+			Name: randomString(),
+			ClusterSelector: libsveltosv1beta1.Selector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{randomString(): randomString()},
+				},
+			},
+			Trigger: &configv1beta1.Trigger{
+				Manual: &configv1beta1.ManualTrigger{
+					AutomaticReset: true,
+					Approved:       &notApproved,
+				},
+			},
+		}
+
+		stage2 := configv1beta1.Stage{
+			Name: randomString(),
+			ClusterSelector: libsveltosv1beta1.Selector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{randomString(): randomString()},
+				},
+			},
+			Trigger: &configv1beta1.Trigger{
+				Manual: &configv1beta1.ManualTrigger{
+					AutomaticReset: true,
+					Approved:       &notApproved,
+				},
+			},
+		}
+
+		promotionSpec := &configv1beta1.ClusterPromotionSpec{
+			ProfileSpec: *profileSpec,
+			Stages:      []configv1beta1.Stage{stage1, stage2},
+		}
+
+		reconciler := controllers.ClusterPromotionReconciler{}
+
+		hash, err := controllers.GetStagesHash(&reconciler, promotionSpec)
+		Expect(err).To(BeNil())
+		Expect(hash).ToNot(BeNil())
+
+		// change stage1 trigger
+		stage1.ClusterSelector = libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{randomString(): randomString()},
+			},
+		}
+
+		promotionSpec = &configv1beta1.ClusterPromotionSpec{
+			ProfileSpec: *profileSpec,
+			Stages:      []configv1beta1.Stage{stage1, stage2},
+		}
+
+		newHash, err := controllers.GetStagesHash(&reconciler, promotionSpec)
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(hash, newHash)).To(BeFalse())
+	})
+
 	It("Calculate ProfileSpec hash", func() {
 		hc1 := configv1beta1.HelmChart{
 			RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),

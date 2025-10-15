@@ -317,14 +317,31 @@ func (r *ClusterPromotionReconciler) addFinalizer(ctx context.Context, promotion
 	return nil
 }
 
-func (r *ClusterPromotionReconciler) getStagesHash(spec *configv1beta1.ClusterPromotionSpec) ([]byte, error) {
-	h := sha256.New()
+// StageHashable defines the structure used *only* for hashing,
+// intentionally omitting the 'Trigger' field.
+type StageHashable struct {
+	Name            string                     `json:"name"`
+	ClusterSelector libsveltosv1beta1.Selector `json:"clusterSelector,omitempty"`
+}
 
-	stagesBytes, err := json.Marshal(spec.Stages)
+func (r *ClusterPromotionReconciler) getStagesHash(spec *configv1beta1.ClusterPromotionSpec) ([]byte, error) {
+	// Create a new slice of the hashable stage structure.
+	// The Trigger field in the Stage struct is used for runtime progression logic (like manual approval),
+	// changes to it shouldn't trigger a re-hash. So exclude Trigger field.
+	stagesForHash := make([]StageHashable, len(spec.Stages))
+	for i, stage := range spec.Stages {
+		stagesForHash[i] = StageHashable{
+			Name:            stage.Name,
+			ClusterSelector: stage.ClusterSelector,
+		}
+	}
+
+	stagesBytes, err := json.Marshal(stagesForHash)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal Stages for hashing: %w", err)
 	}
 
+	h := sha256.New()
 	if _, err := h.Write(stagesBytes); err != nil {
 		return nil, fmt.Errorf("failed to write Stages bytes to total: %w", err)
 	}

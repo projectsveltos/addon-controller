@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    oci://registry-1.docker.io/bitnamicharts
     repositoryName:   oci-vault
     chartName:        vault
-    chartVersion:     0.7.2
+    chartVersion:     1.9.0
     releaseName:      vault
     releaseNamespace: vault
     helmChartAction:  Install

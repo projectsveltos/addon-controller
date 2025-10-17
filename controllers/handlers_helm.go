@@ -76,6 +76,7 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -92,7 +93,7 @@ var (
 )
 
 const (
-	writeFilePermission        = 0644
+	writeFilePermission        = 0o644
 	lockTimeout                = 30
 	notInstalledMessage        = "Not installed yet and action is uninstall"
 	defaultMaxHistory          = 2
@@ -2432,8 +2433,14 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 		return err
 	}
 
-	clusterReportName := clusterops.GetClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
+	fullName := clusterops.GetClusterReportName(profileOwnerRef.Kind, profileOwnerRef.Name,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	clusterReportName, err := utils.GetNameManager().AllocateName(ctx, clusterSummary.Spec.ClusterNamespace,
+		fullName, &configv1beta1.ClusterReport{},
+	)
+	if err != nil {
+		return nil
+	}
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1beta1.ClusterReport{}

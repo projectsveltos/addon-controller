@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.25.0
+go 1.25.2
 
 require (
 	dario.cat/mergo v1.0.2
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.26.0
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.1.1-0.20251010134903-b0f01649796e
+	github.com/projectsveltos/libsveltos v1.1.1-0.20251017113901-ab75f0913756
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10
@@ -34,7 +34,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.2
-	sigs.k8s.io/controller-runtime v0.22.2
+	sigs.k8s.io/controller-runtime v0.22.3
 	sigs.k8s.io/kustomize/api v0.20.1
 	sigs.k8s.io/kustomize/kyaml v0.20.1
 	sigs.k8s.io/yaml v1.6.0

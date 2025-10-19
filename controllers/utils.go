@@ -476,7 +476,7 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 			clusterNamespace, clusterName, clusterTypeString, err))
 	}
 
-	return true, "", "", ""
+	return true, clusterNamespace, clusterName, clusterType
 }
 
 func convertPointerSliceToValueSlice(pointerSlice []*unstructured.Unstructured) []unstructured.Unstructured {

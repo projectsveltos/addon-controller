@@ -230,7 +230,7 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	}
 
 	err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, remoteDeployed, logger)
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, remoteDeployed, isPullMode, logger)
 	if err != nil {
 		return err
 	}
@@ -967,7 +967,7 @@ func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clus
 		// un-needed reconciliation (Sveltos is updating those resources so we don't want drift-detection to think
 		// a configuration drift is happening)
 		err = handleKustomizeResourceSummaryDeployment(ctx, clusterSummary, clusterNamespace, clusterName,
-			clusterType, []libsveltosv1beta1.Resource{}, logger)
+			clusterType, []libsveltosv1beta1.Resource{}, isPullMode, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 			return err
@@ -981,9 +981,15 @@ func handleDriftDetectionManagerDeploymentForKustomize(ctx context.Context, clus
 // ResourceSummary in the managed cluster
 func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
-	remoteDeployed []libsveltosv1beta1.Resource, logger logr.Logger) error {
+	remoteDeployed []libsveltosv1beta1.Resource, isPullMode bool, logger logr.Logger) error {
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
+		// If SveltosCLuster is in pull mode, do nothing. A knob will notify agent about DriftDetection being set
+		// and agent will manage the ResourceSummary life cycle in the managed cluster
+		if isPullMode {
+			return nil
+		}
+
 		// deploy ResourceSummary
 		err := deployResourceSummaryWithKustomizeResources(ctx, clusterNamespace, clusterName, clusterSummary,
 			clusterType, remoteDeployed, logger)

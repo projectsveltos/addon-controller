@@ -4331,7 +4331,7 @@ func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *config
 		bundleResources := make(map[string][]unstructured.Unstructured)
 		bundleResources[key] = convertPointerSliceToValueSlice(bundles[i])
 
-		setters := prepareBundleSetters(currentChart, helmActionVar == uninstall, i == len(bundles)-1, rInfo)
+		setters := prepareBundleSettersWithHelmInfo(currentChart, helmActionVar == uninstall, i == len(bundles)-1, rInfo)
 
 		err := pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
@@ -4346,7 +4346,7 @@ func stageHelmResourcesForDeployment(ctx context.Context, clusterSummary *config
 	return nil
 }
 
-func prepareBundleSetters(currentChart *configv1beta1.HelmChart, isUninstall, isLast bool,
+func prepareBundleSettersWithHelmInfo(currentChart *configv1beta1.HelmChart, isUninstall, isLast bool,
 	rInfo *releaseInfo) []pullmode.BundleOption {
 
 	setters := make([]pullmode.BundleOption, 0)

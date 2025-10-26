@@ -288,11 +288,13 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		// In pull mode we return reports with action Create. Those will only be used to update deployed GVK.
 		// sveltos-applier will take care of sending proper reports
 
+		setters := prepareBundleSettersWithResourceInfo(ref.Kind, ref.Namespace, ref.Name, referenceTier)
+
 		return prepareReports(resources),
 			pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 				configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
-				bundleResources, false, logger)
+				bundleResources, false, logger, setters...)
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref, referenceTier,
@@ -1612,4 +1614,15 @@ func getFileWithKubeconfig(ctx context.Context, c client.Client, clusterSummary 
 		return "", nil, err
 	}
 	return fileName, closer, nil
+}
+
+func prepareBundleSettersWithResourceInfo(referenceKind, referenceNamespace, referenceName string,
+	tier int32) []pullmode.BundleOption {
+
+	setters := make([]pullmode.BundleOption, 0)
+
+	setters = append(setters,
+		pullmode.WithResourceInfo(referenceKind, referenceNamespace, referenceName, tier))
+
+	return setters
 }

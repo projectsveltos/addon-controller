@@ -413,14 +413,25 @@ var _ = Describe("Hash methods", func() {
 		config = string(tmpHash)
 
 		referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+		policyRefs := make(map[corev1.ObjectReference]configv1beta1.PolicyRef, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+
 		for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
 			referencedObjects[i] = corev1.ObjectReference{
 				Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
 				Namespace: clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace,
 				Name:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name,
 			}
+			policyRefs[referencedObjects[i]] = clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
 		}
+
 		sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
+
+		sortedPolicyRefs := make([]configv1beta1.PolicyRef, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+		for i := range referencedObjects {
+			sortedPolicyRefs[i] = policyRefs[referencedObjects[i]]
+		}
+		config += render.AsCode(sortedPolicyRefs)
+
 		for i := range referencedObjects {
 			switch referencedObjects[i].Name {
 			case configMap1.Name:

@@ -500,6 +500,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 	config += string(clusterProfileSpecHash)
 
 	sortedPolicyRefs := getSortedPolicyRefs(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
+	config += render.AsCode(sortedPolicyRefs)
 
 	referencedObjects := make([]corev1.ObjectReference, 0, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
 	for i := range sortedPolicyRefs {

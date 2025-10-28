@@ -34,6 +34,7 @@ import (
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
+	lua "github.com/yuin/gopher-lua"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -95,6 +96,8 @@ var (
 	disableTelemetry        bool
 	autoDeployDependencies  bool
 	registry                string
+	luaCallStackSize        int
+	luaRegistrySize         int
 )
 
 const (
@@ -124,22 +127,7 @@ func main() {
 	pflag.Parse()
 
 	reportMode = controllers.ReportMode(tmpReportMode)
-	disableFor := []client.Object{}
-	byObject := map[client.Object]cache.ByObject{}
-	if disableCaching {
-		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
-		// The default client of the manager won't use the cache for secrets at all.
-		disableFor = []client.Object{
-			&corev1.Secret{},
-			&corev1.ConfigMap{},
-		}
-
-		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
-
-		byObject[&corev1.Secret{}] = cache.ByObject{
-			Field: fieldSelector,
-		}
-	}
+	disableFor, byObject := getCacheConfig()
 
 	ctrl.SetLogger(klog.Background())
 	ctrlOptions := ctrl.Options{
@@ -179,6 +167,8 @@ func main() {
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 	controllers.SetLuaConfigMap(luaConfigMap)
+	controllers.SetLuaCallStackSize(luaCallStackSize)
+	controllers.SetLuaRegistrySize(luaRegistrySize)
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
@@ -309,6 +299,10 @@ func initFlags(fs *pflag.FlagSet) {
 	// configuration inconsistencies.
 	fs.BoolVar(&autoDeployDependencies, "auto-deploy-dependencies", true,
 		" When AutoDeployDependencies is set to true, Sveltos will automatically resolve and deploy the prerequisite profiles specified in the DependsOn field")
+
+	fs.IntVar(&luaCallStackSize, "lua-call-stack-size", lua.CallStackSize, "Call stack size. This defaults to lua.CallStackSize")
+
+	fs.IntVar(&luaRegistrySize, "lua-registry-size", lua.RegistrySize, "Call stack size. This defaults to lua.RegistrySize")
 }
 
 func setupIndexes(ctx context.Context, mgr ctrl.Manager) {
@@ -682,4 +676,24 @@ func printMemUsage(logger logr.Logger) {
 
 func bToMb(b uint64) uint64 {
 	return b / mebibytes_bytes
+}
+
+func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]cache.ByObject) {
+	disableFor = []client.Object{}
+	byObject = map[client.Object]cache.ByObject{}
+	if disableCaching {
+		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
+		// The default client of the manager won't use the cache for secrets at all.
+		disableFor = []client.Object{
+			&corev1.Secret{},
+			&corev1.ConfigMap{},
+		}
+
+		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
+
+		byObject[&corev1.Secret{}] = cache.ByObject{
+			Field: fieldSelector,
+		}
+	}
+	return
 }

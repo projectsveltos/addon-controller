@@ -33,6 +33,8 @@ var (
 	capiOnboardAnnotation   string
 	driftDetectionRegistry  string
 	agentInMgmtCluster      bool
+	luaCallStackSize        int
+	luaRegistrySize         int
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config) {
@@ -46,6 +48,14 @@ func SetDriftdetectionConfigMap(name string) {
 
 func SetLuaConfigMap(name string) {
 	luaConfigMap = name
+}
+
+func SetLuaCallStackSize(callStackSize int) {
+	luaCallStackSize = callStackSize
+}
+
+func SetLuaRegistrySize(registrySize int) {
+	luaRegistrySize = registrySize
 }
 
 func SetCAPIOnboardAnnotation(key string) {
@@ -74,6 +84,14 @@ func getDriftDetectionConfigMap() string {
 
 func getLuaConfigMap() string {
 	return luaConfigMap
+}
+
+func getLuaCallStackSize() int {
+	return luaCallStackSize
+}
+
+func getLuaRegistrySize() int {
+	return luaRegistrySize
 }
 
 func getCAPIOnboardAnnotation() string {

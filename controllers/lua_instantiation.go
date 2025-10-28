@@ -73,7 +73,10 @@ func instantiateWithLuaScript(ctx context.Context, config *rest.Config, c client
 	}
 
 	// Create a new Lua state
-	l := lua.NewState()
+	l := lua.NewState(lua.Options{
+		CallStackSize: getLuaCallStackSize(),
+		RegistrySize:  getLuaRegistrySize(),
+	})
 	defer l.Close()
 
 	sveltoslua.LoadModulesAndRegisterMethods(l)

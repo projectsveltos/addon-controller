@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
@@ -555,7 +556,7 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 	return nil
 }
 
-func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+func getDriftDetectionManagerPatchesOld(ctx context.Context, c client.Client,
 	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
 
 	patches := make([]libsveltosv1beta1.Patch, 0)
@@ -582,6 +583,66 @@ func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 			},
 		}
 		patches = append(patches, patch)
+	}
+
+	return patches, nil
+}
+
+func getDriftDetectionManagerPatchesNew(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	configMapName := getDriftDetectionConfigMap()
+	configMap := &corev1.ConfigMap{}
+	if configMapName != "" {
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			configMap)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
+				configMapName, err))
+			return nil, err
+		}
+	}
+
+	return getPatchesFromConfigMap(configMap, logger)
+}
+
+func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, logger)
+	if err == nil {
+		return patches, nil
+	}
+
+	return getDriftDetectionManagerPatchesOld(ctx, c, logger)
+}
+
+func getPatchesFromConfigMap(configMap *corev1.ConfigMap, logger logr.Logger,
+) ([]libsveltosv1beta1.Patch, error) {
+
+	patches := make([]libsveltosv1beta1.Patch, 0)
+	for k := range configMap.Data {
+		patch := &libsveltosv1beta1.Patch{}
+		err := yaml.Unmarshal([]byte(configMap.Data[k]), patch)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to marshal unstructured object")
+			return nil, err
+		}
+
+		if patch.Patch == "" {
+			return nil, fmt.Errorf("ConfigMap %s: content of key %s is not a Patch",
+				configMap.Name, k)
+		}
+
+		if patch.Target == nil {
+			patch.Target = &libsveltosv1beta1.PatchSelector{
+				Kind:  "Deployment",
+				Group: "apps",
+			}
+		}
+
+		patches = append(patches, *patch)
 	}
 
 	return patches, nil

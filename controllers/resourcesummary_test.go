@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -31,12 +32,20 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta1" //nolint:staticcheck // SA1019: We are unable to update the dependency at this time.
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/deployer"
 )
 
 var _ = Describe("ResourceSummary Deployer", func() {
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+	})
+
 	It("deployDebuggingConfigurationCRD deploys DebuggingConfiguration CRD", func() {
 		Expect(controllers.DeployDebuggingConfigurationCRD(context.TODO(), testEnv.Config, "", "", "", "",
 			false, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
@@ -144,6 +153,113 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			}
 			return true
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("getSveltosAgentPatches reads old post render patches from ConfigMap", func() {
+		cmYAML := `apiVersion: v1
+data:
+  deployment-patch: |-
+            image-patch: |-
+              - op: replace
+                path: /spec/template/spec/containers/0/image
+                value: registry.ciroos.ai/samay/third-party-images/projectsveltos/drift-detection-manager:f2d27fef1-251024102029-amd64
+              - op: add
+                path: /spec/template/spec/imagePullSecrets
+                value:
+                  - name: regcred
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/requests/cpu
+                value: 500m
+              - op: replace
+                path: /spec/template/spec/containers/0/resources/requests/memory
+                value: 512Mi
+kind: ConfigMap
+metadata:
+  name: drift-detection-config-old
+  namespace: projectsveltos`
+
+		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
+		Expect(err).To(BeNil())
+
+		initObjects := []client.Object{}
+		for i := range cm {
+			initObjects = append(initObjects, cm[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		controllers.SetDriftdetectionConfigMap("drift-detection-config-old")
+		patches, err := controllers.GetDriftDetectionManagerPatches(context.TODO(), c, logger)
+		Expect(err).To(BeNil())
+		Expect(len(patches)).To(Equal(1))
+		controllers.SetDriftdetectionConfigMap("")
+	})
+
+	It("getDriftDetectionManagerPatches reads post render patches from ConfigMap", func() {
+		cmYAML := `apiVersion: v1
+data:
+  deployment-patch: |-
+      patch: |-
+        - op: replace
+          path: /spec/template/spec/containers/0/image
+          value: registry.ciroos.ai/samay/third-party-images/projectsveltos/drift-detection-manager:f2d27fef1-251024102029-amd64
+        - op: add
+          path: /spec/template/spec/imagePullSecrets
+          value:
+            - name: regcred
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/cpu
+          value: 500m
+        - op: replace
+          path: /spec/template/spec/containers/0/resources/requests/memory
+          value: 512Mi
+      target:
+        kind: Deployment
+        name: drift-detection-manager
+        namespace: projectsveltos
+  clusterrole-patch: |-
+      patch: |-
+        - op: remove
+          path: /rules
+      target:
+        kind: ClusterRole
+        name: drift-detection-manager-role
+kind: ConfigMap
+metadata:
+  name: drift-detection-config
+  namespace: projectsveltos`
+
+		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
+		Expect(err).To(BeNil())
+
+		initObjects := []client.Object{}
+		for i := range cm {
+			initObjects = append(initObjects, cm[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		controllers.SetDriftdetectionConfigMap("drift-detection-config")
+		patches, err := controllers.GetDriftDetectionManagerPatches(context.TODO(), c, logger)
+		Expect(err).To(BeNil())
+		Expect(len(patches)).To(Equal(2))
+		controllers.SetDriftdetectionConfigMap("")
+
+		found := false
+		for i := range patches {
+			if patches[i].Target.Kind == "ClusterRole" {
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
+
+		found = false
+		for i := range patches {
+			if patches[i].Target.Kind == "Deployment" {
+				found = true
+			}
+		}
+		Expect(found).To(BeTrue())
 	})
 })
 

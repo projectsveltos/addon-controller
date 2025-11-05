@@ -40,9 +40,6 @@ const (
 	// ProfileLabelName is added to all ClusterSummary instances created
 	// by a Profile instance
 	ProfileLabelName = "projectsveltos.io/profile-name"
-
-	// FullNameAnnotation stores the full name before ellipsization
-	FullNameAnnotation = "projectsveltos.io/full-name"
 )
 
 // GetClusterSummary returns the ClusterSummary instance created by a specific
@@ -91,16 +88,12 @@ func GetClusterSummaryName(profileKind, profileName, clusterName string, isSvelt
 		clusterType = libsveltosv1beta1.ClusterTypeSveltos
 	}
 	prefix := GetPrefix(clusterType)
-
-	var name string
 	if profileKind == configv1beta1.ClusterProfileKind {
 		// For backward compatibility (code before addition of Profiles) do not change this
-		name = fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
-	} else {
-		name = fmt.Sprintf("p--%s-%s-%s", profileName, prefix, clusterName)
+		return fmt.Sprintf("%s-%s-%s", profileName, prefix, clusterName)
 	}
 
-	return name
+	return fmt.Sprintf("p--%s-%s-%s", profileName, prefix, clusterName)
 }
 
 func GetPrefix(clusterType libsveltosv1beta1.ClusterType) string {

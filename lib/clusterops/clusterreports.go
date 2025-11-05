@@ -26,7 +26,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -46,13 +45,9 @@ func UpdateClusterReportWithResourceReports(ctx context.Context, c client.Client
 		return nil
 	}
 
-	fullName := GetClusterReportName(profileRef.Kind, profileRef.Name, clusterName, clusterType)
-	clusterReportName, err := utils.GetNameManager().AllocateName(ctx, clusterNamespace, fullName, &configv1beta1.ClusterReport{})
-	if err != nil {
-		return err
-	}
+	clusterReportName := GetClusterReportName(profileRef.Kind, profileRef.Name, clusterName, clusterType)
 
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		clusterReport := &configv1beta1.ClusterReport{}
 		err := c.Get(ctx,
 			types.NamespacedName{Namespace: clusterNamespace, Name: clusterReportName}, clusterReport)
@@ -74,13 +69,13 @@ func UpdateClusterReportWithResourceReports(ctx context.Context, c client.Client
 }
 
 func GetClusterReportName(profileKind, profileName, clusterName string, clusterType libsveltosv1beta1.ClusterType) string {
+	// TODO: shorten this value
 	prefix := "" // For backward compatibility (before addition of Profile) leave this empty for ClusterProfiles
 	if profileKind == configv1beta1.ProfileKind {
 		prefix = "p--"
 	}
-	name := prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
+	return prefix + profileName + nameSeparator + strings.ToLower(string(clusterType)) +
 		nameSeparator + clusterName
-	return name
 }
 
 // ConvertResourceReportsToObjectReference converts a slice of ResourceReports to

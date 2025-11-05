@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
-	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -101,9 +100,6 @@ var _ = BeforeSuite(func() {
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})
 	Expect(err).NotTo(HaveOccurred())
-
-	// Initialize NameManager with k8s client for tests
-	utils.GetNameManager().SetClient(k8sClient)
 
 	if isCAPIInstalled(context.TODO(), k8sClient) {
 		verifyCAPICluster()

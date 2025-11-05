@@ -62,8 +62,6 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/internal/telemetry"
-	"github.com/projectsveltos/addon-controller/lib/clusterops"
-	"github.com/projectsveltos/addon-controller/lib/utils"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/crd"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -174,10 +172,6 @@ func main() {
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
 
-	utils.GetNameManager().SetClient(mgr.GetClient())
-
-	rebuildNameCache(ctx)
-
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
 
@@ -227,18 +221,6 @@ func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]ca
 		}
 	}
 	return
-}
-
-func rebuildNameCache(ctx context.Context) {
-	// Rebuild name cache from existing ClusterSummary and ClusterReport objects
-	setupLog.Info("Rebuilding name cache from existing ClusterSummary objects")
-	if err := utils.GetNameManager().RebuildCache(ctx, &configv1beta1.ClusterSummaryList{}, clusterops.FullNameAnnotation); err != nil {
-		setupLog.Error(err, "failed to rebuild cache for ClusterSummary")
-	}
-	setupLog.Info("Rebuilding name cache from existing ClusterReport objects")
-	if err := utils.GetNameManager().RebuildCache(ctx, &configv1beta1.ClusterReportList{}, clusterops.FullNameAnnotation); err != nil {
-		setupLog.Error(err, "failed to rebuild cache for ClusterReport")
-	}
 }
 
 func initFlags(fs *pflag.FlagSet) {

@@ -49,7 +49,6 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
-	"github.com/projectsveltos/addon-controller/lib/utils"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -1600,8 +1599,6 @@ func (r *ClusterSummaryReconciler) removeFinalizer(clusterSummaryScope *scope.Cl
 			configv1beta1.ClusterSummaryFinalizer); !finalizersUpdated {
 			return fmt.Errorf("failed to remove finalizer")
 		}
-		utils.GetNameManager().RemoveName(clusterSummaryScope.ClusterSummary.Namespace,
-			clusterSummaryScope.ClusterSummary.Name)
 	}
 
 	return nil

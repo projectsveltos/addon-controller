@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://prometheus-community.github.io/helm-charts
     repositoryName:   prometheus-community
     chartName:        prometheus-community/prometheus
-    chartVersion:     27.42.2
+    chartVersion:     27.44.1
     releaseName:      prometheus
     releaseNamespace: prometheus
     helmChartAction:  Install

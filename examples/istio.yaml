@@ -11,7 +11,7 @@ spec:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/base
-    chartVersion:     1.27.3
+    chartVersion:     1.28.0
     releaseName:      istio-base
     releaseNamespace: istio-system
     helmChartAction:  Install
@@ -20,14 +20,14 @@ spec:
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/istiod
-    chartVersion:     1.27.3
+    chartVersion:     1.28.0
     releaseName:      istiod
     releaseNamespace: istio-system
     helmChartAction:  Install
   - repositoryURL:    https://istio-release.storage.googleapis.com/charts
     repositoryName:   istio
     chartName:        istio/gateway
-    chartVersion:     1.27.3
+    chartVersion:     1.28.0
     releaseName:      istio-ingress
     releaseNamespace: istio-system
     helmChartAction:  Install

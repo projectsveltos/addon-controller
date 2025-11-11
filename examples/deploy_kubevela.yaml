@@ -11,7 +11,7 @@ spec:
   - repositoryURL: https://kubevela.github.io/charts
     repositoryName: kubevela
     chartName: kubevela/vela-core
-    chartVersion: 1.10.4
+    chartVersion: 1.10.5
     releaseName: kubevela-core-latest
     releaseNamespace: vela-system
     helmChartAction: Install

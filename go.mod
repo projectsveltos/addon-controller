@@ -1,13 +1,13 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.25.3
+go 1.25.4
 
 require (
 	dario.cat/mergo v1.0.2
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v28.5.2+incompatible
+	github.com/docker/cli v29.0.0+incompatible
 	github.com/fluxcd/pkg/apis/meta v1.22.0
 	github.com/fluxcd/pkg/http/fetch v0.20.0
 	github.com/fluxcd/pkg/tar v0.15.0
@@ -18,13 +18,13 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.1.1-0.20251026150302-43e3552ba60c
+	github.com/projectsveltos/libsveltos v1.1.1-0.20251106133930-7c281ffd469e
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.30.0
-	helm.sh/helm/v3 v3.19.0
+	helm.sh/helm/v3 v3.19.1
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -35,8 +35,8 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/cluster-api v1.11.3
 	sigs.k8s.io/controller-runtime v0.22.4
-	sigs.k8s.io/kustomize/api v0.20.1
-	sigs.k8s.io/kustomize/kyaml v0.20.1
+	sigs.k8s.io/kustomize/api v0.21.0
+	sigs.k8s.io/kustomize/kyaml v0.21.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -56,11 +56,11 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
-	github.com/containerd/containerd v1.7.28 // indirect
+	github.com/containerd/containerd v1.7.29 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
-	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
+	github.com/cyphar/filepath-securejoin v0.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
@@ -156,14 +156,14 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.45.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/term v0.36.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.37.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect

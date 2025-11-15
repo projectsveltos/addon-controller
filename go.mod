@@ -24,7 +24,7 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/text v0.30.0
-	helm.sh/helm/v3 v3.19.1
+	helm.sh/helm/v3 v3.19.2
 	k8s.io/api v0.34.1
 	k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/apimachinery v0.34.1

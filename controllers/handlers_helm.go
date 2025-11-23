@@ -3736,6 +3736,44 @@ func getPlainHTTP(currentChart *configv1beta1.HelmChart) bool {
 	return currentChart.RegistryCredentialsConfig.PlainHTTP
 }
 
+// chartNameContainsRepositoryName checks if chartName starts with repositoryName
+// followed by a '/'. This indicates that the repository name is already
+// prefixed in the chartName.
+func chartNameContainsRepositoryName(chartName, repositoryName string) bool {
+	// To avoid issues with repositoryName potentially being a substring of another part
+	// of the chartName (e.g., "myrepo/foo-repo/chart" and "repo"),
+	// we specifically check for "repositoryName/" prefix.
+	prefix := repositoryName + "/"
+	return strings.HasPrefix(chartName, prefix)
+}
+
+// removeRepositoryNameFromChartName removes the repositoryName prefix
+// from the chartName if it exists.
+func removeRepositoryNameFromChartName(chartName, repositoryName string) string {
+	prefix := repositoryName + "/"
+	if strings.HasPrefix(chartName, prefix) {
+		return strings.TrimPrefix(chartName, prefix)
+	}
+	return chartName // Return original chartName if prefix not found
+}
+
+// ensureRepositoryNamePrefix appends "repositoryName/" to chartName
+// if it's not already present.
+func ensureRepositoryNamePrefix(chartName, repositoryName string) string {
+	// If repositoryName is empty, there's no prefix to add, so return chartName as is.
+	if repositoryName == "" {
+		return chartName
+	}
+
+	// If the chartName already contains the repositoryName prefix, return it as is.
+	if chartNameContainsRepositoryName(chartName, repositoryName) {
+		return chartName
+	}
+
+	// Otherwise, prepend the repositoryName and a slash.
+	return repositoryName + "/" + chartName
+}
+
 // getHelmChartAndRepoName returns helm repo URL and chart name
 func getHelmChartAndRepoName(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, //nolint: gocritic // ignore
 	requestedChart *configv1beta1.HelmChart, logger logr.Logger) (string, string, string, error) {
@@ -3749,9 +3787,15 @@ func getHelmChartAndRepoName(ctx context.Context, clusterSummary *configv1beta1.
 			return "", "", "", err
 		}
 
-		u.Path = path.Join(u.Path, chartName)
+		if chartNameContainsRepositoryName(chartName, requestedChart.RepositoryName) {
+			u.Path = path.Join(u.Path, removeRepositoryNameFromChartName(chartName, requestedChart.RepositoryName))
+		} else {
+			u.Path = path.Join(u.Path, chartName)
+		}
 		chartName = u.String()
 		repoURL = ""
+	} else if !chartNameContainsRepositoryName(chartName, requestedChart.RepositoryName) {
+		chartName = ensureRepositoryNamePrefix(chartName, requestedChart.RepositoryName)
 	}
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace

@@ -67,10 +67,11 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 				continue
 			}
 
-			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, logger)
+			l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, l)
 			if err != nil {
 				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
-					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
+					l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
 						cluster.Namespace, cluster.Name, err))
 				}
 			}
@@ -123,7 +124,6 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 		return nil
 	}
 
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
 	clusterRef := &corev1.ObjectReference{
 		Namespace:  cluster.Namespace,
 		Name:       cluster.Name,

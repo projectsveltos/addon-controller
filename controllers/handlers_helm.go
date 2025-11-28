@@ -1153,12 +1153,14 @@ func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	var message string
 	current, err := semver.NewVersion(currentRelease.ChartVersion)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("chartVersion: %s failed to get semantic version. Err: %v",
+			currentRelease.ChartVersion, err))
 		return helmRelease, nil, err
 	}
 	expected, err := semver.NewVersion(currentChart.ChartVersion)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get semantic version. Err: %v", err))
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("currentVersion: %s failed to get semantic version. Err: %v",
+			currentChart.ChartVersion, err))
 		return helmRelease, nil, err
 	}
 	if current.Compare(expected) != 0 {
@@ -1400,6 +1402,14 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 	return nil
 }
 
+func getChartVersion(requestedChart *configv1beta1.HelmChart, chartRequested *chart.Chart) string {
+	if requestedChart.ChartVersion == "" && isReferencingFluxSource(requestedChart) {
+		return chartRequested.AppVersion()
+	}
+
+	return requestedChart.ChartVersion
+}
+
 // installRelease installs helm release in the Cluster.
 // No action in DryRun mode.
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, settings *cli.EnvSettings,
@@ -1424,8 +1434,8 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		chartName = filepath.Join(tmpDir, chartName)
 	}
 
-	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
-	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
+	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName,
+		"credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
 	logger.V(logs.LogDebug).Info("installing release")
 
@@ -1452,6 +1462,8 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		logger.V(logs.LogDebug).Info("Load failed")
 		return nil, err
 	}
+
+	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
 
 	validInstallableChart := isChartInstallable(chartRequested)
 	if !validInstallableChart {
@@ -1604,8 +1616,8 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		chartName = filepath.Join(tmpDir, chartName)
 	}
 
-	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName)
-	logger = logger.WithValues("credentials", registryOptions.credentialsPath, "ca",
+	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName,
+		"credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
 	logger.V(logs.LogDebug).Info("upgrading release")
 
@@ -1636,6 +1648,9 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	if err != nil {
 		return nil, err
 	}
+
+	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
+
 	if req := chartRequested.Metadata.Dependencies; req != nil {
 		err = action.CheckDependencies(chartRequested, req)
 		if err != nil {

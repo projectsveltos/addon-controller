@@ -481,7 +481,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 
 	// This is one time operation that upgrades drift detection instances in all managed cluster
 	// where drift detection has been deployed
-	go upgradeDriftDetection(ctx, r.Logger)
+	go upgradeDriftDetection(ctx, r.ShardKey, r.Logger)
 
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 

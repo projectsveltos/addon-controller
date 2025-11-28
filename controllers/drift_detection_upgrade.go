@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -29,13 +30,12 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-func upgradeDriftDetection(ctx context.Context, logger logr.Logger) {
+func upgradeDriftDetection(ctx context.Context, shardKey string, logger logr.Logger) {
 	if getAgentInMgmtCluster() {
 		logger.V(logs.LogInfo).Info("upgrade drift detection on management cluster")
 		upgradeDriftDetectionDeploymentsInMgmtCluster(ctx, logger)
@@ -43,11 +43,13 @@ func upgradeDriftDetection(ctx context.Context, logger logr.Logger) {
 	}
 
 	logger.V(logs.LogInfo).Info("upgrade drift detection on managed clusters")
-	upgradeDriftDetectionDeploymentsInManagedClusters(ctx, logger)
+	upgradeDriftDetectionDeploymentsInManagedClusters(ctx, shardKey, logger)
 }
 
-func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, logger logr.Logger) {
-	const retryAfter = 5 * time.Second
+func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shardKey string, logger logr.Logger) {
+	const two = 2
+	const maxRetryAfter = two * time.Minute // Maximum sleep duration
+	retryAfter := 5 * time.Second
 
 	mgmtClient := getManagementClusterClient()
 	for {
@@ -55,13 +57,18 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, logg
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect drift detection patches: %v", err))
 			time.Sleep(retryAfter)
+			// Double the sleep time, capped at maxRetryAfter
+			retryAfter = time.Duration(math.Min(float64(retryAfter*two), float64(maxRetryAfter)))
 			continue
 		}
 
-		clusters, err := getListOfClustersWithDriftDetection(ctx, mgmtClient, logger)
+		clusters, err := clusterproxy.GetListOfClustersForShardKey(ctx, mgmtClient, "", capiOnboardAnnotation,
+			shardKey, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect drift detection patches: %v", err))
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
 			time.Sleep(retryAfter)
+			// Double the sleep time, capped at maxRetryAfter
+			retryAfter = time.Duration(math.Min(float64(retryAfter*two), float64(maxRetryAfter)))
 			continue
 		}
 
@@ -79,9 +86,22 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, logg
 				if apierrors.IsNotFound(err) {
 					continue
 				}
-				if !cluster.GetDeletionTimestamp().IsZero() {
-					continue
-				}
+				allProcessed = false
+				continue
+			}
+
+			if !cluster.GetDeletionTimestamp().IsZero() {
+				continue
+			}
+
+			skipUpgrading, err := skipUpgrading(ctx, mgmtClient, cluster, logger)
+			if err != nil {
+				allProcessed = false
+				continue
+			}
+
+			if skipUpgrading {
+				continue
 			}
 
 			err = deployDriftDetectionManagerInManagedCluster(ctx, clusters[i].Namespace, clusters[i].Name,
@@ -99,6 +119,10 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, logg
 			break
 		}
 
+		// If not all clusters were processed successfully (allProcessed is false),
+		// we sleep and increase the backoff timer.
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("not all clusters processed successfully. Retrying after %v", retryAfter))
+		time.Sleep(retryAfter)
 		time.Sleep(retryAfter)
 	}
 }
@@ -167,36 +191,42 @@ func upgradeDriftDetectionDeployment(ctx context.Context, config *rest.Config, c
 	return nil
 }
 
-func getListOfClustersWithDriftDetection(ctx context.Context, c client.Client,
-	logger logr.Logger) ([]corev1.ObjectReference, error) {
+func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
+	logger logr.Logger) (bool, error) {
 
-	clusterSummaries := &configv1beta1.ClusterSummaryList{}
+	clusterRef := &corev1.ObjectReference{
+		Namespace: cluster.GetNamespace(),
+		Name:      cluster.GetName(),
+	}
 
-	err := c.List(ctx, clusterSummaries)
+	if cluster.GetObjectKind().GroupVersionKind().Kind == libsveltosv1beta1.SveltosClusterKind {
+		clusterRef.Kind = libsveltosv1beta1.SveltosClusterKind
+		clusterRef.APIVersion = libsveltosv1beta1.GroupVersion.String()
+	} else {
+		clusterRef.Kind = clusterKind
+		clusterRef.APIVersion = clusterv1.GroupVersion.String()
+	}
+
+	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, clusterRef, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch clusterSummary instances: %v", err))
-		return nil, err
+		logger.V(logs.LogDebug).Info("cluster is not ready yet")
+		return true, err
 	}
 
-	clusters := []corev1.ObjectReference{}
-	for i := range clusterSummaries.Items {
-		cs := &clusterSummaries.Items[i]
-		if cs.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
-			kind := libsveltosv1beta1.SveltosClusterKind
-			apiVersion := libsveltosv1beta1.GroupVersion.String()
-			if cs.Spec.ClusterType == libsveltosv1beta1.ClusterTypeCapi {
-				kind = clusterv1.ClusterKind
-				apiVersion = clusterv1.GroupVersion.String()
-			}
-
-			clusters = append(clusters, corev1.ObjectReference{
-				Namespace:  cs.Spec.ClusterNamespace,
-				Name:       cs.Spec.ClusterName,
-				Kind:       kind,
-				APIVersion: apiVersion,
-			})
-		}
+	if !ready {
+		return true, nil
 	}
 
-	return clusters, nil
+	paused, err := clusterproxy.IsClusterPaused(ctx, c, cluster.GetNamespace(), cluster.GetName(),
+		clusterproxy.GetClusterType(clusterRef))
+	if err != nil {
+		logger.V(logs.LogDebug).Error(err, "failed to verify if cluster is paused")
+		return true, err
+	}
+
+	if paused {
+		return true, nil
+	}
+
+	return false, nil
 }

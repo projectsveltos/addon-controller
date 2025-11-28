@@ -23,14 +23,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -42,81 +40,102 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		logger = textlogger.NewLogger(textlogger.NewConfig())
 	})
 
-	It("getListOfClustersWithDriftDetection returns the list of clusters with drift detection enabled", func() {
-		cluster1 := corev1.ObjectReference{
-			Namespace:  randomString(),
-			Name:       randomString(),
-			Kind:       libsveltosv1beta1.SveltosClusterKind,
-			APIVersion: libsveltosv1beta1.GroupVersion.String(),
-		}
-		clusterSummary1 := &configv1beta1.ClusterSummary{
+	It("skipUpgrading skips clusters which are paused or not ready", func() {
+		paused := true
+		sveltosClusterPaused := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: configv1beta1.ClusterSummarySpec{
-				ClusterNamespace: cluster1.Namespace,
-				ClusterName:      cluster1.Name,
-				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
-				ClusterProfileSpec: configv1beta1.Spec{
-					SyncMode: configv1beta1.SyncModeContinuousWithDriftDetection,
-				},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				Paused: paused,
 			},
 		}
+		Expect(addTypeInformationToObject(scheme, sveltosClusterPaused)).To(Succeed())
 
-		cluster2 := corev1.ObjectReference{
-			Namespace:  randomString(),
-			Name:       randomString(),
-			Kind:       clusterv1.ClusterKind,
-			APIVersion: clusterv1.GroupVersion.String(),
-		}
-		clusterSummary2 := &configv1beta1.ClusterSummary{
+		sveltosClusterNotReady := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
-			Spec: configv1beta1.ClusterSummarySpec{
-				ClusterNamespace: cluster2.Namespace,
-				ClusterName:      cluster2.Name,
-				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1beta1.Spec{
-					SyncMode: configv1beta1.SyncModeContinuousWithDriftDetection,
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				Paused: false,
+			},
+			Status: libsveltosv1beta1.SveltosClusterStatus{
+				Ready: false,
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, sveltosClusterNotReady)).To(Succeed())
+
+		sveltosClusterReadyAndNotPaused := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				Paused: false,
+			},
+			Status: libsveltosv1beta1.SveltosClusterStatus{
+				Ready: true,
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, sveltosClusterReadyAndNotPaused)).To(Succeed())
+
+		capiClusterPaused := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: clusterv1.ClusterSpec{
+				Paused: &paused,
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, capiClusterPaused)).To(Succeed())
+
+		initialized := true
+		capiClusterNotPaused := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: clusterv1.ClusterSpec{},
+			Status: clusterv1.ClusterStatus{
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
 				},
 			},
 		}
+		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
 
 		initObjects := []client.Object{
-			clusterSummary1,
-			clusterSummary2,
+			sveltosClusterPaused,
+			sveltosClusterNotReady,
+			sveltosClusterReadyAndNotPaused,
+			capiClusterPaused,
+			capiClusterNotPaused,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
 
-		clusters, err := controllers.GetListOfClustersWithDriftDetection(context.TODO(), c, logger)
+		skip, err := controllers.SkipUpgrading(context.TODO(), c, sveltosClusterPaused, logger)
 		Expect(err).To(BeNil())
-		Expect(len(clusters)).To(Equal(2))
-		Expect(clusters).To(ContainElement(cluster1))
-		Expect(clusters).To(ContainElement(cluster2))
+		Expect(skip).To(BeTrue())
 
-		// This is continuous, so this cluster wont be included
-		clusterSummary3 := &configv1beta1.ClusterSummary{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: randomString(),
-			},
-			Spec: configv1beta1.ClusterSummarySpec{
-				ClusterNamespace: randomString(),
-				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
-				ClusterProfileSpec: configv1beta1.Spec{
-					SyncMode: configv1beta1.SyncModeContinuous,
-				},
-			},
-		}
-
-		Expect(c.Create(context.TODO(), clusterSummary3)).To(Succeed())
-		clusters, err = controllers.GetListOfClustersWithDriftDetection(context.TODO(), c, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), c, sveltosClusterNotReady, logger)
 		Expect(err).To(BeNil())
-		Expect(len(clusters)).To(Equal(2))
+		Expect(skip).To(BeTrue())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), c, sveltosClusterReadyAndNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeFalse())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeTrue())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeFalse())
 	})
 })

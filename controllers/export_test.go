@@ -200,5 +200,5 @@ var (
 )
 
 var (
-	GetListOfClustersWithDriftDetection = getListOfClustersWithDriftDetection
+	SkipUpgrading = skipUpgrading
 )

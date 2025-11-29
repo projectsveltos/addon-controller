@@ -53,7 +53,9 @@ import (
 )
 
 var (
-	clusterPromotionNameLabel = "config.projectsveltos.io/promotionname"
+	clusterPromotionNameLabel          = "config.projectsveltos.io/promotionname"
+	stageNameAnnotation                = "config.projectsveltos.io/stagename"
+	preVerificationClusterProfileLabel = "config.projectsveltos.io/promotion-verification"
 )
 
 const (
@@ -197,12 +199,13 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 	r.setPromotionHashesInStatus(promotionScope, newProfileSpecHash, newStagesHash)
 
 	if restart {
-		return r.handlePromotionRestart(ctx, promotionScope)
+		return r.handlePromotionRestart(ctx, promotionScope, logger)
 	}
 
 	currentStageName := getCurrentStage(promotionScope.ClusterPromotion)
+	l := logger.WithValues("stage", currentStageName)
 	if !r.isStageProvisioned(promotionScope.ClusterPromotion, currentStageName) {
-		deployed, message, err := r.checkCurrentStageDeployment(ctx, promotionScope, logger)
+		deployed, message, err := r.checkCurrentStageDeployment(ctx, promotionScope.ClusterPromotion, l)
 		if err != nil {
 			promotionScope.Error(err, "Failed to verify current stage deployment status")
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
@@ -212,24 +215,27 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 			return reconcile.Result{Requeue: true, RequeueAfter: normalStageRequeueAfter}
 		}
 
+		l.V(logs.LogDebug).Info(fmt.Sprintf("Stage %s provisioned", currentStageName))
 		r.eventRecorder.Eventf(promotionScope.ClusterPromotion, corev1.EventTypeNormal, "sveltos",
 			fmt.Sprintf("Stage %s provisioned", currentStageName))
 		// Stage is successfully deployed
-		updateStageStatus(promotionScope.ClusterPromotion, currentStageName, true, &message)
+		updateStageStatus(promotionScope.ClusterPromotion, currentStageName, true, nil)
+		updateStageDescription(promotionScope.ClusterPromotion, currentStageName, message)
 	}
 
-	return r.advanceToNextStage(ctx, promotionScope)
+	return r.advanceToNextStage(ctx, promotionScope, l)
 }
 
 // handlePromotionRestart restarts the promotion process from Stage 1.
-func (r *ClusterPromotionReconciler) handlePromotionRestart(
-	ctx context.Context,
-	promotionScope *scope.ClusterPromotionScope) reconcile.Result {
+func (r *ClusterPromotionReconciler) handlePromotionRestart(ctx context.Context,
+	promotionScope *scope.ClusterPromotionScope, logger logr.Logger) reconcile.Result {
 
 	// The minimum length of stages is 1 so accessing the first stage is safe
 	firstStage := promotionScope.ClusterPromotion.Spec.Stages[0]
 
-	if err := r.reconcileStageProfile(ctx, promotionScope, firstStage); err != nil {
+	l := logger.WithValues("stage", firstStage.Name)
+
+	if err := r.reconcileStageProfile(ctx, promotionScope, &firstStage, l); err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
@@ -238,19 +244,20 @@ func (r *ClusterPromotionReconciler) handlePromotionRestart(
 
 	resetStageStatuses(promotionScope.ClusterPromotion)
 	addStageStatus(promotionScope.ClusterPromotion, firstStage.Name)
+	updateStageDescription(promotionScope.ClusterPromotion, firstStage.Name,
+		"Clusters are being provisioned")
 
 	return reconcile.Result{Requeue: true, RequeueAfter: normalStageRequeueAfter}
 }
 
 // advanceToNextStage checks if promotion criteria are met and moves to the next stage if possible.
-func (r *ClusterPromotionReconciler) advanceToNextStage(
-	ctx context.Context,
-	promotionScope *scope.ClusterPromotionScope) reconcile.Result {
+func (r *ClusterPromotionReconciler) advanceToNextStage(ctx context.Context,
+	promotionScope *scope.ClusterPromotionScope, logger logr.Logger) reconcile.Result {
 
 	currentStageName := getCurrentStage(promotionScope.ClusterPromotion)
 
 	// Current Stage is provisioned. Evaluates whether moving to next stage is needed.
-	canAdvance, err := r.doMoveToNextStage(ctx, promotionScope.ClusterPromotion, promotionScope.Logger)
+	canAdvance, err := r.doMoveToNextStage(ctx, promotionScope.ClusterPromotion, logger)
 	if err != nil {
 		return reconcile.Result{Requeue: true, RequeueAfter: normalStageRequeueAfter}
 	}
@@ -260,13 +267,23 @@ func (r *ClusterPromotionReconciler) advanceToNextStage(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalStageRequeueAfter}
 	}
 
+	updateStageStatus(promotionScope.ClusterPromotion, currentStageName, true, nil)
+	updateStageDescription(promotionScope.ClusterPromotion, currentStageName,
+		"Successfully provisioned")
+
+	if err := r.deleteCheckDeploymentClusterProfile(ctx, promotionScope.ClusterPromotion,
+		currentStageName, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to delete preHealthCheckDeployment profile")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
+	}
+
 	nextStage := r.getNextStage(promotionScope.ClusterPromotion, currentStageName)
 	if nextStage != nil {
 		// Move to next stage
-		promotionScope.Logger.V(logs.LogInfo).Info("ClusterPromotion advancing to next stage",
-			"previousStage", currentStageName, "nexStage", nextStage.Name)
+		logger.V(logs.LogInfo).Info("ClusterPromotion advancing to next stage",
+			"nexStage", nextStage.Name)
 
-		if err := r.reconcileStageProfile(ctx, promotionScope, *nextStage); err != nil {
+		if err := r.reconcileStageProfile(ctx, promotionScope, nextStage, logger); err != nil {
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 		}
 
@@ -461,19 +478,22 @@ func (r *ClusterPromotionReconciler) needsPromotionRestart(promotionScope *scope
 }
 
 // reconcileStageProfile creates/updates the ClusterProfile for the given stage
-func (r *ClusterPromotionReconciler) reconcileStageProfile(
-	ctx context.Context,
-	promotionScope *scope.ClusterPromotionScope,
-	stage configv1beta1.Stage,
+func (r *ClusterPromotionReconciler) reconcileStageProfile(ctx context.Context,
+	promotionScope *scope.ClusterPromotionScope, stage *configv1beta1.Stage, logger logr.Logger,
 ) error {
 
-	promotionScope.Logger.V(logs.LogInfo).Info("Reconciling ClusterProfile for stage", "stageName", stage.Name)
+	if err := r.deleteCheckDeploymentClusterProfile(ctx, promotionScope.ClusterPromotion, stage.Name,
+		logger); err != nil {
+		return err
+	}
+
+	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile for stage")
 
 	addTypeInformationToObject(r.Scheme, promotionScope.ClusterPromotion)
 
 	clusterProfile := &configv1beta1.ClusterProfile{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: getClusterProfileName(promotionScope.Name(), stage.Name),
+			Name: mainDeploymentClusterProfileName(promotionScope.Name(), stage.Name),
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: configv1beta1.GroupVersion.String(),
@@ -482,7 +502,8 @@ func (r *ClusterPromotionReconciler) reconcileStageProfile(
 					UID:        promotionScope.ClusterPromotion.GetUID(),
 				},
 			},
-			Labels: getClusterPromotionLabels(promotionScope.ClusterPromotion),
+			Labels:      getMainDeploymentClusterProfileLabels(promotionScope.ClusterPromotion),
+			Annotations: getStageAnnotation(stage.Name),
 		},
 	}
 
@@ -550,17 +571,17 @@ func (r *ClusterPromotionReconciler) reconcileStageProfile(
 }
 
 func (r *ClusterPromotionReconciler) checkCurrentStageDeployment(ctx context.Context,
-	promotionScope *scope.ClusterPromotionScope, logger logr.Logger,
-) (deployed bool, message string, err error) { // FIXED: Named return parameters
+	clusterPromotion *configv1beta1.ClusterPromotion, logger logr.Logger,
+) (deployed bool, message string, err error) {
 
 	// Get the Name of the current stage from the status
-	currentStageName := promotionScope.ClusterPromotion.Status.CurrentStageName
+	currentStageName := clusterPromotion.Status.CurrentStageName
 	if currentStageName == "" {
 		logger.V(logs.LogDebug).Info("No current stage is set, nothing to check.")
 		return true, "No current stage to check.", nil
 	}
 
-	clusterProfileName := getClusterProfileName(promotionScope.Name(), currentStageName)
+	clusterProfileName := mainDeploymentClusterProfileName(clusterPromotion.Name, currentStageName)
 
 	currentClusterProfile := &configv1beta1.ClusterProfile{}
 
@@ -595,20 +616,54 @@ func (r *ClusterPromotionReconciler) checkCurrentStageDeployment(ctx context.Con
 
 	if !isDeployed {
 		logger.V(logs.LogDebug).Info("Stage deployment still pending.", "stageName", currentStageName, "status", message)
+	} else {
+		logger.V(logs.LogDebug).Info("Stage deployment is provisioned.", "stageName", currentStageName, "status", message)
 	}
-
-	logger.V(logs.LogDebug).Info("Stage deployment is provisioned.", "stageName", currentStageName, "status", message)
 	// Return the result of the deployment check
 	return isDeployed, message, nil
 }
 
-func getClusterProfileName(promotionClusterName, stageName string) string {
+// Returns the name of the ClusterProfile Sveltos creates for the primary resources
+// being deployed in the current promotion stage.
+func mainDeploymentClusterProfileName(promotionClusterName, stageName string) string {
 	return fmt.Sprintf("%s-%s", promotionClusterName, stageName)
 }
 
-func getClusterPromotionLabels(clusterPromotion *configv1beta1.ClusterPromotion) map[string]string {
+// Returns the name of the ClusterProfile Sveltos creates for the PreHealthCheckDeployment
+// resources (e.g., a validation Job) in the current promotion stage.
+func preCheckDeploymentClusterProfileName(promotionClusterName, stageName string) string {
+	return fmt.Sprintf("preverification-%s-%s", promotionClusterName, stageName)
+}
+
+// getStageAnnotation returns the annotations added to the managed ClusterProfile
+// created for a given ClusterPromotion's stage.
+func getStageAnnotation(stageName string,
+) map[string]string {
+
+	return map[string]string{
+		stageNameAnnotation: stageName,
+	}
+}
+
+// getMainDeploymentClusterProfileLabels returns the labels added to the main ClusterProfile
+// created for a given ClusterPromotion instance.
+func getMainDeploymentClusterProfileLabels(clusterPromotion *configv1beta1.ClusterPromotion,
+) map[string]string {
+
 	return map[string]string{
 		clusterPromotionNameLabel: clusterPromotion.Name,
+	}
+}
+
+// getPreCheckDeploymentClusterProfileLabels returns the labels added to the ClusterProfile
+// created for the PreHealthCheckDeployment step (e.g., validation Job).
+func getPreCheckDeploymentClusterProfileLabels(clusterPromotion *configv1beta1.ClusterPromotion,
+) map[string]string {
+
+	return map[string]string{
+		clusterPromotionNameLabel: clusterPromotion.Name,
+		// Adding a distinct label to easily identify this ClusterProfile as part of the pre-verification step.
+		preVerificationClusterProfileLabel: "true",
 	}
 }
 
@@ -644,6 +699,26 @@ func updateStageStatus(clusterPromotion *configv1beta1.ClusterPromotion, stageNa
 			if allProvisioned {
 				clusterPromotion.Status.Stages[i].LastSuccessfulAppliedTime = now
 			}
+		}
+	}
+}
+
+func updateStageDescription(clusterPromotion *configv1beta1.ClusterPromotion,
+	stageName string, description string) {
+
+	if description == "" {
+		return
+	}
+
+	nowTime := time.Now().UTC().Truncate(time.Second)
+	formattedTime := nowTime.Format("2006-01-02T15:04:05Z")
+	message := fmt.Sprintf("%s (%s)", description, formattedTime)
+
+	for i := range clusterPromotion.Status.Stages {
+		if clusterPromotion.Status.Stages[i].Name == stageName {
+			clusterPromotion.Status.Stages[i].CurrentStatusDescription = &message
+
+			return
 		}
 	}
 }
@@ -736,16 +811,18 @@ func (r *ClusterPromotionReconciler) doMoveToNextStage(ctx context.Context,
 	}
 
 	if currentStageSpec.Trigger == nil {
-		logger.V(logs.LogDebug).Info("stage is completed as no trigger is defined", "stage", currentStageName)
+		logger.V(logs.LogDebug).Info("stage is completed as no trigger is defined")
 		return true, nil
 	}
 
 	if currentStageSpec.Trigger.Auto != nil {
+		logger.V(logs.LogDebug).Info("trigger is auto")
 		return r.canAutoAdvance(ctx, clusterPromotion, currentStageName, currentStageSpec.Trigger.Auto, logger)
 	}
 
 	if currentStageSpec.Trigger.Manual != nil {
-		return r.canManualAdvance(currentStageName, currentStageSpec.Trigger.Manual, logger), nil
+		logger.V(logs.LogDebug).Info("trigger is manual")
+		return r.canManualAdvance(clusterPromotion, currentStageName, currentStageSpec.Trigger.Manual, logger), nil
 	}
 
 	return true, nil
@@ -775,20 +852,45 @@ func (r *ClusterPromotionReconciler) canAutoAdvance(ctx context.Context,
 		// 2. Check the delay condition
 		if now.Before(requiredReadyTime) {
 			// The required delay time has NOT yet passed.
-			logger.V(logs.LogDebug).Info("Delay period not yet finished. Waiting to auto-advance.",
+			message := fmt.Sprintf("Delayed: Waiting for Time Window: %s",
+				requiredReadyTime.Format(time.RFC3339))
+			logger.V(logs.LogDebug).Info(message,
 				"stage", currentStageName,
 				"delay", delayDuration.String(),
 				"ready_at", requiredReadyTime.Format(time.RFC3339),
 			)
+
+			updateStageDescription(clusterPromotion, currentStageName, message)
 			return false, nil
 		}
 	}
 
-	// --- DELAY HAS PASSED: Reconcile Post-Delay Health Checks ---
+	// --- DELAY HAS PASSED: Deploy PreHealthCheckDeployment --
+	stage := getStageSpecByName(clusterPromotion, currentStageName)
+	if err := r.reconcilePreHealthCheckDeployment(ctx, clusterPromotion, stage, logger); err != nil {
+		return false, err
+	}
 
+	// --- DELAY HAS PASSED: Reconcile Post-Delay Health Checks ---
 	if err := r.reconcilePostDelayHealthChecks(ctx, clusterPromotion, currentStageName,
 		autoTrigger.PostDelayHealthChecks, logger); err != nil {
+		logger.V(logs.LogDebug).Info("Running Post-Promotion Health Checks")
+		updateStageDescription(clusterPromotion, currentStageName, "Running Post-Promotion Health Checks")
+
 		return false, err
+	}
+
+	// Verify ClusterSummary instances are all Provisioned (which means PostDelayHealthChecks) are passing
+	deployed, message, err := r.checkCurrentStageDeployment(ctx, clusterPromotion, logger)
+	if err != nil {
+		logger.Error(err, "Failed to verify current stage deployment status")
+		return false, err
+	}
+	if !deployed {
+		logger.V(logs.LogDebug).Info("Awaiting Health Checks to Pass")
+		updateStageStatus(clusterPromotion, currentStageName, false, &message)
+		updateStageDescription(clusterPromotion, currentStageName, "Awaiting Health Checks to Pass")
+		return false, nil
 	}
 
 	// Enforce Promotion Window (If Defined)
@@ -800,12 +902,14 @@ func (r *ClusterPromotionReconciler) canAutoAdvance(ctx context.Context,
 		}
 
 		if !isOpen {
+			message := fmt.Sprintf("Window Closed: Waiting for Next Schedule (%s).",
+				nextOpenTime.Format(time.RFC3339))
 			// Promotion Window is currently closed. Block advancement.
-			logger.V(logs.LogInfo).Info("Promotion window is currently closed. Waiting for the next window.",
+			logger.V(logs.LogInfo).Info(message,
 				"stage", currentStageName,
 				"next_open_time", nextOpenTime.Format(time.RFC3339),
 			)
-
+			updateStageDescription(clusterPromotion, currentStageName, message)
 			return false, nil
 		}
 	}
@@ -898,6 +1002,108 @@ func (r *ClusterPromotionReconciler) isPromotionWindowOpen(promotionWindow *conf
 	return isOpen, nextOpenTime, nil
 }
 
+func (r *ClusterPromotionReconciler) deleteCheckDeploymentClusterProfile(ctx context.Context,
+	clusterPromotion *configv1beta1.ClusterPromotion, stageName string, logger logr.Logger,
+) error {
+
+	profileName := preCheckDeploymentClusterProfileName(clusterPromotion.Name, stageName)
+	clusterProfile := &configv1beta1.ClusterProfile{}
+	err := r.Get(ctx, types.NamespacedName{Name: profileName}, clusterProfile)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		logger.V(logs.LogInfo).Error(err, "failed to get preCheckDeployment ClusterProfile")
+		return err
+	}
+
+	logger.V(logs.LogDebug).Info("deleting preCheckDeployment ClusterProfile")
+	return r.Delete(ctx, clusterProfile)
+}
+
+// reconcilePreHealthCheckDeployment creates/updates the PreHealthCheck ClusterProfile
+// for the given stage
+func (r *ClusterPromotionReconciler) reconcilePreHealthCheckDeployment(ctx context.Context,
+	clusterPromotion *configv1beta1.ClusterPromotion, stage *configv1beta1.Stage,
+	logger logr.Logger) error {
+
+	if stage.Trigger == nil || stage.Trigger.Auto == nil ||
+		len(stage.Trigger.Auto.PreHealthCheckDeployment) == 0 {
+
+		return nil
+	}
+
+	logger.V(logs.LogDebug).Info("create/update PreHealthCheckDeployment ClusterProfile")
+	clusterProfile := &configv1beta1.ClusterProfile{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: preCheckDeploymentClusterProfileName(clusterPromotion.Name, stage.Name),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: configv1beta1.GroupVersion.String(),
+					Kind:       clusterPromotion.GetObjectKind().GroupVersionKind().Kind,
+					Name:       clusterPromotion.GetName(),
+					UID:        clusterPromotion.GetUID(),
+				},
+			},
+			Labels:      getPreCheckDeploymentClusterProfileLabels(clusterPromotion),
+			Annotations: getStageAnnotation(stage.Name),
+		},
+	}
+
+	// The desired ClusterProfile Spec is the combination of the ClusterPromotion's
+	// global ProfileSpec and the stage-specific ClusterSelector.
+	desiredSpec := configv1beta1.Spec{
+		// 1. Copy all fields from ClusterPromotionSpec.ProfileSpec
+		SyncMode:           configv1beta1.SyncModeContinuous,
+		Tier:               clusterPromotion.Spec.ProfileSpec.Tier,
+		ContinueOnConflict: clusterPromotion.Spec.ProfileSpec.ContinueOnConflict,
+		ContinueOnError:    clusterPromotion.Spec.ProfileSpec.ContinueOnError,
+
+		// 2. Set the stage-specific ClusterSelector
+		ClusterSelector: stage.ClusterSelector,
+
+		// 3. Set PreHealthCheckDeployment
+		PolicyRefs: stage.Trigger.Auto.PreHealthCheckDeployment,
+	}
+
+	clusterProfile.Spec = desiredSpec
+
+	clusterProfile.SetGroupVersionKind(configv1beta1.GroupVersion.WithKind(configv1beta1.ClusterProfileKind))
+
+	dr, err := k8s_utils.GetDynamicResourceInterface(r.Config, clusterProfile.GroupVersionKind(), "")
+	if err != nil {
+		logger.V(logs.LogInfo).Info("failed to get dynamic ResourceInterface", "error", err)
+		return err
+	}
+
+	unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(clusterProfile)
+	if err != nil {
+		logger.V(logs.LogInfo).Info("failed to convert ClusterProfile to Unstructured", "error", err)
+		return err
+	}
+
+	// Convert the Unstructured object to a byte slice for the Patch data.
+	patchData, err := json.Marshal(unstructuredObj)
+	if err != nil {
+		logger.V(logs.LogInfo).Info("failed to marshal Unstructured object", "error", err)
+		return err
+	}
+
+	forceConflict := true
+	options := metav1.PatchOptions{
+		FieldManager: "application/apply-patch",
+		Force:        &forceConflict,
+	}
+
+	_, err = dr.Patch(ctx, clusterProfile.Name, types.ApplyPatchType, patchData, options)
+	if err != nil {
+		logger.Error(err, "failed to apply patch for ClusterProfile", "clusterProfileName", clusterProfile.Name)
+		return err
+	}
+
+	return nil
+}
+
 // reconcilePostDelayHealthChecks updates the ClusterProfile's Spec.ValidateHealths
 // to include the PostDelayHealthChecks if they are not already present.
 func (r *ClusterPromotionReconciler) reconcilePostDelayHealthChecks(
@@ -908,7 +1114,7 @@ func (r *ClusterPromotionReconciler) reconcilePostDelayHealthChecks(
 	logger logr.Logger,
 ) error {
 
-	clusterProfileName := getClusterProfileName(clusterPromotion.Name, currentStageName)
+	clusterProfileName := mainDeploymentClusterProfileName(clusterPromotion.Name, currentStageName)
 	currentClusterProfile := &configv1beta1.ClusterProfile{}
 
 	if err := r.Get(ctx, types.NamespacedName{Name: clusterProfileName}, currentClusterProfile); err != nil {
@@ -973,13 +1179,15 @@ func (r *ClusterPromotionReconciler) postDelayChecksAlreadyIncluded(
 }
 
 // canManualAdvance returns true if Sveltos should move to next stage based on Manual Trigger
-func (r *ClusterPromotionReconciler) canManualAdvance(currentStageName string,
-	manualTrigger *configv1beta1.ManualTrigger, logger logr.Logger) bool {
+func (r *ClusterPromotionReconciler) canManualAdvance(clusterPromotion *configv1beta1.ClusterPromotion,
+	currentStageName string, manualTrigger *configv1beta1.ManualTrigger, logger logr.Logger) bool {
 
 	if manualTrigger.Approved == nil ||
 		!(*manualTrigger.Approved) {
 
-		logger.V(logs.LogDebug).Info("Manual mode not approving promotion yet", "stage", currentStageName)
+		message := "Paused: Awaiting Manual Approva"
+		logger.V(logs.LogDebug).Info(message)
+		updateStageDescription(clusterPromotion, currentStageName, message)
 		return false
 	}
 
@@ -994,7 +1202,7 @@ func (r *ClusterPromotionReconciler) cleanClusterProfiles(ctx context.Context,
 	clusterPromotion *configv1beta1.ClusterPromotion) error {
 
 	listOptions := []client.ListOption{
-		client.MatchingLabels(getClusterPromotionLabels(clusterPromotion)),
+		client.MatchingLabels(getMainDeploymentClusterProfileLabels(clusterPromotion)),
 	}
 	clusterProfiles := &configv1beta1.ClusterProfileList{}
 	err := r.List(ctx, clusterProfiles, listOptions...)
@@ -1013,7 +1221,7 @@ func (r *ClusterPromotionReconciler) allClusterProfilesGone(ctx context.Context,
 	clusterPromotion *configv1beta1.ClusterPromotion, logger logr.Logger) bool {
 
 	listOptions := []client.ListOption{
-		client.MatchingLabels(getClusterPromotionLabels(clusterPromotion)),
+		client.MatchingLabels(getMainDeploymentClusterProfileLabels(clusterPromotion)),
 	}
 	clusterProfiles := &configv1beta1.ClusterProfileList{}
 	err := r.List(ctx, clusterProfiles, listOptions...)
@@ -1039,11 +1247,12 @@ func (r *ClusterPromotionReconciler) removeStaleClusterProfiles(ctx context.Cont
 
 	for i := range promotionScope.ClusterPromotion.Spec.Stages {
 		stage := &promotionScope.ClusterPromotion.Spec.Stages[i]
-		expectedClusterProfiles[getClusterProfileName(promotionScope.Name(), stage.Name)] = struct{}{}
+		expectedClusterProfiles[mainDeploymentClusterProfileName(promotionScope.Name(), stage.Name)] = struct{}{}
+		expectedClusterProfiles[preCheckDeploymentClusterProfileName(promotionScope.Name(), stage.Name)] = struct{}{}
 	}
 
 	listOptions := []client.ListOption{
-		client.MatchingLabels(getClusterPromotionLabels(promotionScope.ClusterPromotion)),
+		client.MatchingLabels(getMainDeploymentClusterProfileLabels(promotionScope.ClusterPromotion)),
 	}
 	clusterProfiles := &configv1beta1.ClusterProfileList{}
 	err := r.List(ctx, clusterProfiles, listOptions...)

@@ -178,6 +178,13 @@ type AutoTrigger struct {
 	// +optional
 	Delay *metav1.Duration `json:"delay,omitempty"`
 
+	// PreHealthCheckDeployment is a slice of resources Sveltos will deploy after the Delay
+	// period has elapsed and before running PostDelayHealthChecks.
+	// This can be used, for example, to deploy a Job that performs validation tasks.
+	// The PostDelayHealthChecks can then validate the successful completion of these resources (e.g., a Job).
+	// +optional
+	PreHealthCheckDeployment []PolicyRef `json:"preHealthCheckDeployment,omitempty"`
+
 	// PostDelayHealthChecks is a slice of health checks Sveltos will run after the delay
 	// period has elapsed.
 	// +optional
@@ -299,6 +306,13 @@ type StageStatus struct {
 	// FailureMessage reports a detailed error message if a failure occurred.
 	// +optional
 	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	// CurrentStatusDescription provides a high-level description of where the stage is
+	// in its progression (e.g., "Waiting for cluster profiles to be created",
+	// "Waiting for all clusters to be Provisioned", "Running post-deployment health checks").
+	// This helps users understand the current blocking state.
+	// +optional
+	CurrentStatusDescription *string `json:"currentStatusDescription,omitempty"`
 }
 
 // ClusterPromotionStatus defines the observed state of ClusterPromotion.

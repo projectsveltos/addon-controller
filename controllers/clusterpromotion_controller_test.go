@@ -503,9 +503,9 @@ var _ = Describe("ClusterPromotionController", func() {
 
 		stage := &clusterPromotion.Spec.Stages[0]
 		Expect(controllers.ReconcileStageProfile(&reconciler, context.TODO(), &promotionScope,
-			*stage)).To(Succeed())
+			stage, logger)).To(Succeed())
 
-		clusterProfileName := controllers.GetClusterProfileName(promotionScope.Name(), stage.Name)
+		clusterProfileName := controllers.MainDeploymentClusterProfileName(promotionScope.Name(), stage.Name)
 		Eventually(func() error {
 			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			return testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfileName},
@@ -526,7 +526,7 @@ var _ = Describe("ClusterPromotionController", func() {
 			})
 
 		Expect(controllers.ReconcileStageProfile(&reconciler, context.TODO(), &promotionScope,
-			*stage)).To(Succeed())
+			stage, logger)).To(Succeed())
 		Eventually(func() bool {
 			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			err := testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfileName},
@@ -600,7 +600,7 @@ var _ = Describe("ClusterPromotionController", func() {
 		// ClusterProfile matching a clusterPromotion stage
 		clusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterProfileName(clusterPromotion.Name, stageName),
+				Name: controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, stageName),
 			},
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
@@ -694,7 +694,7 @@ var _ = Describe("ClusterPromotionController", func() {
 			ClusterPromotion: clusterPromotion,
 		}
 
-		deployed, msg, err := controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), &promotionScope, logger)
+		deployed, msg, err := controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), promotionScope.ClusterPromotion, logger)
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeFalse())
 		Expect(msg).To(Equal(fmt.Sprintf("ClusterSummary HelmCharts %s is not in sync.", clusterSummary2.Name)))
@@ -705,7 +705,7 @@ var _ = Describe("ClusterPromotionController", func() {
 		}
 
 		Expect(c.Update(context.TODO(), clusterSummary2)).To(Succeed())
-		deployed, msg, err = controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), &promotionScope, logger)
+		deployed, msg, err = controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), promotionScope.ClusterPromotion, logger)
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeFalse())
 		Expect(msg).To(Equal(fmt.Sprintf("ClusterSummary %s is not yet provisioned.", clusterSummary2.Name)))
@@ -725,7 +725,7 @@ var _ = Describe("ClusterPromotionController", func() {
 			},
 		}
 		Expect(c.Status().Update(context.TODO(), clusterSummary2)).To(Succeed())
-		deployed, msg, err = controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), &promotionScope, logger)
+		deployed, msg, err = controllers.CheckCurrentStageDeployment(&reconciler, context.TODO(), promotionScope.ClusterPromotion, logger)
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeTrue())
 		Expect(msg).To(Equal("All matching clusters are successfully deployed."))
@@ -803,7 +803,7 @@ var _ = Describe("ClusterPromotionController", func() {
 		// ClusterProfile matching a clusterPromotion stage
 		clusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterProfileName(clusterPromotion.Name, stage1),
+				Name: controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, stage1),
 			},
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
@@ -918,7 +918,7 @@ var _ = Describe("ClusterPromotionController", func() {
 		// ClusterProfile matching a clusterPromotion stage
 		clusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: controllers.GetClusterProfileName(clusterPromotion.Name, stage1),
+				Name: controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, stage1),
 			},
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
@@ -984,7 +984,7 @@ var _ = Describe("ClusterPromotionController", func() {
 
 		reconciler := controllers.ClusterPromotionReconciler{Client: c}
 
-		canAdvance := controllers.CanManualAdvance(&reconciler,
+		canAdvance := controllers.CanManualAdvance(&reconciler, clusterPromotion,
 			stage1, clusterPromotion.Spec.Stages[0].Trigger.Manual, logger)
 		Expect(canAdvance).To(BeFalse()) // Approved is not set in ManualTrigger
 
@@ -1003,7 +1003,7 @@ var _ = Describe("ClusterPromotionController", func() {
 			},
 		}
 
-		canAdvance = controllers.CanManualAdvance(&reconciler,
+		canAdvance = controllers.CanManualAdvance(&reconciler, clusterPromotion,
 			stage1, clusterPromotion.Spec.Stages[0].Trigger.Manual, logger)
 		Expect(canAdvance).To(BeTrue()) // Approved is set to true in ManualTrigger
 	})
@@ -1017,18 +1017,18 @@ var _ = Describe("ClusterPromotionController", func() {
 
 		clusterProfile1 := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   controllers.GetClusterProfileName(clusterPromotion.Name, randomString()),
-				Labels: controllers.GetClusterPromotionLabels(clusterPromotion)},
+				Name:   controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, randomString()),
+				Labels: controllers.GetMainDeploymentClusterProfileLabels(clusterPromotion)},
 		}
 		clusterProfile2 := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   controllers.GetClusterProfileName(clusterPromotion.Name, randomString()),
-				Labels: controllers.GetClusterPromotionLabels(clusterPromotion)},
+				Name:   controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, randomString()),
+				Labels: controllers.GetMainDeploymentClusterProfileLabels(clusterPromotion)},
 		}
 		clusterProfile3 := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:   controllers.GetClusterProfileName(clusterPromotion.Name, randomString()),
-				Labels: controllers.GetClusterPromotionLabels(clusterPromotion)},
+				Name:   controllers.MainDeploymentClusterProfileName(clusterPromotion.Name, randomString()),
+				Labels: controllers.GetMainDeploymentClusterProfileLabels(clusterPromotion)},
 		}
 
 		initObjects := []client.Object{
@@ -1044,7 +1044,7 @@ var _ = Describe("ClusterPromotionController", func() {
 		Expect(controllers.CleanClusterProfiles(&reconciler, context.TODO(), clusterPromotion)).To(Succeed())
 
 		listOptions := []client.ListOption{
-			client.MatchingLabels(controllers.GetClusterPromotionLabels(clusterPromotion)),
+			client.MatchingLabels(controllers.GetMainDeploymentClusterProfileLabels(clusterPromotion)),
 		}
 		clusterProfiles := &configv1beta1.ClusterProfileList{}
 		Expect(c.List(ctx, clusterProfiles, listOptions...)).To(Succeed())

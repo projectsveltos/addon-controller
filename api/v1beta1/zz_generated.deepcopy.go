@@ -37,6 +37,11 @@ func (in *AutoTrigger) DeepCopyInto(out *AutoTrigger) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.PreHealthCheckDeployment != nil {
+		in, out := &in.PreHealthCheckDeployment, &out.PreHealthCheckDeployment
+		*out = make([]PolicyRef, len(*in))
+		copy(*out, *in)
+	}
 	if in.PostDelayHealthChecks != nil {
 		in, out := &in.PostDelayHealthChecks, &out.PostDelayHealthChecks
 		*out = make([]apiv1beta1.ValidateHealth, len(*in))
@@ -1294,6 +1299,11 @@ func (in *StageStatus) DeepCopyInto(out *StageStatus) {
 	}
 	if in.FailureMessage != nil {
 		in, out := &in.FailureMessage, &out.FailureMessage
+		*out = new(string)
+		**out = **in
+	}
+	if in.CurrentStatusDescription != nil {
+		in, out := &in.CurrentStatusDescription, &out.CurrentStatusDescription
 		*out = new(string)
 		**out = **in
 	}

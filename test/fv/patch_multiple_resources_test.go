@@ -50,7 +50,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		// install-flux ConfigMap is created by Makefile. Contains all Flux resources
-		cmNamespace := "default"
+		cmNamespace := defaultNamespace
 		cmName := "install-flux"
 
 		cm := &corev1.ConfigMap{}

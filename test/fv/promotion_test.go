@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -53,9 +54,58 @@ envoy:
       registry: docker.io
       repository: envoyproxy/envoy
       tag: distroless-v1.35.2`
+
+		counterJob = `apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minute-counter
+  namespace: %s
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: counter
+        image: alpine/curl:latest # Using a common lightweight image
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          # The loop runs from i=1 up to 60
+          for i in $(seq 1 60); do
+            echo "Current second: $i"
+            sleep 1
+          done
+          echo "Job completed after 60 seconds."`
+
+		luaEvaluateJobCompleted = `function evaluate()
+  local hs = {healthy = false, message = "Job minute-counter is not yet completed successfully"}
+
+  if obj.status and obj.status.succeeded then
+    if obj.status.succeeded >= 1 then
+      -- Check the conditions array for the 'Complete' status
+      if obj.status.conditions then
+        for _, condition in ipairs(obj.status.conditions) do
+          if condition.type == "Complete" and condition.status == "True" then
+            hs.healthy = true
+            hs.message = "Job minute-counter completed successfully"
+            return hs
+          end
+        end
+      end
+    end
+  end
+
+  return hs
+end`
 	)
 
 	It("Deploy ClusterPromotion with multiple stages", Label("NEW-FV", "NEW-FV-PULLMODE", "EXTENDED"), func() {
+		configMapNs := defaultNamespace
+		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
+			fmt.Sprintf(counterJob, configMapNs))
+		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+
 		clusterLabels := map[string]string{key: value}
 		const two = 2
 		stage1 := configv1beta1.Stage{
@@ -68,6 +118,24 @@ envoy:
 			Trigger: &configv1beta1.Trigger{
 				Auto: &configv1beta1.AutoTrigger{
 					Delay: &metav1.Duration{Duration: two * time.Minute},
+					PreHealthCheckDeployment: []configv1beta1.PolicyRef{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: configMap.Namespace,
+							Name:      configMap.Name,
+						},
+					},
+					PostDelayHealthChecks: []libsveltosv1beta1.ValidateHealth{
+						{
+							Name:      "job-completion-check",
+							FeatureID: libsveltosv1beta1.FeatureResources,
+							Namespace: configMapNs,
+							Group:     "batch",
+							Version:   "v1",
+							Kind:      "Job",
+							Script:    luaEvaluateJobCompleted,
+						},
+					},
 				},
 			},
 		}
@@ -147,6 +215,8 @@ envoy:
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		// Stage1 has a Delay set to two minutes. Verify no new ClusterProfile is created
 		Consistently(func() bool {
@@ -159,6 +229,46 @@ envoy:
 		}, time.Minute, pollingInterval).Should(BeTrue())
 
 		time.Sleep(time.Minute)
+
+		Byf("Verifying ClusterProfile for preHealthCheckDeployment is created")
+		Eventually(func() bool {
+			listOptions := []client.ListOption{
+				client.MatchingLabels{
+					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
+					"config.projectsveltos.io/promotion-verification": "true",
+				},
+			}
+			clusterProfileList := &configv1beta1.ClusterProfileList{}
+			err := k8sClient.List(context.TODO(), clusterProfileList, listOptions...)
+			if err != nil {
+				return false
+			}
+			return len(clusterProfileList.Items) == 1
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Wait for Job to be deployed and almost completed
+		time.Sleep(time.Minute)
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resource feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
+		Byf("Verifying ClusterProfile for preHealthCheckDeployment is deleted")
+		Eventually(func() bool {
+			listOptions := []client.ListOption{
+				client.MatchingLabels{
+					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
+					"config.projectsveltos.io/promotion-verification": "true",
+				},
+			}
+			clusterProfileList := &configv1beta1.ClusterProfileList{}
+			err := k8sClient.List(context.TODO(), clusterProfileList, listOptions...)
+			if err != nil {
+				return false
+			}
+			return len(clusterProfileList.Items) == 0
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying second clusterProfile is created for stage %s", stage2.Name)
 		Eventually(func() bool {
@@ -186,6 +296,22 @@ envoy:
 					stage2.ClusterSelector)).To(BeTrue())
 			}
 		}
+
+		Byf("Verifying ClusterProfile for preHealthCheckDeployment is deleted")
+		Eventually(func() bool {
+			listOptions := []client.ListOption{
+				client.MatchingLabels{
+					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
+					"config.projectsveltos.io/promotion-verification": "true",
+				},
+			}
+			clusterProfileList := &configv1beta1.ClusterProfileList{}
+			err := k8sClient.List(context.TODO(), clusterProfileList, listOptions...)
+			if err != nil {
+				return false
+			}
+			return len(clusterProfileList.Items) == 0
+		}, time.Minute, pollingInterval).Should(BeTrue())
 
 		By("Verifying ClusterPromotion Status")
 		Eventually(func() bool {

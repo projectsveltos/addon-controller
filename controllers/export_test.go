@@ -83,11 +83,11 @@ var (
 	CleanClusterProfiles        = (*ClusterPromotionReconciler).cleanClusterProfiles
 	IsPromotionWindowOpen       = (*ClusterPromotionReconciler).isPromotionWindowOpen
 
-	GetClusterProfileName     = getClusterProfileName
-	ResetStageStatuses        = resetStageStatuses
-	AddStageStatus            = addStageStatus
-	UpdateStageStatus         = updateStageStatus
-	GetClusterPromotionLabels = getClusterPromotionLabels
+	MainDeploymentClusterProfileName      = mainDeploymentClusterProfileName
+	ResetStageStatuses                    = resetStageStatuses
+	AddStageStatus                        = addStageStatus
+	UpdateStageStatus                     = updateStageStatus
+	GetMainDeploymentClusterProfileLabels = getMainDeploymentClusterProfileLabels
 )
 
 var (

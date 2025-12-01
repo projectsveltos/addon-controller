@@ -1274,6 +1274,80 @@ spec:
                                 - version
                                 type: object
                               type: array
+                            preHealthCheckDeployment:
+                              description: |-
+                                PreHealthCheckDeployment is a slice of resources Sveltos will deploy after the Delay
+                                period has elapsed and before running PostDelayHealthChecks.
+                                This can be used, for example, to deploy a Job that performs validation tasks.
+                                The PostDelayHealthChecks can then validate the successful completion of these resources (e.g., a Job).
+                              items:
+                                properties:
+                                  deploymentType:
+                                    default: Remote
+                                    description: |-
+                                      DeploymentType indicates whether resources need to be deployed
+                                      into the management cluster (local) or the managed cluster (remote)
+                                    enum:
+                                    - Local
+                                    - Remote
+                                    type: string
+                                  kind:
+                                    description: |-
+                                      Kind of the resource. Supported kinds are:
+                                      - ConfigMap/Secret
+                                      - flux GitRepository;OCIRepository;Bucket
+                                    enum:
+                                    - GitRepository
+                                    - OCIRepository
+                                    - Bucket
+                                    - ConfigMap
+                                    - Secret
+                                    type: string
+                                  name:
+                                    description: |-
+                                      Name of the referenced resource.
+                                      Name can be expressed as a template and instantiate using any cluster field.
+                                    minLength: 1
+                                    type: string
+                                  namespace:
+                                    description: |-
+                                      Namespace of the referenced resource.
+                                      For ClusterProfile namespace can be left empty. In such a case, namespace will
+                                      be implicit set to cluster's namespace.
+                                      For Profile namespace must be left empty. Profile namespace will be used.
+                                      Namespace can be expressed as a template and instantiate using any cluster field.
+                                    type: string
+                                  optional:
+                                    default: false
+                                    description: |-
+                                      Optional indicates that the referenced resource is not mandatory.
+                                      If set to true and the resource is not found, the error will be ignored,
+                                      and Sveltos will continue processing other PolicyRefs.
+                                    type: boolean
+                                  path:
+                                    description: |-
+                                      Path to the directory containing the YAML files.
+                                      Defaults to 'None', which translates to the root path of the SourceRef.
+                                      Used only for GitRepository;OCIRepository;Bucket
+                                    type: string
+                                  tier:
+                                    default: 100
+                                    description: |-
+                                      Tier controls the order of deployment for resources coming from different PolicyRefs
+                                      within the same ClusterProfile or Profile.
+                                      When two PolicyRefs attempt to deploy the same resource, the PolicyRef with the lowest
+                                      Tier value takes priority and deploys/updates the resource.
+                                      This priority mechanism is only checked after the parent ClusterProfile has won
+                                      the primary conflict resolution against other ClusterProfiles.
+                                      Higher Tier values represent lower priority. The default Tier value is 100.
+                                    format: int32
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                - kind
+                                - name
+                                type: object
+                              type: array
                             promotionWindow:
                               description: |-
                                 PromotionWindow defines the recurring time window during which the
@@ -1363,6 +1437,13 @@ spec:
                   description: StageStatus defines the status for a given stage in
                     a progressive deployment.
                   properties:
+                    currentStatusDescription:
+                      description: |-
+                        CurrentStatusDescription provides a high-level description of where the stage is
+                        in its progression (e.g., "Waiting for cluster profiles to be created",
+                        "Waiting for all clusters to be Provisioned", "Running post-deployment health checks").
+                        This helps users understand the current blocking state.
+                      type: string
                     failureMessage:
                       description: FailureMessage reports a detailed error message
                         if a failure occurred.

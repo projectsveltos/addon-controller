@@ -1,13 +1,13 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.25.4
+go 1.25.5
 
 require (
 	dario.cat/mergo v1.0.2
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v29.0.2+incompatible
+	github.com/docker/cli v29.1.2+incompatible
 	github.com/fluxcd/pkg/apis/meta v1.23.0
 	github.com/fluxcd/pkg/http/fetch v0.21.0
 	github.com/fluxcd/pkg/tar v0.16.0
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.1.1-0.20251106133930-7c281ffd469e
+	github.com/projectsveltos/libsveltos v1.1.1-0.20251203082530-326accb8509d
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10

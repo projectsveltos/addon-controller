@@ -53,7 +53,7 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shar
 
 	mgmtClient := getManagementClusterClient()
 	for {
-		patches, err := getDriftDetectionManagerPatches(ctx, mgmtClient, logger)
+		globalPatches, err := getGlobalDriftDetectionManagerPatches(ctx, mgmtClient, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect drift detection patches: %v", err))
 			time.Sleep(retryAfter)
@@ -104,6 +104,17 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shar
 				continue
 			}
 
+			patches, err := getPerClusterDriftDetectionManagerPatches(ctx, mgmtClient,
+				clusters[i].Namespace, clusters[i].Name, clusterType, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(
+					fmt.Sprintf("cluster %s %s/%s failed to get per cluster driftDetection patches: %v",
+						clusterType, clusters[i].Namespace, clusters[i].Name, err))
+				allProcessed = false
+			} else if patches == nil {
+				patches = globalPatches
+			}
+
 			err = deployDriftDetectionManagerInManagedCluster(ctx, clusters[i].Namespace, clusters[i].Name,
 				"sveltos-upgrade", featureID,
 				"do-not-send-updates", clusterType, patches, logger)
@@ -129,11 +140,11 @@ func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shar
 
 func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger logr.Logger) {
 	config := getManagementClusterConfig()
-	c := getManagementClusterClient()
+	mgmtClient := getManagementClusterClient()
 	const retryAfter = 5 * time.Second
 
 	for {
-		patches, err := getDriftDetectionManagerPatches(ctx, c, logger)
+		globalPatches, err := getGlobalDriftDetectionManagerPatches(ctx, mgmtClient, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect drift detection patches: %v", err))
 			time.Sleep(retryAfter)
@@ -147,7 +158,7 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 		}
 
 		driftDetectionDeployments := &appsv1.DeploymentList{}
-		err = c.List(ctx, driftDetectionDeployments, listOptions...)
+		err = mgmtClient.List(ctx, driftDetectionDeployments, listOptions...)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect driftDetection deployment: %v", err))
 			time.Sleep(retryAfter)
@@ -161,7 +172,23 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 				continue
 			}
 
-			err = upgradeDriftDetectionDeployment(ctx, config, c, &driftDetectionDeployments.Items[i],
+			var patches []libsveltosv1beta1.Patch
+			clusterNamespace, clusterName, clusterType, found :=
+				getClusterDataFromDriftDetectionManagerDeployment(&driftDetectionDeployments.Items[i])
+			if found {
+				patches, err = getPerClusterDriftDetectionManagerPatches(ctx, mgmtClient,
+					clusterNamespace, clusterName, clusterType, logger)
+				if err != nil {
+					logger.V(logs.LogInfo).Info(
+						fmt.Sprintf("cluster %s %s/%s failed to get per cluster driftDetection patches: %v",
+							clusterType, clusterNamespace, clusterName, err))
+					allProcessed = false
+				} else if patches == nil {
+					patches = globalPatches
+				}
+			}
+
+			err = upgradeDriftDetectionDeployment(ctx, config, mgmtClient, &driftDetectionDeployments.Items[i],
 				patches, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade driftDetection deployment: %v", err))

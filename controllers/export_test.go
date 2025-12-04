@@ -171,7 +171,7 @@ var (
 	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels
 	RemoveDriftDetectionManagerFromManagementCluster = removeDriftDetectionManagerFromManagementCluster
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
-	GetDriftDetectionManagerPatches                  = getDriftDetectionManagerPatches
+	GetGlobalDriftDetectionManagerPatches            = getGlobalDriftDetectionManagerPatches
 )
 
 var (

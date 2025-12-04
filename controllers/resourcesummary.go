@@ -59,6 +59,23 @@ const (
 	driftDetectionFeatureLabelValue     = "drift-detection"
 )
 
+const (
+	// This optional annotation enables **per-cluster configuration overrides** for Sveltos drift-detection-manager,
+	// addressing the limitation of the global configuration.
+	// The value must be a reference to a ConfigMap and supports the following formats:
+	// <namespace>/<name>: Explicitly specifies the ConfigMap namespace and name.
+	// <name> (or /<name>): Assumes the ConfigMap is in the same namespace as the Cluster instance being annotated.
+	//
+	// The referenced ConfigMap contains the configuration data which Sveltos will use to override
+	// the default or globally set configuration parameters (e.g., environment variables, settings)
+	// for components deployed within this managed cluster (such as the drift-detection-manager).
+	//
+	// **The configuration data within the ConfigMap must be a patch of one of the following types:**
+	// * **Strategic Merge Patch**
+	// * **JSON Patch (RFC6902)**
+	driftDetectionOverrideAnnotation = "driftdetection.projectsveltos.io/config-override-ref"
+)
+
 func getDriftDetectionNamespaceInMgmtCluster() string {
 	return projectsveltos
 }
@@ -71,9 +88,18 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
 
-	patches, err := getDriftDetectionManagerPatches(ctx, c, logger)
+	// Attempt to retrieve configuration overrides specific to this cluster.
+	// If no cluster-specific overrides are found (patches == nil), fall back
+	// to checking for globally configured overrides.
+	patches, err := getPerClusterDriftDetectionManagerPatches(ctx, c, clusterNamespace, clusterName,
+		clusterType, logger)
 	if err != nil {
 		return err
+	} else if patches == nil {
+		patches, err = getGlobalDriftDetectionManagerPatches(ctx, c, logger)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = deployDriftDetectionCRDs(ctx, clusterNamespace, clusterName, applicant, featureID, clusterType,
@@ -491,6 +517,41 @@ func getInstantiatedObjectName(objects []client.Object) (name string, err error)
 	return name, err
 }
 
+// getClusterDataFromDriftDetectionManagerDeployment extracts the cluster's namespace, name, and type
+// from the labels of a Deployment representing the drift-detection-manager for a specific cluster.
+// It returns the clusterNamespace, clusterName, clusterType, and a boolean indicating success.
+func getClusterDataFromDriftDetectionManagerDeployment(deployment *appsv1.Deployment) (
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, success bool) {
+
+	lbls := deployment.GetLabels()
+	if lbls == nil {
+		return "", "", "", false
+	}
+
+	// 1. Get Cluster Namespace
+	clusterNamespace, ok := lbls[driftDetectionClusterNamespaceLabel]
+	if !ok || clusterNamespace == "" {
+		return "", "", "", false
+	}
+
+	// 2. Get Cluster Name
+	clusterName, ok = lbls[driftDetectionClusterNameLabel]
+	if !ok || clusterName == "" {
+		return "", "", "", false
+	}
+
+	// 3. Get Cluster Type (and convert it back to the proper type)
+	clusterTypeStr, ok := lbls[driftDetectionClusterTypeLabel]
+	if !ok || clusterTypeStr == "" {
+		return "", "", "", false
+	}
+
+	// Convert the string representation (which was lowercased) back to the ClusterType enum.
+	clusterType = libsveltosv1beta1.ClusterType(strings.ToUpper(clusterTypeStr))
+
+	return clusterNamespace, clusterName, clusterType, true
+}
+
 func getDriftDetectionManagerLabels(clusterNamespace, clusterName string,
 	clusterType libsveltosv1beta1.ClusterType) map[string]string {
 
@@ -589,13 +650,12 @@ func getDriftDetectionManagerPatchesOld(ctx context.Context, c client.Client,
 }
 
 func getDriftDetectionManagerPatchesNew(ctx context.Context, c client.Client,
-	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+	configMapNamespace, configMapName string, logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
 
-	configMapName := getDriftDetectionConfigMap()
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			types.NamespacedName{Namespace: configMapNamespace, Name: configMapName},
 			configMap)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
@@ -607,10 +667,69 @@ func getDriftDetectionManagerPatchesNew(ctx context.Context, c client.Client,
 	return getPatchesFromConfigMap(configMap, logger)
 }
 
-func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+func getPerClusterDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
 
-	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, logger)
+	var cluster client.Object
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	// get annotation
+	annotations := cluster.GetAnnotations()
+	if annotations == nil {
+		return nil, nil // No annotation, no override
+	}
+
+	configMapRef, ok := annotations[driftDetectionOverrideAnnotation]
+	if !ok || configMapRef == "" {
+		return nil, nil // Annotation present but empty, or not present
+	}
+
+	var configMapNamespace, configMapName string
+	// get configMap namespace, name from annotation
+	parts := strings.Split(configMapRef, "/")
+	const two = 2
+	// If only one part is present, assume it is the ConfigMap name and use the cluster's namespace.
+	if len(parts) == 1 {
+		configMapNamespace = clusterNamespace
+		configMapName = parts[0]
+	} else if len(parts) == two {
+		configMapNamespace = parts[0]
+		configMapName = parts[1]
+
+		// If the namespace part is empty (e.g., "/my-config"), use the cluster's namespace.
+		if configMapNamespace == "" {
+			configMapNamespace = clusterNamespace
+		}
+	} else {
+		logger.Error(nil, "invalid configMap reference format in annotation",
+			"annotation", driftDetectionOverrideAnnotation, "value", configMapRef)
+		return nil, fmt.Errorf("invalid configMap reference format: %s. Expected <namespace>/<name> or just <name>",
+			configMapRef)
+	}
+
+	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, configMapNamespace, configMapName, logger)
+	if err != nil {
+		logger.Error(err, "failed to get ConfigMap with drift-detection patches",
+			"configMapNamespace", configMapNamespace, "configMapName", configMapName)
+		return nil, err
+	}
+
+	return patches, nil
+}
+
+func getGlobalDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	configMapName := getDriftDetectionConfigMap()
+
+	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, projectsveltos, configMapName, logger)
 	if err == nil {
 		return patches, nil
 	}

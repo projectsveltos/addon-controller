@@ -640,6 +640,9 @@ func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Cont
 		}
 		errorMsg := err.Error()
 		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+	} else if pullmode.IsActionNotSetToDeploy(err) {
+		_ = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Kind, clusterSummary.Name, string(f.id), logger)
 	} else if status.FailureMessage != nil {
 		clusterSummaryScope.SetFailureMessage(f.id, status.FailureMessage)
 	}

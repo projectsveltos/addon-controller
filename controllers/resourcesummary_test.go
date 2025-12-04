@@ -155,7 +155,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
-	It("getSveltosAgentPatches reads old post render patches from ConfigMap", func() {
+	It("getGlobalDriftDetectionManagerPatches reads old post render patches from ConfigMap", func() {
 		cmYAML := `apiVersion: v1
 data:
   deployment-patch: |-
@@ -189,7 +189,7 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetDriftdetectionConfigMap("drift-detection-config-old")
-		patches, err := controllers.GetDriftDetectionManagerPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetGlobalDriftDetectionManagerPatches(context.TODO(), c, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(1))
 		controllers.SetDriftdetectionConfigMap("")
@@ -240,7 +240,7 @@ metadata:
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
 
 		controllers.SetDriftdetectionConfigMap("drift-detection-config")
-		patches, err := controllers.GetDriftDetectionManagerPatches(context.TODO(), c, logger)
+		patches, err := controllers.GetGlobalDriftDetectionManagerPatches(context.TODO(), c, logger)
 		Expect(err).To(BeNil())
 		Expect(len(patches)).To(Equal(2))
 		controllers.SetDriftdetectionConfigMap("")

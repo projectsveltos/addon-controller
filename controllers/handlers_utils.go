@@ -469,8 +469,10 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		}
 
 		if err != nil {
+			logger.Error(err, fmt.Sprintf("failed to deploy resource %s %s/%s",
+				policy.GetKind(), policy.GetNamespace(), policy.GetName()))
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
-				errorMsg += fmt.Sprintf("%v", err)
+				errorMsg += fmt.Sprintf("%s: %v", errorPrefix, err)
 				continue
 			}
 			return reports, fmt.Errorf("%s: %w", errorPrefix, err)
@@ -1468,6 +1470,10 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 			return nil, err
 		}
 		config += render.AsCode(configMap.Data)
+	}
+
+	if clusterProfileSpec.DriftExclusions != nil {
+		config += render.AsCode(clusterProfileSpec.DriftExclusions)
 	}
 
 	h.Write([]byte(config))

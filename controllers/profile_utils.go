@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
@@ -250,7 +251,12 @@ func updateClusterConfigurationProfileResources(ctx context.Context, c client.Cl
 func updateClusterConfigurationOwnerReferences(ctx context.Context, c client.Client,
 	profile client.Object, clusterConfiguration *configv1beta1.ClusterConfiguration) error {
 
-	if util.IsOwnedByObject(clusterConfiguration, profile) {
+	targetGK := schema.GroupKind{
+		Group: configv1beta1.GroupVersion.Group,
+		Kind:  profile.GetObjectKind().GroupVersionKind().Kind,
+	}
+
+	if util.IsOwnedByObject(clusterConfiguration, profile, targetGK) {
 		return nil
 	}
 
@@ -426,7 +432,12 @@ func cleanClusterConfigurationOwnerReferences(ctx context.Context, c client.Clie
 		Name:       profile.GetName(),
 	}
 
-	if !util.IsOwnedByObject(clusterConfiguration, profile) {
+	targetGK := schema.GroupKind{
+		Group: configv1beta1.GroupVersion.Group,
+		Kind:  profile.GetObjectKind().GroupVersionKind().Kind,
+	}
+
+	if !util.IsOwnedByObject(clusterConfiguration, profile, targetGK) {
 		return nil
 	}
 
@@ -808,12 +819,17 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 		return err
 	}
 
+	targetGK := schema.GroupKind{
+		Group: configv1beta1.GroupVersion.Group,
+		Kind:  profileScope.Profile.GetObjectKind().GroupVersionKind().Kind,
+	}
+
 	// Check if any ClusterSummary instance that needs to be removed is still present
 	foundClusterSummaries := false
 	for i := range clusterSummaryList.Items {
 		cs := &clusterSummaryList.Items[i]
 
-		if util.IsOwnedByObject(cs, profileScope.Profile) {
+		if util.IsOwnedByObject(cs, profileScope.Profile, targetGK) {
 			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
 				foundClusterSummaries = true
 				err := c.Delete(ctx, cs)

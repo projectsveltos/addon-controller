@@ -254,6 +254,12 @@ type HelmInstallOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	DisableHooks bool `json:"disableHooks,omitempty"`
+
+	// if set, install will ignore the check for helm annotations
+	// and take ownership of the existing resources
+	// +kubebuilder:default:=false
+	// +optional
+	TakeOwnership bool `json:"takeOwnership,omitempty"`
 }
 
 type HelmUpgradeOptions struct {
@@ -317,6 +323,12 @@ type HelmUpgradeOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	DisableHooks bool `json:"disableHooks,omitempty"`
+
+	// if set, upgrade will ignore the check for helm annotations
+	// and take ownership of the existing resources
+	// +kubebuilder:default:=false
+	// +optional
+	TakeOwnership bool `json:"takeOwnership,omitempty"`
 }
 
 type HelmUninstallOptions struct {

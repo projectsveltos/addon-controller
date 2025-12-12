@@ -3126,6 +3126,18 @@ func getWaitForJobsHelmValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
+func getTakeOwnershipHelmValue(options *configv1beta1.HelmOptions, isUpgrade bool) bool {
+	if options == nil {
+		return false
+	}
+
+	if isUpgrade {
+		return options.UpgradeOptions.TakeOwnership
+	}
+
+	return options.InstallOptions.TakeOwnership
+}
+
 func getCreateNamespaceHelmValue(options *configv1beta1.HelmOptions) bool {
 	if options != nil {
 		return options.InstallOptions.CreateNamespace
@@ -3363,6 +3375,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	installClient.Labels = getLabelsValue(requestedChart.Options)
 	installClient.Description = getDescriptionValue(requestedChart.Options)
 	installClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
+	installClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, false)
 	if actionConfig.RegistryClient != nil {
 		installClient.SetRegistryClient(actionConfig.RegistryClient)
 	}
@@ -3423,6 +3436,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.PlainHTTP = registryOptions.plainHTTP
 	upgradeClient.CaFile = registryOptions.caPath
 	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
+	upgradeClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, true)
 
 	if actionConfig.RegistryClient != nil {
 		upgradeClient.SetRegistryClient(actionConfig.RegistryClient)

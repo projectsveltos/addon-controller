@@ -632,6 +632,12 @@ spec:
                               description: Replaces if set indicates to replace an
                                 older release with this one
                               type: boolean
+                            takeOwnership:
+                              default: false
+                              description: |-
+                                if set, install will ignore the check for helm annotations
+                                and take ownership of the existing resources
+                              type: boolean
                           type: object
                         labels:
                           additionalProperties:
@@ -742,6 +748,12 @@ spec:
                               default: false
                               description: SubNotes determines whether sub-notes are
                                 rendered in the chart.
+                              type: boolean
+                            takeOwnership:
+                              default: false
+                              description: |-
+                                if set, upgrade will ignore the check for helm annotations
+                                and take ownership of the existing resources
                               type: boolean
                             upgradeCRDs:
                               default: false
@@ -1931,6 +1943,12 @@ spec:
                                   description: Replaces if set indicates to replace
                                     an older release with this one
                                   type: boolean
+                                takeOwnership:
+                                  default: false
+                                  description: |-
+                                    if set, install will ignore the check for helm annotations
+                                    and take ownership of the existing resources
+                                  type: boolean
                               type: object
                             labels:
                               additionalProperties:
@@ -2042,6 +2060,12 @@ spec:
                                   default: false
                                   description: SubNotes determines whether sub-notes
                                     are rendered in the chart.
+                                  type: boolean
+                                takeOwnership:
+                                  default: false
+                                  description: |-
+                                    if set, upgrade will ignore the check for helm annotations
+                                    and take ownership of the existing resources
                                   type: boolean
                                 upgradeCRDs:
                                   default: false
@@ -3866,6 +3890,12 @@ spec:
                                   description: Replaces if set indicates to replace
                                     an older release with this one
                                   type: boolean
+                                takeOwnership:
+                                  default: false
+                                  description: |-
+                                    if set, install will ignore the check for helm annotations
+                                    and take ownership of the existing resources
+                                  type: boolean
                               type: object
                             labels:
                               additionalProperties:
@@ -3977,6 +4007,12 @@ spec:
                                   default: false
                                   description: SubNotes determines whether sub-notes
                                     are rendered in the chart.
+                                  type: boolean
+                                takeOwnership:
+                                  default: false
+                                  description: |-
+                                    if set, upgrade will ignore the check for helm annotations
+                                    and take ownership of the existing resources
                                   type: boolean
                                 upgradeCRDs:
                                   default: false
@@ -5249,6 +5285,12 @@ spec:
                               description: Replaces if set indicates to replace an
                                 older release with this one
                               type: boolean
+                            takeOwnership:
+                              default: false
+                              description: |-
+                                if set, install will ignore the check for helm annotations
+                                and take ownership of the existing resources
+                              type: boolean
                           type: object
                         labels:
                           additionalProperties:
@@ -5359,6 +5401,12 @@ spec:
                               default: false
                               description: SubNotes determines whether sub-notes are
                                 rendered in the chart.
+                              type: boolean
+                            takeOwnership:
+                              default: false
+                              description: |-
+                                if set, upgrade will ignore the check for helm annotations
+                                and take ownership of the existing resources
                               type: boolean
                             upgradeCRDs:
                               default: false

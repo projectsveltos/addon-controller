@@ -31,6 +31,8 @@ import (
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 var _ = Describe("Drift Detection Upgrade", func() {
@@ -107,12 +109,16 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		}
 		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
 
+		resourceSummaryCRD, err := k8s_utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
+		Expect(err).To(BeNil())
+
 		initObjects := []client.Object{
 			sveltosClusterPaused,
 			sveltosClusterNotReady,
 			sveltosClusterReadyAndNotPaused,
 			capiClusterPaused,
 			capiClusterNotPaused,
+			resourceSummaryCRD,
 		}
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
@@ -137,5 +143,52 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterNotPaused, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeFalse())
+	})
+
+	It("skipUpgrading skips clusters with no ResourceSummary CRD", func() {
+		sveltosClusterReadyAndNotPaused := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				Paused: false,
+			},
+			Status: libsveltosv1beta1.SveltosClusterStatus{
+				Ready: true,
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, sveltosClusterReadyAndNotPaused)).To(Succeed())
+
+		initialized := true
+		capiClusterNotPaused := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: clusterv1.ClusterSpec{},
+			Status: clusterv1.ClusterStatus{
+				Initialization: clusterv1.ClusterInitializationStatus{
+					ControlPlaneInitialized: &initialized,
+				},
+			},
+		}
+		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
+
+		initObjects := []client.Object{
+			sveltosClusterReadyAndNotPaused,
+			capiClusterNotPaused,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		skip, err := controllers.SkipUpgrading(context.TODO(), c, sveltosClusterReadyAndNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeTrue())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeTrue())
 	})
 })

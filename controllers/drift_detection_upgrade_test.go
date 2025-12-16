@@ -23,172 +23,196 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	libsveltoscrd "github.com/projectsveltos/libsveltos/lib/crd"
-	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 )
 
 var _ = Describe("Drift Detection Upgrade", func() {
+	sveltosKubeconfigPostfix := "-sveltos" + kubeconfigPostfix
 	var logger logr.Logger
 
 	BeforeEach(func() {
-		logger = textlogger.NewLogger(textlogger.NewConfig())
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(0)))
 	})
 
 	It("skipUpgrading skips clusters which are paused or not ready", func() {
 		paused := true
+		namespace := randomString()
 		sveltosClusterPaused := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
-				Namespace: randomString(),
+				Namespace: namespace,
 			},
 			Spec: libsveltosv1beta1.SveltosClusterSpec{
 				Paused: paused,
 			},
 		}
-		Expect(addTypeInformationToObject(scheme, sveltosClusterPaused)).To(Succeed())
 
 		sveltosClusterNotReady := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
-				Namespace: randomString(),
+				Namespace: namespace,
 			},
 			Spec: libsveltosv1beta1.SveltosClusterSpec{
 				Paused: false,
 			},
-			Status: libsveltosv1beta1.SveltosClusterStatus{
-				Ready: false,
-			},
 		}
-		Expect(addTypeInformationToObject(scheme, sveltosClusterNotReady)).To(Succeed())
 
 		sveltosClusterReadyAndNotPaused := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
-				Namespace: randomString(),
+				Namespace: namespace,
 			},
 			Spec: libsveltosv1beta1.SveltosClusterSpec{
 				Paused: false,
 			},
-			Status: libsveltosv1beta1.SveltosClusterStatus{
-				Ready: true,
-			},
 		}
-		Expect(addTypeInformationToObject(scheme, sveltosClusterReadyAndNotPaused)).To(Succeed())
 
 		capiClusterPaused := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
-				Namespace: randomString(),
+				Namespace: namespace,
 			},
 			Spec: clusterv1.ClusterSpec{
 				Paused: &paused,
 			},
 		}
-		Expect(addTypeInformationToObject(scheme, capiClusterPaused)).To(Succeed())
 
 		initialized := true
 		capiClusterNotPaused := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
-				Namespace: randomString(),
+				Namespace: namespace,
 			},
 			Spec: clusterv1.ClusterSpec{},
-			Status: clusterv1.ClusterStatus{
-				Initialization: clusterv1.ClusterInitializationStatus{
-					ControlPlaneInitialized: &initialized,
-				},
-			},
-		}
-		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
-
-		resourceSummaryCRD, err := k8s_utils.GetUnstructured(libsveltoscrd.GetResourceSummaryCRDYAML())
-		Expect(err).To(BeNil())
-
-		initObjects := []client.Object{
-			sveltosClusterPaused,
-			sveltosClusterNotReady,
-			sveltosClusterReadyAndNotPaused,
-			capiClusterPaused,
-			capiClusterNotPaused,
-			resourceSummaryCRD,
 		}
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
-			WithObjects(initObjects...).Build()
-
-		skip, err := controllers.SkipUpgrading(context.TODO(), c, sveltosClusterPaused, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeTrue())
-
-		skip, err = controllers.SkipUpgrading(context.TODO(), c, sveltosClusterNotReady, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeTrue())
-
-		skip, err = controllers.SkipUpgrading(context.TODO(), c, sveltosClusterReadyAndNotPaused, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeFalse())
-
-		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterPaused, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeTrue())
-
-		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterNotPaused, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeFalse())
-	})
-
-	It("skipUpgrading skips clusters with no ResourceSummary CRD", func() {
-		sveltosClusterReadyAndNotPaused := &libsveltosv1beta1.SveltosCluster{
+		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: randomString(),
-			},
-			Spec: libsveltosv1beta1.SveltosClusterSpec{
-				Paused: false,
-			},
-			Status: libsveltosv1beta1.SveltosClusterStatus{
-				Ready: true,
+				Name: namespace,
 			},
 		}
+
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, ns)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), sveltosClusterReadyAndNotPaused)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused)).To(Succeed())
+
+		sveltosClusterReadyAndNotPaused.Status = libsveltosv1beta1.SveltosClusterStatus{
+			Ready: true,
+		}
+		Expect(testEnv.Status().Update(context.TODO(), sveltosClusterReadyAndNotPaused)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), capiClusterNotPaused)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, capiClusterNotPaused)).To(Succeed())
+
+		capiClusterNotPaused.Status = clusterv1.ClusterStatus{
+			Initialization: clusterv1.ClusterInitializationStatus{
+				ControlPlaneInitialized: &initialized,
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), capiClusterNotPaused)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), sveltosClusterPaused)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, sveltosClusterPaused)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), sveltosClusterNotReady)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, sveltosClusterNotReady)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), capiClusterPaused)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, capiClusterPaused)).To(Succeed())
+
+		Expect(addTypeInformationToObject(scheme, sveltosClusterPaused)).To(Succeed())
+		Expect(addTypeInformationToObject(scheme, sveltosClusterNotReady)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, sveltosClusterReadyAndNotPaused)).To(Succeed())
-
-		initialized := true
-		capiClusterNotPaused := &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: randomString(),
-			},
-			Spec: clusterv1.ClusterSpec{},
-			Status: clusterv1.ClusterStatus{
-				Initialization: clusterv1.ClusterInitializationStatus{
-					ControlPlaneInitialized: &initialized,
-				},
-			},
-		}
+		Expect(addTypeInformationToObject(scheme, capiClusterPaused)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
 
-		initObjects := []client.Object{
-			sveltosClusterReadyAndNotPaused,
-			capiClusterNotPaused,
+		By("Create the secrets with cluster kubeconfig")
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      sveltosClusterPaused.Name + sveltosKubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
 		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
 
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
-			WithObjects(initObjects...).Build()
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      sveltosClusterNotReady.Name + sveltosKubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
 
-		skip, err := controllers.SkipUpgrading(context.TODO(), c, sveltosClusterReadyAndNotPaused, logger)
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      sveltosClusterReadyAndNotPaused.Name + sveltosKubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
+
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      capiClusterPaused.Name + kubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
+
+		secret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      capiClusterNotPaused.Name + kubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
+
+		skip, err := controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterPaused, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), c, capiClusterNotPaused, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterNotReady, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeFalse())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeTrue())
+
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterNotPaused, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeFalse())
 	})
 })

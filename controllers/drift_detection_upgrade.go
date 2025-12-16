@@ -32,6 +32,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -257,8 +258,16 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return true, nil
 	}
 
+	cacheMgr := clustercache.GetManager()
+	managedClient, err := cacheMgr.GetKubernetesClient(ctx, c, cluster.GetNamespace(), cluster.GetName(),
+		"", "", clusterproxy.GetClusterType(clusterRef), logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get managed client")
+		return true, err
+	}
+
 	// Verify if ResourceSummary CRD is present. Th
-	resourceCRDPresent, err := isResourceSummaryCRDPresent(ctx, c, logger)
+	resourceCRDPresent, err := isResourceSummaryCRDPresent(ctx, managedClient, logger)
 	if err != nil {
 		return true, err
 	}

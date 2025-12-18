@@ -52,8 +52,12 @@ func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger)
 	// Update status with the reconciliation progress.
 	// revision := source.GetArtifact().Revision
 
+	// Sanitize revision string by replacing invalid filesystem characters
+	// Git artifact revisions contain characters like '/', ':', '@' which are not valid in directory names
+	sanitizedRevision := strings.NewReplacer("/", "-", ":", "-", "@", "-").Replace(source.GetArtifact().Revision)
+
 	// Create tmp dir.
-	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s", source.GetArtifact().Revision))
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s", sanitizedRevision))
 	if err != nil {
 		err = fmt.Errorf("prepareFileSystemWithFluxSource: tmp dir error: %w", err)
 		return "", err
@@ -130,13 +134,19 @@ func getReferencedFluxSourceFromURL(hc *configv1beta1.HelmChart) (*corev1.Object
 	const repoURLParts = 2
 	parts := strings.SplitN(hc.RepositoryURL, "://", repoURLParts)
 	if len(parts) != repoURLParts {
-		return nil, "", fmt.Errorf("incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath", hc.RepositoryURL)
+		return nil, "", fmt.Errorf(
+			"incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath",
+			hc.RepositoryURL,
+		)
 	}
 
 	sourceKind := parts[0]
 	remainingParts := strings.Split(parts[1], "/")
 	if len(remainingParts) < 3 { //nolint: mnd // expected namespace, name and path
-		return nil, "", fmt.Errorf("incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath", hc.RepositoryURL)
+		return nil, "", fmt.Errorf(
+			"incorrect format: %q. Expected format sourceKind://sourceNamespace/sourceName/sourcePath",
+			hc.RepositoryURL,
+		)
 	}
 
 	sourceNamespace := remainingParts[0]

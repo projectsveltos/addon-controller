@@ -69,6 +69,7 @@ type FeatureSummary struct {
 	// DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
 	// the workload cluster or the management cluster because of this feature.
 	// Each element has format kind.version.group
+	//
 	// Deprecated: Replaced by FeatureDeploymentInfo field instead
 	// +optional
 	DeployedGroupVersionKind []string `json:"deployedGroupVersionKind,omitempty"`

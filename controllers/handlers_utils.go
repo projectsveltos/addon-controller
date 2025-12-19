@@ -1073,7 +1073,9 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1beta1.ClusterSummary,
 	// New code set only FeatureDeploymentInfo
 	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
 	if fs != nil {
+		//nolint:staticcheck // using for backward compatibility
 		for j := range fs.DeployedGroupVersionKind {
+			//nolint:staticcheck // using for backward compatibility
 			gvk, _ := schema.ParseKindArg(fs.DeployedGroupVersionKind[j])
 			gvks = append(gvks, *gvk)
 		}

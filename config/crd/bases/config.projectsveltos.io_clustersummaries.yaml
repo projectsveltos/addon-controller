@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: clustersummaries.config.projectsveltos.io
 spec:
   group: config.projectsveltos.io
@@ -1318,6 +1318,7 @@ spec:
                         DeployedGroupVersionKind contains all GroupVersionKinds deployed in either
                         the workload cluster or the management cluster because of this feature.
                         Each element has format kind.version.group
+
                         Deprecated: Replaced by FeatureDeploymentInfo field instead
                       items:
                         type: string

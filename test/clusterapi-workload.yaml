@@ -7,6 +7,13 @@ spec:
   controlPlane:
     healthCheck:
       checks:
+        unhealthyMachineConditions:
+        - status: Unknown
+          timeoutSeconds: 300
+          type: NodeReady
+        - status: "False"
+          timeoutSeconds: 300
+          type: NodeReady
         unhealthyNodeConditions:
         - status: Unknown
           timeoutSeconds: 300
@@ -224,6 +231,13 @@ spec:
       class: default-worker
       healthCheck:
         checks:
+          unhealthyMachineConditions:
+          - status: Unknown
+            timeoutSeconds: 300
+            type: NodeReady
+          - status: "False"
+            timeoutSeconds: 300
+            type: NodeReady
           unhealthyNodeConditions:
           - status: Unknown
             timeoutSeconds: 300
@@ -367,7 +381,7 @@ spec:
         enabled: true
         enforce: baseline
         warn: restricted
-    version: v1.34.0
+    version: v1.35.0
     workers:
       machineDeployments:
       - class: default-worker

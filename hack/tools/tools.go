@@ -25,6 +25,7 @@ import (
 	_ "github.com/a8m/envsubst"
 	_ "github.com/onsi/ginkgo/v2/ginkgo"
 	_ "golang.org/x/oauth2/google"
+	_ "golang.org/x/tools/cmd/goimports"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
 	_ "sigs.k8s.io/kind"

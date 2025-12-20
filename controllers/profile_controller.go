@@ -118,7 +118,7 @@ type ProfileReconciler struct {
 
 func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the Profile instance
 	profile := &configv1beta1.Profile{}
@@ -176,7 +176,7 @@ func (r *ProfileReconciler) reconcileDelete(
 	profileScope *scope.ProfileScope) reconcile.Result {
 
 	logger := profileScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Profile delete")
+	logger.V(logs.LogDebug).Info("Reconciling Profile delete")
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
 		configv1beta1.ProfileFinalizer, logger); err != nil {
@@ -185,7 +185,7 @@ func (r *ProfileReconciler) reconcileDelete(
 
 	r.cleanMaps(profileScope)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}
 }
 
@@ -194,7 +194,7 @@ func (r *ProfileReconciler) reconcileNormal(
 	profileScope *scope.ProfileScope) reconcile.Result {
 
 	logger := profileScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Profile")
+	logger.V(logs.LogDebug).Info("Reconciling Profile")
 
 	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1beta1.ProfileFinalizer) {
 		if err := addFinalizer(ctx, profileScope, configv1beta1.ProfileFinalizer); err != nil {
@@ -234,7 +234,7 @@ func (r *ProfileReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
-	logger.V(logs.LogInfo).Info("Reconcile success")
+	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}
 }
 

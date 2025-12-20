@@ -51,13 +51,13 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 		clusterList, err := clusterproxy.GetListOfClustersForShardKey(ctx, c, "", getCAPIOnboardAnnotation(),
 			shardkey, logger)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get clusters: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to get clusters")
 			continue
 		}
 
 		clustersWithDD, err := getListOfClusterWithDriftDetectionDeployed(ctx, c)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusters with drift detection: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to collect clusters with drift detection")
 			continue
 		}
 
@@ -146,7 +146,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 		var installed bool
 		installed, err = isResourceSummaryInstalled(ctx, clusterClient)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if ResourceSummary is installed %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to verify if ResourceSummary is installed")
 			return err
 		}
 
@@ -318,7 +318,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 		}
 
 		if !clusterSummary.DeletionTimestamp.IsZero() {
-			logger.V(logs.LogInfo).Info("clusterSummary is marked for deletion. Nothing to do.")
+			logger.V(logs.LogDebug).Info("clusterSummary is marked for deletion. Nothing to do.")
 			return nil
 		}
 
@@ -354,7 +354,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 
 		err = getManagementClusterClient().Status().Update(ctx, clusterSummary)
 		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update ClusterSummary status: %v", err))
+			logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummary status")
 			return err
 		}
 		return nil

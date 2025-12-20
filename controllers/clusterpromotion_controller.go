@@ -79,7 +79,7 @@ type ClusterPromotionReconciler struct {
 
 func (r *ClusterPromotionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the ClusterPromotion instance
 	clusterPromotion := &configv1beta1.ClusterPromotion{}

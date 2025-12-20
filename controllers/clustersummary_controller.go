@@ -147,7 +147,7 @@ type ClusterSummaryReconciler struct {
 
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the clusterSummary instance
 	clusterSummary := &configv1beta1.ClusterSummary{}
@@ -252,7 +252,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	logger logr.Logger,
 ) (reconcile.Result, error) {
 
-	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary delete")
+	logger.V(logs.LogDebug).Info("Reconciling ClusterSummary delete")
 
 	r.updateDeletedInstancs(clusterSummaryScope)
 
@@ -329,7 +329,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	manager := getManager()
 	manager.stopStaleWatchForTemplateResourceRef(ctx, clusterSummaryScope.ClusterSummary, true)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
 }
@@ -337,7 +337,7 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
 
-	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary")
+	logger.V(logs.LogDebug).Info("Reconciling ClusterSummary")
 
 	if !controllerutil.ContainsFinalizer(clusterSummaryScope.ClusterSummary, configv1beta1.ClusterSummaryFinalizer) {
 		if err := r.addFinalizer(ctx, clusterSummaryScope); err != nil {
@@ -427,7 +427,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
-	logger.V(logs.LogInfo).Info("Reconciling ClusterSummary success")
+	logger.V(logs.LogDebug).Info("Reconciling ClusterSummary success")
 
 	if clusterSummaryScope.IsDryRunSync() {
 		r.resetFeatureStatusToProvisioning(clusterSummaryScope)

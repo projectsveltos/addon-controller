@@ -92,7 +92,7 @@ type ClusterProfileReconciler struct {
 
 func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 	// Fecth the ClusterProfile instance
 	clusterProfile := &configv1beta1.ClusterProfile{}
 	if err := r.Get(ctx, req.NamespacedName, clusterProfile); err != nil {
@@ -146,7 +146,7 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 	profileScope *scope.ProfileScope) reconcile.Result {
 
 	logger := profileScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile delete")
+	logger.V(logs.LogDebug).Info("Reconciling ClusterProfile delete")
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
 		configv1beta1.ClusterProfileFinalizer, logger); err != nil {
@@ -155,7 +155,7 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 
 	r.cleanMaps(profileScope)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}
 }
 
@@ -164,7 +164,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	profileScope *scope.ProfileScope) reconcile.Result {
 
 	logger := profileScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling ClusterProfile")
+	logger.V(logs.LogDebug).Info("Reconciling ClusterProfile")
 
 	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1beta1.ClusterProfileFinalizer) {
 		if err := addFinalizer(ctx, profileScope, configv1beta1.ClusterProfileFinalizer); err != nil {
@@ -204,7 +204,7 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
-	logger.V(logs.LogInfo).Info("Reconcile success")
+	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}
 }
 

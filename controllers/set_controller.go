@@ -81,7 +81,7 @@ type SetReconciler struct {
 
 func (r *SetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
-	logger.V(logs.LogInfo).Info("Reconciling")
+	logger.V(logs.LogDebug).Info("Reconciling")
 
 	// Fecth the Set instance
 	set := &libsveltosv1beta1.Set{}
@@ -129,11 +129,11 @@ func (r *SetReconciler) reconcileDelete(
 	setScope *scope.SetScope) {
 
 	logger := setScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Set delete")
+	logger.V(logs.LogDebug).Info("Reconciling Set delete")
 
 	r.cleanMaps(setScope)
 
-	logger.V(logs.LogInfo).Info("Reconcile delete success")
+	logger.V(logs.LogDebug).Info("Reconcile delete success")
 }
 
 func (r *SetReconciler) reconcileNormal(
@@ -141,7 +141,7 @@ func (r *SetReconciler) reconcileNormal(
 	setScope *scope.SetScope) reconcile.Result {
 
 	logger := setScope.Logger
-	logger.V(logs.LogInfo).Info("Reconciling Set")
+	logger.V(logs.LogDebug).Info("Reconciling Set")
 
 	// Limit the search of matching cluster to the Set namespace
 	matchingCluster, err := getMatchingClusters(ctx, r.Client, setScope.Set.GetNamespace(),
@@ -159,7 +159,7 @@ func (r *SetReconciler) reconcileNormal(
 
 	r.updateMaps(setScope)
 
-	logger.V(logs.LogInfo).Info("Reconcile success")
+	logger.V(logs.LogDebug).Info("Reconcile success")
 	return reconcile.Result{}
 }
 

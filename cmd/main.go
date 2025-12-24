@@ -38,6 +38,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,12 +101,11 @@ var (
 )
 
 const (
-	addonComplianceTimer = 5
-	defaultReconcilers   = 10
-	defaultWorkers       = 20
-	defaulReportMode     = int(controllers.CollectFromManagementCluster)
-	mebibytes_bytes      = 1 << 20
-	gibibytes_per_bytes  = 1 << 30
+	defaultReconcilers  = 10
+	defaultWorkers      = 20
+	defaulReportMode    = int(controllers.CollectFromManagementCluster)
+	mebibytes_bytes     = 1 << 20
+	gibibytes_per_bytes = 1 << 30
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -138,8 +138,9 @@ func main() {
 				Port: webhookPort,
 			}),
 		Cache: cache.Options{
-			SyncPeriod: &syncPeriod,
-			ByObject:   byObject,
+			SyncPeriod:       &syncPeriod,
+			ByObject:         byObject,
+			DefaultTransform: reduceMemoryFootprint,
 		},
 		Client: client.Options{
 			Cache: &client.CacheOptions{
@@ -695,4 +696,32 @@ func printMemUsage(logger logr.Logger) {
 
 func bToMb(b uint64) uint64 {
 	return b / mebibytes_bytes
+}
+
+// reduceMemoryFootprint removes large, rarely-used fields from all cached objects
+func reduceMemoryFootprint(obj interface{}) (interface{}, error) {
+	accessor, err := meta.Accessor(obj)
+	if err != nil {
+		return obj, nil
+	}
+
+	// Remove managedFields (typically the largest field)
+	accessor.SetManagedFields(nil)
+
+	// Clean up annotations
+	annotations := accessor.GetAnnotations()
+	if len(annotations) > 0 {
+		// Remove large annotations
+		delete(annotations, "kubectl.kubernetes.io/last-applied-configuration")
+		delete(annotations, "deployment.kubernetes.io/revision")
+
+		// If annotations is now empty, set to nil
+		if len(annotations) == 0 {
+			accessor.SetAnnotations(nil)
+		} else {
+			accessor.SetAnnotations(annotations)
+		}
+	}
+
+	return obj, nil
 }

@@ -570,9 +570,9 @@ var _ = Describe("HandlersUtils", func() {
 			var policyHash string
 			policyHash, err = deployer.ComputePolicyHash(policy)
 			Expect(err).To(BeNil())
-			deployer.AddLabel(policy, deployer.ReferenceKindLabel, secret.Kind)
-			deployer.AddLabel(policy, deployer.ReferenceNameLabel, secret.Name)
-			deployer.AddLabel(policy, deployer.ReferenceNamespaceLabel, secret.Namespace)
+			deployer.AddAnnotation(policy, deployer.ReferenceKindAnnotation, secret.Kind)
+			deployer.AddAnnotation(policy, deployer.ReferenceNameAnnotation, secret.Name)
+			deployer.AddAnnotation(policy, deployer.ReferenceNamespaceAnnotation, secret.Namespace)
 			deployer.AddAnnotation(policy, deployer.PolicyHash, policyHash)
 			deployer.AddAnnotation(policy, deployer.OwnerTier, "100")
 			deployer.AddAnnotation(policy, deployer.OwnerName, clusterProfile.Name)
@@ -731,10 +731,12 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, viewClusterRoleName)))
 		Expect(err).To(BeNil())
 		clusterRole.SetLabels(map[string]string{
-			deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-			deployer.ReferenceNameLabel:      configMap.Name,
-			deployer.ReferenceNamespaceLabel: configMap.Namespace,
-			deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
+			deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+		})
+		clusterRole.SetAnnotations(map[string]string{
+			deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+			deployer.ReferenceNameAnnotation:      configMap.Name,
+			deployer.ReferenceNamespaceAnnotation: configMap.Namespace,
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
 			{Kind: configv1beta1.ClusterProfileKind, Name: clusterProfile.Name,
@@ -798,10 +800,12 @@ var _ = Describe("HandlersUtils", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterRoleName1,
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      configMap1.Kind,
-					deployer.ReferenceNamespaceLabel: configMap1.Namespace,
-					deployer.ReferenceNameLabel:      configMap1.Name,
-					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      configMap1.Kind,
+					deployer.ReferenceNamespaceAnnotation: configMap1.Namespace,
+					deployer.ReferenceNameAnnotation:      configMap1.Name,
 				},
 			},
 		}
@@ -812,10 +816,12 @@ var _ = Describe("HandlersUtils", func() {
 				Name:      clusterRoleName2,
 				Namespace: "default",
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      configMap2.Kind,
-					deployer.ReferenceNamespaceLabel: configMap2.Namespace,
-					deployer.ReferenceNameLabel:      configMap2.Name,
-					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureResources),
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      configMap2.Kind,
+					deployer.ReferenceNamespaceAnnotation: configMap2.Namespace,
+					deployer.ReferenceNameAnnotation:      configMap2.Name,
 				},
 			},
 		}

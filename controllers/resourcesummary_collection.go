@@ -244,6 +244,7 @@ func getClusterSummaryNameFromResourceSummary(rs *libsveltosv1beta1.ResourceSumm
 
 	if !ok { // If not found in annotations, try labels
 		if rs.Labels != nil {
+			//nolint: staticcheck // for backbaward compatibility
 			clusterSummaryName, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNameLabel]
 		}
 	}
@@ -273,6 +274,7 @@ func getClusterSummaryNamespaceFromResourceSummary(rs *libsveltosv1beta1.Resourc
 
 	if !ok { // If not found in annotations, try labels
 		if rs.Labels != nil {
+			//nolint: staticcheck // for backbaward compatibility
 			clusterSummaryNamespace, ok = rs.Labels[libsveltosv1beta1.ClusterSummaryNamespaceLabel]
 		}
 	}

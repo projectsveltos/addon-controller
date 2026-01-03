@@ -119,10 +119,12 @@ var _ = Describe("KustomizeRefs", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-					deployer.ReferenceNameLabel:      randomString(),
-					deployer.ReferenceNamespaceLabel: randomString(),
-					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureKustomize),
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureKustomize),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
 				},
 			},
 		}
@@ -138,10 +140,12 @@ var _ = Describe("KustomizeRefs", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: randomString(),
 				Labels: map[string]string{
-					deployer.ReferenceKindLabel:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-					deployer.ReferenceNameLabel:      randomString(),
-					deployer.ReferenceNamespaceLabel: randomString(),
-					deployer.ReasonLabel:             string(libsveltosv1beta1.FeatureKustomize),
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureKustomize),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
 				},
 			},
 		}

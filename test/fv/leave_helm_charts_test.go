@@ -139,15 +139,6 @@ var _ = Describe("Helm", func() {
 			Byf("Verifying Minio deployment annotations and labels are updated")
 			Expect(workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: minioNamespace, Name: minioDeployment}, depl)).To(Succeed())
-			lbls := depl.Labels
-			if lbls != nil {
-				_, ok := lbls[deployer.ReferenceKindLabel]
-				Expect(ok).To(BeFalse())
-				_, ok = lbls[deployer.ReferenceNameLabel]
-				Expect(ok).To(BeFalse())
-				_, ok = lbls[deployer.ReferenceNamespaceLabel]
-				Expect(ok).To(BeFalse())
-			}
 			annotations := depl.Annotations
 			if annotations != nil {
 				_, ok := annotations[deployer.OwnerKind]
@@ -155,6 +146,12 @@ var _ = Describe("Helm", func() {
 				_, ok = annotations[deployer.OwnerName]
 				Expect(ok).To(BeFalse())
 				_, ok = annotations[deployer.OwnerTier]
+				Expect(ok).To(BeFalse())
+				_, ok = annotations[deployer.ReferenceKindAnnotation]
+				Expect(ok).To(BeFalse())
+				_, ok = annotations[deployer.ReferenceNameAnnotation]
+				Expect(ok).To(BeFalse())
+				_, ok = annotations[deployer.ReferenceNamespaceAnnotation]
 				Expect(ok).To(BeFalse())
 			}
 

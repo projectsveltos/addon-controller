@@ -86,8 +86,12 @@ func deployResources(ctx context.Context, c client.Client,
 		clusterSummary, featureHandler, logger)
 
 	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
-	return postProcessDeployedResources(ctx, remoteRestConfig, clusterSummary, localResourceReports,
+	err = postProcessDeployedResources(ctx, remoteRestConfig, clusterSummary, localResourceReports,
 		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to deploy PolicyRefs")
+	}
+	return err
 }
 
 func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Config,

@@ -145,6 +145,9 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 
 	if deployerStatus != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("deployer result is available: %v", *deployerStatus))
+		if deployerError != nil {
+			logger.V(logs.LogDebug).Error(deployerError, "deployer error")
+		}
 
 		if *deployerStatus == libsveltosv1beta1.FeatureStatusProvisioned {
 			if isPullMode {

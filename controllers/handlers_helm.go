@@ -92,8 +92,6 @@ var (
 )
 
 const (
-	writeFilePermission        = 0644
-	lockTimeout                = 30
 	notInstalledMessage        = "Not installed yet and action is uninstall"
 	defaultMaxHistory          = 2
 	defaultDeletionPropagation = "background"
@@ -183,7 +181,11 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return nil
 	}
 
-	return postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, mgmtResources, logger)
+	err = postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, mgmtResources, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to deploy helmCharts")
+	}
+	return err
 }
 
 func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -338,7 +340,11 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	}
 	defer closer()
 
-	return undeployHelmChartResources(ctx, c, clusterSummary, kubeconfig, logger)
+	err = undeployHelmChartResources(ctx, c, clusterSummary, kubeconfig, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to undeploy HelmCharts")
+	}
+	return err
 }
 
 func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,

@@ -130,8 +130,12 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		clusterSummary, logger)
 
 	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
-	return processKustomizeDeployment(ctx, remoteRestConfig, clusterSummary, localResourceReports,
+	err = processKustomizeDeployment(ctx, remoteRestConfig, clusterSummary, localResourceReports,
 		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to deploy KustomizeRefs")
+	}
+	return err
 }
 
 func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Config,

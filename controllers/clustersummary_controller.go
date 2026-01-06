@@ -18,8 +18,10 @@ package controllers
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"syscall"
 	"time"
@@ -423,8 +425,47 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
 			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
 		}
+
+		requeueAfter := normalRequeueAfter
+		maxFailures := r.getMaxConsecutiveFailures(clusterSummaryScope)
+
+		if maxFailures > 1 {
+			const (
+				minMultiplier = 2
+				maxMultiplier = 6
+			)
+
+			// 1. Determine the ceiling safely.
+			// By checking if maxFailures (uint) is less than maxMultiplier (6),
+			// we ensure the value is small enough to cast to int64 without overflow.
+			currentMax := int64(maxMultiplier)
+			if uint64(maxFailures) < uint64(maxMultiplier) {
+				currentMax = int64(maxFailures)
+			}
+
+			// 2. Calculate the range (delta) for the random generator
+			delta := currentMax - minMultiplier + 1
+			multiplier := int64(minMultiplier)
+
+			if delta > 0 {
+				// Use crypto/rand for gosec compliance
+				n, err := rand.Int(rand.Reader, big.NewInt(delta))
+				if err == nil {
+					multiplier = n.Int64() + minMultiplier
+				}
+			}
+
+			// 3. Apply the multiplier to the duration
+			requeueAfter = time.Duration(multiplier) * normalRequeueAfter
+
+			logger.V(logs.LogDebug).Info("increasing backoff due to consecutive failures",
+				"consecutiveFailures", maxFailures,
+				"multiplier", multiplier,
+				"requeueAfter", requeueAfter)
+		}
+
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 	}
 
 	logger.V(logs.LogDebug).Info("Reconciling ClusterSummary success")

@@ -8,7 +8,7 @@ require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v29.1.3+incompatible
-	github.com/fluxcd/pkg/apis/meta v1.23.0
+	github.com/fluxcd/pkg/apis/meta v1.24.0
 	github.com/fluxcd/pkg/http/fetch v0.21.0
 	github.com/fluxcd/pkg/tar v0.16.0
 	github.com/fluxcd/source-controller/api v1.7.4
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.27.3
 	github.com/onsi/gomega v1.38.3
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.3.2-0.20260103131048-3e231674542f
+	github.com/projectsveltos/libsveltos v1.3.2-0.20260105141051-705efd5ce5f7
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10

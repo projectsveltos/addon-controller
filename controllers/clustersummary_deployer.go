@@ -853,6 +853,17 @@ func (r *ClusterSummaryReconciler) maxNumberOfConsecutiveFailureReached(clusterS
 	return false
 }
 
+func (r *ClusterSummaryReconciler) getMaxConsecutiveFailures(clusterSummaryScope *scope.ClusterSummaryScope) uint {
+	maxVal := uint(0)
+	for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
+		fs := clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
+		if fs.ConsecutiveFailures > maxVal {
+			maxVal = fs.ConsecutiveFailures
+		}
+	}
+	return maxVal
+}
+
 func logContentSummary(clusterSummary *configv1beta1.ClusterSummary, fID libsveltosv1beta1.FeatureID, logger logr.Logger) {
 	switch fID {
 	case libsveltosv1beta1.FeatureHelm:

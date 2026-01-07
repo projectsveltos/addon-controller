@@ -98,8 +98,6 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fluxcd/pkg/apis/acl v0.9.0 h1:wBpgsKT+jcyZEcM//OmZr9RiF8klL3ebrDp2u2ThsnA=
 github.com/fluxcd/pkg/apis/acl v0.9.0/go.mod h1:TttNS+gocsGLwnvmgVi3/Yscwqrjc17+vhgYfqkfrV4=
-github.com/fluxcd/pkg/apis/meta v1.23.0 h1:fLis5YcHnOsyKYptzBtituBm5EWNx13I0bXQsy0FG4s=
-github.com/fluxcd/pkg/apis/meta v1.23.0/go.mod h1:UWsIbBPCxYvoVklr2mV2uLFBf/n17dNAmKFjRfApdDo=
 github.com/fluxcd/pkg/apis/meta v1.24.0 h1:+e33T4OL9oqMWZSltsgImvi+/Punx42X9NqFlPesH6o=
 github.com/fluxcd/pkg/apis/meta v1.24.0/go.mod h1:UWsIbBPCxYvoVklr2mV2uLFBf/n17dNAmKFjRfApdDo=
 github.com/fluxcd/pkg/http/fetch v0.21.0 h1:/vHWc+3BIk9q5HFA8khl0NEBb/XFXzZOqpnUC7gmtkk=
@@ -289,8 +287,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v1.3.2-0.20260105141051-705efd5ce5f7 h1:hsiSDYPPRHl8BCSIjVD3sA+usHCc5dvlM1Cs0gvxa9s=
-github.com/projectsveltos/libsveltos v1.3.2-0.20260105141051-705efd5ce5f7/go.mod h1:SL8yFAUfonKi8fJsW+VkWnYFVJ8jWx62RD4e0aglVvc=
+github.com/projectsveltos/libsveltos v1.3.2-0.20260106181004-5f54626fd3ed h1:xPA+dceHZ6tZa45FzwURwKe8s8oROEz7Es036t/BXo4=
+github.com/projectsveltos/libsveltos v1.3.2-0.20260106181004-5f54626fd3ed/go.mod h1:FVlyPzYhNgvfKmZ1qmYcdvFRJELmW9LyPXLUkjqeGcg=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=
@@ -527,8 +525,8 @@ k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 h1:Y3gxNAuB0OBLImH611+UDZ
 k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912/go.mod h1:kdmbQkyfwUagLfXIad1y2TdrjPFWp2Q89B3qkRwf/pQ=
 k8s.io/kubectl v0.34.2 h1:+fWGrVlDONMUmmQLDaGkQ9i91oszjjRAa94cr37hzqA=
 k8s.io/kubectl v0.34.2/go.mod h1:X2KTOdtZZNrTWmUD4oHApJ836pevSl+zvC5sI6oO2YQ=
-k8s.io/utils v0.0.0-20251222233032-718f0e51e6d2 h1:OfgiEo21hGiwx1oJUU5MpEaeOEg6coWndBkZF/lkFuE=
-k8s.io/utils v0.0.0-20251222233032-718f0e51e6d2/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
+k8s.io/utils v0.0.0-20260106112306-0fe9cd71b2f8 h1:oV4uULAC2QPIdMQwjMaNIwykyhWhnhBwX40yd5h9u3U=
+k8s.io/utils v0.0.0-20260106112306-0fe9cd71b2f8/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
 oras.land/oras-go/v2 v2.6.0 h1:X4ELRsiGkrbeox69+9tzTu492FMUu7zJQW6eJU+I2oc=
 oras.land/oras-go/v2 v2.6.0/go.mod h1:magiQDfG6H1O9APp+rOsvCPcW1GD2MM7vgnKY0Y+u1o=
 sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 h1:jpcvIRr3GLoUoEKRkHKSmGjxb6lWwrBlJsXc+eUYQHM=

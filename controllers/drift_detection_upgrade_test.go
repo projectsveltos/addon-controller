@@ -195,23 +195,23 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
 
-		skip, err := controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterPaused, logger)
+		skip, err := controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterPaused, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterNotReady, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterNotReady, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeFalse())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterPaused, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterPaused, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterNotPaused, logger)
+		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterNotPaused, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeFalse())
 	})

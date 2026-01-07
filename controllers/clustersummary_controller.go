@@ -58,6 +58,7 @@ import (
 	license "github.com/projectsveltos/libsveltos/lib/licenses"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 	"github.com/projectsveltos/libsveltos/lib/sharding"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
@@ -214,21 +215,14 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.reconcileDelete(ctx, clusterSummaryScope, logger)
 	}
 
-	isReady, err := r.isReady(ctx, clusterSummary, logger)
+	proceed, err := r.checkClusterHealth(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		msg := err.Error()
 		logger.Error(err, msg)
-		clusterSummary.Status.FailureMessage = &msg
+		clusterSummaryScope.ClusterSummary.Status.FailureMessage = &msg
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
-	if !isReady {
-		logger.V(logs.LogInfo).Info("cluster is not ready.")
-		r.setFailureMessage(clusterSummaryScope, "cluster is not ready")
-		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
-		// if cluster is not ready, do nothing and don't queue for reconciliation.
-		// When cluster becomes ready, all matching clusterSummaries will be requeued for reconciliation
-		_ = r.updateMaps(ctx, clusterSummaryScope, logger)
-
+	if !proceed {
 		return reconcile.Result{}, nil
 	}
 
@@ -236,6 +230,47 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Handle non-deleted clusterSummary
 	return r.reconcileNormal(ctx, clusterSummaryScope, logger)
+}
+
+// checkClusterHealth checks if the cluster is ready and the agent is healthy.
+// Returns (proceed, result, error)
+func (r *ClusterSummaryReconciler) checkClusterHealth(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (bool, error) {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	// 1. Check if Cluster is Ready
+	isReady, err := r.isReady(ctx, clusterSummary, logger)
+	if err != nil {
+		return false, err
+	}
+	if !isReady {
+		logger.V(logs.LogInfo).Info("cluster is not ready.")
+		r.handleClusterNotUsable(ctx, clusterSummaryScope, "cluster is not ready", logger)
+		return false, nil
+	}
+
+	// 2. Check if Agent is Healthy (Pull Mode Heartbeat)
+	isHealthy, err := r.isAgentHealthy(ctx, clusterSummary, logger)
+	if err != nil {
+		return false, err
+	}
+	if !isHealthy {
+		logger.V(logs.LogInfo).Info("agent in managed cluster is not healthy.")
+		r.handleClusterNotUsable(ctx, clusterSummaryScope, "agent in managed cluster is not healthy.", logger)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// Helper to avoid repeating the "Not Ready/Not Healthy" boilerplate
+func (r *ClusterSummaryReconciler) handleClusterNotUsable(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, msg string, logger logr.Logger) {
+
+	r.setFailureMessage(clusterSummaryScope, msg)
+	r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
+	_ = r.updateMaps(ctx, clusterSummaryScope, logger)
 }
 
 func (r *ClusterSummaryReconciler) updateDeletedInstancs(clusterSummaryScope *scope.ClusterSummaryScope) {
@@ -1197,6 +1232,48 @@ func (r *ClusterSummaryReconciler) isPaused(ctx context.Context,
 	}
 
 	return annotations.HasPaused(clusterSummary), nil
+}
+
+// isAgentHealthy returns true if the cluster is NOT in pull mode,
+// OR if it is in pull mode and the heartbeat is current.
+func (r *ClusterSummaryReconciler) isAgentHealthy(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (bool, error) {
+
+	if clusterSummary.Spec.ClusterType != libsveltosv1beta1.ClusterTypeSveltos {
+		return true, nil
+	}
+
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		msg := fmt.Sprintf("failed to verify if Cluster is in pull mode: %v", err)
+		logger.V(logs.LogDebug).Info(msg)
+		return false, err
+	}
+
+	if !isPullMode {
+		return true, nil
+	}
+
+	sveltosCluster := &libsveltosv1beta1.SveltosCluster{}
+	err = r.Get(ctx,
+		types.NamespacedName{
+			Namespace: clusterSummary.Spec.ClusterNamespace,
+			Name:      clusterSummary.Spec.ClusterName,
+		}, sveltosCluster)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Check if the failure message indicates a heartbeat timeout
+	if pullmode.IsAgentTimeoutError(sveltosCluster) {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // canRemoveFinalizer returns true if finalizer can be removed.

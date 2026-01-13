@@ -322,7 +322,9 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	if isPullMode {
 		mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 		if err != nil {
-			return err
+			if !apierrors.IsNotFound(err) {
+				return err
+			}
 		}
 
 		return undeployHelmChartsInPullMode(ctx, c, clusterSummary, mgmtResources, logger)

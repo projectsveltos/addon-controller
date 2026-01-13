@@ -453,8 +453,8 @@ var _ = Describe("Profile: Reconciler", func() {
 		})
 		Expect(err).To(BeNil())
 
-		err = controllers.UpdateClusterSummary(context.TODO(), c,
-			clusterProfileScope, &corev1.ObjectReference{
+		_, err = controllers.UpdateClusterSummary(context.TODO(), c,
+			clusterProfileScope, clusterSummary, &corev1.ObjectReference{
 				Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
 				Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String()})
 		Expect(err).To(BeNil())
@@ -525,8 +525,8 @@ var _ = Describe("Profile: Reconciler", func() {
 		})
 		Expect(err).To(BeNil())
 
-		err = controllers.UpdateClusterSummary(context.TODO(), c,
-			clusterProfileScope, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
+		_, err = controllers.UpdateClusterSummary(context.TODO(), c, clusterProfileScope,
+			clusterSummary, &corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name})
 		Expect(err).To(BeNil())
 
 		clusterSummaryList := &configv1beta1.ClusterSummaryList{}

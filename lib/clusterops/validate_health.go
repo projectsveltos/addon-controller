@@ -45,7 +45,7 @@ type healthStatus struct {
 
 // ValidateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
 func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, validateHealths []libsveltosv1beta1.ValidateHealth,
-	featureID libsveltosv1beta1.FeatureID, logger logr.Logger) error {
+	featureID libsveltosv1beta1.FeatureID, isDelete bool, logger logr.Logger) error {
 
 	// If SveltosCluster is in pull mode, this will done by the agent in the managed cluster
 	if remoteConfig == nil {
@@ -59,7 +59,7 @@ func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, vali
 			continue
 		}
 
-		if err := validateHealthPolicy(ctx, remoteConfig, check, logger); err != nil {
+		if err := validateHealthPolicy(ctx, remoteConfig, check, isDelete, logger); err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate check: %s", err))
 			return err
 		}
@@ -69,7 +69,7 @@ func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, vali
 }
 
 func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *libsveltosv1beta1.ValidateHealth,
-	logger logr.Logger) error {
+	isDelete bool, logger logr.Logger) error {
 
 	l := logger.WithValues("validation", check.Name)
 	l.V(logs.LogDebug).Info("running health validation")
@@ -79,8 +79,12 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 		return err
 	}
 
-	if list == nil || len(list.Items) == 0 {
-		return fmt.Errorf("did not fetch any resource")
+	if !isDelete {
+		// dont fail for pre and post delete checks. Those checks are usually intended to verify
+		// resources are gone
+		if list == nil || len(list.Items) == 0 {
+			return fmt.Errorf("validateHealth: %s did not fetch any resource", check.Name)
+		}
 	}
 
 	for i := range list.Items {

@@ -241,7 +241,7 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	}
 
 	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
-		libsveltosv1beta1.FeatureKustomize, logger)
+		libsveltosv1beta1.FeatureKustomize, false, logger)
 }
 
 func cleanStaleKustomizeResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -306,8 +306,6 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("undeployKustomizeRefs")
 
-	var resourceReports []libsveltosv1beta1.ResourceReport
-
 	// Undeploy from management cluster
 	_, err = undeployStaleResources(ctx, true, getManagementClusterConfig(), c, libsveltosv1beta1.FeatureKustomize,
 		clusterSummary, getDeployedGroupVersionKinds(clusterSummary, libsveltosv1beta1.FeatureKustomize),
@@ -322,49 +320,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 			return err
 		}
 	} else {
-		// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
-		// use cluster-admin account to do the removal
-		cacheMgr := clustercache.GetManager()
-		remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
-			"", "", clusterSummary.Spec.ClusterType, logger)
-		if err != nil {
-			return err
-		}
-
-		remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
-			"", "", clusterSummary.Spec.ClusterType, logger)
-		if err != nil {
-			return err
-		}
-
-		// Undeploy from managed cluster
-		resourceReports, err = undeployStaleResources(ctx, false, remoteRestConfig, remoteClient, libsveltosv1beta1.FeatureKustomize,
-			clusterSummary, getDeployedGroupVersionKinds(clusterSummary, libsveltosv1beta1.FeatureKustomize),
-			map[string]libsveltosv1beta1.Resource{}, logger)
-		if err != nil {
-			return err
-		}
-
-		profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
-		if err != nil {
-			return err
-		}
-
-		err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureKustomize,
-			nil, true, logger)
-		if err != nil {
-			return err
-		}
-
-		isDrynRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
-		err = clusterops.UpdateClusterConfiguration(ctx, c, isDrynRun, true, clusterNamespace, clusterName, clusterType,
-			profileRef, libsveltosv1beta1.FeatureKustomize, []configv1beta1.DeployedResource{}, nil)
-		if err != nil {
-			return err
-		}
-
-		err = updateClusterReportWithResourceReports(ctx, c, clusterSummary, remoteRestConfig == nil,
-			resourceReports, libsveltosv1beta1.FeatureKustomize)
+		err = pushModeUndeployResources(ctx, c, clusterSummary, libsveltosv1beta1.FeatureKustomize, logger)
 		if err != nil {
 			return err
 		}

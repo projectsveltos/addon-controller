@@ -525,8 +525,11 @@ func (r *ClusterPromotionReconciler) reconcileStageProfile(ctx context.Context,
 		KustomizationRefs:      promotionScope.ClusterPromotion.Spec.ProfileSpec.KustomizationRefs,
 		ValidateHealths:        promotionScope.ClusterPromotion.Spec.ProfileSpec.ValidateHealths,
 		Patches:                promotionScope.ClusterPromotion.Spec.ProfileSpec.Patches,
+		PatchesFrom:            promotionScope.ClusterPromotion.Spec.ProfileSpec.PatchesFrom,
 		DriftExclusions:        promotionScope.ClusterPromotion.Spec.ProfileSpec.DriftExclusions,
 		MaxConsecutiveFailures: promotionScope.ClusterPromotion.Spec.ProfileSpec.MaxConsecutiveFailures,
+		PreDeleteChecks:        promotionScope.ClusterPromotion.Spec.ProfileSpec.PreDeleteChecks,
+		PostDeleteChecks:       promotionScope.ClusterPromotion.Spec.ProfileSpec.PostDeleteChecks,
 
 		// 2. Set the stage-specific ClusterSelector
 		ClusterSelector: stage.ClusterSelector,

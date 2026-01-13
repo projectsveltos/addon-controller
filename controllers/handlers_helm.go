@@ -528,8 +528,20 @@ func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSum
 
 	logger.V(logs.LogDebug).Info("undeployHelmChartResources")
 
+	err := validatePreDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "pre delete checks failed")
+		return err
+	}
+
 	releaseReports, err := uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
+		return err
+	}
+
+	err = validatePostDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "post delete checks failed")
 		return err
 	}
 

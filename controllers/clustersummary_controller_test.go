@@ -1341,4 +1341,63 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 
 		Expect(testEnv.Delete(context.TODO(), ns)).To(Succeed())
 	})
+
+	It("getPatchesFrom returns list of all ConfigMap/Secret instances referenced in PatchesFrom section", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, ns))
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: ns.Name,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PatchesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: "{{ .Cluster.metadata.name }}",
+							Name:      "{{ .Cluster.metadata.name }}-patch",
+						},
+						{
+							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
+							Namespace: "{{ .Cluster.metadata.name }}",
+							Name:      "{{ .Cluster.metadata.name }}-patch",
+						},
+					},
+				},
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterSummary))
+
+		patchesFrom, err := controllers.GetPatchesFrom(context.TODO(), clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(patchesFrom.Len()).To(Equal(2))
+		Expect(patchesFrom.Has(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+			Namespace:  cluster.Namespace,
+			Name:       fmt.Sprintf("%s-patch", cluster.Name),
+		}))
+
+		Expect(patchesFrom.Has(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       string(libsveltosv1beta1.SecretReferencedResourceKind),
+			Namespace:  cluster.Namespace,
+			Name:       fmt.Sprintf("%s-patch", cluster.Name),
+		}))
+	})
 })

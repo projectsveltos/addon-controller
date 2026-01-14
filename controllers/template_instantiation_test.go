@@ -104,7 +104,7 @@ var _ = Describe("Template instantiation", func() {
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
 
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -139,7 +139,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -176,7 +176,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -256,7 +256,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -297,7 +297,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -338,7 +338,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -394,7 +394,7 @@ var _ = Describe("Template instantiation", func() {
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -424,7 +424,7 @@ var _ = Describe("Template instantiation", func() {
 	  `
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -476,7 +476,7 @@ valuesTemplate: |
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 
@@ -529,7 +529,7 @@ valuesTemplate: |
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		objects, err := controllers.FecthClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
+		objects, err := controllers.FetchClusterObjects(ctx, testEnv.Config, testEnv.GetClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 		Expect(err).To(BeNil())
 

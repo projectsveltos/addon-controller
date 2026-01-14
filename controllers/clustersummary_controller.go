@@ -975,6 +975,12 @@ func (r *ClusterSummaryReconciler) getCurrentReferences(ctx context.Context,
 	}
 	currentReferences.Append(helmRefs)
 
+	patchesFromReferences, err := getPatchesFrom(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return nil, err
+	}
+	currentReferences.Append(patchesFromReferences)
+
 	return currentReferences, nil
 }
 
@@ -1742,4 +1748,36 @@ func (r *ClusterSummaryReconciler) processUndeployError(clusterSummaryScope *sco
 	}
 
 	return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+}
+
+// getPatchesFrom gets referenced ConfigMap/Secret in a PatchesFrom.
+func getPatchesFrom(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary) (*libsveltosset.Set, error) {
+	currentValuesFromReferences := &libsveltosset.Set{}
+
+	patchesFrom := clusterSummary.Spec.ClusterProfileSpec.PatchesFrom
+	for i := range patchesFrom {
+		referencedNamespace := patchesFrom[i].Namespace
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, referencedNamespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
+
+		referencedName, err := libsveltostemplate.GetReferenceResourceName(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, patchesFrom[i].Name,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			return nil, err
+		}
+
+		currentValuesFromReferences.Insert(&corev1.ObjectReference{
+			APIVersion: corev1.SchemeGroupVersion.String(),
+			Kind:       patchesFrom[i].Kind,
+			Namespace:  namespace,
+			Name:       referencedName,
+		})
+	}
+
+	return currentValuesFromReferences, nil
 }

@@ -383,7 +383,7 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary)
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -506,7 +506,7 @@ func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *c
 
 	requestorName := clusterSummary.Namespace + clusterSummary.Name + "kustomize"
 
-	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	objects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, err
@@ -531,7 +531,7 @@ func instantiateKustomizeSubstituteValues(ctx context.Context, clusterSummary *c
 
 // getKustomizeSubstituteValues returns all key-value pair looking at both Values and ValuesFrom
 func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (dynamicValues, staticValues map[string]string, err error) {
 
 	values := make(map[string]string)
 	for k := range kustomizationRef.Values {
@@ -539,24 +539,114 @@ func getKustomizeSubstituteValues(ctx context.Context, c client.Client, clusterS
 	}
 
 	// Get key-value pairs from ValuesFrom
-	templatedValues, nonTemplatedValues, err = getKustomizeSubstituteValuesFrom(ctx, c, clusterSummary, kustomizationRef, logger)
+	dynamicValues, staticValues, err = getKustomizeSubstituteValuesFrom(ctx, c, clusterSummary, kustomizationRef, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Values are always treated as templates. So copy the templated values here
-	for k := range templatedValues {
-		values[k] = templatedValues[k]
+	for k := range dynamicValues {
+		values[k] = dynamicValues[k]
 	}
 
-	return values, nonTemplatedValues, nil
+	return values, staticValues, nil
 }
 
 // getKustomizeSubstituteValuesFrom return key-value pair from referenced ConfigMap/Secret
 func getKustomizeSubstituteValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (templatedValues, nonTemplatedValues map[string]string, err error) {
+	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (dynamicValues, staticValues map[string]string, err error) {
 
-	return getValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
+	return getKustomizeValuesFrom(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, true, logger)
+}
+
+// getValuesFrom function retrieves key-value pairs from referenced ConfigMaps or Secrets.
+//
+// - `valuesFrom`: A slice of `ValueFrom` objects specifying the ConfigMaps or Secrets to use.
+// - `overrideKeys`: Controls how existing keys are handled:
+//   - `true`: Existing keys in the output map will be overwritten with new values from references.
+//   - `false`: Values from references will be appended to existing keys in the output map using the `addToMap` function.
+//
+// It returns a map containing the collected key-value pairs and any encountered error.
+func getKustomizeValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	valuesFrom []configv1beta1.ValueFrom, overrideKeys bool, logger logr.Logger) (dynamicValues, staticValues map[string]string, err error) {
+
+	dynamicValues = make(map[string]string)
+	staticValues = make(map[string]string)
+	for i := range valuesFrom {
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return nil, nil, err
+		}
+
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, valuesFrom[i].Name, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
+			return nil, nil, err
+		}
+
+		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
+			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+			if err != nil {
+				err = handleReferenceError(err, valuesFrom[i].Kind, namespace, name, valuesFrom[i].Optional, logger)
+				if err == nil {
+					continue
+				}
+				return nil, nil, err
+			}
+
+			if instantiateTemplate(configMap, logger) {
+				for key, value := range configMap.Data {
+					if overrideKeys {
+						dynamicValues[key] = value
+					} else {
+						addToMap(dynamicValues, key, value)
+					}
+				}
+			} else {
+				for key, value := range configMap.Data {
+					if overrideKeys {
+						staticValues[key] = value
+					} else {
+						addToMap(staticValues, key, value)
+					}
+				}
+			}
+		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
+			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
+			if err != nil {
+				err = handleReferenceError(err, valuesFrom[i].Kind, namespace, name, valuesFrom[i].Optional, logger)
+				if err == nil {
+					continue
+				}
+				return nil, nil, err
+			}
+			if instantiateTemplate(secret, logger) {
+				for key, value := range secret.Data {
+					if overrideKeys {
+						dynamicValues[key] = string(value)
+					} else {
+						addToMap(dynamicValues, key, string(value))
+					}
+				}
+			} else {
+				for key, value := range secret.Data {
+					if overrideKeys {
+						staticValues[key] = string(value)
+					} else {
+						addToMap(staticValues, key, string(value))
+					}
+				}
+			}
+		}
+	}
+
+	return dynamicValues, staticValues, nil
 }
 
 func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
@@ -585,7 +675,7 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	defer os.RemoveAll(tmpDir)
 
-	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	objects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err

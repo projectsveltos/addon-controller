@@ -494,7 +494,7 @@ func pullModeUndeployResources(ctx context.Context, c client.Client, clusterSumm
 func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary)
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}

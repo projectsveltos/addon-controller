@@ -1263,6 +1263,7 @@ status:
 					},
 				},
 			}
+
 			Expect(testEnv.Create(context.TODO(), depl)).To(Succeed())
 			Expect(waitForObject(context.TODO(), testEnv.Client, depl)).To(Succeed())
 

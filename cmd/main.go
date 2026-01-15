@@ -181,7 +181,7 @@ func main() {
 		ctrl.GetConfigOrDie())
 
 	debug.SetMemoryLimit(gibibytes_per_bytes)
-	go printMemUsage(ctrl.Log.WithName("memory-usage"))
+	go printMemUsage(ctx, ctrl.Log.WithName("memory-usage"))
 	controllers.NewLicenseManager()
 
 	if shardKey == "" && !disableTelemetry {
@@ -679,18 +679,28 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 }
 
 // printMemUsage memory stats. Call GC
-func printMemUsage(logger logr.Logger) {
+func printMemUsage(ctx context.Context, logger logr.Logger) {
+	const five = 5
+	ticker := time.NewTicker(five * time.Minute)
+	defer ticker.Stop()
+
 	for {
-		time.Sleep(time.Minute)
-		var m runtime.MemStats
-		runtime.ReadMemStats(&m)
-		// For info on each, see: /pkg/runtime/#MemStats
-		l := logger.WithValues("Alloc (MiB)", bToMb(m.Alloc)).
-			WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
-			WithValues("Sys (MiB)", bToMb(m.Sys)).
-			WithValues("NumGC", m.NumGC)
-		l.V(logs.LogInfo).Info("memory stats")
-		runtime.GC()
+		select {
+		case <-ctx.Done():
+			logger.Info("stopping memory usage printer")
+			return
+		case <-ticker.C:
+			time.Sleep(time.Minute)
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			// For info on each, see: /pkg/runtime/#MemStats
+			l := logger.WithValues("Alloc (MiB)", bToMb(m.Alloc)).
+				WithValues("TotalAlloc (MiB)", bToMb(m.TotalAlloc)).
+				WithValues("Sys (MiB)", bToMb(m.Sys)).
+				WithValues("NumGC", m.NumGC)
+			l.V(1).Info("memory stats")
+			runtime.GC()
+		}
 	}
 }
 

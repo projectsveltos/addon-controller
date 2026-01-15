@@ -72,10 +72,10 @@ func fetchKubeadmControlPlane(ctx context.Context, cluster *clusterv1.Cluster,
 	return kubeadmControlPlane, err
 }
 
-// fecthClusterObjects fetches resources representing a cluster.
+// fetchClusterObjects fetches resources representing a cluster.
 // All fetched objects are in the management cluster.
 // Currently limited to Cluster and Infrastructure Provider
-func fecthClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
+func fetchClusterObjects(ctx context.Context, config *rest.Config, c client.Client,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) (*currentClusterObjects, error) {
 

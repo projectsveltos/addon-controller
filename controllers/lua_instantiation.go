@@ -58,7 +58,7 @@ func instantiateWithLuaScript(ctx context.Context, config *rest.Config, c client
 
 	luaCode += script
 
-	objects, err := fecthClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
+	objects, err := fetchClusterObjects(ctx, config, c, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return "", err
 	}

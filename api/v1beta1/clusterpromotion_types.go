@@ -156,6 +156,15 @@ type ProfileSpec struct {
 	// +optional
 	Patches []libsveltosv1beta1.Patch `json:"patches,omitempty"`
 
+	// PatchesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+	// it is possible to store additional Kustomize inline Patches applied for all resources on this profile
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+	// +listType=atomic
+	// +optional
+	PatchesFrom []ValueFrom `json:"patchesFrom,omitempty"`
+
 	// DriftExclusions is a list of configuration drift exclusions to be applied when syncMode is
 	// set to ContinuousWithDriftDetection. Each exclusion specifies JSON6902 paths to ignore
 	// when evaluating drift, optionally targeting specific resources and features.

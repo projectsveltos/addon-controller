@@ -68,6 +68,8 @@ var (
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
 	RequeueClusterSummaryForCluster   = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
+
+	GetPatchesFrom = getPatchesFrom
 )
 
 var (
@@ -144,7 +146,7 @@ var (
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
 
 	InstantiateTemplateValues = instantiateTemplateValues
-	FecthClusterObjects       = fecthClusterObjects
+	FetchClusterObjects       = fetchClusterObjects
 
 	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
 	IsNamespaced               = isNamespaced

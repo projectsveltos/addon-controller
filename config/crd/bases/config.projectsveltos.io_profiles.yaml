@@ -888,6 +888,50 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
+              patchesFrom:
+                description: |-
+                  PatchesFrom can reference ConfigMap/Secret instances. Within the ConfigMap or Secret data,
+                  it is possible to store additional Kustomize inline Patches applied for all resources on this profile
+                  These values can be static or leverage Go templates for dynamic customization.
+                  When expressed as templates, the values are filled in using information from
+                  resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
+                items:
+                  properties:
+                    kind:
+                      description: |-
+                        Kind of the resource. Supported kinds are:
+                        - ConfigMap/Secret
+                      enum:
+                      - ConfigMap
+                      - Secret
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referenced resource.
+                        Name can be expressed as a template and instantiate using any cluster field.
+                      minLength: 1
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referenced resource.
+                        For ClusterProfile namespace can be left empty. In such a case, namespace will
+                        be implicit set to cluster's namespace.
+                        For Profile namespace must be left empty. The Profile namespace will be used.
+                        Namespace can be expressed as a template and instantiate using any cluster field.
+                      type: string
+                    optional:
+                      default: false
+                      description: |-
+                        Optional indicates that the referenced resource is not mandatory.
+                        If set to true and the resource is not found, the error will be ignored,
+                        and Sveltos will continue processing other ValueFroms.
+                      type: boolean
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               policyRefs:
                 description: |-
                   PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources

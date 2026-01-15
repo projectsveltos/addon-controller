@@ -710,7 +710,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary)
+	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -2481,7 +2481,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 	mgmtConfig := getManagementClusterConfig()
 	mgmtClient := getManagementClusterClient()
 
-	objects, err := fecthClusterObjects(ctx, mgmtConfig, mgmtClient, clusterSummary.Spec.ClusterNamespace,
+	objects, err := fetchClusterObjects(ctx, mgmtConfig, mgmtClient, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, err
@@ -2550,68 +2550,7 @@ func getInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.Cl
 func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	helmChart *configv1beta1.HelmChart, logger logr.Logger) (valuesToInstantiate, valuesToUse []string, err error) {
 
-	valuesToInstantiate = []string{}
-	valuesToUse = []string{}
-	for i := range helmChart.ValuesFrom {
-		vf := &helmChart.ValuesFrom[i]
-		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, vf.Namespace,
-			clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
-				vf.Kind, vf.Namespace, vf.Name, err))
-			return nil, nil, err
-		}
-
-		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, vf.Name, clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
-				vf.Kind, vf.Namespace, vf.Name, err))
-			return nil, nil, err
-		}
-
-		if vf.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
-			if err != nil {
-				err = handleReferenceError(err, vf.Kind, namespace, name, vf.Optional, logger)
-				if err == nil {
-					continue
-				}
-				return nil, nil, err
-			}
-
-			if instantiateTemplate(configMap, logger) {
-				for _, value := range configMap.Data {
-					valuesToInstantiate = append(valuesToInstantiate, value)
-				}
-			} else {
-				for _, value := range configMap.Data {
-					valuesToUse = append(valuesToUse, value)
-				}
-			}
-		} else if vf.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c, types.NamespacedName{Namespace: namespace, Name: name})
-			if err != nil {
-				err = handleReferenceError(err, vf.Kind, namespace, name, vf.Optional, logger)
-				if err == nil {
-					continue
-				}
-				return nil, nil, err
-			}
-
-			if instantiateTemplate(secret, logger) {
-				for _, value := range secret.Data {
-					valuesToInstantiate = append(valuesToInstantiate, string(value))
-				}
-			} else {
-				for _, value := range secret.Data {
-					valuesToUse = append(valuesToUse, string(value))
-				}
-			}
-		}
-	}
-	return valuesToInstantiate, valuesToUse, nil
+	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, logger)
 }
 
 // collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all
@@ -4102,7 +4041,7 @@ func getInstantiatedChart(ctx context.Context, clusterSummary *configv1beta1.Clu
 	// Create a deep copy of the chart to avoid modifying the original.
 	instantiatedChart := currentChart.DeepCopy()
 
-	objects, err := fecthClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	objects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to fetch resources")

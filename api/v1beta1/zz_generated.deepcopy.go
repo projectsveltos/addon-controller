@@ -1096,6 +1096,11 @@ func (in *ProfileSpec) DeepCopyInto(out *ProfileSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.PatchesFrom != nil {
+		in, out := &in.PatchesFrom, &out.PatchesFrom
+		*out = make([]ValueFrom, len(*in))
+		copy(*out, *in)
+	}
 	if in.DriftExclusions != nil {
 		in, out := &in.DriftExclusions, &out.DriftExclusions
 		*out = make([]apiv1beta1.DriftExclusion, len(*in))
@@ -1221,6 +1226,11 @@ func (in *Spec) DeepCopyInto(out *Spec) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.PatchesFrom != nil {
+		in, out := &in.PatchesFrom, &out.PatchesFrom
+		*out = make([]ValueFrom, len(*in))
+		copy(*out, *in)
 	}
 	if in.DriftExclusions != nil {
 		in, out := &in.DriftExclusions, &out.DriftExclusions

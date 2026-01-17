@@ -287,8 +287,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v1.4.0 h1:W30Bmyv5g6qmHOcGtURRmr5JFjKSx1ZA9NRpz147sS8=
-github.com/projectsveltos/libsveltos v1.4.0/go.mod h1:M3ljA5j0FMQ9V0dGE3OvqhzfUEgzcU4JDGj/VTQMfZg=
+github.com/projectsveltos/libsveltos v1.4.1-0.20260117075726-0c63966fba23 h1:8hlYPnuCbcd/iwdbZGHx3wSJGqr4dUD8FHlb3SUlkHU=
+github.com/projectsveltos/libsveltos v1.4.1-0.20260117075726-0c63966fba23/go.mod h1:M3ljA5j0FMQ9V0dGE3OvqhzfUEgzcU4JDGj/VTQMfZg=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=

@@ -63,15 +63,3 @@ func (r *ClusterProfileReconciler) requeueClusterProfileForCluster(
 
 	return requeueForCluster(cluster, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ClusterProfileKind, r.Logger)
 }
-
-func (r *ClusterProfileReconciler) requeueClusterProfileForMachine(
-	ctx context.Context, machine *clusterv1.Machine,
-) []reconcile.Request {
-
-	addTypeInformationToObject(r.Scheme, machine)
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	return requeueForMachine(machine, r.ClusterProfiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ClusterProfileKind, r.Logger)
-}

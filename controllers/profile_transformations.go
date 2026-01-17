@@ -52,18 +52,6 @@ func (r *ProfileReconciler) requeueProfileForCluster(
 	return requeueForCluster(cluster, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ProfileKind, r.Logger)
 }
 
-func (r *ProfileReconciler) requeueProfileForMachine(
-	ctx context.Context, machine *clusterv1.Machine,
-) []reconcile.Request {
-
-	addTypeInformationToObject(r.Scheme, machine)
-
-	r.Mux.Lock()
-	defer r.Mux.Unlock()
-
-	return requeueForMachine(machine, r.Profiles, r.ClusterLabels, r.ClusterMap, configv1beta1.ProfileKind, r.Logger)
-}
-
 func (r *ProfileReconciler) requeueProfileForSet(
 	ctx context.Context, o client.Object,
 ) []reconcile.Request {

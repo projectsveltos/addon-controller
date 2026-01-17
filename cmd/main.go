@@ -699,7 +699,6 @@ func printMemUsage(ctx context.Context, logger logr.Logger) {
 				WithValues("Sys (MiB)", bToMb(m.Sys)).
 				WithValues("NumGC", m.NumGC)
 			l.V(1).Info("memory stats")
-			runtime.GC()
 		}
 	}
 }

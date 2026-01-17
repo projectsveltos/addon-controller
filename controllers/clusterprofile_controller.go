@@ -261,19 +261,6 @@ func (r *ClusterProfileReconciler) WatchForCAPI(mgr ctrl.Manager, c controller.C
 		return err
 	}
 
-	sourceMachine := source.Kind[*clusterv1.Machine](
-		mgr.GetCache(),
-		&clusterv1.Machine{},
-		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterProfileForMachine),
-		predicates.MachinePredicate{Logger: mgr.GetLogger().WithValues("predicate", "machinepredicate")},
-	)
-
-	// When cluster-api machine changes, according to ClusterPredicates,
-	// one or more ClusterProfiles need to be reconciled.
-	if err := c.Watch(sourceMachine); err != nil {
-		return err
-	}
-
 	return nil
 }
 

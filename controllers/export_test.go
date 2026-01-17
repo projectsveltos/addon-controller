@@ -35,13 +35,11 @@ var (
 
 var (
 	RequeueClusterProfileForCluster = (*ClusterProfileReconciler).requeueClusterProfileForCluster
-	RequeueClusterProfileForMachine = (*ClusterProfileReconciler).requeueClusterProfileForMachine
 	GetClustersFromClusterSets      = (*ClusterProfileReconciler).getClustersFromClusterSets
 )
 
 var (
 	RequeueProfileForCluster   = (*ProfileReconciler).requeueProfileForCluster
-	RequeueProfileForMachine   = (*ProfileReconciler).requeueProfileForMachine
 	LimitReferencesToNamespace = (*ProfileReconciler).limitReferencesToNamespace
 	GetClustersFromSets        = (*ProfileReconciler).getClustersFromSets
 )

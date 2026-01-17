@@ -185,14 +185,3 @@ func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileRec
 		Mux:             sync.Mutex{},
 	}
 }
-
-func getProfileReconciler(c client.Client) *controllers.ProfileReconciler {
-	return &controllers.ProfileReconciler{
-		Client:        c,
-		Scheme:        scheme,
-		ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
-		Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
-		ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
-		Mux:           sync.Mutex{},
-	}
-}

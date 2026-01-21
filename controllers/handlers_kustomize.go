@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -383,14 +384,12 @@ func undeployKustomizeRefs(ctx context.Context, c client.Client,
 func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
+	config, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}
 
 	h := sha256.New()
-	var config string
-	config += string(clusterProfileSpecHash)
 
 	sortedKustomizationRefs := getSortedKustomizationRefs(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
 	config += render.AsCode(sortedKustomizationRefs)
@@ -652,7 +651,49 @@ func getKustomizeValuesFrom(ctx context.Context, c client.Client, clusterSummary
 func getKustomizeReferenceResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) (string, error) {
 
-	return getValuesFromResourceHash(ctx, c, clusterSummary, kustomizationRef.ValuesFrom, logger)
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to collect templateResourceRefs")
+		return "", err
+	}
+
+	// Get key-value pairs from ValuesFrom
+	templatedValues, nonTemplatedValues, err := getKustomizeSubstituteValues(ctx, c, clusterSummary, kustomizationRef, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to collect kustomize substitute values")
+		return "", err
+	}
+
+	// Get substitute values. Those are collected from Data sections of referenced ConfigMap/Secret instances.
+	// Those values can be expressed as template. This method instantiates those using resources in
+	// the managemenet cluster
+	instantiatedSubstituteValues, err := instantiateKustomizeSubstituteValues(ctx, clusterSummary, mgmtResources, templatedValues, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to instantiate kustomize substitute values")
+		return "", err
+	}
+	for k := range nonTemplatedValues {
+		instantiatedSubstituteValues[k] = nonTemplatedValues[k]
+	}
+
+	if len(instantiatedSubstituteValues) == 0 {
+		return "", nil
+	}
+
+	// 2. Deterministically marshal the map to JSON.
+	// json.Marshal sorts map keys alphabetically, ensuring the hash remains
+	// the same as long as the content is identical.
+	hashData, err := json.Marshal(instantiatedSubstituteValues)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal kustomize substitute values: %w", err)
+	}
+
+	// 3. Generate SHA256 hash
+	hash := sha256.Sum256(hashData)
+
+	// 4. Return as hex string
+	hashString := fmt.Sprintf("%x", hash)
+	return hashString, nil
 }
 
 func getKustomizationRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef {

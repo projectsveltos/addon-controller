@@ -494,14 +494,10 @@ func pullModeUndeployResources(ctx context.Context, c client.Client, clusterSumm
 func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
-	clusterProfileSpecHash, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
+	config, err := getClusterProfileSpecHash(ctx, clusterSummary, logger)
 	if err != nil {
 		return nil, err
 	}
-
-	h := sha256.New()
-	var config string
-	config += string(clusterProfileSpecHash)
 
 	sortedPolicyRefs := getSortedPolicyRefs(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
 	config += render.AsCode(sortedPolicyRefs)
@@ -537,6 +533,8 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 
 	sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
 
+	// Collect the referenced resources. No need to instantiate them since also the content of the templateResourceRefs
+	// is considered when evaluating the hash
 	for i := range referencedObjects {
 		reference := &referencedObjects[i]
 		if reference.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
@@ -583,6 +581,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		}
 	}
 
+	h := sha256.New()
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
 }

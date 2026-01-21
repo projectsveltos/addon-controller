@@ -33,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -640,4 +642,35 @@ func verifyExtraAnnotations(u *unstructured.Unstructured, extraAnnotations map[s
 	for k := range extraAnnotations {
 		Expect(annotations[k]).To(Equal(extraAnnotations[k]))
 	}
+}
+
+func setAnnotationOnCluster(key, value string) {
+	var currentCluster client.Object
+
+	// Initialize the correct struct based on Kind
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		currentCluster = &libsveltosv1beta1.SveltosCluster{}
+	} else {
+		currentCluster = &clusterv1.Cluster{}
+	}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: kindWorkloadCluster.GetNamespace(),
+				Name:      kindWorkloadCluster.GetName()},
+			currentCluster)
+		if err != nil {
+			return err
+		}
+
+		updatedAnnotations := currentCluster.GetAnnotations()
+		if updatedAnnotations == nil {
+			updatedAnnotations = map[string]string{}
+		}
+		updatedAnnotations[key] = value
+		currentCluster.SetAnnotations(updatedAnnotations)
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
 }

@@ -85,6 +85,10 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 			return nil, err
 		}
 
+		if ref.IgnoreStatusChanges {
+			unstructured.RemoveNestedField(u.Object, "status")
+		}
+
 		result[ref.Identifier] = u
 	}
 

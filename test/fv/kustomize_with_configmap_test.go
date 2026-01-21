@@ -46,6 +46,11 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		kustomizeConfigMapName = "kustomize"
 	)
 
+	var (
+		labelsValues = `customLabels:
+  %s: "{{ .Cluster.metadata.name }}"`
+	)
+
 	It("Deploy Kustomize resources with ConfigMap", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Verifying ConfigMap kustomize exists. It is created by Makefile")
 		kustomizeConfigMap := &corev1.ConfigMap{}

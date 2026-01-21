@@ -140,7 +140,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:3548dcac021da842cded7c2fa7bd8cee832861d71aac771ab9c82720eb857e54
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:071ca9c6e0b31d7a544ee14d09c5cc12ab2aeae90db37376d824445c3055c6c3
         livenessProbe:
           failureThreshold: 3
           httpGet:

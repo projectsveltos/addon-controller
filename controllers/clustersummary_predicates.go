@@ -34,6 +34,12 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+const (
+	// retriggerAnnotation is the annotation used to manually or automatically
+	// force a reconciliation of a ClusterSummary.
+	retriggerAnnotation = "projectsveltos.io/retrigger"
+)
+
 // ConfigMapPredicates predicates for ConfigMaps. ClusterSummaryReconciler watches ConfigMap events
 // and react to those by reconciling itself based on following predicates
 func ConfigMapPredicates(logger logr.Logger) predicate.Funcs {
@@ -347,6 +353,22 @@ func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
 	}
 
 	if !reflect.DeepEqual(oldClusterSummary.DeletionTimestamp, newClusterSummary.DeletionTimestamp) {
+		return true
+	}
+
+	newAnnot := newClusterSummary.GetAnnotations()
+	oldAnnot := oldClusterSummary.GetAnnotations()
+
+	var oldVal, newVal string
+	if oldAnnot != nil {
+		oldVal = oldAnnot[retriggerAnnotation]
+	}
+	if newAnnot != nil {
+		newVal = newAnnot[retriggerAnnotation]
+	}
+
+	if oldVal != newVal {
+		log.V(logs.LogVerbose).Info("Retrigger annotation changed. Reconciling ClusterSummary.")
 		return true
 	}
 

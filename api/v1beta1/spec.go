@@ -579,6 +579,13 @@ type TemplateResourceRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	Optional bool `json:"optional,omitempty"`
+
+	// IgnoreStatusChanges indicates whether changes to the status of the referenced
+	// resource should be ignored. If set to true, only changes to the spec or
+	// metadata (generation change) will trigger a reconciliation.
+	// +kubebuilder:default:=false
+	// +optional
+	IgnoreStatusChanges bool `json:"ignoreStatusChanges,omitempty"`
 }
 
 type PolicyRef struct {

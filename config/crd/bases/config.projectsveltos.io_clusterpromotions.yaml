@@ -962,6 +962,13 @@ spec:
                             Identifier is how the resource will be referred to in the
                             template
                           type: string
+                        ignoreStatusChanges:
+                          default: false
+                          description: |-
+                            IgnoreStatusChanges indicates whether changes to the status of the referenced
+                            resource should be ignored. If set to true, only changes to the spec or
+                            metadata (generation change) will trigger a reconciliation.
+                          type: boolean
                         optional:
                           default: false
                           description: |-

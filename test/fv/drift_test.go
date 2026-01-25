@@ -24,7 +24,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -44,7 +44,7 @@ const (
 
 var (
 	labelsValues = `customLabels:
-  %s: "{{ .Cluster.metadata.name }}"`
+  %s: "{{ .Cluster.metadata.annotations.cluster }}"`
 
 	cleanupControllerValues = `cleanupController:
   livenessProbe:
@@ -109,10 +109,29 @@ var _ = Describe("Helm", Serial, func() {
 	)
 
 	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		tagValue := randomString()
+
+		// Annotation is used to instantiate ConfigMap with labelsValues used in ValuesFrom
+		Byf("Add annotation %s: %s on cluster %s/%s",
+			clusterKey, tagValue, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+		setAnnotationOnCluster(clusterKey, tagValue)
+
 		Byf("Create a ClusterProfile matching Cluster %s/%s",
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		Byf("Update ClusterProfile %s to reference cluster in templateResourceRefs", clusterProfile.Name)
+		clusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					Kind:       kindWorkloadCluster.GetKind(),
+					APIVersion: kindWorkloadCluster.GetAPIVersion(),
+					Name:       "{{ .Cluster.metadata.name }}",
+					Namespace:  "{{ .Cluster.metadata.namespace }}",
+				},
+				IgnoreStatusChanges: true,
+			},
+		}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -243,16 +262,17 @@ reportsController:
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying Kyverno deployment is created in the workload cluster")
+		expectedReplicas := int32(1)
+		Byf("Verifying Kyverno deployment %s/%s is created in the workload cluster (with label %s/%s and replicas %d)",
+			kyvernoNamespace, admissionControllerDeplName, clusterKey, tagValue, expectedReplicas)
 		Eventually(func() bool {
-			expectedReplicas := int32(1)
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 			if err != nil {
 				return false
 			}
-			if !isDeplLabelCorrect(depl.Labels, clusterKey, kindWorkloadCluster.GetName()) {
+			if !isDeplLabelCorrect(depl.Labels, clusterKey, tagValue) {
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
@@ -385,7 +405,7 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoAdmissionImageName {
-					By("Kyverno image is set to v1.14.1")
+					By("Kyverno image is set to v1.15.1")
 					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
 				}
 			}
@@ -410,7 +430,7 @@ reportsController:
 			}
 			return false
 		}, timeout/4, pollingInterval).Should(BeTrue())
-		By("Kyverno image is NOT reset to v1.14.2")
+		By("Kyverno image is NOT reset to v1.15.2")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
@@ -433,6 +453,23 @@ cleanupController:
   replicas: 1
 reportsController:
   replicas: 1`,
+				ValuesFrom: []configv1beta1.ValueFrom{
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: labelsConfigMap.Namespace,
+						Name:      labelsConfigMap.Name,
+					},
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: cleanupControllerConfigMap.Namespace,
+						Name:      cleanupControllerConfigMap.Name,
+					},
+					{
+						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace: admissionControllerConfigMap.Namespace,
+						Name:      admissionControllerConfigMap.Name,
+					},
+				},
 			},
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -447,6 +484,29 @@ reportsController:
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		tagValue = randomString()
+		Byf("Update annotation %s: %s on cluster %s/%s",
+			clusterKey, tagValue, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+		setAnnotationOnCluster(clusterKey, tagValue)
+
+		const sleepFor = 30 * time.Second
+		time.Sleep(sleepFor)
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
+		Byf("Verifying Kyverno deployment %s/%s is update in the workload cluster with label %s:%s",
+			kyvernoNamespace, admissionControllerDeplName, clusterKey, tagValue)
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+			if err != nil {
+				return false
+			}
+			return isDeplLabelCorrect(depl.Labels, clusterKey, tagValue)
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)

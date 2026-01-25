@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -269,17 +268,11 @@ func getSecretHash(secret *corev1.Secret) string {
 
 // getDataSectionHash sorts map and return the hash
 func getDataSectionHash[T any](data map[string]T) string {
-	var keys []string
-	for k := range data {
-		keys = append(keys, k)
-	}
-
-	// Sort keys (ascending order)
-	sort.Strings(keys)
+	sortedKey := getSortedKeys(data)
 
 	var config string
-	for i := range keys {
-		config += render.AsCode(data[keys[i]])
+	for i := range sortedKey {
+		config += render.AsCode(data[sortedKey[i]])
 	}
 
 	return config

@@ -164,3 +164,21 @@ func getSortedDriftExclusions(driftExclusions []libsveltosv1beta1.DriftExclusion
 	sort.Sort(SortedDriftExclusions(sortedDriftExclusions))
 	return sortedDriftExclusions
 }
+
+func getSortedKeys(m interface{}) []string {
+	var keys []string
+	switch v := m.(type) {
+	case map[string]string:
+		keys = make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+	case map[string][]byte:
+		keys = make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}

@@ -517,7 +517,10 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&configv1beta1.ClusterSummary{}, builder.WithPredicates(ClusterSummaryPredicate{Logger: r.Logger.WithName("clusterSummaryPredicate")})).
+		For(&configv1beta1.ClusterSummary{},
+			builder.WithPredicates(
+				ClusterSummaryPredicate{Logger: r.Logger.WithName("clusterSummaryPredicate")}),
+		).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).

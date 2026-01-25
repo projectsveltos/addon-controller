@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +34,6 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -75,8 +75,11 @@ type manager struct {
 	// Those resources' values will be used to instantiate templates contained in referenced
 	requestorForTemplateResourceRefs map[schema.GroupVersionKind]*libsveltosset.Set
 
-	// key: resource being watched, value: list of ClusterSummary interested in this resource
+	// key: resource being watched, value: list of ClusterSummary interested in ALL changes (including status)
 	templateResourceRefsWatched map[corev1.ObjectReference]*libsveltosset.Set
+
+	// key: resource being watched, value: list of ClusterSummary interested ONLY in spec/metadata changes
+	templateResourceRefsWatchedIgnoreStatus map[corev1.ObjectReference]*libsveltosset.Set
 }
 
 // initializeManager initializes a manager implementing the Watchers
@@ -95,6 +98,7 @@ func initializeManager(l logr.Logger, config *rest.Config, c client.Client) {
 			managerInstance.mgmtResourcesWatchedKustomizeRef = make(map[corev1.ObjectReference]*libsveltosset.Set)
 			managerInstance.mgmtResourcesWatchedPolicyRef = make(map[corev1.ObjectReference]*libsveltosset.Set)
 			managerInstance.templateResourceRefsWatched = make(map[corev1.ObjectReference]*libsveltosset.Set)
+			managerInstance.templateResourceRefsWatchedIgnoreStatus = make(map[corev1.ObjectReference]*libsveltosset.Set)
 		}
 	}
 }
@@ -140,7 +144,8 @@ func (m *manager) startWatcherForMgmtResource(ctx context.Context, gvk schema.Gr
 
 // startWatcherForTemplateResourceRef starts a watcher if one does not exist already
 // ClusterSummary is listed as one of the consumer for this watcher.
-// ClusterSummary will only receive updates when the specific resource itself changes, not when other resources of the same type change.
+// ClusterSummary will only receive updates when the specific resource itself changes,
+// not when other resources of the same type change.
 func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk schema.GroupVersionKind,
 	ref *configv1beta1.TemplateResourceRef, clusterSummary *configv1beta1.ClusterSummary) error {
 
@@ -184,12 +189,29 @@ func (m *manager) startWatcherForTemplateResourceRef(ctx context.Context, gvk sc
 
 	m.requestorForTemplateResourceRefs[gvk].Insert(consumer)
 
-	if _, ok := m.templateResourceRefsWatched[resource]; !ok {
-		s := &libsveltosset.Set{}
-		m.templateResourceRefsWatched[resource] = s
-	}
+	if ref.IgnoreStatusChanges {
+		// Ensure it's NOT in the "All Changes" bucket
+		if m.templateResourceRefsWatched[resource] != nil {
+			m.templateResourceRefsWatched[resource].Erase(consumer)
+		}
 
-	m.templateResourceRefsWatched[resource].Insert(consumer)
+		// Add to "Ignore Status" bucket
+		if _, ok := m.templateResourceRefsWatchedIgnoreStatus[resource]; !ok {
+			m.templateResourceRefsWatchedIgnoreStatus[resource] = &libsveltosset.Set{}
+		}
+		m.templateResourceRefsWatchedIgnoreStatus[resource].Insert(consumer)
+	} else {
+		// Ensure it's NOT in the "Ignore Status" bucket
+		if m.templateResourceRefsWatchedIgnoreStatus[resource] != nil {
+			m.templateResourceRefsWatchedIgnoreStatus[resource].Erase(consumer)
+		}
+
+		// Add to "All Changes" bucket
+		if _, ok := m.templateResourceRefsWatched[resource]; !ok {
+			m.templateResourceRefsWatched[resource] = &libsveltosset.Set{}
+		}
+		m.templateResourceRefsWatched[resource].Insert(consumer)
+	}
 
 	return nil
 }
@@ -314,11 +336,22 @@ func (m *manager) stopStaleWatchForTemplateResourceRef(ctx context.Context,
 		}
 	}
 
-	for resource := range m.templateResourceRefsWatched {
+	// Clean up the "All Changes" bucket
+	for resource, set := range m.templateResourceRefsWatched {
 		if _, ok := currentResources[resource]; !ok {
-			m.templateResourceRefsWatched[resource].Erase(consumer)
-			if m.templateResourceRefsWatched[resource].Len() == 0 {
+			set.Erase(consumer)
+			if set.Len() == 0 {
 				delete(m.templateResourceRefsWatched, resource)
+			}
+		}
+	}
+
+	// Clean up the "Ignore Status" bucket
+	for resource, set := range m.templateResourceRefsWatchedIgnoreStatus {
+		if _, ok := currentResources[resource]; !ok {
+			set.Erase(consumer)
+			if set.Len() == 0 {
+				delete(m.templateResourceRefsWatchedIgnoreStatus, resource)
 			}
 		}
 	}
@@ -389,13 +422,13 @@ func (m *manager) runInformer(stopCh <-chan struct{}, s cache.SharedIndexInforme
 
 	handlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			m.react(obj.(client.Object), logger)
+			m.react(nil, obj.(client.Object), logger)
 		},
 		DeleteFunc: func(obj interface{}) {
-			m.react(obj.(client.Object), logger)
+			m.react(nil, obj.(client.Object), logger)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			m.react(newObj.(client.Object), logger)
+			m.react(oldObj.(client.Object), newObj.(client.Object), logger)
 		},
 	}
 	_, err := s.AddEventHandler(handlers)
@@ -406,15 +439,15 @@ func (m *manager) runInformer(stopCh <-chan struct{}, s cache.SharedIndexInforme
 }
 
 // react gets called when an instance of passed in gvk has been modified.
-func (m *manager) react(obj client.Object, logger logr.Logger) {
+func (m *manager) react(oldObj, newObj client.Object, logger logr.Logger) {
 	m.watchMu.RLock()
 	defer m.watchMu.RUnlock()
 
 	ref := corev1.ObjectReference{
-		Kind:       obj.GetObjectKind().GroupVersionKind().Kind,
-		APIVersion: obj.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-		Namespace:  obj.GetNamespace(),
-		Name:       obj.GetName(),
+		Kind:       newObj.GetObjectKind().GroupVersionKind().Kind,
+		APIVersion: newObj.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		Namespace:  newObj.GetNamespace(),
+		Name:       newObj.GetName(),
 	}
 
 	logger = logger.WithValues("resource", fmt.Sprintf("%s/%s", ref.Namespace, ref.Name))
@@ -432,9 +465,22 @@ func (m *manager) react(obj client.Object, logger logr.Logger) {
 	}
 
 	// finds all ClusterSummary objects that want to be informed about updates to this specific resource.
-	// It takes into account registrations made through TemplateResourceRefs
+	// It takes into account registrations made through TemplateResourceRefs.
+	// Consumers interested in ALL changes
 	if v, ok := m.templateResourceRefsWatched[ref]; ok {
 		m.notify(v, logger)
+	}
+
+	// finds all ClusterSummary objects that want to be informed about updates to this specific resource.
+	// It takes into account registrations made through TemplateResourceRefs.
+	// Consumers ignoring Status changes
+	if v, ok := m.templateResourceRefsWatchedIgnoreStatus[ref]; ok {
+		// - Or the Generation has increased (Spec/Metadata change)
+		if oldObj == nil || oldObj.GetGeneration() != newObj.GetGeneration() {
+			m.notify(v, logger)
+		} else {
+			logger.V(logs.LogDebug).Info("skipping notification: only status changed")
+		}
 	}
 }
 
@@ -460,12 +506,12 @@ func (m *manager) notifyConsumer(consumer *corev1.ObjectReference) {
 
 		m.log.V(logs.LogInfo).Info(fmt.Sprintf("requeuing ClusterSummary %s/%s",
 			currentRequestor.Namespace, currentRequestor.Name))
-		// reset hash
-		for i := range currentRequestor.Status.FeatureSummaries {
-			const length = 20
-			currentRequestor.Status.FeatureSummaries[i].Hash = []byte(util.RandomString(length))
+		// reset annotation. This will cause a new reconciliation to happen
+		if currentRequestor.Annotations == nil {
+			currentRequestor.Annotations = map[string]string{}
 		}
-		return m.Status().Update(context.TODO(), currentRequestor)
+		currentRequestor.Annotations[retriggerAnnotation] = time.Now().UTC().Format(time.RFC3339Nano)
+		return m.Update(context.TODO(), currentRequestor)
 	})
 	if err != nil {
 		// TODO: if this fails, there is no way to reconcile the ClusterSummary

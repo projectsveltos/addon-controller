@@ -18,10 +18,8 @@ package controllers_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"reflect"
-	"sort"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,12 +32,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
-	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -322,39 +317,52 @@ var _ = Describe("HandlersResource", func() {
 })
 
 var _ = Describe("Hash methods", func() {
-	It("ResourcesHash returns hash considering all referenced core resources", func() {
+	It("ResourcesHash returns consistent hash considering all referenced core resources", func() {
 		clusterRole1 := rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name: "clusterrole1",
 			},
 			Rules: []rbacv1.PolicyRule{
 				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
 				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
 			},
 		}
+
+		namespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "my-namespace",
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), namespace)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, namespace)).To(Succeed())
+
 		Expect(addTypeInformationToObject(scheme, &clusterRole1)).To(Succeed())
-		configMap1 := createConfigMapWithPolicy(randomString(), randomString(), render.AsCode(clusterRole1))
+		configMap1 := createConfigMapWithPolicy(namespace.Name, "a-configmap-1", render.AsCode(clusterRole1))
+		Expect(testEnv.Create(context.TODO(), configMap1)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, configMap1)).To(Succeed())
 
 		clusterRole2 := rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name: "clusterrole2",
 			},
 			Rules: []rbacv1.PolicyRule{
 				{Verbs: []string{"get", "list"}, APIGroups: []string{"apiextensions.k8s.io"}, Resources: []string{"customresourcedefinitions"}},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, &clusterRole2)).To(Succeed())
-		configMap2 := createConfigMapWithPolicy(randomString(), randomString(), render.AsCode(clusterRole2))
+		configMap2 := createConfigMapWithPolicy(namespace.Name, "a-configmap-2", render.AsCode(clusterRole2))
+		Expect(testEnv.Create(context.TODO(), configMap2)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, configMap2)).To(Succeed())
 
-		namespace := randomString()
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: randomString(),
+				Name:      randomString(),
+				Namespace: namespace.Name,
 			},
 			Spec: configv1beta1.ClusterSummarySpec{
-				ClusterNamespace: namespace,
+				ClusterNamespace: namespace.Name,
 				ClusterName:      randomString(),
-				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
 				ClusterProfileSpec: configv1beta1.Spec{
 					PolicyRefs: []configv1beta1.PolicyRef{
 						{
@@ -366,7 +374,7 @@ var _ = Describe("Hash methods", func() {
 							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 						{
-							Namespace: randomString(), Name: randomString(),
+							Namespace: "default", Name: "non-existing",
 							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
@@ -381,78 +389,35 @@ var _ = Describe("Hash methods", func() {
 				},
 			},
 		}
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterSummary)).To(Succeed())
 
-		cluster := &clusterv1.Cluster{
+		cluster := &libsveltosv1beta1.SveltosCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterSummary.Spec.ClusterName,
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 			},
 		}
-
-		initObjects := []client.Object{
-			clusterSummary,
-			configMap1,
-			configMap2,
-			cluster,
-		}
-
-		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, cluster)).To(Succeed())
 
 		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
-			Client:         c,
+			Client:         testEnv,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
 			ControllerName: "clustersummary",
 		})
 		Expect(err).To(BeNil())
 
-		config := fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.SyncMode)
-		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Reloader)
-		config += fmt.Sprintf("%v", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.Tier)
-		config += fmt.Sprintf("%t", clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict)
-		config += render.AsCode(clusterSummary.Spec.ClusterProfileSpec.Patches)
-		h := sha256.New()
-		h.Write([]byte(config))
-		tmpHash := h.Sum(nil)
-
-		config = string(tmpHash)
-
-		referencedObjects := make([]corev1.ObjectReference, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
-		policyRefs := make(map[corev1.ObjectReference]configv1beta1.PolicyRef, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
-
-		for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
-			referencedObjects[i] = corev1.ObjectReference{
-				Kind:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Kind,
-				Namespace: clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Namespace,
-				Name:      clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i].Name,
-			}
-			policyRefs[referencedObjects[i]] = clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
-		}
-
-		sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
-
-		sortedPolicyRefs := make([]configv1beta1.PolicyRef, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
-		for i := range referencedObjects {
-			sortedPolicyRefs[i] = policyRefs[referencedObjects[i]]
-		}
-		config += render.AsCode(sortedPolicyRefs)
-
-		for i := range referencedObjects {
-			switch referencedObjects[i].Name {
-			case configMap1.Name:
-				config += controllers.GetStringDataSectionHash(configMap1.Data)
-			case configMap2.Name:
-				config += controllers.GetStringDataSectionHash(configMap2.Data)
-			}
-		}
-
-		h = sha256.New()
-		h.Write([]byte(config))
-		expectHash := h.Sum(nil)
-
-		hash, err := controllers.ResourcesHash(context.TODO(), c, clusterSummaryScope.ClusterSummary,
+		expectedHash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummaryScope.ClusterSummary,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
-		Expect(reflect.DeepEqual(hash, expectHash)).To(BeTrue())
+		// Must be consistent
+		for range 10 {
+			hash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummaryScope.ClusterSummary,
+				textlogger.NewLogger(textlogger.NewConfig()))
+			Expect(err).To(BeNil())
+			Expect(reflect.DeepEqual(hash, expectedHash)).To(BeTrue())
+		}
 	})
 })

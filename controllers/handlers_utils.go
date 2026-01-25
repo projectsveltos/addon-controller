@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1230,49 +1231,6 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 	return remoteRestConfig, logger, nil
 }
 
-func getValuesFromResourceHash(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	valuesFrom []configv1beta1.ValueFrom, logger logr.Logger) (string, error) {
-
-	var config string
-	for i := range valuesFrom {
-		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Namespace,
-			clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
-				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
-			return "", err
-		}
-
-		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, valuesFrom[i].Name,
-			clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
-				valuesFrom[i].Kind, valuesFrom[i].Namespace, valuesFrom[i].Name, err))
-			return "", err
-		}
-
-		if valuesFrom[i].Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
-			configMap, err := getConfigMap(ctx, c,
-				types.NamespacedName{Namespace: namespace, Name: name})
-			if err == nil {
-				config += getDataSectionHash(configMap.Data)
-				config += getDataSectionHash(configMap.BinaryData)
-			}
-		} else if valuesFrom[i].Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
-			secret, err := getSecret(ctx, c,
-				types.NamespacedName{Namespace: namespace, Name: name})
-			if err == nil {
-				config += getDataSectionHash(secret.Data)
-				config += getDataSectionHash(secret.StringData)
-			}
-		}
-	}
-
-	return config, nil
-}
-
 func handleReferenceError(err error, kind, namespace, name string, optional bool,
 	logger logr.Logger) error {
 
@@ -1372,9 +1330,8 @@ func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 }
 
 func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	logger logr.Logger) ([]byte, error) {
+	logger logr.Logger) (string, error) {
 
-	h := sha256.New()
 	var config string
 
 	clusterProfileSpec := clusterSummary.Spec.ClusterProfileSpec
@@ -1406,24 +1363,16 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 
 	mgmtResourceHash, err := getTemplateResourceRefHash(ctx, clusterSummary)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	config += string(mgmtResourceHash)
 
-	if clusterProfileSpec.Patches != nil {
-		config += render.AsCode(clusterProfileSpec.Patches)
-	}
-
-	if clusterProfileSpec.PatchesFrom != nil {
-		config += render.AsCode(clusterProfileSpec.PatchesFrom)
-	}
-
-	patchesFromHash, err := getPatchesFromHash(ctx, clusterSummary, logger)
+	patchesHash, err := getPatchesHash(ctx, clusterSummary, logger)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if patchesFromHash != "" {
-		config += patchesFromHash
+	if patchesHash != "" {
+		config += patchesHash
 	}
 
 	// If drift-detectionmanager configuration is in a ConfigMap. fetch ConfigMap and use its Data
@@ -1431,7 +1380,7 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 	if driftDetectionConfigMap := getDriftDetectionConfigMap(); driftDetectionConfigMap != "" {
 		configMap, err := collectDriftDetectionConfigMap(ctx)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		config += render.AsCode(configMap.Data)
 	}
@@ -1440,8 +1389,7 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		config += render.AsCode(clusterProfileSpec.DriftExclusions)
 	}
 
-	h.Write([]byte(config))
-	return h.Sum(nil), nil
+	return config, nil
 }
 
 func getTemplateResourceRefHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -1473,11 +1421,38 @@ func getTemplateResourceRefHash(ctx context.Context, clusterSummary *configv1bet
 	return h.Sum(nil), nil
 }
 
-func getPatchesFromHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+func getPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	return getValuesFromResourceHash(ctx, getManagementClusterClient(), clusterSummary,
-		clusterSummary.Spec.ClusterProfileSpec.PatchesFrom, logger)
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to collect templateResourceRefs")
+		return "", err
+	}
+
+	patches, err := initiatePatches(ctx, clusterSummary, clusterSummary.Name, mgmtResources, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to collect patches")
+		return "", err
+	}
+
+	if len(patches) == 0 {
+		return "", nil
+	}
+
+	// JSON marshaling handles the nested structures and strings within the Patch objects.
+	patchBytes, err := json.Marshal(patches)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal patches: %w", err)
+	}
+
+	// 3. Generate SHA256 hash
+	hash := sha256.New()
+	hash.Write(patchBytes)
+
+	// 4. Return as a hex string
+	hashString := fmt.Sprintf("%x", hash.Sum(nil))
+	return hashString, nil
 }
 
 func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
@@ -1645,13 +1620,16 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 				return nil, nil, err
 			}
 
+			sortedKey := getSortedKeys(configMap.Data)
 			if instantiateTemplate(configMap, logger) {
-				for _, value := range configMap.Data {
-					valuesToInstantiate = append(valuesToInstantiate, value)
+				for i := range sortedKey {
+					key := &sortedKey[i]
+					valuesToInstantiate = append(valuesToInstantiate, configMap.Data[*key])
 				}
 			} else {
-				for _, value := range configMap.Data {
-					valuesToUse = append(valuesToUse, value)
+				for i := range sortedKey {
+					key := &sortedKey[i]
+					valuesToUse = append(valuesToUse, configMap.Data[*key])
 				}
 			}
 		} else if vf.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
@@ -1664,13 +1642,16 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 				return nil, nil, err
 			}
 
+			sortedKey := getSortedKeys(secret.Data)
 			if instantiateTemplate(secret, logger) {
-				for _, value := range secret.Data {
-					valuesToInstantiate = append(valuesToInstantiate, string(value))
+				for i := range sortedKey {
+					key := &sortedKey[i]
+					valuesToInstantiate = append(valuesToInstantiate, string(secret.Data[*key]))
 				}
 			} else {
-				for _, value := range secret.Data {
-					valuesToUse = append(valuesToUse, string(value))
+				for i := range sortedKey {
+					key := &sortedKey[i]
+					valuesToUse = append(valuesToUse, string(secret.Data[*key]))
 				}
 			}
 		}

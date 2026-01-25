@@ -118,6 +118,7 @@ var (
 	KustomizationHash                 = kustomizationHash
 	GetKustomizeReferenceResourceHash = getKustomizeReferenceResourceHash
 	ExtractTarGz                      = extractTarGz
+	GetHelmChartHash                  = getHelmChartHash
 	//nolint: gocritic // getDataSectionHash is generic and needs instantiation
 	GetStringDataSectionHash = func(aMap map[string]string) string { return getDataSectionHash(aMap) }
 	//nolint: gocritic // getDataSectionHash is generic and needs instantiation
@@ -137,11 +138,11 @@ var (
 	CreateReportForUnmanagedHelmRelease      = createReportForUnmanagedHelmRelease
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
 	HandleCharts                             = handleCharts
-	GetHelmReferenceResourceHash             = getHelmReferenceResourceHash
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
 	GetInstantiatedChart                     = getInstantiatedChart
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
+	GetHelmChartInstantiatedValues           = getHelmChartInstantiatedValues
 
 	InstantiateTemplateValues = instantiateTemplateValues
 	FetchClusterObjects       = fetchClusterObjects
@@ -201,4 +202,8 @@ var (
 
 var (
 	SkipUpgrading = skipUpgrading
+)
+
+var (
+	GetSortedKeys = getSortedKeys
 )

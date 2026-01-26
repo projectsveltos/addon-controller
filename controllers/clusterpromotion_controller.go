@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,7 +68,7 @@ type ClusterPromotionReconciler struct {
 	client.Client
 	Config               *rest.Config
 	Scheme               *runtime.Scheme
-	eventRecorder        record.EventRecorder
+	eventRecorder        events.EventRecorder
 	ConcurrentReconciles int
 }
 
@@ -216,8 +216,8 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 		}
 
 		l.V(logs.LogDebug).Info(fmt.Sprintf("Stage %s provisioned", currentStageName))
-		r.eventRecorder.Eventf(promotionScope.ClusterPromotion, corev1.EventTypeNormal, "sveltos",
-			fmt.Sprintf("Stage %s provisioned", currentStageName))
+		r.eventRecorder.Eventf(promotionScope.ClusterPromotion, nil, corev1.EventTypeNormal, "Sveltos",
+			configv1beta1.ClusterPromotionKind, fmt.Sprintf("Stage %s provisioned", currentStageName))
 		// Stage is successfully deployed
 		updateStageStatus(promotionScope.ClusterPromotion, currentStageName, true, nil)
 		updateStageDescription(promotionScope.ClusterPromotion, currentStageName, message)
@@ -239,8 +239,8 @@ func (r *ClusterPromotionReconciler) handlePromotionRestart(ctx context.Context,
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
 	}
 
-	r.eventRecorder.Eventf(promotionScope.ClusterPromotion, corev1.EventTypeNormal, "sveltos",
-		fmt.Sprintf("Provisioning stage %s (Restart)", firstStage.Name))
+	r.eventRecorder.Eventf(promotionScope.ClusterPromotion, nil, corev1.EventTypeNormal, "Sveltos",
+		configv1beta1.ClusterPromotionKind, fmt.Sprintf("Provisioning stage %s (Restart)", firstStage.Name))
 
 	resetStageStatuses(promotionScope.ClusterPromotion)
 	addStageStatus(promotionScope.ClusterPromotion, firstStage.Name)
@@ -288,8 +288,8 @@ func (r *ClusterPromotionReconciler) advanceToNextStage(ctx context.Context,
 		}
 
 		addStageStatus(promotionScope.ClusterPromotion, nextStage.Name)
-		r.eventRecorder.Eventf(promotionScope.ClusterPromotion, corev1.EventTypeNormal, "sveltos",
-			fmt.Sprintf("Provisioning stage %s", nextStage.Name))
+		r.eventRecorder.Eventf(promotionScope.ClusterPromotion, nil, corev1.EventTypeNormal, "Sveltos",
+			configv1beta1.ClusterPromotionKind, fmt.Sprintf("Provisioning stage %s", nextStage.Name))
 
 		return reconcile.Result{Requeue: true, RequeueAfter: normalStageRequeueAfter}
 	}
@@ -317,7 +317,7 @@ func (r *ClusterPromotionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}).
 		Build(r)
 
-	r.eventRecorder = mgr.GetEventRecorderFor("event-recorder")
+	r.eventRecorder = mgr.GetEventRecorder("event-recorder")
 	return err
 }
 

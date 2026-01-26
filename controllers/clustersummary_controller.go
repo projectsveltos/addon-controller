@@ -36,7 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -114,7 +114,7 @@ type ClusterSummaryReconciler struct {
 	ConflictRetryTime time.Duration
 	ctrl              controller.Controller
 
-	eventRecorder record.EventRecorder
+	eventRecorder events.EventRecorder
 
 	DeletedInstances map[types.NamespacedName]time.Time
 }
@@ -565,7 +565,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
 	r.DeletedInstances = make(map[types.NamespacedName]time.Time)
-	r.eventRecorder = mgr.GetEventRecorderFor("event-recorder")
+	r.eventRecorder = mgr.GetEventRecorder("event-recorder")
 	r.ctrl = c
 
 	return err

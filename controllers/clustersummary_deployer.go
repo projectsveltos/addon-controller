@@ -161,7 +161,10 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 			r.updateFeatureStatus(clusterSummaryScope, f.id, deployerStatus, currentHash, deployerError, logger)
 			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
-			r.eventRecorder.Eventf(clusterSummary, corev1.EventTypeNormal, "sveltos", message)
+			cluster, _ := clusterproxy.GetCluster(ctx, getManagementClusterClient(),
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+			r.eventRecorder.Eventf(clusterSummary, cluster, corev1.EventTypeNormal, "Sveltos",
+				configv1beta1.ClusterSummaryKind, message)
 			return nil
 		}
 
@@ -221,8 +224,9 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 	return fmt.Errorf("request is queued")
 }
 
-func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
-	f feature, isConfigSame bool, currentHash []byte, logger logr.Logger) error {
+func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, f feature, isConfigSame bool, currentHash []byte,
+	logger logr.Logger) error {
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
@@ -254,9 +258,12 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 
 		switch *pullmodeStatus {
 		case libsveltosv1beta1.FeatureStatusProvisioned:
+			cluster, _ := clusterproxy.GetCluster(ctx, getManagementClusterClient(),
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
-			r.eventRecorder.Eventf(clusterSummary, corev1.EventTypeNormal, "sveltos", message)
+			r.eventRecorder.Eventf(clusterSummary, cluster, corev1.EventTypeNormal, "Sveltos",
+				configv1beta1.ClusterSummaryKind, message)
 			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
 			clusterSummaryScope.SetFailureMessage(f.id, nil)
 			now := metav1.NewTime(time.Now())

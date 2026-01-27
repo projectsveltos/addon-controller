@@ -717,6 +717,9 @@ func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client
 
 	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, cluster, logger)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	if !ready {

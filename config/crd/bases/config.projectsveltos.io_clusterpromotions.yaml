@@ -909,6 +909,224 @@ spec:
                       type: object
                     type: array
                     x-kubernetes-list-type: atomic
+                  postDeleteChecks:
+                    description: |-
+                      PostDeleteChecks is a slice of Lua functions to run against
+                      the managed cluster *after* Sveltos has deleted all resources.
+                      This ensures that the environment has reached the desired clean state.
+                    items:
+                      properties:
+                        evaluateCEL:
+                          description: |-
+                            EvaluateCEL contains a list of named CEL (Common Expression Language) rules.
+                            Each rule will be evaluated in order against each object selected based on
+                            the criteria defined above. Each rule's expression must return a boolean value
+                            indicating whether the object is a match.
+
+                            Evaluation stops at the first rule that returns true; subsequent
+                            rules will not be evaluated.
+                          items:
+                            description: CELRule defines a named CEL rule used in
+                              EvaluateCEL.
+                            properties:
+                              name:
+                                description: Name is a human-readable identifier for
+                                  the rule.
+                                type: string
+                              rule:
+                                description: |-
+                                  Rule is the CEL (Common Expression Language) expression to evaluate.
+                                  It must return a bool
+                                type: string
+                            required:
+                            - name
+                            - rule
+                            type: object
+                          type: array
+                        featureID:
+                          description: |-
+                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            This field indicates when to run this check.
+                            For instance:
+                            - if set to Helm this check will be run after all helm
+                            charts specified in the ClusterProfile are deployed.
+                            - if set to Resources this check will be run after the content
+                            of all the ConfigMaps/Secrets referenced by ClusterProfile in the
+                            PolicyRef sections is deployed
+                          enum:
+                          - Resources
+                          - Helm
+                          - Kustomize
+                          type: string
+                        group:
+                          description: Group of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                        kind:
+                          description: Kind of the resource to fetch in the managed
+                            Cluster.
+                          minLength: 1
+                          type: string
+                        labelFilters:
+                          description: LabelFilters allows to filter resources based
+                            on current labels.
+                          items:
+                            properties:
+                              key:
+                                description: Key is the label key
+                                type: string
+                              operation:
+                                description: Operation is the comparison operation
+                                enum:
+                                - Equal
+                                - Different
+                                - Has
+                                - DoesNotHave
+                                type: string
+                              value:
+                                description: Value is the label value
+                                type: string
+                            required:
+                            - key
+                            - operation
+                            type: object
+                          type: array
+                        name:
+                          description: Name is the name of this check
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the resource to fetch in the managed Cluster.
+                            Empty for resources scoped at cluster level.
+                          type: string
+                        script:
+                          description: |-
+                            Script is a text containing a lua script.
+                            Must return struct with field "health"
+                            representing whether object is a match (true or false)
+                          type: string
+                        version:
+                          description: Version of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                      required:
+                      - featureID
+                      - group
+                      - kind
+                      - name
+                      - version
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  preDeleteChecks:
+                    description: |-
+                      PreDeleteChecks is a slice of Lua functions to run against
+                      the managed cluster *before* Sveltos starts deleting resources.
+                      If any of these fail, the deletion process is halted.
+                    items:
+                      properties:
+                        evaluateCEL:
+                          description: |-
+                            EvaluateCEL contains a list of named CEL (Common Expression Language) rules.
+                            Each rule will be evaluated in order against each object selected based on
+                            the criteria defined above. Each rule's expression must return a boolean value
+                            indicating whether the object is a match.
+
+                            Evaluation stops at the first rule that returns true; subsequent
+                            rules will not be evaluated.
+                          items:
+                            description: CELRule defines a named CEL rule used in
+                              EvaluateCEL.
+                            properties:
+                              name:
+                                description: Name is a human-readable identifier for
+                                  the rule.
+                                type: string
+                              rule:
+                                description: |-
+                                  Rule is the CEL (Common Expression Language) expression to evaluate.
+                                  It must return a bool
+                                type: string
+                            required:
+                            - name
+                            - rule
+                            type: object
+                          type: array
+                        featureID:
+                          description: |-
+                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            This field indicates when to run this check.
+                            For instance:
+                            - if set to Helm this check will be run after all helm
+                            charts specified in the ClusterProfile are deployed.
+                            - if set to Resources this check will be run after the content
+                            of all the ConfigMaps/Secrets referenced by ClusterProfile in the
+                            PolicyRef sections is deployed
+                          enum:
+                          - Resources
+                          - Helm
+                          - Kustomize
+                          type: string
+                        group:
+                          description: Group of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                        kind:
+                          description: Kind of the resource to fetch in the managed
+                            Cluster.
+                          minLength: 1
+                          type: string
+                        labelFilters:
+                          description: LabelFilters allows to filter resources based
+                            on current labels.
+                          items:
+                            properties:
+                              key:
+                                description: Key is the label key
+                                type: string
+                              operation:
+                                description: Operation is the comparison operation
+                                enum:
+                                - Equal
+                                - Different
+                                - Has
+                                - DoesNotHave
+                                type: string
+                              value:
+                                description: Value is the label value
+                                type: string
+                            required:
+                            - key
+                            - operation
+                            type: object
+                          type: array
+                        name:
+                          description: Name is the name of this check
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the resource to fetch in the managed Cluster.
+                            Empty for resources scoped at cluster level.
+                          type: string
+                        script:
+                          description: |-
+                            Script is a text containing a lua script.
+                            Must return struct with field "health"
+                            representing whether object is a match (true or false)
+                          type: string
+                        version:
+                          description: Version of the resource to fetch in the managed
+                            Cluster.
+                          type: string
+                      required:
+                      - featureID
+                      - group
+                      - kind
+                      - name
+                      - version
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
                   reloader:
                     default: false
                     description: |-

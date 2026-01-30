@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -535,22 +536,17 @@ func cleanProfileResources(ctx context.Context, c client.Client, profile client.
 // and a matching Sveltos/Cluster.
 // If ClusterProfile/Profile Spec.SyncMode is set to one time, nothing will happen
 func updateClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
-	cluster *corev1.ObjectReference) error {
+	clusterSummary *configv1beta1.ClusterSummary, cluster *corev1.ObjectReference,
+) (*configv1beta1.ClusterSummary, error) {
 
 	if profileScope.IsOneTimeSync() {
-		return nil
-	}
-
-	clusterSummary, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
-		cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(cluster))
-	if err != nil {
-		return err
+		return clusterSummary, nil
 	}
 
 	if reflect.DeepEqual(profileScope.GetSpec(), clusterSummary.Spec.ClusterProfileSpec) &&
 		reflect.DeepEqual(profileScope.Profile.GetAnnotations(), clusterSummary.Annotations) {
 		// Nothing has changed
-		return nil
+		return clusterSummary, nil
 	}
 
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
@@ -559,7 +555,8 @@ func updateClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 	addClusterSummaryLabels(clusterSummary, profileScope, cluster)
 	// Copy annotation. Paused annotation might be set on ClusterProfile.
 	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
-	return c.Update(ctx, clusterSummary)
+	err := c.Update(ctx, clusterSummary)
+	return clusterSummary, err
 }
 
 func addClusterSummaryLabels(clusterSummary *configv1beta1.ClusterSummary, profileScope *scope.ProfileScope,
@@ -783,7 +780,8 @@ func patchClusterSummary(ctx context.Context, c client.Client, profileScope *sco
 			logger.V(logs.LogInfo).Info(msg)
 			return &ClusterSummaryDeletedError{Message: msg}
 		}
-		err = updateClusterSummary(ctx, c, profileScope, cluster)
+
+		_, err = updateClusterSummary(ctx, c, profileScope, cs, cluster)
 		if err != nil {
 			logger.Error(err, "failed to update ClusterSummary")
 			return err
@@ -834,10 +832,18 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 
 		if util.IsOwnedByObject(cs, profileScope.Profile, targetGK) {
 			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
-				foundClusterSummaries = true
-				err := c.Delete(ctx, cs)
+				clusterRef := getClusterObjectReferenceFromClusterSummary(cs)
+				currentClusterSummary, err := updateClusterSummary(ctx, c, profileScope, cs, clusterRef)
 				if err != nil {
 					profileScope.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
+						cs.Namespace, cs.Name))
+					return err
+				}
+
+				foundClusterSummaries = true
+				err = c.Delete(ctx, currentClusterSummary)
+				if err != nil {
+					profileScope.Error(err, fmt.Sprintf("failed to delete ClusterSummary for cluster %s/%s",
 						cs.Namespace, cs.Name))
 					return err
 				}
@@ -1276,4 +1282,19 @@ func getPrerequesites(profileScope *scope.ProfileScope) []corev1.ObjectReference
 	}
 
 	return prerequesites
+}
+
+func getClusterObjectReferenceFromClusterSummary(cs *configv1beta1.ClusterSummary) *corev1.ObjectReference {
+	cluster := &corev1.ObjectReference{
+		Namespace:  cs.Spec.ClusterNamespace,
+		Name:       cs.Spec.ClusterName,
+		Kind:       clusterv1.ClusterKind,
+		APIVersion: clusterv1.GroupVersion.String(),
+	}
+	if cs.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos {
+		cluster.Kind = libsveltosv1beta1.SveltosClusterKind
+		cluster.APIVersion = libsveltosv1beta1.GroupVersion.String()
+	}
+
+	return cluster
 }

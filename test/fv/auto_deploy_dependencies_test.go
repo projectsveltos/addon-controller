@@ -95,97 +95,98 @@ var _ = Describe("Feature", func() {
 		namePrefix = "auto-deploy-dependencies-"
 	)
 
-	It("With AutoDeployDependencies set Sveltos resolves all prerequesities", Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
-		Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector is not set
-		helmClusterProfile := getClusterProfile(namePrefix, map[string]string{})
-		Byf("Create ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
-		helmClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.5.2",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), helmClusterProfile)).To(Succeed())
+	It("With AutoDeployDependencies set Sveltos resolves all prerequesities",
+		Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
+			Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector is not set
+			helmClusterProfile := getClusterProfile(namePrefix, map[string]string{})
+			Byf("Create ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
+			helmClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+				{
+					RepositoryURL:    "https://kyverno.github.io/kyverno/",
+					RepositoryName:   "kyverno",
+					ChartName:        "kyverno/kyverno",
+					ChartVersion:     "v3.5.2",
+					ReleaseName:      "kyverno-latest",
+					ReleaseNamespace: "kyverno",
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), helmClusterProfile)).To(Succeed())
 
-		configMapNs := randomString()
-		Byf("Create configMap's namespace %s", configMapNs)
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: configMapNs,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+			configMapNs := randomString()
+			Byf("Create configMap's namespace %s", configMapNs)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapNs,
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
 
-		Byf("Create a configMap with disallow-latest-tag Kyverno policy")
-		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), disallowLatestTag)
-		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
-		currentConfigMap := &corev1.ConfigMap{}
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+			Byf("Create a configMap with disallow-latest-tag Kyverno policy")
+			configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), disallowLatestTag)
+			Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+			currentConfigMap := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 
-		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
-		policyClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		policyClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
-		Byf("Make ClusterProfile %s depend on ClusterProfile %s", policyClusterProfile.Name, helmClusterProfile.Name)
-		policyClusterProfile.Spec.DependsOn = []string{helmClusterProfile.Name}
-		Byf("Make ClusterProfile %s reference ConfigMap %s/%s",
-			policyClusterProfile.Name, configMap.Namespace, configMap.Name)
-		policyClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-			{
-				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace: configMap.Namespace,
-				Name:      configMap.Name,
-			},
-		}
-		Expect(k8sClient.Create(context.TODO(), policyClusterProfile)).To(Succeed())
+			Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			policyClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+			policyClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+			Byf("Make ClusterProfile %s depend on ClusterProfile %s", policyClusterProfile.Name, helmClusterProfile.Name)
+			policyClusterProfile.Spec.DependsOn = []string{helmClusterProfile.Name}
+			Byf("Make ClusterProfile %s reference ConfigMap %s/%s",
+				policyClusterProfile.Name, configMap.Namespace, configMap.Name)
+			policyClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), policyClusterProfile)).To(Succeed())
 
-		verifyClusterProfileMatches(policyClusterProfile)
+			verifyClusterProfileMatches(policyClusterProfile)
 
-		currentClusterProfile := &configv1beta1.ClusterProfile{}
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: policyClusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: policyClusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
 
-		Byf("Verify ClusterSummary for dependent ClusterProfile")
-		policyClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+			Byf("Verify ClusterSummary for dependent ClusterProfile")
+			policyClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				currentClusterProfile.Name, &currentClusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		// Because of dependencies, expect also the ClusterProfile deploying Kyverno is a match
-		verifyClusterProfileMatches(helmClusterProfile)
+			// Because of dependencies, expect also the ClusterProfile deploying Kyverno is a match
+			verifyClusterProfileMatches(helmClusterProfile)
 
-		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: helmClusterProfile.Name},
-			currentClusterProfile)).To(Succeed())
-		Byf("Verify CLusterSummary for prerequisite ClusterProfile")
-		helmClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
-			currentClusterProfile.Name, &currentClusterProfile.Spec,
-			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: helmClusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
+			Byf("Verify CLusterSummary for prerequisite ClusterProfile")
+			helmClusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
+				currentClusterProfile.Name, &currentClusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
-		}
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
-			helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
-			nil, charts)
+			charts := []configv1beta1.Chart{
+				{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
+			}
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, helmClusterProfile.Name,
+				helmClusterSummary.Spec.ClusterNamespace, helmClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+				nil, charts)
 
-		policies := []policy{
-			{kind: "ClusterPolicy", name: "disallow-latest-tag", namespace: "", group: "kyverno.io"},
-		}
+			policies := []policy{
+				{kind: "ClusterPolicy", name: "disallow-latest-tag", namespace: "", group: "kyverno.io"},
+			}
 
-		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, policyClusterProfile.Name,
-			policyClusterSummary.Spec.ClusterNamespace, policyClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
-			policies, nil)
+			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, policyClusterProfile.Name,
+				policyClusterSummary.Spec.ClusterNamespace, policyClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
+				policies, nil)
 
-		deleteClusterProfile(policyClusterProfile)
+			deleteClusterProfile(policyClusterProfile)
 
-		verifyClusterProfileIsNotAMatch(helmClusterProfile)
+			verifyClusterProfileIsNotAMatch(helmClusterProfile)
 
-		deleteClusterProfile(helmClusterProfile)
-	})
+			deleteClusterProfile(helmClusterProfile)
+		})
 })
 
 func verifyClusterProfileIsNotAMatch(clusterProfile *configv1beta1.ClusterProfile) {

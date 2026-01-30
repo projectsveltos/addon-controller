@@ -61,7 +61,7 @@ var _ = Describe("HelmOptions", func() {
 					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
 					RepositoryName:   "external-dns",
 					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.17.0",
+					ChartVersion:     "1.20.0",
 					ReleaseName:      "external-dns",
 					ReleaseNamespace: "external-dns",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -102,10 +102,10 @@ var _ = Describe("HelmOptions", func() {
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)).To(Succeed())
 		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
-		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.17.0"))
+		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.20.0"))
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "external-dns", ChartVersion: "1.17.0", Namespace: "external-dns"},
+			{ReleaseName: "external-dns", ChartVersion: "1.20.0", Namespace: "external-dns"},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -122,7 +122,7 @@ var _ = Describe("HelmOptions", func() {
 					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
 					RepositoryName:   "external-dns",
 					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.14.4",
+					ChartVersion:     "1.17.0",
 					ReleaseName:      "external-dns",
 					ReleaseNamespace: "external-dns",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -158,7 +158,7 @@ var _ = Describe("HelmOptions", func() {
 			if len(depl.Spec.Template.Spec.Containers) != 1 {
 				return false
 			}
-			return strings.Contains(depl.Spec.Template.Spec.Containers[0].Image, "v0.14.1")
+			return strings.Contains(depl.Spec.Template.Spec.Containers[0].Image, "v0.17.0")
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Update ClusterProfile %s to uninstall external-dns helm charts", clusterProfile.Name)
@@ -171,7 +171,7 @@ var _ = Describe("HelmOptions", func() {
 					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
 					RepositoryName:   "external-dns",
 					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.14.4",
+					ChartVersion:     "1.17.0",
 					ReleaseName:      "external-dns",
 					ReleaseNamespace: "external-dns",
 					HelmChartAction:  configv1beta1.HelmChartActionUninstall,

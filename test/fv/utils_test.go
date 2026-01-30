@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -135,14 +136,19 @@ func getClusterSummaryOwnerReference(clusterSummary *configv1beta1.ClusterSummar
 	return nil, nil
 }
 
-// getKindWorkloadClusterKubeconfig returns client to access the kind cluster used as workload cluster
-func getKindWorkloadClusterKubeconfig() (client.Client, error) {
+// getKindWorkloadClusterRestConfig returns rest.Config to access the kind cluster used as workload cluster
+func getKindWorkloadClusterRestConfig() (*rest.Config, error) {
 	kubeconfigPath := "workload_kubeconfig" // this file is created in this directory by Makefile during cluster creation
 	config, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
-	restConfig, err := clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{}).ClientConfig()
+	return clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{}).ClientConfig()
+}
+
+// getKindWorkloadClusterKubeconfig returns client to access the kind cluster used as workload cluster
+func getKindWorkloadClusterKubeconfig() (client.Client, error) {
+	restConfig, err := getKindWorkloadClusterRestConfig()
 	if err != nil {
 		return nil, err
 	}

@@ -251,7 +251,7 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 		return err
 	}
 	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
-		libsveltosv1beta1.FeatureHelm, logger)
+		libsveltosv1beta1.FeatureHelm, false, logger)
 }
 
 func manageDriftDetectionManagerDeploymentForHelm(ctx context.Context, c client.Client,
@@ -528,8 +528,20 @@ func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSum
 
 	logger.V(logs.LogDebug).Info("undeployHelmChartResources")
 
+	err := validatePreDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "pre delete checks failed")
+		return err
+	}
+
 	releaseReports, err := uninstallHelmCharts(ctx, c, clusterSummary, kubeconfig, logger)
 	if err != nil {
+		return err
+	}
+
+	err = validatePostDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "post delete checks failed")
 		return err
 	}
 
@@ -1594,6 +1606,12 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	logger = logger.WithValues("release", releaseName, "releaseNamespace", releaseNamespace)
 	logger.V(logs.LogDebug).Info("uninstalling release")
 
+	err = validatePreDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "pre delete checks failed")
+		return err
+	}
+
 	enableClientCache := false
 	if helmChart != nil {
 		enableClientCache = getEnableClientCacheValue(helmChart.Options)
@@ -1608,6 +1626,12 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 
 	_, err = uninstallClient.Run(releaseName)
 	if err != nil {
+		return err
+	}
+
+	err = validatePostDeleteChecks(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "post delete checks failed")
 		return err
 	}
 

@@ -1495,6 +1495,8 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
 		pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths),
+		pullmode.WithPreDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks),
+		pullmode.WithPostDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks),
 		pullmode.WithDeployedGVKs(gvks))
 
 	// Do not check on profileOwnerRef being not nil. It must always be passed

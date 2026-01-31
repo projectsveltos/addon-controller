@@ -979,7 +979,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 			return releaseReports, chartDeployed, err
 		}
 
-		err = updateValueHashOnHelmChartSummary(ctx, instantiatedChart, clusterSummary, mgmtResources, logger)
+		valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, clusterSummary, mgmtResources, logger)
 		if err != nil {
 			return releaseReports, chartDeployed, err
 		}
@@ -987,8 +987,14 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		releaseReports = append(releaseReports, *report)
 
 		if currentRelease != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) status: %s",
-				currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion, currentRelease.Status))
+			if valueHash != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) (value hash %x) status: %s",
+					currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion,
+					valueHash, currentRelease.Status))
+			} else {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) status: %s",
+					currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion, currentRelease.Status))
+			}
 			if currentRelease.Status == release.StatusDeployed.String() {
 				// Deployed chart is used for updating ClusterConfiguration. There is no ClusterConfiguration for mgmt cluster
 				chartDeployed = append(chartDeployed, configv1beta1.Chart{
@@ -3573,13 +3579,13 @@ func getHelmChartValuesHash(ctx context.Context, c client.Client, instantiatedCh
 
 func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1beta1.HelmChart,
 	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
-	logger logr.Logger) error {
+	logger logr.Logger) ([]byte, error) {
 
 	c := getManagementClusterClient()
 
 	helmChartValuesHash, err := getHelmChartValuesHash(ctx, c, requestedChart, clusterSummary, mgmtResources, logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -3602,7 +3608,7 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 		return c.Status().Update(ctx, currentClusterSummary)
 	})
 
-	return err
+	return helmChartValuesHash, err
 }
 
 // getValueHashFromHelmChartSummary returns the valueHash stored for this chart

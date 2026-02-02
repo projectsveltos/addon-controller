@@ -1456,7 +1456,7 @@ func getPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 }
 
 func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
-	profileRef *corev1.ObjectReference, configurationHash []byte) []pullmode.Option {
+	profileRef *corev1.ObjectReference, configurationHash []byte, includeDeleteChecks bool) []pullmode.Option {
 
 	setters := make([]pullmode.Option, 0)
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
@@ -1495,9 +1495,14 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
 		pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths),
-		pullmode.WithPreDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks),
-		pullmode.WithPostDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks),
 		pullmode.WithDeployedGVKs(gvks))
+
+	if includeDeleteChecks {
+		setters = append(setters,
+			pullmode.WithPreDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks),
+			pullmode.WithPostDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks),
+		)
+	}
 
 	// Do not check on profileOwnerRef being not nil. It must always be passed
 	sourceRef := corev1.ObjectReference{

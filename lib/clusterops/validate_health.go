@@ -79,6 +79,11 @@ func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check 
 		return err
 	}
 
+	// This can happen if the CRD is not present
+	if list == nil {
+		return nil
+	}
+
 	if !isDelete {
 		// dont fail for pre and post delete checks. Those checks are usually intended to verify
 		// resources are gone

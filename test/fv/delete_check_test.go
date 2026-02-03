@@ -79,8 +79,7 @@ spec:
     - "gh-pages.github.com"`
 	)
 
-	// TODO: Add to NEW-PULLMODE as well once sveltos-applier is taken care of
-	It("Pre Delete checks blocks an uninstall", Label("NEW-FV", "EXTENDED"), func() {
+	It("Pre Delete checks blocks an uninstall", Label("NEW-FV", "NEW-FV-PULLMODE", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s",
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})

@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v29.1.5+incompatible
+	github.com/docker/cli v29.2.1+incompatible
 	github.com/fluxcd/pkg/apis/meta v1.25.0
 	github.com/fluxcd/pkg/http/fetch v0.22.0
 	github.com/fluxcd/pkg/tar v0.17.0

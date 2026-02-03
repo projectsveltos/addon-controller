@@ -366,7 +366,7 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 	if err != nil {
 		return err
 	}
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil)
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil, true)
 
 	// If charts have pre/post delete hooks, those need to be deployed. A ConfigurationGroup to deploy those
 	// is created. If this does not exist yet assume we still have to deploy those.
@@ -2207,73 +2207,64 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kubeconfig string, logger logr.Logger) ([]configv1beta1.ReleaseReport, error) {
 
+	staleReleases, err := getStaleReleases(ctx, c, clusterSummary, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get list of stale helm releases")
+		return nil, err
+	}
+
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 
-	managedHelmReleases := chartManager.GetManagedHelmReleases(clusterSummary)
-
-	// Build map of current referenced helm charts
-	currentlyReferencedReleases := make(map[string]bool)
-	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		currentlyReferencedReleases[chartManager.GetReleaseKey(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
-	}
-
 	reports := make([]configv1beta1.ReleaseReport, 0)
 
-	for i := range managedHelmReleases {
-		releaseKey := chartManager.GetReleaseKey(managedHelmReleases[i].Namespace, managedHelmReleases[i].Name)
-		if _, ok := currentlyReferencedReleases[releaseKey]; !ok {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("helm release %s (namespace %s) used to be managed but not referenced anymore",
-				managedHelmReleases[i].Name, managedHelmReleases[i].Namespace))
-
-			_, err := getReleaseInfo(managedHelmReleases[i].Name,
-				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, false)
-			if err != nil {
-				if errors.Is(err, driver.ErrReleaseNotFound) {
-					continue
-				}
-				return nil, err
+	for i := range staleReleases {
+		_, err := getReleaseInfo(staleReleases[i].Name,
+			staleReleases[i].Namespace, kubeconfig, &registryClientOptions{}, false)
+		if err != nil {
+			if errors.Is(err, driver.ErrReleaseNotFound) {
+				continue
 			}
-
-			if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-				// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
-				// Let the other ClusterSummary take it over.
-
-				currentChart := &configv1beta1.HelmChart{
-					ReleaseNamespace: managedHelmReleases[i].Namespace,
-					ReleaseName:      managedHelmReleases[i].Name,
-				}
-				otherRegisteredClusterSummaries := chartManager.GetRegisteredClusterSummariesForChart(
-					clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-					clusterSummary.Spec.ClusterType, currentChart)
-				if len(otherRegisteredClusterSummaries) > 1 {
-					// Immediately unregister so next inline ClusterSummary can take this over
-					chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
-					err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
-						otherRegisteredClusterSummaries, logger)
-					if err != nil {
-						// TODO: Handle errors to prevent bad state. ClusterSummary no longer manage the chart,
-						// but no other ClusterSummary instance has been requeued.
-						return nil, err
-					}
-
-					continue
-				}
-			}
-
-			if err := uninstallRelease(ctx, clusterSummary, managedHelmReleases[i].Name,
-				managedHelmReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil, logger); err != nil {
-				return nil, err
-			}
-
-			reports = append(reports, configv1beta1.ReleaseReport{
-				ReleaseNamespace: managedHelmReleases[i].Namespace, ReleaseName: managedHelmReleases[i].Name,
-				Action: string(configv1beta1.UninstallHelmAction),
-			})
+			return nil, err
 		}
+
+		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
+			// Let the other ClusterSummary take it over.
+
+			currentChart := &configv1beta1.HelmChart{
+				ReleaseNamespace: staleReleases[i].Namespace,
+				ReleaseName:      staleReleases[i].Name,
+			}
+			otherRegisteredClusterSummaries := chartManager.GetRegisteredClusterSummariesForChart(
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				clusterSummary.Spec.ClusterType, currentChart)
+			if len(otherRegisteredClusterSummaries) > 1 {
+				// Immediately unregister so next inline ClusterSummary can take this over
+				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
+				err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
+					otherRegisteredClusterSummaries, logger)
+				if err != nil {
+					// TODO: Handle errors to prevent bad state. ClusterSummary no longer manage the chart,
+					// but no other ClusterSummary instance has been requeued.
+					return nil, err
+				}
+
+				continue
+			}
+		}
+
+		if err := uninstallRelease(ctx, clusterSummary, staleReleases[i].Name,
+			staleReleases[i].Namespace, kubeconfig, &registryClientOptions{}, nil, logger); err != nil {
+			return nil, err
+		}
+
+		reports = append(reports, configv1beta1.ReleaseReport{
+			ReleaseNamespace: staleReleases[i].Namespace, ReleaseName: staleReleases[i].Name,
+			Action: string(configv1beta1.UninstallHelmAction),
+		})
 	}
 
 	return reports, nil
@@ -4445,7 +4436,14 @@ func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *con
 		return err
 	}
 
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash)
+	staleReleases, err := getStaleReleases(ctx, getManagementClusterClient(), clusterSummary, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get list of stale helm releases")
+		return err
+	}
+
+	// if a stale helm release is being deleted, run the pre/post delete checks
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash, len(staleReleases) != 0)
 	// Commit deployment
 	return pullmode.CommitStagedResourcesForDeployment(ctx, getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
@@ -4568,4 +4566,36 @@ func removeCachedData(settings *cli.EnvSettings, name, repoURL string, registryO
 	}
 
 	_ = repoAddOrUpdate(settings, name, repoURL, registryOptions, logger)
+}
+
+// getStaleReleases returns releases which used to be managed by the ClusterSummary but are not referenced anymore
+func getStaleReleases(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) ([]chartmanager.HelmReleaseInfo, error) {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	managedHelmReleases := chartManager.GetManagedHelmReleases(clusterSummary)
+
+	// Build map of current referenced helm charts
+	currentlyReferencedReleases := make(map[string]bool)
+	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+		currentlyReferencedReleases[chartManager.GetReleaseKey(currentChart.ReleaseNamespace, currentChart.ReleaseName)] = true
+	}
+
+	staleReleases := make([]chartmanager.HelmReleaseInfo, 0)
+
+	for i := range managedHelmReleases {
+		releaseKey := chartManager.GetReleaseKey(managedHelmReleases[i].Namespace, managedHelmReleases[i].Name)
+		if _, ok := currentlyReferencedReleases[releaseKey]; !ok {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("helm release %s (namespace %s) used to be managed but not referenced anymore",
+				managedHelmReleases[i].Name, managedHelmReleases[i].Namespace))
+			staleReleases = append(staleReleases, managedHelmReleases[i])
+		}
+	}
+
+	return staleReleases, nil
 }

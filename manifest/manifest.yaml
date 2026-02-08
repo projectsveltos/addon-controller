@@ -8002,6 +8002,8 @@ spec:
   selector:
     matchLabels:
       control-plane: addon-controller
+  strategy:
+    type: Recreate
   template:
     metadata:
       annotations:
@@ -8067,6 +8069,12 @@ spec:
         volumeMounts:
         - mountPath: /tmp
           name: tmp
+      initContainers:
+      - env:
+        - name: IS_INITIALIZATION
+          value: "true"
+        image: docker.io/projectsveltos/addon-controller:main
+        name: initialization
       securityContext:
         runAsNonRoot: true
       serviceAccountName: addon-controller

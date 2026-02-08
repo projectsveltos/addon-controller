@@ -40,9 +40,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/fields"
+	apimachineryruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -126,35 +128,21 @@ func main() {
 	pflag.Parse()
 
 	reportMode = controllers.ReportMode(tmpReportMode)
-	disableFor, byObject := getCacheConfig()
-
 	ctrl.SetLogger(klog.Background())
-	ctrlOptions := ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                getDiagnosticsOptions(),
-		HealthProbeBindAddress: healthAddr,
-		WebhookServer: webhook.NewServer(
-			webhook.Options{
-				Port: webhookPort,
-			}),
-		Cache: cache.Options{
-			SyncPeriod:       &syncPeriod,
-			ByObject:         byObject,
-			DefaultTransform: reduceMemoryFootprint,
-		},
-		Client: client.Options{
-			Cache: &client.CacheOptions{
-				DisableFor: disableFor,
-			},
-		},
-		PprofBindAddress: profilerAddress,
-	}
+	ctrlOptions := getCtrlOptions(scheme)
 
 	restConfig := ctrl.GetConfigOrDie()
 	restConfig.QPS = restConfigQPS
 	restConfig.Burst = restConfigBurst
 	restConfig.UserAgent = remote.DefaultClusterAPIUserAgent("addon-controller")
 	restConfig.WarningHandler = apiwarnings.DefaultHandler(klog.Background().WithName("API Server Warning"))
+
+	ctx := ctrl.SetupSignalHandler()
+
+	if isInitContainer() {
+		runInitContainerWork(ctx, restConfig, scheme)
+		os.Exit(0)
+	}
 
 	mgr, err := ctrl.NewManager(restConfig, ctrlOptions)
 	if err != nil {
@@ -163,7 +151,6 @@ func main() {
 	}
 
 	// Setup the context that's going to be used in controllers and for the manager.
-	ctx := ctrl.SetupSignalHandler()
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
 	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
 	controllers.SetLuaConfigMap(luaConfigMap)
@@ -733,4 +720,45 @@ func reduceMemoryFootprint(obj interface{}) (interface{}, error) {
 	}
 
 	return obj, nil
+}
+
+func getCtrlOptions(scheme *apimachineryruntime.Scheme) ctrl.Options {
+	disableFor, byObject := getCacheConfig()
+
+	return ctrl.Options{
+		Scheme:                 scheme,
+		Metrics:                getDiagnosticsOptions(),
+		HealthProbeBindAddress: healthAddr,
+		WebhookServer: webhook.NewServer(
+			webhook.Options{
+				Port: webhookPort,
+			}),
+		Cache: cache.Options{
+			SyncPeriod:       &syncPeriod,
+			ByObject:         byObject,
+			DefaultTransform: reduceMemoryFootprint,
+		},
+		Client: client.Options{
+			Cache: &client.CacheOptions{
+				DisableFor: disableFor,
+			},
+		},
+		PprofBindAddress: profilerAddress,
+	}
+}
+
+func isInitContainer() bool {
+	return os.Getenv("IS_INITIALIZATION") == "true"
+}
+
+func runInitContainerWork(ctx context.Context, config *rest.Config,
+	scheme *apimachineryruntime.Scheme) {
+
+	directClient, err := client.New(config, client.Options{Scheme: scheme})
+	if err != nil {
+		return
+	}
+	controllers.SetManagementClusterAccess(directClient, config)
+	controllers.Initialization(ctx, config, scheme, shardKey,
+		ctrl.Log.WithName("initialization"))
 }

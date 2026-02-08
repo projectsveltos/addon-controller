@@ -17,7 +17,7 @@ spec:
     port: 80
     targetPort: 8443
     name: metrics
-  type: ClusterIP  
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -27,6 +27,8 @@ metadata:
   labels:
     control-plane: addon-controller
 spec:
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       control-plane: addon-controller
@@ -40,20 +42,20 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
-        # TODO(user): For common cases that do not require escalating privileges
-        # it is recommended to ensure that all your Pods/Containers are restrictive.
-        # More info: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
-        # Please uncomment the following code if your project does NOT have to work on old Kubernetes
-        # versions < 1.19 or on vendors versions which do NOT support this field by default (i.e. Openshift < 4.11 ).
-        # seccompProfile:
-        #   type: RuntimeDefault
+      initContainers:
+      - env:
+        - name: IS_INITIALIZATION
+          value: "true"
+        image: controller:latest
+        imagePullPolicy: IfNotPresent
+        name: initialization
       containers:
       - command:
         - /manager
         args:
         - --v=5
         image: controller:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: controller
         ports:
         - containerPort: 8443

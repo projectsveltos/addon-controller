@@ -180,7 +180,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	var isMatch bool
-	isMatch, err = r.isClusterAShardMatch(ctx, clusterSummary, logger)
+	isMatch, err = isClusterAShardMatch(ctx, r.Client, r.ShardKey, clusterSummary, logger)
 	if err != nil {
 		msg := err.Error()
 		logger.Error(err, msg)
@@ -1385,10 +1385,10 @@ func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
 }
 
 // isClusterAShardMatch checks if cluster is matching this addon-controller deployment shard.
-func (r *ClusterSummaryReconciler) isClusterAShardMatch(ctx context.Context,
+func isClusterAShardMatch(ctx context.Context, c client.Client, shardKey string,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (bool, error) {
 
-	cluster, err := clusterproxy.GetCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
 	if err != nil {
 		// If Cluster does not exist anymore, make it match any shard
@@ -1400,7 +1400,7 @@ func (r *ClusterSummaryReconciler) isClusterAShardMatch(ctx context.Context,
 		return false, err
 	}
 
-	if !sharding.IsShardAMatch(r.ShardKey, cluster) {
+	if !sharding.IsShardAMatch(shardKey, cluster) {
 		logger.V(logs.LogDebug).Info("not a shard match")
 		return false, nil
 	}

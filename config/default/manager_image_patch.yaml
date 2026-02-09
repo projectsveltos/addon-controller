@@ -6,7 +6,9 @@ metadata:
 spec:
   template:
     spec:
+      initContainers:
+      - image: docker.io/projectsveltos/addon-controller:main
+        name: initialization
       containers:
-      # Change the value of image field below to your controller image URL
       - image: docker.io/projectsveltos/addon-controller:main
         name: controller

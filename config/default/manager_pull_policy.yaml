@@ -6,6 +6,9 @@ metadata:
 spec:
   template:
     spec:
+      initContainers:
+      - name: initialization
+        imagePullPolicy: 
       containers:
       - name: controller
         imagePullPolicy: 

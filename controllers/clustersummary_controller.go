@@ -32,6 +32,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -787,9 +789,21 @@ func (r *ClusterSummaryReconciler) updateChartMap(ctx context.Context, clusterSu
 		return err
 	}
 
+	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return err
+	}
+
+	csCopy, err := getClusterSummaryWithInstantiatedCharts(ctx, clusterSummaryScope.ClusterSummary,
+		mgmtResources, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get instantiated charts")
+		return err
+	}
+
 	// First try to be elected manager. Only if that succeeds, manage an helm chart.
 	logger.V(logs.LogDebug).Info("register clustersummary with helm chart manager")
-	chartManager.RegisterClusterSummaryForCharts(clusterSummaryScope.ClusterSummary)
+	chartManager.RegisterClusterSummaryForCharts(csCopy)
 
 	// Registration for helm chart not referenced anymore, are cleaned only after such helm
 	// chart are removed from Sveltos/Cluster. That is done as part of deployHelmCharts and
@@ -1783,4 +1797,32 @@ func getPatchesFrom(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	}
 
 	return currentValuesFromReferences, nil
+}
+
+func getClusterSummaryWithInstantiatedCharts(ctx context.Context, cs *configv1beta1.ClusterSummary,
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
+) (*configv1beta1.ClusterSummary, error) {
+
+	csCopy := configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cs.Namespace,
+			Name:      cs.Name,
+		},
+	}
+	csCopy.Spec = cs.Spec
+	csCopy.Spec.ClusterProfileSpec.HelmCharts = nil
+	csCopy.Spec.ClusterProfileSpec.HelmCharts = make([]configv1beta1.HelmChart,
+		len(cs.Spec.ClusterProfileSpec.HelmCharts))
+
+	for i := range cs.Spec.ClusterProfileSpec.HelmCharts {
+		helmChart := &cs.Spec.ClusterProfileSpec.HelmCharts[i]
+		instantiateHelmChart, err := getInstantiatedChart(ctx, cs,
+			helmChart, mgmtResources, logger)
+		if err != nil {
+			return nil, err
+		}
+		csCopy.Spec.ClusterProfileSpec.HelmCharts[i] = *instantiateHelmChart
+	}
+
+	return &csCopy, nil
 }

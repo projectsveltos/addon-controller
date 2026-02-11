@@ -24,8 +24,11 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/go-logr/logr"
+
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
@@ -70,6 +73,8 @@ type instance struct {
 
 	// list of tracked clusters
 	clusters *libsveltosset.Set
+
+	logger logr.Logger
 }
 
 type HelmReleaseInfo struct {
@@ -96,6 +101,7 @@ func GetChartManagerInstance(ctx context.Context, c client.Client) (*instance, e
 				perClusterChartMap:        make(map[string]map[string][]string),
 				perClusterChartVersionMap: make(map[string]map[string]string),
 				chartMux:                  sync.Mutex{},
+				logger:                    logr.FromContextOrDiscard(ctx),
 			}
 			managerInstance.clusters = &libsveltosset.Set{}
 			if err := managerInstance.rebuildRegistrations(ctx, c); err != nil {
@@ -130,9 +136,12 @@ func (m *instance) RegisterClusterSummaryForCharts(clusterSummary *configv1beta1
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
+	logger := m.logger.WithValues("clustersummary",
+		fmt.Sprintf("%s/%s", clusterSummary.Namespace, clusterSummary.Name))
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 		releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("register clusterSummary for release key %s", releaseKey))
 		m.addClusterEntry(clusterKey)
 		m.addReleaseEntry(clusterKey, releaseKey)
 		m.addClusterSummaryEntry(clusterKey, releaseKey, clusterSummaryKey)
@@ -148,7 +157,6 @@ func (m *instance) RegisterVersionForChart(clusterNamespace, clusterName string,
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
-
 	chartVersion := chart.ChartVersion
 
 	m.chartMux.Lock()
@@ -200,7 +208,9 @@ func (m *instance) SetManagerForChart(clusterSummary *configv1beta1.ClusterSumma
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
-
+	logger := m.logger.WithValues("clustersummary",
+		fmt.Sprintf("%s/%s", clusterSummary.Namespace, clusterSummary.Name))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("set clusterSummary as manager for release key %s", releaseKey))
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
@@ -229,7 +239,9 @@ func (m *instance) UnregisterClusterSummaryForChart(clusterSummary *configv1beta
 		clusterSummary.Spec.ClusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
-
+	logger := m.logger.WithValues("clustersummary",
+		fmt.Sprintf("%s/%s", clusterSummary.Namespace, clusterSummary.Name))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("unregister clusterSummary as manager for release key %s", releaseKey))
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
@@ -271,11 +283,16 @@ func (m *instance) cleanRegistrations(clusterSummary *configv1beta1.ClusterSumma
 		clusterSummary.Spec.ClusterType)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
 
+	logger := m.logger.WithValues("clustersummary",
+		fmt.Sprintf("%s/%s", clusterSummary.Namespace, clusterSummary.Name))
+
 	currentReferencedReleases := make(map[string]bool)
 	if !removeAll {
 		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("clean clusterSummary registration for release key %s",
+				releaseKey))
 			currentReferencedReleases[releaseKey] = true
 		}
 	}
@@ -356,7 +373,6 @@ func (m *instance) GetRegisteredClusterSummariesForChart(clusterNamespace, clust
 
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
-
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
@@ -372,7 +388,6 @@ func (m *instance) CanManageChart(clusterSummary *configv1beta1.ClusterSummary,
 		clusterSummary.Spec.ClusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
 	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
-
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 

@@ -43,14 +43,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-- apiGroups:
   - '*'
   resources:
   - '*'
@@ -70,6 +62,14 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:
@@ -146,7 +146,7 @@ spec:
         - --cluster-type=
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-updates
-        - --version=main
+        - --version=v1.5.0
         command:
         - /manager
         env:
@@ -158,7 +158,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:071ca9c6e0b31d7a544ee14d09c5cc12ab2aeae90db37376d824445c3055c6c3
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:47cb5531adfe14d4be2e02f9d93da04c775caea5f67ab4e978ed5667fcb5ffe5
         livenessProbe:
           failureThreshold: 3
           httpGet:

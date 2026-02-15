@@ -78,7 +78,11 @@ spec:
         - mountPath: /tmp
           name: tmp
       initContainers:
-      - env:
+      - args:
+        - --report-mode=0
+        - --shard-key=
+        - --agent-in-mgmt-cluster=true
+        env:
         - name: IS_INITIALIZATION
           value: "true"
         image: docker.io/projectsveltos/addon-controller:v1.5.0

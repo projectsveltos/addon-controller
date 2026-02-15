@@ -139,6 +139,14 @@ func main() {
 
 	ctx := ctrl.SetupSignalHandler()
 
+	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
+	controllers.SetLuaConfigMap(luaConfigMap)
+	controllers.SetLuaCallStackSize(luaCallStackSize)
+	controllers.SetLuaRegistrySize(luaRegistrySize)
+	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
+	controllers.SetDriftDetectionRegistry(registry)
+	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+
 	if isInitContainer() {
 		runInitContainerWork(ctx, restConfig, scheme)
 		os.Exit(0)
@@ -152,13 +160,6 @@ func main() {
 
 	// Setup the context that's going to be used in controllers and for the manager.
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
-	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
-	controllers.SetLuaConfigMap(luaConfigMap)
-	controllers.SetLuaCallStackSize(luaCallStackSize)
-	controllers.SetLuaRegistrySize(luaRegistrySize)
-	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
-	controllers.SetDriftDetectionRegistry(registry)
-	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
 
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))

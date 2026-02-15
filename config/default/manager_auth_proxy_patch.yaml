@@ -8,6 +8,12 @@ metadata:
 spec:
   template:
     spec:
+      initContainers:
+      - name: initialization
+        args:
+        - "--report-mode=0"
+        - --shard-key=
+        - "--agent-in-mgmt-cluster=false"
       containers:
       - name: controller
         args:

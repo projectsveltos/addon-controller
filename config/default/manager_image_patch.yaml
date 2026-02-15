@@ -7,8 +7,8 @@ spec:
   template:
     spec:
       initContainers:
-      - image: docker.io/projectsveltos/addon-controller:v1.5.0
+      - image: docker.io/projectsveltos/addon-controller:v1.5.1
         name: initialization
       containers:
-      - image: docker.io/projectsveltos/addon-controller:v1.5.0
+      - image: docker.io/projectsveltos/addon-controller:v1.5.1
         name: controller

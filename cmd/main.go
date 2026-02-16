@@ -88,6 +88,7 @@ var (
 	webhookPort             int
 	syncPeriod              time.Duration
 	conflictRetryTime       time.Duration
+	healthErrorRetryTime    time.Duration
 	version                 string
 	healthAddr              string
 	profilerAddress         string
@@ -286,6 +287,11 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&conflictRetryTime, "conflict-retry-time", defaultConflictRetryTime*time.Second,
 		fmt.Sprintf("The minimum interval at which watched ClusterProfile with conflicts are retried. Defaul: %d seconds",
 			defaultConflictRetryTime))
+
+	const defaultHealthErrorRetryTime = 60
+	fs.DurationVar(&healthErrorRetryTime, "health-error-retry-time", defaultHealthErrorRetryTime*time.Second,
+		fmt.Sprintf("The minimum interval at which health check failures are retried. Default: %d seconds",
+			defaultHealthErrorRetryTime))
 
 	// AutoDeployDependencies enables automatic deployment of prerequisite profiles.
 	//
@@ -518,6 +524,7 @@ func getClusterSummaryReconciler(ctx context.Context, mgr manager.Manager) *cont
 		PolicyMux:            sync.Mutex{},
 		ConcurrentReconciles: concurrentReconciles,
 		ConflictRetryTime:    conflictRetryTime,
+		HealthErrorRetryTime: healthErrorRetryTime,
 		Logger:               ctrl.Log.WithName("clustersummaryreconciler"),
 	}
 }

@@ -43,6 +43,21 @@ type healthStatus struct {
 	Message string `json:"message"`
 }
 
+type HealthCheckError struct {
+	FeatureID   libsveltosv1beta1.FeatureID
+	CheckName   string
+	InternalErr error
+}
+
+func (e *HealthCheckError) Error() string {
+	return fmt.Sprintf("health check '%s' for feature %s failed: %v",
+		e.CheckName, e.FeatureID, e.InternalErr)
+}
+
+func (e *HealthCheckError) Unwrap() error {
+	return e.InternalErr
+}
+
 // ValidateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
 func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, validateHealths []libsveltosv1beta1.ValidateHealth,
 	featureID libsveltosv1beta1.FeatureID, isDelete bool, logger logr.Logger) error {
@@ -61,7 +76,11 @@ func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, vali
 
 		if err := validateHealthPolicy(ctx, remoteConfig, check, isDelete, logger); err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate check: %s", err))
-			return err
+			return &HealthCheckError{
+				FeatureID:   featureID,
+				CheckName:   check.Name,
+				InternalErr: err,
+			}
 		}
 	}
 

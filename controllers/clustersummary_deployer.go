@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
@@ -170,24 +171,9 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 
 		r.updateFeatureStatus(clusterSummaryScope, f.id, deployerStatus, currentHash, deployerError, logger)
 		if deployerError != nil {
-			// Check if error is a NonRetriableError type
-			var nonRetriableError *configv1beta1.NonRetriableError
-			if errors.As(deployerError, &nonRetriableError) {
-				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
-				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
-				return nil
-			}
-			var templateError *configv1beta1.TemplateInstantiationError
-			if errors.As(deployerError, &templateError) {
-				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
-				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
-				return nil
-			}
-			if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
-				nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
-				resultError := errors.New("the maximum number of consecutive errors has been reached")
-				r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
-				return nil
+			shouldReturn, err := r.handleDeployerError(deployerError, clusterSummaryScope, f, currentHash, logger)
+			if shouldReturn {
+				return err
 			}
 		}
 		if *deployerStatus == libsveltosv1beta1.FeatureStatusProvisioning {
@@ -222,6 +208,38 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 	}
 
 	return fmt.Errorf("request is queued")
+}
+
+func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clusterSummaryScope *scope.ClusterSummaryScope,
+	f feature, currentHash []byte, logger logr.Logger) (bool, error) {
+
+	// Check if error is a NonRetriableError type
+	var nonRetriableError *configv1beta1.NonRetriableError
+	if errors.As(deployerError, &nonRetriableError) {
+		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
+		return true, nil
+	}
+	var templateError *configv1beta1.TemplateInstantiationError
+	if errors.As(deployerError, &templateError) {
+		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
+		return true, nil
+	}
+	var healthCheckError *clusterops.HealthCheckError
+	if errors.As(deployerError, &healthCheckError) {
+		retriableStatus := libsveltosv1beta1.FeatureStatusFailed
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &retriableStatus, currentHash, deployerError, logger)
+		return true, healthCheckError
+	}
+	if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
+		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
+		resultError := errors.New("the maximum number of consecutive errors has been reached")
+		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
+		return true, nil
+	}
+
+	return false, deployerError
 }
 
 func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context.Context,

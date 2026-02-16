@@ -113,8 +113,9 @@ type ClusterSummaryReconciler struct {
 	ReferenceMap         map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterSummaries referencing the resource
 	ClusterMap           map[corev1.ObjectReference]*libsveltosset.Set // key: Sveltos/Cluster; value: set of all ClusterSummaries for that Cluster
 
-	ConflictRetryTime time.Duration
-	ctrl              controller.Controller
+	ConflictRetryTime    time.Duration
+	HealthErrorRetryTime time.Duration
+	ctrl                 controller.Controller
 
 	eventRecorder events.EventRecorder
 
@@ -461,6 +462,17 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		if ok {
 			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
 			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
+		}
+
+		var healthCheckError *clusterops.HealthCheckError
+		ok = errors.As(err, &healthCheckError)
+		if ok {
+			logger.V(logs.LogInfo).Info("failed to deploy health check not passing",
+				"feature", healthCheckError.FeatureID,
+				"checkName", healthCheckError.CheckName,
+				"reason", healthCheckError.InternalErr.Error(),
+				"requeueAfter", r.HealthErrorRetryTime.String())
+			return reconcile.Result{Requeue: true, RequeueAfter: r.HealthErrorRetryTime}, nil
 		}
 
 		requeueAfter := normalRequeueAfter
@@ -1762,6 +1774,11 @@ func (r *ClusterSummaryReconciler) processUndeployError(clusterSummaryScope *sco
 	var templateError *configv1beta1.TemplateInstantiationError
 	if errors.As(undeployError, &templateError) {
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+	}
+
+	var healthCheckError *clusterops.HealthCheckError
+	if errors.As(undeployError, &healthCheckError) {
+		return reconcile.Result{Requeue: true, RequeueAfter: r.HealthErrorRetryTime}, nil
 	}
 
 	return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil

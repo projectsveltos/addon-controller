@@ -66,16 +66,17 @@ func validateDeleteChecks(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, adminNamespace,
+		adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get cluster rest.Config")
 		return err
 	}
 
 	logger.V(logs.LogDebug).Info("validate delete checks")
-	err = clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks,
-		featureID, true, logger)
+	err = clusterops.ValidateHealthPolicies(ctx, remoteRestConfig,
+		clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, featureID, true, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "delete check failed")
 		return err

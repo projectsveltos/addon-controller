@@ -113,6 +113,49 @@ func (s *ProfileScope) GetSelector() *metav1.LabelSelector {
 	return &spec.ClusterSelector.LabelSelector
 }
 
+func (s *ProfileScope) SetFailedClusters(cluster *corev1.ObjectReference, err error) {
+	status := s.GetStatus()
+	now := metav1.Now()
+
+	for i := range status.FailedClusters {
+		fc := status.FailedClusters[i]
+		if fc.ClusterRef.Namespace == cluster.Namespace &&
+			fc.ClusterRef.Name == cluster.Name &&
+			fc.ClusterRef.Kind == cluster.Kind &&
+			fc.ClusterRef.APIVersion == cluster.APIVersion {
+
+			status.FailedClusters[i].FailureMessage = err.Error()
+			status.FailedClusters[i].LastFailureTime = &now
+			return
+		}
+	}
+
+	newEntry := configv1beta1.FailedCluster{
+		ClusterRef:      *cluster,
+		FailureMessage:  err.Error(),
+		LastFailureTime: &now, // Assign the pointer
+	}
+
+	status.FailedClusters = append(status.FailedClusters, newEntry)
+}
+
+func (s *ProfileScope) ClearFailedClusters(cluster *corev1.ObjectReference) {
+	status := s.GetStatus()
+
+	for i := range status.FailedClusters {
+		fc := status.FailedClusters[i]
+		if fc.ClusterRef.Namespace == cluster.Namespace &&
+			fc.ClusterRef.Name == cluster.Name &&
+			fc.ClusterRef.Kind == cluster.Kind &&
+			fc.ClusterRef.APIVersion == cluster.APIVersion {
+
+			// Remove this entry by slicing it out
+			status.FailedClusters = append(status.FailedClusters[:i], status.FailedClusters[i+1:]...)
+			return
+		}
+	}
+}
+
 // SetMatchingClusterRefs sets the feature status.
 func (s *ProfileScope) SetMatchingClusterRefs(matchingClusters []corev1.ObjectReference) {
 	status := s.GetStatus()

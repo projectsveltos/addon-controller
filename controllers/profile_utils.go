@@ -752,7 +752,13 @@ func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client
 	// If a Cluster exists and it is a match, ClusterSummary is created (and ClusterSummary.Spec kept in sync if mode is
 	// continuous).
 	// ClusterSummary won't program cluster in paused state.
-	return false, patchClusterSummary(ctx, c, profileScope, cluster, logger)
+	err = patchClusterSummary(ctx, c, profileScope, cluster, logger)
+	if err != nil {
+		profileScope.SetFailedClusters(cluster, err)
+	} else {
+		profileScope.ClearFailedClusters(cluster)
+	}
+	return false, err
 }
 
 func patchClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
@@ -769,6 +775,7 @@ func patchClusterSummary(ctx context.Context, c client.Client, profileScope *sco
 			err = createClusterSummary(ctx, c, profileScope, cluster)
 			if err != nil {
 				logger.Error(err, "failed to create ClusterSummary")
+				return err
 			}
 		} else {
 			logger.Error(err, "failed to get ClusterSummary")

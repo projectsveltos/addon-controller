@@ -18,7 +18,23 @@ package v1beta1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// FailedCluster describes an error encountered while trying to
+// manage resources for a specific matching cluster.
+type FailedCluster struct {
+	// ClusterRef is a reference to the cluster where the failure occurred.
+	ClusterRef corev1.ObjectReference `json:"clusterRef"`
+
+	// FailureMessage is a human-readable explanation of why the
+	// ClusterSummary creation/update failed.
+	FailureMessage string `json:"failureMessage"`
+
+	// LastFailureTime is the time the error occurred.
+	// +optional
+	LastFailureTime *metav1.Time `json:"lastFailureTime,omitempty"`
+}
 
 // Status defines the observed state of ClusterProfile/Profile
 type Status struct {
@@ -37,6 +53,11 @@ type Status struct {
 	// Spec
 	// +optional
 	UpdatedClusters Clusters `json:"updatedClusters,omitempty"`
+
+	// FailedClusters contains information about clusters for which
+	// a ClusterSummary could not be created or updated.
+	// +optional
+	FailedClusters []FailedCluster `json:"failedClusters,omitempty"`
 
 	// DependenciesHash is a hash representing the set of clusters where this ClusterProfile
 	// must be deployed, based on the combined configuration of its dependencies.

@@ -28,13 +28,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - '*'
   resources:
-  - events
+  - '*'
   verbs:
-  - create
-  - patch
-  - update
+  - get
+  - list
+  - watch
 - apiGroups:
   - authentication.k8s.io
   resources:
@@ -47,6 +47,14 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
+- apiGroups:
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
 - apiGroups:
   - lib.projectsveltos.io
   resources:

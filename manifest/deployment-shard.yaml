@@ -26,7 +26,7 @@ spec:
         - --shard-key={{.SHARD}}
         - --capi-onboard-annotation=
         - --v=5
-        - --version=v1.5.0
+        - --version=main
         - --agent-in-mgmt-cluster=false
         command:
         - /manager
@@ -39,7 +39,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/addon-controller:v1.5.0
+        image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -85,7 +85,7 @@ spec:
         env:
         - name: IS_INITIALIZATION
           value: "true"
-        image: docker.io/projectsveltos/addon-controller:v1.5.0
+        image: docker.io/projectsveltos/addon-controller:main
         name: initialization
       securityContext:
         runAsNonRoot: true

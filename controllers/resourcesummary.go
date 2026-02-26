@@ -388,6 +388,7 @@ func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 
 		options := metav1.ApplyOptions{
 			FieldManager: "application/apply-patch",
+			Force:        true,
 		}
 
 		_, err = dr.Apply(ctx, policy.GetName(), policy, options)

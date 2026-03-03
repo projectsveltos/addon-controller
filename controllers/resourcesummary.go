@@ -548,7 +548,10 @@ func getClusterDataFromDriftDetectionManagerDeployment(deployment *appsv1.Deploy
 	}
 
 	// Convert the string representation (which was lowercased) back to the ClusterType enum.
-	clusterType = libsveltosv1beta1.ClusterType(strings.ToUpper(clusterTypeStr))
+	clusterType = libsveltosv1beta1.ClusterTypeCapi
+	if strings.EqualFold(clusterTypeStr, string(libsveltosv1beta1.ClusterTypeSveltos)) {
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	}
 
 	return clusterNamespace, clusterName, clusterType, true
 }

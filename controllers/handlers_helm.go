@@ -1752,24 +1752,40 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	helmRelease, err := upgradeClient.RunWithContext(ctxWithTimeout, requestedChart.ReleaseName, chartRequested, values)
 	if err != nil {
-		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
-		currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
-			kubeconfig, registryOptions, getEnableClientCacheValue(requestedChart.Options))
-		if getErr == nil && currentRelease.Info.Status.IsPending() {
+		return nil, handleUpgradeError(ctx, err, clusterSummary, requestedChart, kubeconfig, registryOptions, logger)
+	}
+
+	logger.V(logs.LogDebug).Info("upgrading release done")
+
+	return helmRelease, nil
+}
+
+func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1beta1.ClusterSummary,
+	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
+	logger logr.Logger) error {
+
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
+
+	currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+		kubeconfig, registryOptions, getEnableClientCacheValue(requestedChart.Options))
+	if getErr == nil {
+		status := currentRelease.Info.Status
+
+		if status.IsPending() ||
+			status == release.StatusUninstalling ||
+			strings.Contains(err.Error(), "has no deployed releases") {
+
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("Release in %s state or inconsistent. Triggering recovery.", status))
 			// This error: "another operation (install/upgrade/rollback) is in progress"
 			// With Sveltos this error should never happen. A previous check ensures that only one
 			// ClusterProfile/Profile can manage a Helm Chart with a given name in a specific namespace within
 			// a managed cluster.
 			// Ignore the recoverRelease result. Always return an error as we must install this release back
 			_ = recoverRelease(ctx, clusterSummary, requestedChart, kubeconfig, registryOptions, logger)
-			return nil, fmt.Errorf("tried recovering by uninstalling first")
+			return fmt.Errorf("tried recovering by uninstalling first")
 		}
-		return nil, err
 	}
-
-	logger.V(logs.LogDebug).Info("upgrading release done")
-
-	return helmRelease, nil
+	return err
 }
 
 func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
@@ -1990,21 +2006,62 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
 	logger logr.Logger) error {
 
+	logger.V(logs.LogInfo).Info("MGIANLUC recoverRelease")
+
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions, true)
 	if err != nil {
 		return err
 	}
 
+	// 1. Check current status via Helm
 	statusObject := action.NewStatus(actionConfig)
 	lastRelease, err := statusObject.Run(requestedChart.ReleaseName)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil // Already gone
+		}
 		return err
 	}
 
-	if !lastRelease.Info.Status.IsPending() {
-		return fmt.Errorf("not in the expected status to unlock")
+	status := lastRelease.Info.Status
+	logger.V(logs.LogInfo).Info("Attempting recovery for stuck release", "status", status, "version", lastRelease.Version)
+
+	// 2. If stuck in Uninstalling or Pending, the standard 'uninstall' is likely hanging.
+	// We force recovery by deleting the Secret directly.
+	if status == release.StatusUninstalling || status.IsPending() {
+		// Helm secrets follow this naming convention
+		secretName := fmt.Sprintf("sh.helm.release.v1.%s.v%d",
+			requestedChart.ReleaseName, lastRelease.Version)
+
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("Forcing metadata purge to break deadlock %s/%s",
+				requestedChart.ReleaseNamespace, secretName))
+
+		cacheMgr := clustercache.GetManager()
+		remoteClient, err := cacheMgr.GetKubernetesClient(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			"", "", clusterSummary.Spec.ClusterType, logger)
+		if err != nil {
+			return err
+		}
+
+		// Use the K8s client (ensure m.Client is available in your scope)
+		// This is the "Nuclear Option" that unblocks "cannot re-use a name"
+		err = remoteClient.Delete(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: requestedChart.ReleaseNamespace,
+			},
+		})
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to force delete helm secret")
+			return fmt.Errorf("failed to force delete helm secret: %w", err)
+		}
+
+		return nil
 	}
 
+	// 3. Fallback to standard uninstall if status is something else
 	return uninstallRelease(ctx, clusterSummary, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace, kubeconfig, registryOptions, requestedChart, logger)
 }

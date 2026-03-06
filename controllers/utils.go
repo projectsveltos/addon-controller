@@ -351,32 +351,41 @@ func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger)
 		},
 	}
 
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
 	for {
-		time.Sleep(time.Minute)
+		select {
+		case <-ctx.Done():
+			logger.V(logs.LogInfo).Info("stopping stale drift detection resource cleanup: context canceled")
+			return
+		case <-ticker.C:
+			c := getManagementClusterClient()
+			driftDetectionDeployments := &appsv1.DeploymentList{}
+			err := c.List(ctx, driftDetectionDeployments, listOptions...)
+			if err != nil {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect driftDetection deployment: %v", err))
+				continue
+			}
 
-		c := getManagementClusterClient()
-		driftDetectionDeployments := &appsv1.DeploymentList{}
-		err := c.List(ctx, driftDetectionDeployments, listOptions...)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect driftDetection deployment: %v", err))
-			continue
-		}
+			for i := range driftDetectionDeployments.Items {
+				depl := &driftDetectionDeployments.Items[i]
 
-		for i := range driftDetectionDeployments.Items {
-			depl := &driftDetectionDeployments.Items[i]
+				exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
+				if !exist {
+					// find resourceSummaries from this cluster and remove those.
+					// Remove deployment only after this one succeed
+					// Do not change the order. First delete ResourceSummary instances. Till ResourceSummary
+					// instances are found, do not delete the drift-detection-manager deployment
+					err = removeStaleResourceSummary(ctx, clusterNs, clusterName, clusterType, logger)
+					if err != nil {
+						continue
+					}
 
-			exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
-			if !exist {
-				// find resourceSummaries from this cluster and remove those.
-				// Remove deployment only after this one succeed
-				err = removeStaleResourceSummary(ctx, clusterNs, clusterName, clusterType, logger)
-				if err != nil {
-					continue
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
+						depl.Namespace, depl.Name))
+					_ = c.Delete(ctx, depl)
 				}
-
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
-					depl.Namespace, depl.Name))
-				_ = c.Delete(ctx, depl)
 			}
 		}
 	}
@@ -419,6 +428,16 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 				fmt.Sprintf("failed to delete resourceSummary instance: %v", err))
 			return err
 		}
+	}
+
+	if len(resourceSummaries.Items) > 0 {
+		// The drift-detection-manager adds a finalizer to ResourceSummary instances and removes
+		// it only after a successful deletion. If ResourceSummary instances still exist, we return
+		// an error to prevent the drift-detection-manager deployment from being deleted, ensuring
+		// it has sufficient time to complete the cleanup. Otherwise, we risk leaving behind stale
+		// ResourceSummaries or, worse, deleted instances stuck with a finalizer that have no manager
+		// left to clean them up.
+		return fmt.Errorf("resourceSummary instances still present")
 	}
 
 	return nil

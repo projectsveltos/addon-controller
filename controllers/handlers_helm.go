@@ -2006,8 +2006,6 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
 	logger logr.Logger) error {
 
-	logger.V(logs.LogInfo).Info("MGIANLUC recoverRelease")
-
 	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions, true)
 	if err != nil {
 		return err

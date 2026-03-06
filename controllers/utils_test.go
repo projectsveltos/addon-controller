@@ -45,6 +45,7 @@ import (
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 const (
@@ -55,7 +56,6 @@ const (
 
 const (
 	upstreamClusterNamePrefix = "upstream-cluster"
-	upstreamMachineNamePrefix = "upstream-machine"
 	clusterProfileNamePrefix  = "cluster-profile"
 )
 
@@ -500,14 +500,127 @@ metadata:
 
 			currentRS := &libsveltosv1beta1.ResourceSummary{}
 
-			Expect(controllers.RemoveStaleResourceSummary(context.TODO(), clusterNamespace, clusterName,
-				clusterType, logger)).To(Succeed())
+			err = controllers.RemoveStaleResourceSummary(context.TODO(), clusterNamespace, clusterName,
+				clusterType, logger)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("resourceSummary instances still present"))
 
 			Eventually(func() bool {
 				err = testEnv.Get(context.TODO(),
 					types.NamespacedName{Namespace: u.GetNamespace(), Name: u.GetName()}, currentRS)
 				if err == nil {
-					return false
+					return !currentRS.DeletionTimestamp.IsZero()
+				}
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
+
+	It("removeStaleDriftDetectionResources deletes drift-detection-manager after all ResourceSummaries are gone",
+		func(ctx SpecContext) {
+			namespace := randomString()
+			clusterName := randomString()
+
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: namespace,
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv, ns)).To(Succeed())
+
+			resourceSummary := &libsveltosv1beta1.ResourceSummary{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      randomString(),
+					Namespace: namespace,
+					Labels: map[string]string{
+						sveltos_upgrade.ClusterNameLabel: clusterName,
+						sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(libsveltosv1beta1.ClusterTypeSveltos)),
+					},
+				},
+			}
+
+			Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv, resourceSummary)).To(Succeed())
+
+			lbls := map[string]string{
+				"cluster-namespace": namespace,
+				"cluster-name":      clusterName,
+				"cluster-type":      strings.ToLower(string(libsveltosv1beta1.ClusterTypeSveltos)),
+				"feature":           "drift-detection",
+			}
+
+			var replicas int32 = 1
+			driftDetectionManager := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      randomString(),
+					Namespace: "projectsveltos",
+					Labels:    lbls,
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: lbls,
+					},
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: lbls,
+						},
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:            randomString(),
+									Image:           randomString(),
+									ImagePullPolicy: corev1.PullAlways,
+								},
+							},
+							ServiceAccountName: randomString(),
+						},
+					},
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), driftDetectionManager)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv, driftDetectionManager)).To(Succeed())
+
+			logger := textlogger.NewLogger(textlogger.NewConfig())
+			go controllers.RemoveStaleDriftDetectionResources(ctx, logger)
+
+			// RemoveStaleDriftDetectionResources sleeps for a minute
+			time.Sleep(time.Minute)
+
+			// Because ResourceSummary exists, deployment is not deleted
+			Consistently(func() bool {
+				currentDeployment := &appsv1.Deployment{}
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: driftDetectionManager.GetNamespace(), Name: driftDetectionManager.GetName()},
+					currentDeployment)
+				return err == nil
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+			Expect(testEnv.Get(context.TODO(), types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+				currentResourceSummary)).To(Succeed())
+			currentResourceSummary.Finalizers = nil
+			Expect(testEnv.Delete(context.TODO(), currentResourceSummary)).To(Succeed())
+
+			Eventually(func() bool {
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+					currentResourceSummary)
+				return err != nil &&
+					apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			// RemoveStaleDriftDetectionResources sleeps for a minute
+			time.Sleep(time.Minute)
+
+			// Because ResourceSummary is gone, deployment is deleted
+			Eventually(func() bool {
+				currentDeployment := &appsv1.Deployment{}
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: driftDetectionManager.GetNamespace(), Name: driftDetectionManager.GetName()},
+					currentDeployment)
+				if err == nil {
+					return !currentDeployment.DeletionTimestamp.IsZero()
 				}
 				return apierrors.IsNotFound(err)
 			}, timeout, pollingInterval).Should(BeTrue())

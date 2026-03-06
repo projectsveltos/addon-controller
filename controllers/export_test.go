@@ -147,10 +147,11 @@ var (
 	InstantiateTemplateValues = instantiateTemplateValues
 	FetchClusterObjects       = fetchClusterObjects
 
-	IsCluterSummaryProvisioned = isCluterSummaryProvisioned
-	IsNamespaced               = isNamespaced
-	StringifyMap               = stringifyMap
-	ParseMapFromString         = parseMapFromString
+	IsCluterSummaryProvisioned         = isCluterSummaryProvisioned
+	IsNamespaced                       = isNamespaced
+	RemoveStaleDriftDetectionResources = removeStaleDriftDetectionResources
+	StringifyMap                       = stringifyMap
+	ParseMapFromString                 = parseMapFromString
 
 	GetTemplateResourceRefHash = getTemplateResourceRefHash
 )

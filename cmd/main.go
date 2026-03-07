@@ -121,12 +121,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	klog.InitFlags(nil)
-
-	initFlags(pflag.CommandLine)
-	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
-	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
-	pflag.Parse()
+	setupLogging()
 
 	reportMode = controllers.ReportMode(tmpReportMode)
 	ctrl.SetLogger(klog.Background())
@@ -769,4 +764,20 @@ func runInitContainerWork(ctx context.Context, config *rest.Config,
 	controllers.SetManagementClusterAccess(directClient, config)
 	controllers.Initialization(ctx, config, scheme, shardKey,
 		ctrl.Log.WithName("initialization"))
+}
+
+func setupLogging() {
+	klog.InitFlags(nil)
+	_ = flag.Set("logtostderr", "false") // set default, but still overridable via CLI
+	initFlags(pflag.CommandLine)
+	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+
+	if flag.Lookup("logtostderr").Value.String() == "false" {
+		klog.SetOutputBySeverity("INFO", os.Stdout)
+		klog.SetOutputBySeverity("WARNING", os.Stdout)
+		klog.SetOutputBySeverity("ERROR", os.Stderr)
+		klog.SetOutputBySeverity("FATAL", os.Stderr)
+	}
 }

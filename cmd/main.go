@@ -43,6 +43,7 @@ import (
 	apimachineryruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	cliflag "k8s.io/component-base/cli/flag"
@@ -154,8 +155,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	dc, err := discovery.NewDiscoveryClientForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to get discovery client")
+		os.Exit(1)
+	}
 	// Setup the context that's going to be used in controllers and for the manager.
-	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig())
+	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig(), dc)
 
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
@@ -761,7 +767,14 @@ func runInitContainerWork(ctx context.Context, config *rest.Config,
 	if err != nil {
 		return
 	}
-	controllers.SetManagementClusterAccess(directClient, config)
+
+	dc, err := discovery.NewDiscoveryClientForConfig(config)
+	if err != nil {
+		setupLog.Error(err, "unable to get discovery client")
+		os.Exit(1)
+	}
+
+	controllers.SetManagementClusterAccess(directClient, config, dc)
 	controllers.Initialization(ctx, config, scheme, shardKey,
 		ctrl.Log.WithName("initialization"))
 }

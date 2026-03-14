@@ -21,13 +21,19 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	managementClusterClient client.Client
-	managementClusterConfig *rest.Config
+	managementClusterClient          client.Client
+	managementClusterConfig          *rest.Config
+	managementClusterMapper          *restmapper.DeferredDiscoveryRESTMapper
+	managementClusterCachedDiscovery discovery.CachedDiscoveryInterface
+
 	driftdetectionConfigMap string
 	luaConfigMap            string
 	capiOnboardAnnotation   string
@@ -37,9 +43,12 @@ var (
 	luaRegistrySize         int
 )
 
-func SetManagementClusterAccess(c client.Client, config *rest.Config) {
+func SetManagementClusterAccess(c client.Client, config *rest.Config, dc *discovery.DiscoveryClient) {
 	managementClusterClient = c
 	managementClusterConfig = config
+
+	managementClusterCachedDiscovery = memory.NewMemCacheClient(dc)
+	managementClusterMapper = restmapper.NewDeferredDiscoveryRESTMapper(managementClusterCachedDiscovery)
 }
 
 func SetDriftdetectionConfigMap(name string) {
@@ -78,6 +87,10 @@ func getManagementClusterClient() client.Client {
 	return managementClusterClient
 }
 
+func getManagementClusterMapper() *restmapper.DeferredDiscoveryRESTMapper {
+	return managementClusterMapper
+}
+
 func getDriftDetectionConfigMap() string {
 	return driftdetectionConfigMap
 }
@@ -104,6 +117,14 @@ func getDriftDetectionRegistry() string {
 
 func getAgentInMgmtCluster() bool {
 	return agentInMgmtCluster
+}
+
+func resetManagementClusterMapper() {
+	managementClusterMapper.Reset()
+}
+
+func invalidateManagementClusterCachedDiscover() {
+	managementClusterCachedDiscovery.Invalidate()
 }
 
 func collectDriftDetectionConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {

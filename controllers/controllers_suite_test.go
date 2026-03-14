@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -80,7 +81,12 @@ var _ = BeforeSuite(func() {
 		panic(err)
 	}
 
-	controllers.SetManagementClusterAccess(testEnv.Client, testEnv.Config)
+	dc, err := discovery.NewDiscoveryClientForConfig(testEnv.Config)
+	if err != nil {
+		panic(err)
+	}
+
+	controllers.SetManagementClusterAccess(testEnv.Client, testEnv.Config, dc)
 	controllers.CreatFeatureHandlerMaps()
 
 	Expect(index.AddDefaultIndexes(ctx, testEnv.Manager)).To(Succeed())

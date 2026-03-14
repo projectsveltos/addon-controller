@@ -34,18 +34,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	memory "k8s.io/client-go/discovery/cached"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/restmapper"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -210,26 +206,58 @@ func isCluterSummaryProvisioned(clusterSumary *configv1beta1.ClusterSummary) boo
 	return true
 }
 
-func isNamespaced(r *unstructured.Unstructured, config *rest.Config) (bool, error) {
-	gvk := schema.GroupVersionKind{
-		Group:   r.GroupVersionKind().Group,
-		Kind:    r.GetKind(),
-		Version: r.GroupVersionKind().Version,
-	}
+func isNamespaced(ctx context.Context, r *unstructured.Unstructured, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) (bool, error) {
 
-	dc, err := discovery.NewDiscoveryClientForConfig(config)
+	gvk := r.GroupVersionKind()
+	cacheMgr := clustercache.GetManager()
+
+	mapper, err := cacheMgr.GetMapper(ctx, getManagementClusterClient(), clusterNamespace,
+		clusterName, clusterType, logger)
 	if err != nil {
 		return false, err
 	}
 
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
+	// 1. Initial Attempt
+	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+	if err == nil && mapping != nil {
+		return mapping.Scope.Name() == meta.RESTScopeNameNamespace, nil
+	}
 
-	var mapping *meta.RESTMapping
-	mapping, err = mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-	if err != nil {
+	// Only retry if the GVK is actually missing.
+	// If it's a timeout or RBAC error, don't bother retrying discovery.
+	if !meta.IsNoMatchError(err) {
 		return false, err
 	}
-	return mapping.Scope.Name() == meta.RESTScopeNameNamespace, nil
+
+	// 2. RETRY LOOP: Give it 3 attempts with increasing wait times
+	// Total wait time: 1s + 2s + 3s = 6 seconds.
+	for i := range 3 {
+		// Log that we are attempting a refresh (MGIANLUC style)
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("GVK %s not found, refreshing discovery (attempt %d)", gvk.String(), i+1))
+
+		// IMPORTANT: Invalidate the Discovery Client FIRST, then Reset the Mapper
+		cacheMgr.InvalidateDiscoveryClient(clusterNamespace, clusterName, clusterType)
+		cacheMgr.ResetMapper(clusterNamespace, clusterName, clusterType)
+
+		// Try again after the reset
+		mapping, err = mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err == nil && mapping != nil {
+			return mapping.Scope.Name() == meta.RESTScopeNameNamespace, nil
+		}
+
+		// If we still get a "NoMatch" error, wait for API server aggregation
+		if meta.IsNoMatchError(err) {
+			time.Sleep(time.Duration(i+1) * time.Second)
+			continue
+		}
+
+		// If we get a different error during retry, exit early
+		break
+	}
+
+	logger.Error(err, fmt.Sprintf("GVK %s not found after local retries", gvk.String()))
+	return false, fmt.Errorf("GVK %s not found on remote cluster: %w", gvk.String(), err)
 }
 
 // removeDuplicates removes duplicates entries in the references slice

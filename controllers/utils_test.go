@@ -42,6 +42,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
@@ -283,15 +284,47 @@ var _ = Describe("getClusterProfileOwner ", func() {
 	})
 
 	It("isNamespaced returns true for namespaced resources", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		clusterNamespace := "default"
+		clusterName := randomString()
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      clusterName,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, cluster)).To(Succeed())
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      clusterName + kubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
+
+		cacheMgr := clustercache.GetManager()
+		_, err := cacheMgr.GetKubernetesRestConfig(context.TODO(), testEnv, clusterNamespace,
+			clusterName, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(BeNil())
+
 		clusterRole, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(viewClusterRole, randomString())))
 		Expect(err).To(BeNil())
-		isNamespaced, err := controllers.IsNamespaced(clusterRole, testEnv.Config)
+		isNamespaced, err := controllers.IsNamespaced(context.TODO(), clusterRole, clusterNamespace, clusterName,
+			libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).To(BeNil())
 		Expect(isNamespaced).To(BeFalse())
 
 		deployment, err := k8s_utils.GetUnstructured([]byte(fmt.Sprintf(deplTemplate, randomString())))
 		Expect(err).To(BeNil())
-		isNamespaced, err = controllers.IsNamespaced(deployment, testEnv.Config)
+		isNamespaced, err = controllers.IsNamespaced(context.TODO(), deployment, clusterNamespace, clusterName,
+			libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).To(BeNil())
 		Expect(isNamespaced).To(BeTrue())
 	})

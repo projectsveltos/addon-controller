@@ -43,6 +43,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
@@ -983,6 +984,37 @@ var _ = Describe("HandlersUtils", func() {
 	})
 
 	It("adjustNamespace adjusts namespace for both namespaced and cluster wide resources", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		const defaultNamespace = "default"
+		clusterName := randomString()
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: defaultNamespace,
+				Name:      clusterName,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, cluster)).To(Succeed())
+
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: defaultNamespace,
+				Name:      clusterName + kubeconfigPostfix,
+			},
+			Data: map[string][]byte{
+				"value": testEnv.Kubeconfig,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
+
+		cacheMgr := clustercache.GetManager()
+		_, err := cacheMgr.GetKubernetesRestConfig(context.TODO(), testEnv, defaultNamespace,
+			clusterName, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(BeNil())
+
 		deployment := `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -991,7 +1023,8 @@ metadata:
 		u, err := k8s_utils.GetUnstructured([]byte(deployment))
 		Expect(err).To(BeNil())
 
-		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())
+		Expect(controllers.AdjustNamespace(context.TODO(), u, defaultNamespace, clusterName,
+			libsveltosv1beta1.ClusterTypeCapi, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 		// For namespaced resources if namespace is not set, namespace gets set to default
 		Expect(u.GetNamespace()).To(Equal("default"))
 
@@ -1004,7 +1037,8 @@ metadata:
 		u, err = k8s_utils.GetUnstructured([]byte(clusterIssuer))
 		Expect(err).To(BeNil())
 
-		Expect(controllers.AdjustNamespace(u, testEnv.Config)).To(BeNil())
+		Expect(controllers.AdjustNamespace(context.TODO(), u, defaultNamespace, clusterName,
+			libsveltosv1beta1.ClusterTypeCapi, textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 		// For cluster wide resources if namespace is set, namespace gets reset
 		Expect(u.GetNamespace()).To(Equal(""))
 	})

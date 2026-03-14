@@ -23,7 +23,10 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/discovery"
+	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/secret"
@@ -45,6 +48,9 @@ type clusterCache struct {
 	// Keeps cache of rest.Config for existing clusters
 	configs map[corev1.ObjectReference]*rest.Config
 
+	mappers               map[corev1.ObjectReference]*restmapper.DeferredDiscoveryRESTMapper
+	cachedDiscoveryClient map[corev1.ObjectReference]discovery.CachedDiscoveryInterface
+
 	// key: cluster, value: Secret with kubeconfig
 	clusters map[corev1.ObjectReference]*corev1.ObjectReference
 
@@ -60,10 +66,12 @@ func GetManager() *clusterCache {
 		defer lock.Unlock()
 		if managerInstance == nil {
 			managerInstance = &clusterCache{
-				configs:  make(map[corev1.ObjectReference]*rest.Config),
-				clusters: make(map[corev1.ObjectReference]*corev1.ObjectReference),
-				secrets:  make(map[corev1.ObjectReference]*libsveltosset.Set),
-				rwMux:    sync.RWMutex{},
+				configs:               make(map[corev1.ObjectReference]*rest.Config),
+				clusters:              make(map[corev1.ObjectReference]*corev1.ObjectReference),
+				mappers:               make(map[corev1.ObjectReference]*restmapper.DeferredDiscoveryRESTMapper),
+				cachedDiscoveryClient: make(map[corev1.ObjectReference]discovery.CachedDiscoveryInterface),
+				secrets:               make(map[corev1.ObjectReference]*libsveltosset.Set),
+				rwMux:                 sync.RWMutex{},
 			}
 		}
 	}
@@ -89,6 +97,9 @@ func (m *clusterCache) RemoveCluster(clusterNamespace, clusterName string,
 
 	// Do not track this cluster anymore
 	delete(m.clusters, *cluster)
+
+	delete(m.mappers, *cluster)
+	delete(m.cachedDiscoveryClient, *cluster)
 }
 
 // RemoveSecret removes any in-memory data related to secret
@@ -105,6 +116,8 @@ func (m *clusterCache) RemoveSecret(sec *corev1.ObjectReference) {
 	for i := range clusters {
 		delete(m.configs, clusters[i])
 		delete(m.clusters, clusters[i])
+		delete(m.cachedDiscoveryClient, clusters[i])
+		delete(m.mappers, clusters[i])
 	}
 }
 
@@ -144,11 +157,25 @@ func (m *clusterCache) GetKubernetesRestConfig(ctx context.Context, mgmtClient c
 		return nil, err
 	}
 
+	var cachedDiscoveryClient discovery.CachedDiscoveryInterface
+	var mapper *restmapper.DeferredDiscoveryRESTMapper
+	if remoteRestConfig != nil {
+		dc, err := discovery.NewDiscoveryClientForConfig(remoteRestConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		cachedDiscoveryClient = memory.NewMemCacheClient(dc)
+		mapper = restmapper.NewDeferredDiscoveryRESTMapper(cachedDiscoveryClient)
+	}
+
 	secretInfo, err := getSecretObjectReference(ctx, mgmtClient, clusterNamespace, clusterName, clusterType)
 	if err == nil {
 		// Either all internal structures are updated or none is
 		m.configs[*cluster] = remoteRestConfig
 		m.clusters[*cluster] = secretInfo
+		m.cachedDiscoveryClient[*cluster] = cachedDiscoveryClient
+		m.mappers[*cluster] = mapper
 		v, ok := m.secrets[*secretInfo]
 		if !ok {
 			v = &libsveltosset.Set{}
@@ -158,6 +185,101 @@ func (m *clusterCache) GetKubernetesRestConfig(ctx context.Context, mgmtClient c
 	}
 
 	return remoteRestConfig, nil
+}
+
+func (m *clusterCache) GetMapper(ctx context.Context, mgmtClient client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (*restmapper.DeferredDiscoveryRESTMapper, error) {
+
+	cluster := getClusterObjectReference(clusterNamespace, clusterName, clusterType)
+
+	// 1. Use a Read Lock to check if it's already cached
+	m.rwMux.RLock()
+	mapper, ok := m.mappers[*cluster]
+	m.rwMux.RUnlock()
+
+	if ok {
+		return mapper, nil
+	}
+
+	// 2. Cache Miss: We need to initialize the config and mapper.
+	// Calling GetKubernetesRestConfig will populate m.mappers via the logic you wrote.
+	logger.V(logs.LogInfo).Info("mapper cache miss, initializing cluster config")
+	_, err := m.GetKubernetesRestConfig(ctx, mgmtClient, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize cluster config for mapper: %w", err)
+	}
+
+	// 3. Lock again to retrieve the newly created mapper
+	m.rwMux.RLock()
+	defer m.rwMux.RUnlock()
+
+	if v, ok := m.mappers[*cluster]; ok {
+		return v, nil
+	}
+
+	return nil, fmt.Errorf("mapper not found for cluster %s/%s after initialization", clusterNamespace, clusterName)
+}
+
+func (m *clusterCache) GetCachedDiscoveryClient(ctx context.Context, mgmtClient client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (discovery.CachedDiscoveryInterface, error) {
+
+	cluster := getClusterObjectReference(clusterNamespace, clusterName, clusterType)
+
+	// 1. Thread-safe check for existing cached client
+	m.rwMux.RLock()
+	dc, ok := m.cachedDiscoveryClient[*cluster]
+	m.rwMux.RUnlock()
+
+	if ok {
+		return dc, nil
+	}
+
+	// 2. Cache Miss: Initialize the cluster configuration
+	// This will populate m.cachedDiscoveryClient via GetKubernetesRestConfig
+	logger.V(logs.LogInfo).Info("discovery client cache miss, initializing cluster config")
+	_, err := m.GetKubernetesRestConfig(ctx, mgmtClient, clusterNamespace, clusterName,
+		"", "", clusterType, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize cluster config for discovery client: %w", err)
+	}
+
+	// 3. Retrieve the newly created client
+	m.rwMux.RLock()
+	defer m.rwMux.RUnlock()
+
+	if dc, ok := m.cachedDiscoveryClient[*cluster]; ok {
+		return dc, nil
+	}
+
+	return nil, fmt.Errorf("cached discovery client not found for cluster %s/%s after initialization",
+		clusterNamespace, clusterName)
+}
+
+func (m *clusterCache) ResetMapper(clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) {
+
+	m.rwMux.RLock()
+	defer m.rwMux.RUnlock()
+
+	cluster := getClusterObjectReference(clusterNamespace, clusterName, clusterType)
+	if mapper, ok := m.mappers[*cluster]; ok {
+		mapper.Reset()
+	}
+}
+
+func (m *clusterCache) InvalidateDiscoveryClient(clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) {
+
+	m.rwMux.RLock()
+	defer m.rwMux.RUnlock()
+
+	cluster := getClusterObjectReference(clusterNamespace, clusterName, clusterType)
+	if dc, ok := m.cachedDiscoveryClient[*cluster]; ok {
+		dc.Invalidate()
+	}
 }
 
 func (m *clusterCache) GetKubernetesClient(ctx context.Context, mgmtClient client.Client,

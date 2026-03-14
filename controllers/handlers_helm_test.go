@@ -52,7 +52,7 @@ var _ = Describe("HandlersHelm", func() {
 	var clusterProfile *configv1beta1.ClusterProfile
 	var clusterSummary *configv1beta1.ClusterSummary
 
-	const defaulNamespace = "default"
+	const defaultNamespace = "default"
 
 	BeforeEach(func() {
 		clusterNamespace := randomString()
@@ -188,8 +188,8 @@ var _ = Describe("HandlersHelm", func() {
 			HelmCharts: []configv1beta1.HelmChart{*calicoChart},
 		}
 
-		clusterSummary.Namespace = defaulNamespace
-		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
 
 		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
@@ -483,8 +483,8 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
-		clusterSummary.Namespace = defaulNamespace
-		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
 
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
@@ -524,8 +524,8 @@ var _ = Describe("HandlersHelm", func() {
 {{- else }}23.4.0
 {{- end}}`
 
-		clusterSummary.Namespace = defaulNamespace
-		clusterSummary.Spec.ClusterNamespace = defaulNamespace
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
 		clusterSummary.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
 
 		cluster := &libsveltosv1beta1.SveltosCluster{

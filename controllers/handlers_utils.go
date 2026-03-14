@@ -305,8 +305,11 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 // adjustNamespace fixes namespace.
 // - sets namespace to "default" for namespaced resource with unset namespace
 // - unsets namespace for cluster-wide resources with namespace set
-func adjustNamespace(policy *unstructured.Unstructured, destConfig *rest.Config) error {
-	isResourceNamespaced, err := isNamespaced(policy, destConfig)
+func adjustNamespace(ctx context.Context, policy *unstructured.Unstructured,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) error {
+
+	isResourceNamespaced, err := isNamespaced(ctx, policy, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -384,7 +387,8 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		errorPrefix := fmt.Sprintf("deploying resource %s %s/%s (deploy to management cluster: %v) failed",
 			policy.GetKind(), policy.GetNamespace(), policy.GetName(), deployingToMgmtCluster)
 
-		err := adjustNamespace(policy, destConfig)
+		err := adjustNamespace(ctx, policy, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("%v", err)

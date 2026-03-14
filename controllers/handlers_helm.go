@@ -65,7 +65,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2/textlogger"
@@ -3649,7 +3648,9 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 
 		// For some helm charts, collectHelmContent returns an empty namespace for namespaced resources
 		// If resource is a namespaced one and namespace is empty, set namespace to release namespace.
-		namespace, err := getResourceNamespace(r, requestedChart.ReleaseNamespace, config)
+		namespace, err := getResourceNamespace(ctx, r, requestedChart.ReleaseNamespace,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
 			return err
 		}
@@ -3677,10 +3678,13 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 	return nil
 }
 
-func getResourceNamespace(r *unstructured.Unstructured, releaseNamespace string, config *rest.Config) (string, error) {
+func getResourceNamespace(ctx context.Context, r *unstructured.Unstructured, releaseNamespace string,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) (string, error) {
+
 	namespace := r.GetNamespace()
 	if namespace == "" {
-		namespacedResource, err := isNamespaced(r, config)
+		namespacedResource, err := isNamespaced(ctx, r, clusterNamespace, clusterName, clusterType, logger)
 		if err != nil {
 			return "", err
 		}

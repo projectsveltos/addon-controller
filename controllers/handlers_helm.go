@@ -1734,11 +1734,10 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
 
-	if req := chartRequested.Metadata.Dependencies; req != nil {
-		err = action.CheckDependencies(chartRequested, req)
-		if err != nil {
-			return nil, err
-		}
+	chartRequested, err = prepareChartAndDependencies(chartRequested, requestedChart, chartName,
+		settings, registryOptions, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	err = upgradeCRDs(ctx, requestedChart, kubeconfig, chartRequested.CRDObjects(), logger)
@@ -1786,6 +1785,69 @@ func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1
 		}
 	}
 	return err
+}
+
+// prepareChartAndDependencies ensures chart dependencies are present and metadata is valid.
+func prepareChartAndDependencies(
+	chartRequested *chart.Chart,
+	requestedChart *configv1beta1.HelmChart,
+	chartPath string, // This is the 'chartName' path inside tmpDir
+	settings *cli.EnvSettings,
+	registryOptions *registryClientOptions,
+	logger logr.Logger,
+) (*chart.Chart, error) {
+
+	req := chartRequested.Metadata.Dependencies
+	if req == nil {
+		return chartRequested, nil
+	}
+
+	regClient, err := getRegistryClient(requestedChart.ReleaseNamespace, registryOptions,
+		getEnableClientCacheValue(requestedChart.Options))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registry client: %w", err)
+	}
+
+	// Check if dependencies are actually missing
+	if err := action.CheckDependencies(chartRequested, req); err != nil {
+		logger.V(logs.LogInfo).Info("Dependencies missing or out of date, attempting to fetch")
+
+		man := &downloader.Manager{
+			Out:              os.Stdout,
+			ChartPath:        chartPath,
+			Getters:          getter.All(settings),
+			RepositoryConfig: settings.RepositoryConfig,
+			RepositoryCache:  settings.RepositoryCache,
+			RegistryClient:   regClient,
+		}
+
+		if err := man.Update(); err != nil {
+			return nil, fmt.Errorf("failed to update dependencies: %w", err)
+		}
+
+		// Reload from the directory where man.Update() just ran
+		chartRequested, err = loader.Load(chartPath)
+		if err != nil {
+			// Potential recovery: Use LoadDir which can be more forgiving with paths
+			logger.V(logs.LogDebug).Info("standard loader failed, trying LoadDir", "err", err)
+			chartRequested, err = loader.LoadDir(chartPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to reload chart: %w", err)
+			}
+		}
+	}
+
+	//  Sanitize the version to avoid "invalid semantic version" errors
+	if chartRequested.Metadata.Version == "" || !isValidSemver(chartRequested.Metadata.Version) {
+		logger.V(logs.LogInfo).Info("fixing invalid or empty chart version", "oldVersion",
+			chartRequested.Metadata.Version)
+		chartRequested.Metadata.Version = "0.1.0"
+	}
+
+	// Keep the requestedChart object in sync with actual loaded metadata
+	requestedChart.ChartVersion = chartRequested.Metadata.Version
+
+	return chartRequested, nil
 }
 
 func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
@@ -4685,4 +4747,9 @@ func getStaleReleases(ctx context.Context, c client.Client, clusterSummary *conf
 	}
 
 	return staleReleases, nil
+}
+
+func isValidSemver(v string) bool {
+	_, err := semver.NewVersion(v)
+	return err == nil
 }

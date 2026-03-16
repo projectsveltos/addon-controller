@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -33,7 +34,6 @@ import (
 	"text/template"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -348,7 +348,13 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 	h := sha256.New()
 
 	sortedKustomizationRefs := getSortedKustomizationRefs(clusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
-	config += render.AsCode(sortedKustomizationRefs)
+	raw, err := json.Marshal(sortedKustomizationRefs)
+	if err != nil {
+		return nil, err
+	}
+	hash := sha256.Sum256(raw)
+	config += hex.EncodeToString((hash[:]))
+
 	for i := range sortedKustomizationRefs {
 		kustomizationRef := &sortedKustomizationRefs[i]
 
@@ -376,7 +382,12 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
 		if h.FeatureID == libsveltosv1beta1.FeatureKustomize {
-			config += render.AsCode(h)
+			raw, err := json.Marshal(h)
+			if err != nil {
+				return nil, err
+			}
+			hash := sha256.Sum256(raw)
+			config += hex.EncodeToString((hash[:]))
 		}
 	}
 

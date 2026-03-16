@@ -87,6 +87,10 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 
 		if ref.IgnoreStatusChanges {
 			unstructured.RemoveNestedField(u.Object, "status")
+			// Status update changes resourceVersion and managedFields. Since the goal
+			// is to ignore status changes, implicitly remove those fields
+			unstructured.RemoveNestedField(u.Object, "metadata", "resourceVersion")
+			unstructured.RemoveNestedField(u.Object, "metadata", "managedFields")
 		}
 
 		result[ref.Identifier] = u

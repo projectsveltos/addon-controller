@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,7 +30,6 @@ import (
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
-	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -347,7 +347,7 @@ func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	referencedUnstructured []*unstructured.Unstructured, mgmtResources map[string]*unstructured.Unstructured,
 	logger logr.Logger) ([]*unstructured.Unstructured, error) {
 
-	patches, err := initiatePatches(ctx, clusterSummary, "patch", mgmtResources, logger)
+	patches, err := instantiatedPatches(ctx, clusterSummary, "patch", mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1266,7 +1266,7 @@ func addToMap(m map[string]string, key, value string) {
 }
 
 // Return Templated Patch Objects
-func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+func instantiatedPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	requestor string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]libsveltosv1beta1.Patch, error) {
 
@@ -1334,6 +1334,18 @@ func initiatePatches(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 	return instantiatedPatches, nil
 }
 
+func getUnstructuredHash(obj *unstructured.Unstructured) (string, error) {
+	content := obj.UnstructuredContent()
+
+	raw, err := json.Marshal(content)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(raw)
+	return hex.EncodeToString((hash[:])), nil
+}
+
 func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
@@ -1387,11 +1399,16 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		if err != nil {
 			return "", err
 		}
-		config += render.AsCode(configMap.Data)
+		config += getDataSectionHash(configMap.Data)
 	}
 
 	if clusterProfileSpec.DriftExclusions != nil {
-		config += render.AsCode(clusterProfileSpec.DriftExclusions)
+		raw, err := json.Marshal(clusterProfileSpec.DriftExclusions)
+		if err != nil {
+			return "", err
+		}
+		hash := sha256.Sum256(raw)
+		config += hex.EncodeToString((hash[:]))
 	}
 
 	return config, nil
@@ -1418,7 +1435,11 @@ func getTemplateResourceRefHash(ctx context.Context, clusterSummary *configv1bet
 
 	var config string
 	for i := range keys {
-		config += render.AsCode(mgmtResources[keys[i]])
+		tmpHash, err := getUnstructuredHash(mgmtResources[keys[i]])
+		if err != nil {
+			return nil, err
+		}
+		config += tmpHash
 	}
 
 	h := sha256.New()
@@ -1435,7 +1456,7 @@ func getPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return "", err
 	}
 
-	patches, err := initiatePatches(ctx, clusterSummary, clusterSummary.Name, mgmtResources, logger)
+	patches, err := instantiatedPatches(ctx, clusterSummary, clusterSummary.Name, mgmtResources, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to collect patches")
 		return "", err

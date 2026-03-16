@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -38,7 +40,6 @@ import (
 	dockerconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/credentials"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/hexops/gotextdiff"
 	"github.com/hexops/gotextdiff/myers"
@@ -768,7 +769,13 @@ func helmHash(ctx context.Context, c client.Client, clusterSummary *configv1beta
 	for i := range clusterSummary.Spec.ClusterProfileSpec.ValidateHealths {
 		h := &clusterSummary.Spec.ClusterProfileSpec.ValidateHealths[i]
 		if h.FeatureID == libsveltosv1beta1.FeatureHelm {
-			config += render.AsCode(h)
+			raw, err := json.Marshal(h)
+			if err != nil {
+				return nil, err
+			}
+
+			hash := sha256.Sum256(raw)
+			config += hex.EncodeToString((hash[:]))
 		}
 	}
 
@@ -780,7 +787,15 @@ func getHelmChartHash(ctx context.Context, c client.Client, clusterSummary *conf
 	currentChart *configv1beta1.HelmChart, mgmtResources map[string]*unstructured.Unstructured,
 	logger logr.Logger) (string, error) {
 
-	config := render.AsCode(*currentChart)
+	config := ""
+
+	raw, err := json.Marshal(*currentChart)
+	if err != nil {
+		return "", err
+	}
+
+	hash := sha256.Sum256(raw)
+	config += hex.EncodeToString((hash[:]))
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace
 	clusterName := clusterSummary.Spec.ClusterName
@@ -1509,7 +1524,7 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
 	logger.V(logs.LogDebug).Info("installing release")
 
-	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
+	patches, err := instantiatedPatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -1711,7 +1726,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	driftExclusionPatches := deployer.TransformDriftExclusionsToPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions)
 
-	patches, err := initiatePatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
+	patches, err := instantiatedPatches(ctx, clusterSummary, requestedChart.ChartName, mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}

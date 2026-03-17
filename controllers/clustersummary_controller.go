@@ -27,7 +27,6 @@ import (
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -616,9 +615,9 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 		return err
 	}
 
-	sourceOCIRepository := source.Kind[*sourcev1b2.OCIRepository](
+	sourceOCIRepository := source.Kind[*sourcev1.OCIRepository](
 		mgr.GetCache(),
-		&sourcev1b2.OCIRepository{},
+		&sourcev1.OCIRepository{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxOCIRepository),
 		FluxOCIRepositoryPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
@@ -626,9 +625,9 @@ func (r *ClusterSummaryReconciler) WatchForFlux(mgr ctrl.Manager, c controller.C
 		return err
 	}
 
-	sourceBucket := source.Kind[*sourcev1b2.Bucket](
+	sourceBucket := source.Kind[*sourcev1.Bucket](
 		mgr.GetCache(),
-		&sourcev1b2.Bucket{},
+		&sourcev1.Bucket{},
 		handler.TypedEnqueueRequestsFromMapFunc(r.requeueClusterSummaryForFluxBucket),
 		FluxBucketPredicate{Logger: mgr.GetLogger().WithValues("predicate", "fluxsourcepredicate")},
 	)
@@ -1055,12 +1054,9 @@ func getPolicyRefGroupVersionKind(ref *configv1beta1.PolicyRef) *schema.GroupVer
 	case string(libsveltosv1beta1.SecretReferencedResourceKind),
 		string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
 		return &schema.GroupVersionKind{Group: "", Version: "v1", Kind: ref.Kind}
-	case sourcev1.GitRepositoryKind:
+	case sourcev1.GitRepositoryKind, sourcev1.BucketKind, sourcev1.OCIRepositoryKind:
 		return &schema.GroupVersionKind{Group: sourcev1.GroupVersion.Group,
 			Version: sourcev1.GroupVersion.Version, Kind: ref.Kind}
-	case sourcev1b2.BucketKind, sourcev1b2.OCIRepositoryKind:
-		return &schema.GroupVersionKind{Group: sourcev1b2.GroupVersion.Group,
-			Version: sourcev1b2.GroupVersion.Version, Kind: ref.Kind}
 	}
 
 	return nil
@@ -1093,10 +1089,10 @@ func (r *ClusterSummaryReconciler) getKustomizationRefReferences(ctx context.Con
 		switch kr.Kind {
 		case sourcev1.GitRepositoryKind:
 			apiVersion = sourcev1.GroupVersion.String()
-		case sourcev1b2.OCIRepositoryKind:
-			apiVersion = sourcev1b2.GroupVersion.String()
-		case sourcev1b2.BucketKind:
-			apiVersion = sourcev1b2.GroupVersion.String()
+		case sourcev1.OCIRepositoryKind:
+			apiVersion = sourcev1.GroupVersion.String()
+		case sourcev1.BucketKind:
+			apiVersion = sourcev1.GroupVersion.String()
 		default:
 			apiVersion = corev1.SchemeGroupVersion.String()
 		}

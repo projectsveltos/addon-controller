@@ -29,7 +29,6 @@ import (
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -730,20 +729,20 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
 			object.Path = reference.Path
-		case sourcev1b2.OCIRepositoryKind:
+		case sourcev1.OCIRepositoryKind:
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: sourcev1b2.GroupVersion.String(),
-				Kind:       sourcev1b2.OCIRepositoryKind,
+				APIVersion: sourcev1.GroupVersion.String(),
+				Kind:       sourcev1.OCIRepositoryKind,
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
 			object.Path = reference.Path
-		case sourcev1b2.BucketKind:
+		case sourcev1.BucketKind:
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: sourcev1b2.GroupVersion.String(),
-				Kind:       sourcev1b2.BucketKind,
+				APIVersion: sourcev1.GroupVersion.String(),
+				Kind:       sourcev1.BucketKind,
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,
 			}

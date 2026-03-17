@@ -23,7 +23,6 @@ import (
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -81,10 +80,6 @@ func InitScheme() (*runtime.Scheme, error) {
 	if err := sourcev1.AddToScheme(s); err != nil {
 		return nil, err
 	}
-	if err := sourcev1b2.AddToScheme(s); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 

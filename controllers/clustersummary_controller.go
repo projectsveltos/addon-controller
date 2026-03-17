@@ -96,6 +96,9 @@ const (
 
 const (
 	clusterPausedMessage = "Cluster is paused"
+
+	rateLimiterBaseDelay = 1 * time.Second
+	rateLimiterMaxDelay  = 5 * time.Minute
 )
 
 // ClusterSummaryReconciler reconciles a ClusterSummary object
@@ -180,21 +183,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.skipReconciliation(clusterSummaryScope, req) {
 		logger.V(logs.LogInfo).Info("ignore update")
-		requeueAfter := normalRequeueAfter
-		if nrt := clusterSummaryScope.ClusterSummary.Status.NextReconcileTime; nrt != nil {
-			if remaining := time.Until(nrt.Time); remaining > 0 {
-				requeueAfter = remaining
-			}
-		}
-		// Also check the in-memory cooldown (survives status-patch conflicts)
-		r.PolicyMux.Lock()
-		if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
-			if remaining := time.Until(v); remaining > requeueAfter {
-				requeueAfter = remaining
-			}
-		}
-		r.PolicyMux.Unlock()
-		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: r.remainingCooldown(clusterSummaryScope, req)}, nil
 	}
 
 	var isMatch bool
@@ -443,7 +432,17 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 	clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
 	clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
 
-	err = r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
+	if result, err := r.prepareForDeployment(ctx, clusterSummaryScope, logger); err != nil || result.Requeue {
+		return result, err
+	}
+
+	return r.proceedDeployingClusterSummary(ctx, clusterSummaryScope, logger)
+}
+
+func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
+
+	err := r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to start watcher on resources referenced in TemplateResourceRefs.")
 		r.setNextReconcileTime(clusterSummaryScope, deleteRequeueAfter)
@@ -476,7 +475,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 		}
 	}
 
-	return r.proceedDeployingClusterSummary(ctx, clusterSummaryScope, logger)
+	return reconcile.Result{}, nil
 }
 
 func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Context,
@@ -582,6 +581,29 @@ func (r *ClusterSummaryReconciler) setNextReconcileTime(
 	r.PolicyMux.Unlock()
 }
 
+// remainingCooldown returns the time remaining before the next reconciliation
+// should proceed, checking both the persisted status field and the in-memory map.
+func (r *ClusterSummaryReconciler) remainingCooldown(
+	clusterSummaryScope *scope.ClusterSummaryScope, req ctrl.Request) time.Duration {
+
+	requeueAfter := normalRequeueAfter
+	if nrt := clusterSummaryScope.ClusterSummary.Status.NextReconcileTime; nrt != nil {
+		if remaining := time.Until(nrt.Time); remaining > 0 {
+			requeueAfter = remaining
+		}
+	}
+
+	r.PolicyMux.Lock()
+	if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
+		if remaining := time.Until(v); remaining > requeueAfter {
+			requeueAfter = remaining
+		}
+	}
+	r.PolicyMux.Unlock()
+
+	return requeueAfter
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
@@ -592,8 +614,8 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 			RateLimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](
-				1*time.Second,  // base delay (default is 5ms which is too aggressive)
-				5*time.Minute,  // max delay
+				rateLimiterBaseDelay,
+				rateLimiterMaxDelay,
 			),
 		}).
 		Watches(&libsveltosv1beta1.SveltosCluster{},

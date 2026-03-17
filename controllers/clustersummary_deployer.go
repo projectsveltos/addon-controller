@@ -164,6 +164,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 			if existingFS := getFeatureSummaryForFeatureID(clusterSummary, f.id); existingFS != nil &&
 				existingFS.Status == libsveltosv1beta1.FeatureStatusProvisioned &&
 				reflect.DeepEqual(existingFS.Hash, currentHash) {
+
 				logger.V(logs.LogDebug).Info("feature already provisioned with same hash, skipping status update")
 				return nil
 			}

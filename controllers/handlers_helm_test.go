@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"helm.sh/helm/v3/pkg/release"
+	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -95,7 +95,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldInstall returns false when requested version does not match installed version", func() {
 		currentRelease := &controllers.ReleaseInfo{
-			Status:       release.StatusDeployed.String(),
+			Status:       releasecommon.StatusDeployed.String(),
 			ChartVersion: "v2.5.0",
 		}
 		requestChart := &configv1beta1.HelmChart{
@@ -108,7 +108,7 @@ var _ = Describe("HandlersHelm", func() {
 	It("shouldInstall returns false when requested version matches installed version",
 		func() {
 			currentRelease := &controllers.ReleaseInfo{
-				Status:       release.StatusDeployed.String(),
+				Status:       releasecommon.StatusDeployed.String(),
 				ChartVersion: "v2.5.3",
 			}
 			requestChart := &configv1beta1.HelmChart{
@@ -144,7 +144,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldUninstall returns false when action is not Uninstall", func() {
 		currentRelease := &controllers.ReleaseInfo{
-			Status:       release.StatusDeployed.String(),
+			Status:       releasecommon.StatusDeployed.String(),
 			ChartVersion: "v2.5.3",
 		}
 		requestChart := &configv1beta1.HelmChart{
@@ -156,7 +156,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldUpgrade returns true when installed release is different than requested release", func() {
 		currentRelease := &controllers.ReleaseInfo{
-			Status:       release.StatusDeployed.String(),
+			Status:       releasecommon.StatusDeployed.String(),
 			ChartVersion: "v2.5.0",
 		}
 		requestChart := &configv1beta1.HelmChart{

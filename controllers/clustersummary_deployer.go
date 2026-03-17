@@ -159,6 +159,15 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 				return r.proceedDeployingFeatureInPullMode(ctx, clusterSummaryScope, f, isConfigSame, currentHash, logger)
 			}
 
+			// Skip status update if already provisioned with the same hash — avoids
+			// unnecessary status patches that would trigger watch events and re-enqueue.
+			if existingFS := getFeatureSummaryForFeatureID(clusterSummary, f.id); existingFS != nil &&
+				existingFS.Status == libsveltosv1beta1.FeatureStatusProvisioned &&
+				reflect.DeepEqual(existingFS.Hash, currentHash) {
+				logger.V(logs.LogDebug).Info("feature already provisioned with same hash, skipping status update")
+				return nil
+			}
+
 			r.updateFeatureStatus(clusterSummaryScope, f.id, deployerStatus, currentHash, deployerError, logger)
 			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
 				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)

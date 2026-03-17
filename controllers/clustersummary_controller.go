@@ -38,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/util/workqueue"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -118,7 +119,8 @@ type ClusterSummaryReconciler struct {
 
 	eventRecorder events.EventRecorder
 
-	DeletedInstances map[types.NamespacedName]time.Time
+	DeletedInstances   map[types.NamespacedName]time.Time
+	NextReconcileTimes map[types.NamespacedName]time.Time // in-memory cooldown, survives status-patch conflicts
 }
 
 // If the drift-detection component is deployed in the management cluster, the addon-controller will deploy ResourceSummaries within the same cluster,
@@ -178,7 +180,21 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.skipReconciliation(clusterSummaryScope, req) {
 		logger.V(logs.LogInfo).Info("ignore update")
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		requeueAfter := normalRequeueAfter
+		if nrt := clusterSummaryScope.ClusterSummary.Status.NextReconcileTime; nrt != nil {
+			if remaining := time.Until(nrt.Time); remaining > 0 {
+				requeueAfter = remaining
+			}
+		}
+		// Also check the in-memory cooldown (survives status-patch conflicts)
+		r.PolicyMux.Lock()
+		if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
+			if remaining := time.Until(v); remaining > requeueAfter {
+				requeueAfter = remaining
+			}
+		}
+		r.PolicyMux.Unlock()
+		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 	}
 
 	var isMatch bool
@@ -205,9 +221,16 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
-	// changes.
+	// changes. Conflict errors are swallowed because the watch event from whatever caused the
+	// conflict will re-enqueue this resource, and the next reconciliation will recompute status.
+	// Propagating the conflict would cause controller-runtime to immediately requeue, bypassing
+	// the intended NextReconcileTime backoff.
 	defer func() {
 		if err = clusterSummaryScope.Close(ctx); err != nil {
+			if apierrors.IsConflict(err) {
+				logger.V(logs.LogDebug).Info("conflict patching ClusterSummary status, will reconcile on next event")
+				return
+			}
 			reterr = err
 		}
 	}()
@@ -423,20 +446,24 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 	err = r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to start watcher on resources referenced in TemplateResourceRefs.")
+		r.setNextReconcileTime(clusterSummaryScope, deleteRequeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	allDeployed, msg, err := r.areDependenciesDeployed(ctx, clusterSummaryScope, logger)
 	if err != nil {
+		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 	clusterSummaryScope.SetDependenciesMessage(&msg)
 	if !allDeployed {
+		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	err = r.updateChartMap(ctx, clusterSummaryScope, logger)
 	if err != nil {
+		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 	}
 
@@ -444,6 +471,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+			r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
 		}
 	}
@@ -460,6 +488,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		ok := errors.As(err, &conflictErr)
 		if ok {
 			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
+			r.setNextReconcileTime(clusterSummaryScope, r.ConflictRetryTime)
 			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
 		}
 
@@ -471,6 +500,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 				"checkName", healthCheckError.CheckName,
 				"reason", healthCheckError.InternalErr.Error(),
 				"requeueAfter", r.HealthErrorRetryTime.String())
+			r.setNextReconcileTime(clusterSummaryScope, r.HealthErrorRetryTime)
 			return reconcile.Result{Requeue: true, RequeueAfter: r.HealthErrorRetryTime}, nil
 		}
 
@@ -513,6 +543,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		}
 
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
+		r.setNextReconcileTime(clusterSummaryScope, requeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 	}
 
@@ -521,10 +552,34 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 	if clusterSummaryScope.IsDryRunSync() {
 		r.resetFeatureStatusToProvisioning(clusterSummaryScope)
 		// we need to keep retrying in DryRun ClusterSummaries
+		r.setNextReconcileTime(clusterSummaryScope, dryRunRequeueAfter)
 		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// setNextReconcileTime sets NextReconcileTime on the ClusterSummary status
+// so that skipReconciliation() can honor the intended backoff period
+// even when a watch event re-enqueues the item before RequeueAfter fires.
+// It also records the cooldown in the reconciler's in-memory map so that the
+// guard works even if the status patch fails (e.g. due to a conflict).
+func (r *ClusterSummaryReconciler) setNextReconcileTime(
+	clusterSummaryScope *scope.ClusterSummaryScope, d time.Duration) {
+
+	nextTime := time.Now().Add(d)
+	clusterSummaryScope.ClusterSummary.Status.NextReconcileTime =
+		&metav1.Time{Time: nextTime}
+
+	// Mirror in the in-memory map so skipReconciliation works even if scope.Close()
+	// encounters a conflict and the status field is never persisted.
+	key := types.NamespacedName{
+		Namespace: clusterSummaryScope.ClusterSummary.Namespace,
+		Name:      clusterSummaryScope.ClusterSummary.Name,
+	}
+	r.PolicyMux.Lock()
+	r.NextReconcileTimes[key] = nextTime
+	r.PolicyMux.Unlock()
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -536,6 +591,10 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 		).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
+			RateLimiter: workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](
+				1*time.Second,  // base delay (default is 5ms which is too aggressive)
+				5*time.Minute,  // max delay
+			),
 		}).
 		Watches(&libsveltosv1beta1.SveltosCluster{},
 			handler.EnqueueRequestsFromMapFunc(r.requeueClusterSummaryForSveltosCluster),
@@ -578,6 +637,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
 	r.DeletedInstances = make(map[types.NamespacedName]time.Time)
+	r.NextReconcileTimes = make(map[types.NamespacedName]time.Time)
 	r.eventRecorder = mgr.GetEventRecorder("event-recorder")
 	r.ctrl = c
 
@@ -1642,9 +1702,18 @@ func (r *ClusterSummaryReconciler) skipReconciliation(clusterSummaryScope *scope
 		}
 	}
 
-	// Checking if reconciliation should happen
-	if cs.Status.NextReconcileTime != nil && time.Now().Before(cs.Status.NextReconcileTime.Time) {
+	// Checking if reconciliation should happen — check both the persisted status field
+	// and the in-memory map (which survives status-patch conflicts).
+	now := time.Now()
+	if cs.Status.NextReconcileTime != nil && now.Before(cs.Status.NextReconcileTime.Time) {
 		return true
+	}
+	if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
+		if now.Before(v) {
+			return true
+		}
+		// Cooldown expired — remove from map
+		delete(r.NextReconcileTimes, req.NamespacedName)
 	}
 
 	cs.Status.NextReconcileTime = nil

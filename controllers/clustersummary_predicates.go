@@ -22,7 +22,6 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -198,19 +197,19 @@ type FluxOCIRepositoryPredicate struct {
 	Logger logr.Logger
 }
 
-func (p FluxOCIRepositoryPredicate) Create(obj event.TypedCreateEvent[*sourcev1b2.OCIRepository]) bool {
+func (p FluxOCIRepositoryPredicate) Create(obj event.TypedCreateEvent[*sourcev1.OCIRepository]) bool {
 	return fluxCreatePredicate(obj.Object, p.Logger)
 }
 
-func (p FluxOCIRepositoryPredicate) Update(obj event.TypedUpdateEvent[*sourcev1b2.OCIRepository]) bool {
+func (p FluxOCIRepositoryPredicate) Update(obj event.TypedUpdateEvent[*sourcev1.OCIRepository]) bool {
 	return fluxUpdatePredicate(obj.ObjectNew, obj.ObjectOld, p.Logger)
 }
 
-func (p FluxOCIRepositoryPredicate) Delete(obj event.TypedDeleteEvent[*sourcev1b2.OCIRepository]) bool {
+func (p FluxOCIRepositoryPredicate) Delete(obj event.TypedDeleteEvent[*sourcev1.OCIRepository]) bool {
 	return fluxDeletePredicate(obj.Object, p.Logger)
 }
 
-func (p FluxOCIRepositoryPredicate) Generic(obj event.TypedGenericEvent[*sourcev1b2.OCIRepository]) bool {
+func (p FluxOCIRepositoryPredicate) Generic(obj event.TypedGenericEvent[*sourcev1.OCIRepository]) bool {
 	return fluxGenericPredicate(obj.Object, p.Logger)
 }
 
@@ -218,19 +217,19 @@ type FluxBucketPredicate struct {
 	Logger logr.Logger
 }
 
-func (p FluxBucketPredicate) Create(obj event.TypedCreateEvent[*sourcev1b2.Bucket]) bool {
+func (p FluxBucketPredicate) Create(obj event.TypedCreateEvent[*sourcev1.Bucket]) bool {
 	return fluxCreatePredicate(obj.Object, p.Logger)
 }
 
-func (p FluxBucketPredicate) Update(obj event.TypedUpdateEvent[*sourcev1b2.Bucket]) bool {
+func (p FluxBucketPredicate) Update(obj event.TypedUpdateEvent[*sourcev1.Bucket]) bool {
 	return fluxUpdatePredicate(obj.ObjectNew, obj.ObjectOld, p.Logger)
 }
 
-func (p FluxBucketPredicate) Delete(obj event.TypedDeleteEvent[*sourcev1b2.Bucket]) bool {
+func (p FluxBucketPredicate) Delete(obj event.TypedDeleteEvent[*sourcev1.Bucket]) bool {
 	return fluxDeletePredicate(obj.Object, p.Logger)
 }
 
-func (p FluxBucketPredicate) Generic(obj event.TypedGenericEvent[*sourcev1b2.Bucket]) bool {
+func (p FluxBucketPredicate) Generic(obj event.TypedGenericEvent[*sourcev1.Bucket]) bool {
 	return fluxGenericPredicate(obj.Object, p.Logger)
 }
 
@@ -294,17 +293,17 @@ func hasArtifactChanged(objNew, objOld client.Object) bool {
 
 			return true
 		}
-	case sourcev1b2.BucketKind:
-		newBucket := objNew.(*sourcev1b2.Bucket)
-		oldBucket := objOld.(*sourcev1b2.Bucket)
+	case sourcev1.BucketKind:
+		newBucket := objNew.(*sourcev1.Bucket)
+		oldBucket := objOld.(*sourcev1.Bucket)
 		if oldBucket == nil ||
 			!isArtifactSame(oldBucket.Status.Artifact, newBucket.Status.Artifact) {
 
 			return true
 		}
-	case sourcev1b2.OCIRepositoryKind:
-		newOCIRepo := objNew.(*sourcev1b2.OCIRepository)
-		oldOCIRepo := objOld.(*sourcev1b2.OCIRepository)
+	case sourcev1.OCIRepositoryKind:
+		newOCIRepo := objNew.(*sourcev1.OCIRepository)
+		oldOCIRepo := objOld.(*sourcev1.OCIRepository)
 		if oldOCIRepo == nil ||
 			!isArtifactSame(oldOCIRepo.Status.Artifact, newOCIRepo.Status.Artifact) {
 

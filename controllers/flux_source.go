@@ -25,7 +25,6 @@ import (
 	"github.com/fluxcd/pkg/http/fetch"
 	"github.com/fluxcd/pkg/tar"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -97,8 +96,8 @@ func getSource(ctx context.Context, c client.Client, namespace, sourceName, sour
 			return nil, fmt.Errorf("unable to get source '%s': %w", namespacedName, err)
 		}
 		return &repository, nil
-	case sourcev1b2.OCIRepositoryKind:
-		var repository sourcev1b2.OCIRepository
+	case sourcev1.OCIRepositoryKind:
+		var repository sourcev1.OCIRepository
 		err := c.Get(ctx, namespacedName, &repository)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -107,8 +106,8 @@ func getSource(ctx context.Context, c client.Client, namespace, sourceName, sour
 			return nil, fmt.Errorf("unable to get source '%s': %w", namespacedName, err)
 		}
 		return &repository, nil
-	case sourcev1b2.BucketKind:
-		var bucket sourcev1b2.Bucket
+	case sourcev1.BucketKind:
+		var bucket sourcev1.Bucket
 		err := c.Get(ctx, namespacedName, &bucket)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
@@ -162,12 +161,12 @@ func getReferencedFluxSourceFromURL(hc *configv1beta1.HelmChart) (*corev1.Object
 	case strings.ToLower(sourcev1.GitRepositoryKind):
 		sourceRef.Kind = sourcev1.GitRepositoryKind
 		sourceRef.APIVersion = sourcev1.GroupVersion.String()
-	case strings.ToLower(sourcev1b2.OCIRepositoryKind):
-		sourceRef.Kind = sourcev1b2.OCIRepositoryKind
-		sourceRef.APIVersion = sourcev1b2.GroupVersion.String()
-	case strings.ToLower(sourcev1b2.BucketKind):
-		sourceRef.Kind = sourcev1b2.BucketKind
-		sourceRef.APIVersion = sourcev1b2.GroupVersion.String()
+	case strings.ToLower(sourcev1.OCIRepositoryKind):
+		sourceRef.Kind = sourcev1.OCIRepositoryKind
+		sourceRef.APIVersion = sourcev1.GroupVersion.String()
+	case strings.ToLower(sourcev1.BucketKind):
+		sourceRef.Kind = sourcev1.BucketKind
+		sourceRef.APIVersion = sourcev1.GroupVersion.String()
 	}
 	return sourceRef, sourcePath, nil
 }

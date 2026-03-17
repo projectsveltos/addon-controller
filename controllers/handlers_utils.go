@@ -29,7 +29,6 @@ import (
 	"time"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -422,7 +421,16 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 
 		var resourceInfo *deployer.ResourceInfo
 		var requeue bool
-		resourceInfo, requeue, err = deployer.CanDeployResource(ctx, dr, policy, referencedObject, profile, profileTier, referenceTier, logger)
+		resourceInfo, requeue, err = deployer.CanDeployResource(
+			ctx,
+			dr,
+			policy,
+			referencedObject,
+			profile,
+			profileTier,
+			referenceTier,
+			logger,
+		)
 		if err != nil {
 			var conflictErr *deployer.ConflictError
 			ok := errors.As(err, &conflictErr)
@@ -466,9 +474,16 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			}
 		}
 
-		updatedPolicy, err := deployer.UpdateResource(ctx, dr, clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection,
-			clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
-			policy, subresources, logger)
+		updatedPolicy, err := deployer.UpdateResource(
+			ctx,
+			dr,
+			clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection,
+			clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun,
+			clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+			policy,
+			subresources,
+			logger,
+		)
 		if updatedPolicy != nil {
 			resource.LastAppliedTime = &metav1.Time{Time: time.Now()}
 			reports = append(reports, *deployer.GenerateResourceReport(policyHash, resourceInfo, updatedPolicy, resource))
@@ -730,20 +745,20 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
 			object.Path = reference.Path
-		case sourcev1b2.OCIRepositoryKind:
+		case sourcev1.OCIRepositoryKind:
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: sourcev1b2.GroupVersion.String(),
-				Kind:       sourcev1b2.OCIRepositoryKind,
+				APIVersion: sourcev1.GroupVersion.String(),
+				Kind:       sourcev1.OCIRepositoryKind,
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
 			object.Path = reference.Path
-		case sourcev1b2.BucketKind:
+		case sourcev1.BucketKind:
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: sourcev1b2.GroupVersion.String(),
-				Kind:       sourcev1b2.BucketKind,
+				APIVersion: sourcev1.GroupVersion.String(),
+				Kind:       sourcev1.BucketKind,
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,
 			}

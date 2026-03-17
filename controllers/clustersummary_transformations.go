@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
-	sourcev1b2 "github.com/fluxcd/source-controller/api/v1beta2"
 
 	"github.com/projectsveltos/addon-controller/controllers/clustercache"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -43,14 +42,14 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxGitRepository(
 }
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxOCIRepository(
-	ctx context.Context, o *sourcev1b2.OCIRepository,
+	ctx context.Context, o *sourcev1.OCIRepository,
 ) []reconcile.Request {
 
 	return r.requeueClusterSummaryForFluxSource(ctx, o)
 }
 
 func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxBucket(
-	ctx context.Context, o *sourcev1b2.Bucket,
+	ctx context.Context, o *sourcev1.Bucket,
 ) []reconcile.Request {
 
 	return r.requeueClusterSummaryForFluxSource(ctx, o)
@@ -82,17 +81,17 @@ func (r *ClusterSummaryReconciler) requeueClusterSummaryForFluxSource(
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
-	case *sourcev1b2.OCIRepository:
+	case *sourcev1.OCIRepository:
 		key = corev1.ObjectReference{
-			APIVersion: sourcev1b2.GroupVersion.String(),
-			Kind:       sourcev1b2.OCIRepositoryKind,
+			APIVersion: sourcev1.GroupVersion.String(),
+			Kind:       sourcev1.OCIRepositoryKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}
-	case *sourcev1b2.Bucket:
+	case *sourcev1.Bucket:
 		key = corev1.ObjectReference{
-			APIVersion: sourcev1b2.GroupVersion.String(),
-			Kind:       sourcev1b2.BucketKind,
+			APIVersion: sourcev1.GroupVersion.String(),
+			Kind:       sourcev1.BucketKind,
 			Namespace:  o.GetNamespace(),
 			Name:       o.GetName(),
 		}

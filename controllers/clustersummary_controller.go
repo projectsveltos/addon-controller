@@ -155,6 +155,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets,verbs=get;watch;list
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets/status,verbs=get;watch;list
 
+//nolint:funlen // Reconcile is the standard controller entrypoint; splitting further would hurt readability
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogDebug).Info("Reconciling")

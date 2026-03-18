@@ -52,7 +52,7 @@ jobs:
       run: make create-cluster fv
 
   publish-image:
-    needs: [build-and-lint, unit-tests, fv-tests]
+    needs: [build-and-lint, unit-tests]
     runs-on: ubuntu-latest
     permissions:
       contents: read

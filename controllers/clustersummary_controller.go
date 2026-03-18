@@ -155,7 +155,6 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets,verbs=get;watch;list
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets/status,verbs=get;watch;list
 
-//nolint:funlen // Reconcile is the standard controller entrypoint; splitting further would hurt readability
 func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogDebug).Info("Reconciling")
@@ -433,38 +432,38 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 	clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
 	clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
 
-	if result, err := r.prepareForDeployment(ctx, clusterSummaryScope, logger); err != nil || result.Requeue {
-		return result, err
+	if result := r.prepareForDeployment(ctx, clusterSummaryScope, logger); result.RequeueAfter > 0 {
+		return result, nil
 	}
 
 	return r.proceedDeployingClusterSummary(ctx, clusterSummaryScope, logger)
 }
 
 func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
-	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) reconcile.Result {
 
 	err := r.startWatcherForTemplateResourceRefs(ctx, clusterSummaryScope.ClusterSummary)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to start watcher on resources referenced in TemplateResourceRefs.")
 		r.setNextReconcileTime(clusterSummaryScope, deleteRequeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}
 	}
 
 	allDeployed, msg, err := r.areDependenciesDeployed(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 	clusterSummaryScope.SetDependenciesMessage(&msg)
 	if !allDeployed {
 		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	err = r.updateChartMap(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	if !clusterSummaryScope.IsContinuousWithDriftDetection() {
@@ -472,11 +471,11 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
 			r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
-			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+			return reconcile.Result{RequeueAfter: normalRequeueAfter}
 		}
 	}
 
-	return reconcile.Result{}, nil
+	return reconcile.Result{}
 }
 
 func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Context,

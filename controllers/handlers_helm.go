@@ -1626,6 +1626,7 @@ func checkDependencies(chartRequested *chart.Chart, installClient *action.Instal
 					Getters:          getter.All(settings),
 					RepositoryConfig: settings.RepositoryConfig,
 					RepositoryCache:  settings.RepositoryCache,
+					ContentCache:     settings.ContentCache,
 				}
 				err = man.Update()
 				if err != nil {
@@ -1858,6 +1859,7 @@ func prepareChartAndDependencies(
 			RepositoryConfig: settings.RepositoryConfig,
 			RepositoryCache:  settings.RepositoryCache,
 			RegistryClient:   regClient,
+			ContentCache:     settings.ContentCache,
 		}
 
 		if err := man.Update(); err != nil {

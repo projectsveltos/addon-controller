@@ -1,5 +1,5 @@
 /*
-Copyright 2022-24. projectsveltos.io. All rights reserved.
+Copyright 2022-26. projectsveltos.io. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,11 +20,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -45,18 +48,21 @@ import (
 	"github.com/hexops/gotextdiff/myers"
 	"github.com/hexops/gotextdiff/span"
 	"github.com/pkg/errors"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/downloader"
-	"helm.sh/helm/v3/pkg/getter"
-	"helm.sh/helm/v3/pkg/helmpath"
-	"helm.sh/helm/v3/pkg/registry"
-	"helm.sh/helm/v3/pkg/release"
-	"helm.sh/helm/v3/pkg/repo"
-	"helm.sh/helm/v3/pkg/storage/driver"
+	"helm.sh/helm/v4/pkg/action"
+	chartbase "helm.sh/helm/v4/pkg/chart"
+	"helm.sh/helm/v4/pkg/chart/common"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/downloader"
+	"helm.sh/helm/v4/pkg/getter"
+	"helm.sh/helm/v4/pkg/helmpath"
+	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/registry"
+	releasecommon "helm.sh/helm/v4/pkg/release/common"
+	releasev1 "helm.sh/helm/v4/pkg/release/v1"
+	repo "helm.sh/helm/v4/pkg/repo/v1"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,7 +74,6 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -87,8 +92,7 @@ import (
 )
 
 var (
-	storage    = repo.File{}
-	helmLogger = textlogger.NewLogger(textlogger.NewConfig())
+	storage = repo.File{}
 )
 
 const (
@@ -708,7 +712,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 					return nil, err
 				}
 
-				if currentRelease != nil && currentRelease.Status != string(release.StatusUninstalled) {
+				if currentRelease != nil && currentRelease.Status != string(releasecommon.StatusUninstalled) {
 					err = doUninstallRelease(ctx, clusterSummary, instantiatedChart, kubeconfig, registryOptions, logger)
 					if err != nil {
 						if !errors.Is(err, driver.ErrReleaseNotFound) {
@@ -1030,7 +1034,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) status: %s",
 					currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion, currentRelease.Status))
 			}
-			if currentRelease.Status == release.StatusDeployed.String() {
+			if currentRelease.Status == releasecommon.StatusDeployed.String() {
 				// Deployed chart is used for updating ClusterConfiguration. There is no ClusterConfiguration for mgmt cluster
 				chartDeployed = append(chartDeployed, configv1beta1.Chart{
 					RepoURL:         instantiatedChart.RepositoryURL,
@@ -1127,8 +1131,6 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 
 		if deployer.HasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) {
 			if claimingHelmManager.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-				// Since we are in DryRun mode do not reset the other ClusterSummary. It will still be managing
-				// the helm chart
 				return true, nil
 			}
 			// New ClusterSummary is taking over managing this chart. So reset helmReleaseSummaries for this chart
@@ -1138,13 +1140,11 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			if err != nil {
 				return false, err
 			}
-
 			// Reset Status of the ClusterSummary previously managing this resource
 			err = requeueClusterSummary(ctx, libsveltosv1beta1.FeatureHelm, currentHelmManager, logger)
 			if err != nil {
 				return false, err
 			}
-
 			// Set current ClusterSummary as the new manager
 			chartManager.SetManagerForChart(claimingHelmManager, instantiatedChart)
 			return true, nil
@@ -1152,7 +1152,6 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 		return false, nil
 	}
 
-	// Nobody else is managing the chart
 	return true, nil
 }
 
@@ -1181,7 +1180,7 @@ func resetHelmReleaseSummaries(ctx context.Context, c client.Client, clusterSumm
 func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart, kubeconfig string,
 	registryOptions *registryClientOptions, isPullMode, templateOnly bool, logger logr.Logger,
-) (*release.Release, *configv1beta1.ReleaseReport, error) {
+) (*releasev1.Release, *configv1beta1.ReleaseReport, error) {
 
 	logger.V(logs.LogDebug).Info("install helm release")
 
@@ -1222,7 +1221,7 @@ func handleInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 func handleUpgrade(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, currentChart *configv1beta1.HelmChart,
 	currentRelease *releaseInfo, kubeconfig string, registryOptions *registryClientOptions,
-	logger logr.Logger) (*release.Release, *configv1beta1.ReleaseReport, error) {
+	logger logr.Logger) (*releasev1.Release, *configv1beta1.ReleaseReport, error) {
 
 	var report *configv1beta1.ReleaseReport
 	logger.V(logs.LogDebug).Info("upgrade helm release")
@@ -1394,7 +1393,6 @@ func deployHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 	}
 	var report *configv1beta1.ReleaseReport
 
-	// In pull mode we cannot verify
 	if shouldInstall(currentRelease, instantiatedChart) {
 		_, report, err = handleInstall(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig,
 			registryOptions, false, false, logger)
@@ -1453,7 +1451,7 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 	logger = logger.WithValues("repoURL", repoURL, "repoName", name)
 
 	entry := &repo.Entry{Name: name, URL: repoURL, Username: registryOptions.username, Password: registryOptions.password,
-		InsecureSkipTLSverify: registryOptions.skipTLSVerify}
+		InsecureSkipTLSVerify: registryOptions.skipTLSVerify}
 	chartRepo, err := repo.NewChartRepository(entry, getter.All(settings))
 	if err != nil {
 		return err
@@ -1500,7 +1498,7 @@ func getChartVersion(requestedChart *configv1beta1.HelmChart, chartRequested *ch
 func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, settings *cli.EnvSettings,
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
 	values map[string]interface{}, mgmtResources map[string]*unstructured.Unstructured, templateOnly bool, logger logr.Logger,
-) (*release.Release, error) {
+) (*releasev1.Release, error) {
 
 	if !isReferencingFluxSource(requestedChart) && requestedChart.ChartName == "" {
 		return nil, fmt.Errorf("chart name can not be empty")
@@ -1536,39 +1534,14 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, err
 	}
 
-	cp, err := installClient.LocateChart(chartName, settings)
+	chartRequested, err := locateLoadAndValidateChart(chartName, settings, requestedChart, registryOptions,
+		installClient, logger)
 	if err != nil {
-		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
 	}
 
-	chartRequested, err := loader.Load(cp)
-	if err != nil {
-		logger.V(logs.LogDebug).Info("Load failed")
-		return nil, err
-	}
-
-	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
-
-	validInstallableChart := isChartInstallable(chartRequested)
-	if !validInstallableChart {
-		return nil, fmt.Errorf("chart is not installable")
-	}
-
-	if getDependenciesUpdateValue(requestedChart.Options) {
-		err = checkDependencies(chartRequested, installClient, cp, settings)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Reload the chart with the updated Chart.lock file.
-	if chartRequested, err = loader.Load(cp); err != nil {
-		return nil, fmt.Errorf("%w: failed reloading chart after repo update", err)
-	}
-
-	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-		installClient.DryRun = true
+	if !templateOnly && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		installClient.DryRunStrategy = action.DryRunServer
 	}
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
@@ -1593,12 +1566,57 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	logger.V(logs.LogDebug).Info("installing release done")
 
-	return r, nil
+	rel, ok := r.(*releasev1.Release)
+	if !ok {
+		return nil, fmt.Errorf("unexpected release type %T", r)
+	}
+	return rel, nil
+}
+
+func locateLoadAndValidateChart(chartName string, settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
+	registryOptions *registryClientOptions, installClient *action.Install, logger logr.Logger,
+) (*chart.Chart, error) {
+
+	cp, err := installClient.LocateChart(chartName, settings)
+	if err != nil {
+		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
+		return nil, err
+	}
+
+	chartRequested, err := loader.Load(cp)
+	if err != nil {
+		logger.V(logs.LogDebug).Info("Load failed")
+		return nil, err
+	}
+
+	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
+
+	if !isChartInstallable(chartRequested) {
+		return nil, fmt.Errorf("chart is not installable")
+	}
+
+	if getDependenciesUpdateValue(requestedChart.Options) {
+		err = checkDependencies(chartRequested, installClient, cp, settings)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Reload the chart with the updated Chart.lock file.
+	if chartRequested, err = loader.Load(cp); err != nil {
+		return nil, fmt.Errorf("%w: failed reloading chart after repo update", err)
+	}
+
+	return chartRequested, nil
 }
 
 func checkDependencies(chartRequested *chart.Chart, installClient *action.Install, cp string, settings *cli.EnvSettings) error {
 	if req := chartRequested.Metadata.Dependencies; req != nil {
-		err := action.CheckDependencies(chartRequested, req)
+		deps := make([]chartbase.Dependency, len(req))
+		for i, d := range req {
+			deps[i] = d
+		}
+		err := action.CheckDependencies(chartRequested, deps)
 		if err != nil {
 			if installClient.DependencyUpdate {
 				man := &downloader.Manager{
@@ -1643,8 +1661,6 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 	}
 
 	if !cluster.GetDeletionTimestamp().IsZero() {
-		// if cluster is marked for deletion, no need to worry about removing helm charts deployed
-		// there.
 		return nil
 	}
 
@@ -1690,7 +1706,7 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
 	kubeconfig string, registryOptions *registryClientOptions, values map[string]interface{},
-	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (*release.Release, error) {
+	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) (*releasev1.Release, error) {
 
 	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -1754,7 +1770,9 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, err
 	}
 
-	err = upgradeCRDs(ctx, requestedChart, kubeconfig, chartRequested.CRDObjects(), logger)
+	crds := getCRDObjects(chartRequested)
+
+	err = upgradeCRDs(ctx, requestedChart, kubeconfig, crds, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to upgrade crds: %v", err))
 		return nil, err
@@ -1770,7 +1788,11 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	logger.V(logs.LogDebug).Info("upgrading release done")
 
-	return helmRelease, nil
+	rel, ok := helmRelease.(*releasev1.Release)
+	if !ok {
+		return nil, fmt.Errorf("unexpected release type %T", helmRelease)
+	}
+	return rel, nil
 }
 
 func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1beta1.ClusterSummary,
@@ -1785,7 +1807,7 @@ func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1
 		status := currentRelease.Info.Status
 
 		if status.IsPending() ||
-			status == release.StatusUninstalling ||
+			status == releasecommon.StatusUninstalling ||
 			strings.Contains(err.Error(), "has no deployed releases") {
 
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("Release in %s state or inconsistent. Triggering recovery.", status))
@@ -1805,7 +1827,7 @@ func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1
 func prepareChartAndDependencies(
 	chartRequested *chart.Chart,
 	requestedChart *configv1beta1.HelmChart,
-	chartPath string, // This is the 'chartName' path inside tmpDir
+	chartPath string,
 	settings *cli.EnvSettings,
 	registryOptions *registryClientOptions,
 	logger logr.Logger,
@@ -1822,8 +1844,11 @@ func prepareChartAndDependencies(
 		return nil, fmt.Errorf("failed to get registry client: %w", err)
 	}
 
-	// Check if dependencies are actually missing
-	if err := action.CheckDependencies(chartRequested, req); err != nil {
+	deps := make([]chartbase.Dependency, len(req))
+	for i, d := range req {
+		deps[i] = d
+	}
+	if err := action.CheckDependencies(chartRequested, deps); err != nil {
 		logger.V(logs.LogInfo).Info("Dependencies missing or out of date, attempting to fetch")
 
 		man := &downloader.Manager{
@@ -1839,10 +1864,8 @@ func prepareChartAndDependencies(
 			return nil, fmt.Errorf("failed to update dependencies: %w", err)
 		}
 
-		// Reload from the directory where man.Update() just ran
 		chartRequested, err = loader.Load(chartPath)
 		if err != nil {
-			// Potential recovery: Use LoadDir which can be more forgiving with paths
 			logger.V(logs.LogDebug).Info("standard loader failed, trying LoadDir", "err", err)
 			chartRequested, err = loader.LoadDir(chartPath)
 			if err != nil {
@@ -1851,20 +1874,18 @@ func prepareChartAndDependencies(
 		}
 	}
 
-	//  Sanitize the version to avoid "invalid semantic version" errors
 	if chartRequested.Metadata.Version == "" || !isValidSemver(chartRequested.Metadata.Version) {
 		logger.V(logs.LogInfo).Info("fixing invalid or empty chart version", "oldVersion",
 			chartRequested.Metadata.Version)
 		chartRequested.Metadata.Version = "0.1.0"
 	}
 
-	// Keep the requestedChart object in sync with actual loaded metadata
 	requestedChart.ChartVersion = chartRequested.Metadata.Version
 
 	return chartRequested, nil
 }
 
-func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *chart.File,
+func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *common.File,
 	logger logr.Logger) (int, error) {
 
 	crds, err := deployer.GetUnstructured(chartFile.Data, logger)
@@ -1920,7 +1941,6 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 
 	upgradedCRDs := 0
 
-	// We do these one file at a time in the order they were read.
 	for _, obj := range crds {
 		tmpUpgradedCRDs, err := upgradeCRDsInFile(ctx, dr, obj.File, logger)
 		if err != nil {
@@ -1930,17 +1950,12 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 		upgradedCRDs += tmpUpgradedCRDs
 	}
 
-	// Give time for the CRD to be recognized.
 	if upgradedCRDs > 0 {
 		const waitForCRDs = 30
 		time.Sleep(waitForCRDs * time.Second)
 	}
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs upgraded: %d", upgradedCRDs))
 	return nil
-}
-
-func debugf(format string, v ...interface{}) {
-	helmLogger.V(logs.LogDebug).Info(fmt.Sprintf(format, v...))
 }
 
 func getRegistryClient(namespace string, registryOptions *registryClientOptions, enableClientCache bool,
@@ -1977,7 +1992,6 @@ func newDefaultRegistryClient(plainHTTP bool, settings *cli.EnvSettings,
 		opts = append(opts, registry.ClientOptPlainHTTP())
 	}
 
-	// Create a new registry client
 	registryClient, err := registry.NewClient(opts...)
 	if err != nil {
 		return nil, err
@@ -1985,12 +1999,50 @@ func newDefaultRegistryClient(plainHTTP bool, settings *cli.EnvSettings,
 	return registryClient, nil
 }
 
+// newRegistryClientWithTLS creates a registry client configured with custom TLS settings.
+// v4 CHANGE: registry.NewRegistryClientWithTLS was removed. We now build the TLS config
+// manually and inject it via registry.ClientOptHTTPClient.
 func newRegistryClientWithTLS(certFile, keyFile, caFile string, insecureSkipTLSverify bool,
 	settings *cli.EnvSettings) (*registry.Client, error) {
 
-	// Create a new registry client
-	registryClient, err := registry.NewRegistryClientWithTLS(os.Stderr, certFile, keyFile, caFile, insecureSkipTLSverify,
-		settings.RegistryConfig, settings.Debug)
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: insecureSkipTLSverify, //nolint:gosec // the parameter is set by user
+	}
+
+	if caFile != "" {
+		caPEM, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CA file %s: %w", caFile, err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(caPEM) {
+			return nil, fmt.Errorf("failed to parse CA certificates from %s", caFile)
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	if certFile != "" && keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate/key: %w", err)
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
+	}
+
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
+
+	opts := []registry.ClientOption{
+		registry.ClientOptDebug(settings.Debug),
+		registry.ClientOptWriter(os.Stderr),
+		registry.ClientOptCredentialsFile(settings.RegistryConfig),
+		registry.ClientOptHTTPClient(httpClient),
+	}
+
+	registryClient, err := registry.NewClient(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2007,11 +2059,10 @@ func actionConfigInit(namespace, kubeconfig string, registryOptions *registryCli
 	configFlags.Namespace = &namespace
 	insecure := registryOptions.skipTLSVerify
 	configFlags.Insecure = &insecure
-	// Use a 5m timeout
 	timeout := "5m"
 	configFlags.Timeout = &timeout
 
-	err := actionConfig.Init(configFlags, namespace, "secret", debugf)
+	err := actionConfig.Init(configFlags, namespace, "secret")
 	if err != nil {
 		return nil, err
 	}
@@ -2036,7 +2087,7 @@ func isChartInstallable(ch *chart.Chart) bool {
 }
 
 func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
-	enableClientCache bool) (*release.Release, error) {
+	enableClientCache bool) (*releasev1.Release, error) {
 
 	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 
@@ -2045,7 +2096,18 @@ func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registr
 	}
 
 	statusObject := action.NewStatus(actionConfig)
-	return statusObject.Run(releaseName)
+	r, err := statusObject.Run(releaseName)
+	if err != nil {
+		return nil, err
+	}
+	if r == nil {
+		return nil, nil
+	}
+	rel, ok := r.(*releasev1.Release)
+	if !ok {
+		return nil, fmt.Errorf("unexpected release type %T", r)
+	}
+	return rel, nil
 }
 
 func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
@@ -2071,7 +2133,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOp
 
 	var t metav1.Time
 	if lastDeployed := currentRelease.Info.LastDeployed; !lastDeployed.IsZero() {
-		t = metav1.Time{Time: lastDeployed.Time}
+		t = metav1.Time{Time: lastDeployed}
 	}
 	element.Updated = t
 
@@ -2087,23 +2149,23 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return err
 	}
 
-	// 1. Check current status via Helm
 	statusObject := action.NewStatus(actionConfig)
-	lastRelease, err := statusObject.Run(requestedChart.ReleaseName)
+	r, err := statusObject.Run(requestedChart.ReleaseName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return nil // Already gone
+			return nil
 		}
 		return err
+	}
+	lastRelease, ok := r.(*releasev1.Release)
+	if !ok {
+		return fmt.Errorf("unexpected release type %T", r)
 	}
 
 	status := lastRelease.Info.Status
 	logger.V(logs.LogInfo).Info("Attempting recovery for stuck release", "status", status, "version", lastRelease.Version)
 
-	// 2. If stuck in Uninstalling or Pending, the standard 'uninstall' is likely hanging.
-	// We force recovery by deleting the Secret directly.
-	if status == release.StatusUninstalling || status.IsPending() {
-		// Helm secrets follow this naming convention
+	if status == releasecommon.StatusUninstalling || status.IsPending() {
 		secretName := fmt.Sprintf("sh.helm.release.v1.%s.v%d",
 			requestedChart.ReleaseName, lastRelease.Version)
 
@@ -2119,8 +2181,6 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 			return err
 		}
 
-		// Use the K8s client (ensure m.Client is available in your scope)
-		// This is the "Nuclear Option" that unblocks "cannot re-use a name"
 		err = remoteClient.Delete(ctx, &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
@@ -2135,7 +2195,6 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil
 	}
 
-	// 3. Fallback to standard uninstall if status is something else
 	return uninstallRelease(ctx, clusterSummary, requestedChart.ReleaseName,
 		requestedChart.ReleaseNamespace, kubeconfig, registryOptions, requestedChart, logger)
 }
@@ -2148,11 +2207,8 @@ func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1beta1.He
 		return false
 	}
 
-	// If the release was uninstalled with KeepHistory flag, this is the
-	// status seen at this point. Release should be installed in this state.
-	// Upgrade would fail
 	if currentRelease != nil &&
-		currentRelease.Status == release.StatusUninstalled.String() {
+		currentRelease.Status == releasecommon.StatusUninstalled.String() {
 
 		return true
 	}
@@ -2164,7 +2220,7 @@ func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1beta1.He
 	}
 
 	if currentRelease != nil &&
-		currentRelease.Status == release.StatusDeployed.String() {
+		currentRelease.Status == releasecommon.StatusDeployed.String() {
 
 		return false
 	}
@@ -2184,25 +2240,21 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, instantiate
 
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
 		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-			// In DryRun mode, if values are different, report will be generated
 			oldValueHash := getValueHashFromHelmChartSummary(instantiatedChart, clusterSummary)
 
-			// If Values configuration has changed, trigger an upgrade
 			c := getManagementClusterClient()
 			currentValueHash, err := getHelmChartValuesHash(ctx, c, instantiatedChart, clusterSummary, mgmtResources, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
-				currentValueHash = []byte("") // force upgrade
+				currentValueHash = []byte("")
 			}
 			if !reflect.DeepEqual(oldValueHash, currentValueHash) {
 				return true
 			}
 		}
 
-		// With drift detection mode, there is reconciliation due to configuration drift even
-		// when version is same. So skip this check in SyncModeContinuousWithDriftDetection
 		if currentRelease != nil {
-			if currentRelease.Status != release.StatusDeployed.String() {
+			if currentRelease.Status != releasecommon.StatusDeployed.String() {
 				return true
 			}
 
@@ -2229,7 +2281,7 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1beta1.
 		return false
 	}
 
-	if currentRelease.Status == string(release.StatusUninstalled) {
+	if currentRelease.Status == string(releasecommon.StatusUninstalled) {
 		return false
 	}
 
@@ -2245,9 +2297,8 @@ func shouldUninstall(currentRelease *releaseInfo, requestedChart *configv1beta1.
 func doInstallRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
 	kubeconfig string, registryOptions *registryClientOptions, templateOnly bool, logger logr.Logger,
-) (*release.Release, error) {
+) (*releasev1.Release, error) {
 
-	// No-op in DryRun mode
 	if !templateOnly && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil, nil
 	}
@@ -2286,7 +2337,6 @@ func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Clust
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
 	logger logr.Logger) error {
 
-	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
@@ -2304,9 +2354,8 @@ func doUninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Clust
 // No action in DryRun mode.
 func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
-	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) (*release.Release, error) {
+	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger) (*releasev1.Release, error) {
 
-	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil, nil
 	}
@@ -2340,7 +2389,6 @@ func doUpgradeRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	chartDeployed []configv1beta1.Chart, logger logr.Logger) error {
 
-	// No-op in DryRun mode
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		return nil
 	}
@@ -2359,7 +2407,7 @@ func updateChartsInClusterConfiguration(ctx context.Context, c client.Client, cl
 		nil, chartDeployed)
 }
 
-// undeployStaleReleases uninstalls all helm charts previously managed and not referenced anyomre
+// undeployStaleReleases uninstalls all helm charts previously managed and not referenced anymore
 func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kubeconfig string, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]configv1beta1.ReleaseReport, error) {
@@ -2388,9 +2436,6 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 		}
 
 		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-			// If another ClusterSummary is queued to manage this chart in this cluster, do not uninstall.
-			// Let the other ClusterSummary take it over.
-
 			currentChart := &configv1beta1.HelmChart{
 				ReleaseNamespace: staleReleases[i].Namespace,
 				ReleaseName:      staleReleases[i].Name,
@@ -2399,13 +2444,10 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 				clusterSummary.Spec.ClusterType, currentChart)
 			if len(otherRegisteredClusterSummaries) > 1 {
-				// Immediately unregister so next inline ClusterSummary can take this over
 				chartManager.UnregisterClusterSummaryForChart(clusterSummary, currentChart)
 				err = requeueAllOtherClusterSummaries(ctx, c, clusterSummary.Spec.ClusterNamespace,
 					otherRegisteredClusterSummaries, logger)
 				if err != nil {
-					// TODO: Handle errors to prevent bad state. ClusterSummary no longer manage the chart,
-					// but no other ClusterSummary instance has been requeued.
 					return nil, err
 				}
 
@@ -2427,13 +2469,9 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 	return reports, nil
 }
 
-// updateStatusForeferencedHelmReleases considers helm releases ClusterSummary currently
+// updateStatusForReferencedHelmReleases considers helm releases ClusterSummary currently
 // references. For each of those helm releases, adds an entry in ClusterSummary.Status reporting
 // whether such helm release is managed by this ClusterSummary or not.
-// This method also returns:
-// - an error if any occurs
-// - whether there is at least one helm release ClusterSummary is referencing, but currently not
-// allowed to manage.
 // No action in DryRun mode.
 func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
@@ -2446,7 +2484,7 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 	if len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 &&
 		len(clusterSummary.Status.HelmReleaseSummaries) == 0 {
-		// Nothing to do
+
 		return clusterSummary, false, nil
 	}
 
@@ -2479,7 +2517,6 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 			if err != nil {
 				return err
 			}
-
 			var canManage bool
 			canManage, err = determineChartOwnership(ctx, c, clusterSummary, instantiatedChart, logger)
 			if err != nil {
@@ -2525,7 +2562,6 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 		}
 
 		currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
-
 		return c.Status().Update(ctx, currentClusterSummary)
 	})
 	return currentClusterSummary, conflict, err
@@ -2674,7 +2710,7 @@ func updateClusterReportWithHelmReports(ctx context.Context, c client.Client,
 
 func getHelmChartInstantiatedValues(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, requestedChart *configv1beta1.HelmChart,
-	logger logr.Logger) (chartutil.Values, error) {
+	logger logr.Logger) (common.Values, error) {
 
 	// Get management cluster resources once
 	mgmtConfig := getManagementClusterConfig()
@@ -2745,7 +2781,7 @@ func getHelmChartInstantiatedValues(ctx context.Context, clusterSummary *configv
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("Deploying helm charts with values %#v", result))
 
-	return chartutil.Values(result), nil
+	return common.Values(result), nil
 }
 
 // getHelmChartValuesFrom return key-value pair from referenced ConfigMap/Secret.
@@ -2808,9 +2844,13 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 			}
 
 			statusObject := action.NewStatus(actionConfig)
-			results, err := statusObject.Run(instantiatedChart.ReleaseName)
+			rawResults, err := statusObject.Run(instantiatedChart.ReleaseName)
 			if err != nil {
 				return nil, err
+			}
+			results, ok := rawResults.(*releasev1.Release)
+			if !ok {
+				return nil, fmt.Errorf("unexpected release type %T", rawResults)
 			}
 
 			resources, err := collectHelmContent(results, install, false, logger)
@@ -2834,152 +2874,152 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 	return helmResources, nil
 }
 
-func isHookRelevantForPreInstall(hook *release.Hook) bool {
+func isHookRelevantForPreInstall(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPreInstall:
+		case releasev1.HookPreInstall:
 			return true
-		case release.HookTest,
-			release.HookPreUpgrade,
-			release.HookPreDelete,
-			release.HookPostDelete,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPostInstall,
-			release.HookPostUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPreUpgrade,
+			releasev1.HookPreDelete,
+			releasev1.HookPostDelete,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPreUpgrade(hook *release.Hook) bool {
+func isHookRelevantForPreUpgrade(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPreUpgrade:
+		case releasev1.HookPreUpgrade:
 			return true
-		case release.HookTest,
-			release.HookPreInstall,
-			release.HookPreDelete,
-			release.HookPostDelete,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPostInstall,
-			release.HookPostUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPreInstall,
+			releasev1.HookPreDelete,
+			releasev1.HookPostDelete,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPostInstall(hook *release.Hook) bool {
+func isHookRelevantForPostInstall(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPostInstall:
+		case releasev1.HookPostInstall:
 			return true
-		case release.HookTest,
-			release.HookPostUpgrade,
-			release.HookPreDelete,
-			release.HookPostDelete,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPostUpgrade,
+			releasev1.HookPreDelete,
+			releasev1.HookPostDelete,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPostUpgrade(hook *release.Hook) bool {
+func isHookRelevantForPostUpgrade(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPostUpgrade:
+		case releasev1.HookPostUpgrade:
 			return true
-		case release.HookTest,
-			release.HookPostInstall,
-			release.HookPreDelete,
-			release.HookPostDelete,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPostInstall,
+			releasev1.HookPreDelete,
+			releasev1.HookPostDelete,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPreRollback(hook *release.Hook) bool {
+func isHookRelevantForPreRollback(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPreRollback:
+		case releasev1.HookPreRollback:
 			return true
-		case release.HookTest,
-			release.HookPostInstall,
-			release.HookPostUpgrade,
-			release.HookPostDelete,
-			release.HookPreDelete,
-			release.HookPostRollback,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade,
+			releasev1.HookPostDelete,
+			releasev1.HookPreDelete,
+			releasev1.HookPostRollback,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPostRollback(hook *release.Hook) bool {
+func isHookRelevantForPostRollback(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPostRollback:
+		case releasev1.HookPostRollback:
 			return true
-		case release.HookTest,
-			release.HookPreDelete,
-			release.HookPostInstall,
-			release.HookPostUpgrade,
-			release.HookPreRollback,
-			release.HookPostDelete,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPreDelete,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade,
+			releasev1.HookPreRollback,
+			releasev1.HookPostDelete,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPreDelete(hook *release.Hook) bool {
+func isHookRelevantForPreDelete(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPreDelete:
+		case releasev1.HookPreDelete:
 			return true
-		case release.HookTest,
-			release.HookPostInstall,
-			release.HookPostUpgrade,
-			release.HookPostDelete,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade,
+			releasev1.HookPostDelete,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
 	return false
 }
 
-func isHookRelevantForPostDelete(hook *release.Hook) bool {
+func isHookRelevantForPostDelete(hook *releasev1.Hook) bool {
 	for _, event := range hook.Events {
 		switch event {
-		case release.HookPostDelete:
+		case releasev1.HookPostDelete:
 			return true
-		case release.HookTest,
-			release.HookPreDelete,
-			release.HookPostInstall,
-			release.HookPostUpgrade,
-			release.HookPreRollback,
-			release.HookPostRollback,
-			release.HookPreInstall,
-			release.HookPreUpgrade:
+		case releasev1.HookTest,
+			releasev1.HookPreDelete,
+			releasev1.HookPostInstall,
+			releasev1.HookPostUpgrade,
+			releasev1.HookPreRollback,
+			releasev1.HookPostRollback,
+			releasev1.HookPreInstall,
+			releasev1.HookPreUpgrade:
 			return false
 		}
 	}
@@ -3008,7 +3048,7 @@ func hasHookDeleteAnnotation(obj *unstructured.Unstructured) bool {
 	return exists
 }
 
-func collectHelmContent(result *release.Release, helmActionVar helmAction, includeHookResources bool,
+func collectHelmContent(result *releasev1.Release, helmActionVar helmAction, includeHookResources bool,
 	logger logr.Logger) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
@@ -3073,7 +3113,7 @@ func collectHelmContent(result *release.Release, helmActionVar helmAction, inclu
 	return resources, nil
 }
 
-func collectPreHooks(result *release.Release, helmActionVar helmAction, logger logr.Logger,
+func collectPreHooks(result *releasev1.Release, helmActionVar helmAction, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
@@ -3110,7 +3150,7 @@ func collectPreHooks(result *release.Release, helmActionVar helmAction, logger l
 	return resources, nil
 }
 
-func collectPostHooks(result *release.Release, helmActionVar helmAction, logger logr.Logger,
+func collectPostHooks(result *releasev1.Release, helmActionVar helmAction, logger logr.Logger,
 ) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
@@ -3147,7 +3187,7 @@ func collectPostHooks(result *release.Release, helmActionVar helmAction, logger 
 	return resources, nil
 }
 
-func collectHelmDeleteHooks(result *release.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+func collectHelmDeleteHooks(result *releasev1.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 	resources := make([]*unstructured.Unstructured, 0)
 
 	// Parse pre delete hook manifests
@@ -3494,14 +3534,6 @@ func getSubNotesValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
-func getRecreateValue(options *configv1beta1.HelmOptions) bool {
-	if options != nil {
-		return options.UpgradeOptions.Recreate
-	}
-
-	return false
-}
-
 func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
 	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch, templateOnly bool, logger logr.Logger,
 ) (*action.Install, error) {
@@ -3516,11 +3548,15 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	installClient.ReleaseName = requestedChart.ReleaseName
 	installClient.Namespace = requestedChart.ReleaseNamespace
 	installClient.Version = requestedChart.ChartVersion
-	installClient.Wait = getWaitHelmValue(requestedChart.Options)
+	if getWaitHelmValue(requestedChart.Options) {
+		installClient.WaitStrategy = kube.LegacyStrategy
+	} else {
+		installClient.WaitStrategy = kube.HookOnlyStrategy
+	}
 	installClient.WaitForJobs = getWaitForJobsHelmValue(requestedChart.Options)
 	installClient.CreateNamespace = getCreateNamespaceHelmValue(requestedChart.Options)
 	installClient.SkipCRDs = getSkipCRDsHelmValue(requestedChart.Options)
-	installClient.Atomic = getAtomicHelmValue(requestedChart.Options)
+	installClient.RollbackOnFailure = getAtomicHelmValue(requestedChart.Options)
 	installClient.DisableHooks = getDisableHooksHelmInstallValue(requestedChart.Options)
 	installClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	installClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
@@ -3530,10 +3566,11 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	installClient.Description = getDescriptionValue(requestedChart.Options)
 	installClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	installClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, false)
+	installClient.ForceConflicts = true
 	if actionConfig.RegistryClient != nil {
 		installClient.SetRegistryClient(actionConfig.RegistryClient)
 	}
-	installClient.InsecureSkipTLSverify = registryOptions.skipTLSVerify
+	installClient.InsecureSkipTLSVerify = registryOptions.skipTLSVerify
 	installClient.PlainHTTP = registryOptions.plainHTTP
 	installClient.CaFile = registryOptions.caPath
 
@@ -3541,7 +3578,6 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 		installClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
 	}
 
-	installClient.DryRun = false
 	if templateOnly {
 		currentVersion, err := k8s_utils.GetKubernetesVersion(ctx, getManagementClusterConfig(), logger)
 		if err != nil {
@@ -3549,10 +3585,9 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 		}
 		// We simply want to get list of resources that would be deployed. This is to prepare
 		// what agent for a SveltosCluster in pull mode needs to deploy
-		installClient.DryRun = true
-		installClient.ClientOnly = true
+		installClient.DryRunStrategy = action.DryRunClient
 		installClient.IncludeCRDs = true
-		installClient.KubeVersion, err = chartutil.ParseKubeVersion(currentVersion)
+		installClient.KubeVersion, err = common.ParseKubeVersion(currentVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -3568,10 +3603,14 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.Install = true
 	upgradeClient.Namespace = requestedChart.ReleaseNamespace
 	upgradeClient.Version = requestedChart.ChartVersion
-	upgradeClient.Wait = getWaitHelmValue(requestedChart.Options)
+	if getWaitHelmValue(requestedChart.Options) {
+		upgradeClient.WaitStrategy = kube.LegacyStrategy
+	} else {
+		upgradeClient.WaitStrategy = kube.HookOnlyStrategy
+	}
 	upgradeClient.WaitForJobs = getWaitForJobsHelmValue(requestedChart.Options)
 	upgradeClient.SkipCRDs = getSkipCRDsHelmValue(requestedChart.Options)
-	upgradeClient.Atomic = getAtomicHelmValue(requestedChart.Options)
+	upgradeClient.RollbackOnFailure = getAtomicHelmValue(requestedChart.Options)
 	upgradeClient.DisableHooks = getDisableHooksHelmUpgradeValue(requestedChart.Options)
 	upgradeClient.DisableOpenAPIValidation = getDisableOpenAPIValidationValue(requestedChart.Options)
 	upgradeClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
@@ -3579,18 +3618,18 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
 	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
 	upgradeClient.ResetThenReuseValues = getResetThenReuseValues(requestedChart.Options)
-	upgradeClient.Force = getForceValue(requestedChart.Options)
+	upgradeClient.ForceReplace = getForceValue(requestedChart.Options)
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
 	upgradeClient.Description = getDescriptionValue(requestedChart.Options)
 	upgradeClient.MaxHistory = getMaxHistoryValue(requestedChart.Options)
 	upgradeClient.CleanupOnFail = getCleanupOnFailValue(requestedChart.Options)
 	upgradeClient.SubNotes = getSubNotesValue(requestedChart.Options)
-	upgradeClient.Recreate = getRecreateValue(requestedChart.Options)
-	upgradeClient.InsecureSkipTLSverify = registryOptions.skipTLSVerify
+	upgradeClient.InsecureSkipTLSVerify = registryOptions.skipTLSVerify
 	upgradeClient.PlainHTTP = registryOptions.plainHTTP
 	upgradeClient.CaFile = registryOptions.caPath
 	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	upgradeClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, true)
+	upgradeClient.ForceConflicts = true
 
 	if actionConfig.RegistryClient != nil {
 		upgradeClient.SetRegistryClient(actionConfig.RegistryClient)
@@ -3608,10 +3647,13 @@ func getHelmUninstallClient(requestedChart *configv1beta1.HelmChart, actionConfi
 
 	uninstallClient := action.NewUninstall(actionConfig)
 	uninstallClient.DryRun = false
+	uninstallClient.WaitStrategy = kube.HookOnlyStrategy
 	if requestedChart != nil {
 		uninstallClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
 		uninstallClient.Description = getDescriptionValue(requestedChart.Options)
-		uninstallClient.Wait = getWaitHelmValue(requestedChart.Options)
+		if getWaitHelmValue(requestedChart.Options) {
+			uninstallClient.WaitStrategy = kube.LegacyStrategy
+		}
 		uninstallClient.DisableHooks = getDisableHooksHelmUninstallValue(requestedChart.Options)
 		uninstallClient.KeepHistory = getKeepHistoryValue(requestedChart.Options)
 		uninstallClient.DeletionPropagation = getDeletionPropagation(requestedChart.Options)
@@ -3641,9 +3683,13 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 	}
 
 	statusObject := action.NewStatus(actionConfig)
-	results, err := statusObject.Run(requestedChart.ReleaseName)
+	rawResults, err := statusObject.Run(requestedChart.ReleaseName)
 	if err != nil {
 		return err
+	}
+	results, ok := rawResults.(*releasev1.Release)
+	if !ok {
+		return fmt.Errorf("unexpected release type %T", rawResults)
 	}
 
 	resources, err := collectHelmContent(results, install, true, logger)
@@ -4135,7 +4181,7 @@ func evaluateValuesDiff(ctx context.Context, currentValues map[string]interface{
 		return "", err
 	}
 
-	var values chartutil.Values
+	var values common.Values
 	values, err = getHelmChartInstantiatedValues(ctx, clusterSummary, mgmtResources, requestedChart, logger)
 	if err != nil {
 		return "", err
@@ -4702,7 +4748,7 @@ func removeCachedData(settings *cli.EnvSettings, name, repoURL string, registryO
 	logger = logger.WithValues("repoURL", repoURL, "repoName", name)
 
 	entry := &repo.Entry{Name: name, URL: repoURL, Username: registryOptions.username, Password: registryOptions.password,
-		InsecureSkipTLSverify: registryOptions.skipTLSVerify}
+		InsecureSkipTLSVerify: registryOptions.skipTLSVerify}
 	chartRepo, err := repo.NewChartRepository(entry, getter.All(settings))
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get new chartRepository: %v", err))
@@ -4772,4 +4818,18 @@ func getStaleReleases(ctx context.Context, c client.Client, clusterSummary *conf
 func isValidSemver(v string) bool {
 	_, err := semver.NewVersion(v)
 	return err == nil
+}
+
+func getCRDObjects(ch *chart.Chart) []chart.CRD {
+	var crds []chart.CRD
+	for _, f := range ch.Files {
+		// Helm expects CRDs to be in the "crds/" directory
+		if strings.HasPrefix(f.Name, "crds/") {
+			crds = append(crds, chart.CRD{
+				Name: f.Name,
+				File: f,
+			})
+		}
+	}
+	return crds
 }

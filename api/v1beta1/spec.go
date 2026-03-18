@@ -290,6 +290,9 @@ type HelmUpgradeOptions struct {
 
 	// Recreate will (if true) recreate pods after a rollback.
 	// +kubebuilder:default:=false
+	//
+	// Deprecated: This field is no longer supported
+	//
 	// +optional
 	Recreate bool `json:"recreate,omitempty"`
 

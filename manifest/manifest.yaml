@@ -721,8 +721,10 @@ spec:
                               type: integer
                             recreate:
                               default: false
-                              description: Recreate will (if true) recreate pods after
-                                a rollback.
+                              description: |-
+                                Recreate will (if true) recreate pods after a rollback.
+
+                                Deprecated: This field is no longer supported
                               type: boolean
                             resetThenReuseValues:
                               default: false
@@ -2362,8 +2364,10 @@ spec:
                                   type: integer
                                 recreate:
                                   default: false
-                                  description: Recreate will (if true) recreate pods
-                                    after a rollback.
+                                  description: |-
+                                    Recreate will (if true) recreate pods after a rollback.
+
+                                    Deprecated: This field is no longer supported
                                   type: boolean
                                 resetThenReuseValues:
                                   default: false
@@ -4578,8 +4582,10 @@ spec:
                                   type: integer
                                 recreate:
                                   default: false
-                                  description: Recreate will (if true) recreate pods
-                                    after a rollback.
+                                  description: |-
+                                    Recreate will (if true) recreate pods after a rollback.
+
+                                    Deprecated: This field is no longer supported
                                   type: boolean
                                 resetThenReuseValues:
                                   default: false
@@ -6243,8 +6249,10 @@ spec:
                               type: integer
                             recreate:
                               default: false
-                              description: Recreate will (if true) recreate pods after
-                                a rollback.
+                              description: |-
+                                Recreate will (if true) recreate pods after a rollback.
+
+                                Deprecated: This field is no longer supported
                               type: boolean
                             resetThenReuseValues:
                               default: false

@@ -88,6 +88,8 @@ var (
 	AddStageStatus                        = addStageStatus
 	UpdateStageStatus                     = updateStageStatus
 	GetMainDeploymentClusterProfileLabels = getMainDeploymentClusterProfileLabels
+
+	SetNextReconcileTime = (*ClusterSummaryReconciler).setNextReconcileTime
 )
 
 var (

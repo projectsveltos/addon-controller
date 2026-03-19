@@ -98,7 +98,8 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	// Get hash of current configuration (at this very precise moment)
 	currentHash, err := f.currentHash(ctx, r.Client, clusterSummary, logger)
 	if err != nil {
-		if !apierrors.IsNotFound(err) {
+		var nrErr *configv1beta1.NonRetriableError
+		if !errors.As(err, &nrErr) && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}

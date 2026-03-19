@@ -171,11 +171,11 @@ var _ = AfterSuite(func() {
 
 func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
 	return &controllers.ClusterSummaryReconciler{
-		Client:           c,
-		Scheme:           scheme,
-		Deployer:         dep,
-		ClusterMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
-		ReferenceMap:     make(map[corev1.ObjectReference]*libsveltosset.Set),
+		Client:             c,
+		Scheme:             scheme,
+		Deployer:           dep,
+		ClusterMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+		ReferenceMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
 		DeletedInstances:   make(map[types.NamespacedName]time.Time),
 		NextReconcileTimes: make(map[types.NamespacedName]time.Time),
 		PolicyMux:          sync.Mutex{},

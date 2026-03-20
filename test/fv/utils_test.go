@@ -165,11 +165,12 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 			return false
 		}
 		for i := range currentClusterSummary.Status.FeatureSummaries {
-			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID &&
-				currentClusterSummary.Status.FeatureSummaries[i].Status == libsveltosv1beta1.FeatureStatusProvisioned &&
-				currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == nil {
+			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+				if currentClusterSummary.Status.FeatureSummaries[i].Status == libsveltosv1beta1.FeatureStatusProvisioned &&
+					currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == nil {
 
-				return true
+					return true
+				}
 			}
 		}
 		return false

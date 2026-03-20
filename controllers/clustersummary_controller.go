@@ -155,7 +155,7 @@ type ClusterSummaryReconciler struct {
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets,verbs=get;watch;list
 //+kubebuilder:rbac:groups="source.toolkit.fluxcd.io",resources=buckets/status,verbs=get;watch;list
 
-func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
 	logger.V(logs.LogDebug).Info("Reconciling")
 
@@ -210,14 +210,17 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
-	// changes. Conflict errors are swallowed because the watch event from whatever caused the
-	// conflict will re-enqueue this resource, and the next reconciliation will recompute status.
-	// Propagating the conflict would cause controller-runtime to immediately requeue, bypassing
-	// the intended NextReconcileTime backoff.
+	// changes. Conflict errors are swallowed and a 1-minute requeue is scheduled instead of
+	// propagating the error (which would cause controller-runtime to immediately requeue,
+	// bypassing the intended NextReconcileTime backoff). We cannot rely solely on a watch event
+	// to re-enqueue because the conflict may be caused by the controller's own logic (e.g. a
+	// tier change), in which case no further watch event will arrive.
 	defer func() {
 		if err = clusterSummaryScope.Close(ctx); err != nil {
 			if apierrors.IsConflict(err) {
-				logger.V(logs.LogDebug).Info("conflict patching ClusterSummary status, will reconcile on next event")
+				logger.V(logs.LogDebug).Info("conflict patching ClusterSummary status, will retry in 1 minute")
+				r.setNextReconcileTime(clusterSummaryScope, time.Minute)
+				result = ctrl.Result{RequeueAfter: time.Minute}
 				return
 			}
 			reterr = err
@@ -295,6 +298,11 @@ func (r *ClusterSummaryReconciler) updateDeletedInstancs(clusterSummaryScope *sc
 		Namespace: clusterSummaryScope.Namespace(),
 		Name:      clusterSummaryScope.Name(),
 	}] = time.Now()
+
+	delete(r.NextReconcileTimes, types.NamespacedName{
+		Namespace: clusterSummaryScope.Namespace(),
+		Name:      clusterSummaryScope.Name(),
+	})
 }
 
 func (r *ClusterSummaryReconciler) reconcileDelete(

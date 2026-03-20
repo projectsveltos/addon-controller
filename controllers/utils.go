@@ -236,7 +236,7 @@ func isNamespaced(ctx context.Context, r *unstructured.Unstructured, clusterName
 	// 2. RETRY LOOP: Give it 3 attempts with increasing wait times
 	// Total wait time: 1s + 2s + 3s = 6 seconds.
 	for i := range 3 {
-		// Log that we are attempting a refresh (MGIANLUC style)
+		// Log that we are attempting a refresh
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("GVK %s not found, refreshing discovery (attempt %d)", gvk.String(), i+1))
 
 		// IMPORTANT: Invalidate the Discovery Client FIRST, then Reset the Mapper

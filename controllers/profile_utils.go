@@ -398,7 +398,7 @@ func cleanClusterConfigurations(ctx context.Context, c client.Client, profileSco
 		}
 
 		err = cleanClusterConfiguration(ctx, c, profileScope.Profile, cc)
-		if err != nil {
+		if err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}

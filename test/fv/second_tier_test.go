@@ -135,7 +135,7 @@ var _ = Describe("PolicyRef Tier", func() {
 				currentServiceAccount)
 		}, timeout, pollingInterval).Should(BeNil())
 
-		Byf("Verifying ServicdAccount has proper labels")
+		Byf("Verifying ServiceAccount has proper labels")
 		currentServiceAccount := &corev1.ServiceAccount{}
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: saNamespace, Name: saName},
@@ -144,6 +144,8 @@ var _ = Describe("PolicyRef Tier", func() {
 		v, ok := currentServiceAccount.Labels[firstConfigMapLabelKey]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(firstConfigMapLabelValue))
+		v, ok = currentServiceAccount.Labels[secondConfigMapLabelKey]
+		Expect(ok).To(BeFalse())
 
 		Byf("Verifying ClusterSummary %s status reports conflict for Resources feature", clusterSummary.Name)
 		Eventually(func() bool {
@@ -165,7 +167,7 @@ var _ = Describe("PolicyRef Tier", func() {
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		By("Updating second ConfigMap tier")
+		By(fmt.Sprintf("Updating ConfigMap %s/%s tier", secondConfigMap.Namespace, secondConfigMap.Name))
 		const lowerTier = 90
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(),
@@ -177,18 +179,22 @@ var _ = Describe("PolicyRef Tier", func() {
 					Name:      firstConfigMap.Name,
 				},
 				{
-					Tier:      lowerTier,
 					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 					Namespace: secondConfigMap.Namespace,
 					Name:      secondConfigMap.Name,
+					Tier:      lowerTier,
 				},
 			}
 			return k8sClient.Update(context.TODO(), currentClusterProfile)
 		})
 		Expect(err).To(BeNil())
 
-		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
-		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+		Expect(k8sClient.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
+		clusterSummary = verifyClusterSummary(clusterops.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		Byf("Verifying proper ServiceAccount is still present in the workload cluster with correct labels")
 		Eventually(func() bool {
@@ -203,12 +209,63 @@ var _ = Describe("PolicyRef Tier", func() {
 			if currentServiceAccount.Labels == nil {
 				return false
 			}
+			_, ok = currentServiceAccount.Labels[firstConfigMapLabelKey]
+			if ok {
+				return false
+			}
 			v, ok = currentServiceAccount.Labels[secondConfigMapLabelKey]
 			return ok && v == secondConfigMapLabelValue
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		By("Changing first ConfigMap so there is no conflict anymore")
+		newSaNamespace := randomString()
+		firstConfigMap = createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
+			fmt.Sprintf(resource, newSaNamespace, saName, firstConfigMapLabelKey, firstConfigMapLabelValue))
+		Expect(k8sClient.Create(context.TODO(), firstConfigMap)).To(Succeed())
+
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: firstConfigMap.Namespace,
+					Name:      firstConfigMap.Name,
+				},
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: secondConfigMap.Namespace,
+					Name:      secondConfigMap.Name,
+					Tier:      lowerTier,
+				},
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Byf("Verifying new ServiceAccount is present in the workload cluster with correct labels")
+		Eventually(func() bool {
+			currentServiceAccount := &corev1.ServiceAccount{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: newSaNamespace, Name: saName},
+				currentServiceAccount)
+			if err != nil {
+				return false
+			}
+
+			if currentServiceAccount.Labels == nil {
+				return false
+			}
+			v, ok = currentServiceAccount.Labels[firstConfigMapLabelKey]
+			return ok && v == firstConfigMapLabelValue
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(clusterSummary.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
 		policies := []policy{
 			{kind: "ServiceAccount", name: saName, namespace: saNamespace, group: ""},
+			{kind: "ServiceAccount", name: saName, namespace: newSaNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
@@ -225,6 +282,15 @@ var _ = Describe("PolicyRef Tier", func() {
 			currentServiceAccount := &corev1.ServiceAccount{}
 			err = workloadClient.Get(context.TODO(),
 				types.NamespacedName{Namespace: saNamespace, Name: saName},
+				currentServiceAccount)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying second ServiceAccount is removed from the workload cluster")
+		Eventually(func() bool {
+			currentServiceAccount := &corev1.ServiceAccount{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: newSaNamespace, Name: saName},
 				currentServiceAccount)
 			return err != nil && apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

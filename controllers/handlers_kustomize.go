@@ -367,6 +367,7 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 			continue
 		}
 		config += string(result)
+		config += fmt.Sprintf("%d", kustomizationRef.Tier)
 
 		valueFromHash, err := getKustomizeReferenceResourceHash(ctx, c, clusterSummary,
 			kustomizationRef, logger)

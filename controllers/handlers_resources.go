@@ -533,34 +533,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 	hash := sha256.Sum256(raw)
 	config += hex.EncodeToString((hash[:]))
 
-	referencedObjects := make([]corev1.ObjectReference, 0, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
-	for i := range sortedPolicyRefs {
-		reference := &sortedPolicyRefs[i]
-		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, reference.Namespace,
-			clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
-				reference.Kind, reference.Namespace, reference.Name, err))
-			// Ignore template instantiation error
-			continue
-		}
-
-		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, reference.Name, clusterSummary.Spec.ClusterType)
-		if err != nil {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
-				reference.Kind, reference.Namespace, reference.Name, err))
-			// Ignore template instantiation error
-			continue
-		}
-
-		referencedObjects = append(referencedObjects, corev1.ObjectReference{
-			Kind:      sortedPolicyRefs[i].Kind,
-			Namespace: namespace,
-			Name:      name,
-		})
-	}
+	referencedObjects, referencedObjectTiers := getInstantiatedPolicyRefInfo(ctx, c, clusterSummary, sortedPolicyRefs, logger)
 
 	sort.Sort(dependencymanager.SortedCorev1ObjectReference(referencedObjects))
 
@@ -573,12 +546,14 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, configmap)
 			if err == nil {
 				config += getConfigMapHash(configmap)
+				config += fmt.Sprintf("%d", referencedObjectTiers[*reference])
 			}
 		} else if reference.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := &corev1.Secret{}
 			err = c.Get(ctx, types.NamespacedName{Namespace: reference.Namespace, Name: reference.Name}, secret)
 			if err == nil {
 				config += getSecretHash(secret)
+				config += fmt.Sprintf("%d", referencedObjectTiers[*reference])
 			}
 		} else {
 			var source client.Object
@@ -591,6 +566,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 				if source.GetAnnotations() != nil {
 					config += getDataSectionHash(source.GetAnnotations())
 				}
+				config += fmt.Sprintf("%d", referencedObjectTiers[*reference])
 			}
 		}
 		if err != nil {
@@ -621,6 +597,45 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 	h := sha256.New()
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+func getInstantiatedPolicyRefInfo(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	sortedPolicyRefs []configv1beta1.PolicyRef, logger logr.Logger,
+) (referencedObjects []corev1.ObjectReference, referencedObjectTiers map[corev1.ObjectReference]int32) {
+
+	referencedObjects = make([]corev1.ObjectReference, 0, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+	referencedObjectTiers = make(map[corev1.ObjectReference]int32, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
+	for i := range sortedPolicyRefs {
+		reference := &sortedPolicyRefs[i]
+		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, reference.Namespace,
+			clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate namespace for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			// Ignore template instantiation error
+			continue
+		}
+
+		name, err := libsveltostemplate.GetReferenceResourceName(ctx, c, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, reference.Name, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate name for %s %s/%s: %v",
+				reference.Kind, reference.Namespace, reference.Name, err))
+			// Ignore template instantiation error
+			continue
+		}
+
+		obj := corev1.ObjectReference{
+			Kind:      sortedPolicyRefs[i].Kind,
+			Namespace: namespace,
+			Name:      name,
+		}
+		referencedObjects = append(referencedObjects, obj)
+		referencedObjectTiers[obj] = reference.Tier
+	}
+
+	return referencedObjects, referencedObjectTiers
 }
 
 func getResourceRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef {

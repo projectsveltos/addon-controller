@@ -489,10 +489,20 @@ func (m *instance) updateClusterProfile(ctx context.Context, c client.Client, cl
 }
 
 func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger logr.Logger) {
+	const interval = 30 * time.Second
 	for {
 		m.chartMux.Lock()
 
+		canceled := false
 		for profile := range m.profileToBeUpdated {
+			select {
+			case <-ctx.Done():
+				canceled = true
+			default:
+			}
+			if canceled {
+				break
+			}
 			clusters := m.profileClusterRequests.getClusterDeployments(&profile)
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
 			err := m.updateProfileInstance(ctx, c, &profile, clusters)
@@ -503,8 +513,15 @@ func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger l
 
 		m.chartMux.Unlock()
 
-		const interval = 30 * time.Second
-		time.Sleep(interval)
+		if canceled {
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
 	}
 }
 

@@ -1038,20 +1038,19 @@ resources:
 	})
 
 	It("getCredentialsAndCAFiles returns files containing credentials and CA", func() {
-		type Credentials struct {
-			Username     string
-			Password     string
-			RefreshToken string
-			AccessToken  string
-		}
-
-		credentials := Credentials{
+		credentials := struct {
+			Username     string `json:"username"`
+			Password     string `json:"password"`
+			RefreshToken string `json:"refresh_token"`
+			AccessToken  string `json:"access_token"`
+		}{
 			Username:     randomString(),
 			Password:     randomString(),
 			RefreshToken: randomString(),
 			AccessToken:  randomString(),
 		}
 
+		//nolint:gosec // This is dummy data for testing purposes
 		credentialsBytes, err := json.Marshal(credentials)
 		Expect(err).To(BeNil())
 

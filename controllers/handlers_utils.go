@@ -22,6 +22,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -174,20 +176,44 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 
 func readFiles(dir string) (map[string]string, error) {
 	files := make(map[string]string)
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+
+	// 1. Open the directory as a Root handle
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	// 2. WalkDir is faster than Walk as it doesn't Lstat every file unnecessarily
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if !info.IsDir() {
-			content, err := os.ReadFile(path)
+		if !d.IsDir() {
+			// 3. Get the path relative to the root directory
+			rel, err := filepath.Rel(dir, path)
 			if err != nil {
 				return err
 			}
-			files[filepath.Base(path)] = string(content)
+
+			// 4. Open the file via the Root handle to prevent symlink traversal
+			f, err := root.Open(rel)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			content, err := io.ReadAll(f)
+			if err != nil {
+				return err
+			}
+
+			files[d.Name()] = string(content)
 		}
 		return nil
 	})
+
 	return files, err
 }
 
@@ -1092,12 +1118,12 @@ func getDeployedGroupVersionKinds(clusterSummary *configv1beta1.ClusterSummary,
 	gvks := make([]schema.GroupVersionKind, 0)
 	// For backward compatible we still look at this field.
 	// New code set only FeatureDeploymentInfo
-	fs := getFeatureSummaryForFeatureID(clusterSummary, featureID)
-	if fs != nil {
+	featureSummary := getFeatureSummaryForFeatureID(clusterSummary, featureID)
+	if featureSummary != nil {
 		//nolint:staticcheck // using for backward compatibility
-		for j := range fs.DeployedGroupVersionKind {
+		for j := range featureSummary.DeployedGroupVersionKind {
 			//nolint:staticcheck // using for backward compatibility
-			gvk, _ := schema.ParseKindArg(fs.DeployedGroupVersionKind[j])
+			gvk, _ := schema.ParseKindArg(featureSummary.DeployedGroupVersionKind[j])
 			gvks = append(gvks, *gvk)
 		}
 	}

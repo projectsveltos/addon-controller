@@ -373,7 +373,7 @@ func (m *manager) startWatcher(ctx context.Context, gvk *schema.GroupVersionKind
 		return err
 	}
 
-	watcherCtx, cancel := context.WithCancel(ctx)
+	watcherCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is stored in m.watchers and called when the watcher is stopped
 	m.watchers[*gvk] = cancel
 	go m.runInformer(watcherCtx.Done(), dcinformer.Informer(), logger)
 	return nil

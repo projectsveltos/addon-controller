@@ -3568,6 +3568,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	installClient.Description = getDescriptionValue(requestedChart.Options)
 	installClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	installClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, false)
+	installClient.ServerSideApply = true
 	installClient.ForceConflicts = true
 	if actionConfig.RegistryClient != nil {
 		installClient.SetRegistryClient(actionConfig.RegistryClient)
@@ -3631,6 +3632,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.CaFile = registryOptions.caPath
 	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	upgradeClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, true)
+	upgradeClient.ServerSideApply = "true"
 	upgradeClient.ForceConflicts = true
 
 	if actionConfig.RegistryClient != nil {

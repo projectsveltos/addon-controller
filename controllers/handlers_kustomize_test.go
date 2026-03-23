@@ -620,6 +620,10 @@ func createTarGz(dest string) {
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
 
+	root, err := os.OpenRoot("testdata")
+	Expect(err).To(BeNil())
+	defer root.Close()
+
 	err = filepath.Walk("testdata/", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -636,12 +640,12 @@ func createTarGz(dest string) {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
-		file, err := os.Open(path)
+		f, err := root.Open(path[len("testdata")+1:])
 		if err != nil {
 			return err
 		}
-		defer file.Close()
-		_, err = io.Copy(tarWriter, file)
+		defer f.Close()
+		_, err = io.Copy(tarWriter, f)
 		return err
 	})
 	Expect(err).To(BeNil())

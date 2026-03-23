@@ -62,17 +62,22 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 		}
 
 		for i := range clusterList {
-			cluster := &clusterList[i]
-			if _, ok := clustersWithDD[*cluster]; !ok {
-				continue
-			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				cluster := &clusterList[i]
+				if _, ok := clustersWithDD[*cluster]; !ok {
+					continue
+				}
 
-			l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
-			err = collectResourceSummariesFromCluster(ctx, c, cluster, version, l)
-			if err != nil {
-				if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
-					l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
-						cluster.Namespace, cluster.Name, err))
+				l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+				err = collectResourceSummariesFromCluster(ctx, c, cluster, version, l)
+				if err != nil {
+					if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
+						l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
+							cluster.Namespace, cluster.Name, err))
+					}
 				}
 			}
 		}

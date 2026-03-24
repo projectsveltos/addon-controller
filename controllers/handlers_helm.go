@@ -1007,8 +1007,9 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 
 		var report *configv1beta1.ReleaseReport
 		var currentRelease *releaseInfo
-		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig,
-			isPullMode, logger)
+		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart,
+			kubeconfig, isPullMode, logger)
+		setHelmFailureMessageOnHelmChartSummary(clusterSummary, currentChart, err)
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("chart: %s, release: %s, %v\n",
@@ -1018,7 +1019,8 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 			return releaseReports, chartDeployed, err
 		}
 
-		valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, clusterSummary, mgmtResources, logger)
+		valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, clusterSummary, mgmtResources,
+			logger)
 		if err != nil {
 			return releaseReports, chartDeployed, err
 		}
@@ -1032,10 +1034,12 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 					valueHash, currentRelease.Status))
 			} else {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("release %s/%s (version %s) status: %s",
-					currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion, currentRelease.Status))
+					currentRelease.ReleaseNamespace, currentRelease.ReleaseName, currentRelease.ChartVersion,
+					currentRelease.Status))
 			}
 			if currentRelease.Status == releasecommon.StatusDeployed.String() {
-				// Deployed chart is used for updating ClusterConfiguration. There is no ClusterConfiguration for mgmt cluster
+				// Deployed chart is used for updating ClusterConfiguration. There is no ClusterConfiguration
+				// for mgmt cluster
 				chartDeployed = append(chartDeployed, configv1beta1.Chart{
 					RepoURL:         instantiatedChart.RepositoryURL,
 					Namespace:       currentRelease.ReleaseNamespace,
@@ -1063,6 +1067,59 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 	}
 
 	return releaseReports, chartDeployed, nil
+}
+
+func setHelmFailureMessageOnHelmChartSummary(clusterSummary *configv1beta1.ClusterSummary,
+	instantiatedChart *configv1beta1.HelmChart, err error) {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		hr := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if hr.ReleaseNamespace == instantiatedChart.ReleaseNamespace &&
+			hr.ReleaseName == instantiatedChart.ReleaseName {
+
+			if err == nil {
+				clusterSummary.Status.HelmReleaseSummaries[i].FailureMessage = nil
+			} else {
+				failureMessage := err.Error()
+				clusterSummary.Status.HelmReleaseSummaries[i].FailureMessage = &failureMessage
+			}
+			return
+		}
+	}
+}
+
+// getFailureMessageFromHelmChartSummary returns the failureMessage stored for this chart
+// in the ClusterSummary
+func getFailureMessageFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
+	clusterSummary *configv1beta1.ClusterSummary) *string {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.FailureMessage
+		}
+	}
+
+	return nil
+}
+
+// getValueHashFromHelmChartSummary returns the valueHash stored for this chart
+// in the ClusterSummary
+func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
+	clusterSummary *configv1beta1.ClusterSummary) []byte {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.ValuesHash
+		}
+	}
+
+	return nil
 }
 
 func generateConflictForHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -1553,10 +1610,10 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		// This condition should never occur.  A previous check ensures that only one
 		// ClusterProfile/Profile can manage a Helm Chart with a given name in a
 		// specific namespace within a managed cluster.  If this code is reached,
-		// that check has already passed.  Therefore, the "cannot re-use a name that
+		// that check has already passed.  Therefore, the "cannot reuse a name that
 		// is still in use" error should be impossible.
 		// There is no constant defined in the helm library but this is an error seen more than once.
-		if err.Error() == "cannot re-use a name that is still in use" {
+		if strings.Contains(err.Error(), "cannot reuse a name that is still in use") {
 			_, err = upgradeRelease(ctx, clusterSummary, settings, requestedChart, kubeconfig, registryOptions,
 				values, mgmtResources, logger)
 			return nil, err
@@ -2529,6 +2586,7 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 					ReleaseName:      instantiatedChart.ReleaseName,
 					ReleaseNamespace: instantiatedChart.ReleaseNamespace,
 					Status:           configv1beta1.HelmChartStatusManaging,
+					FailureMessage:   getFailureMessageFromHelmChartSummary(instantiatedChart, clusterSummary),
 					ValuesHash:       getValueHashFromHelmChartSummary(instantiatedChart, clusterSummary), // if a value is currently stored, keep it.
 					// after chart is deployed such value will be updated
 				}
@@ -2596,24 +2654,19 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 		currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
 	}
 
-	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(clusterSummary.Status.HelmReleaseSummaries))
-	for i := range clusterSummary.Status.HelmReleaseSummaries {
-		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
-			helmReleaseSummaries = append(helmReleaseSummaries, *summary)
-		}
-	}
-
-	if len(helmReleaseSummaries) == len(clusterSummary.Status.HelmReleaseSummaries) {
-		// Nothing has changed
-		return clusterSummary, nil
-	}
-
 	currentClusterSummary := &configv1beta1.ClusterSummary{}
 	err := c.Get(ctx,
 		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, currentClusterSummary)
 	if err != nil {
 		return clusterSummary, err
+	}
+
+	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(currentClusterSummary.Status.HelmReleaseSummaries))
+	for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+		summary := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
+			helmReleaseSummaries = append(helmReleaseSummaries, *summary)
+		}
 	}
 
 	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
@@ -3811,23 +3864,6 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 	})
 
 	return helmChartValuesHash, err
-}
-
-// getValueHashFromHelmChartSummary returns the valueHash stored for this chart
-// in the ClusterSummary
-func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
-	clusterSummary *configv1beta1.ClusterSummary) []byte {
-
-	for i := range clusterSummary.Status.HelmReleaseSummaries {
-		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if rs.ReleaseName == requestedChart.ReleaseName &&
-			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
-
-			return rs.ValuesHash
-		}
-	}
-
-	return nil
 }
 
 func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,

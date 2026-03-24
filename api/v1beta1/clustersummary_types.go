@@ -114,6 +114,10 @@ type HelmChartSummary struct {
 	// chart or there is a conflict
 	// +optional
 	ConflictMessage string `json:"conflictMessage,omitempty"`
+
+	// +optional
+	// FailureMessage provides the specific error from the Helm engine for this release
+	FailureMessage *string `json:"failureMessage,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

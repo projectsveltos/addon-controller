@@ -202,6 +202,14 @@ var _ = Describe("Stale Resources", func() {
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Verifying Service %s is not created the workload cluster", incorrectServiceName)
+		Consistently(func() bool {
+			currentService := &corev1.Service{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: configMapNs, Name: incorrectServiceName}, currentService)
+			return err != nil && apierrors.IsNotFound(err)
+		}, time.Minute, pollingInterval).ShouldNot(BeNil())
+
 		for _, serviceName := range []string{service1, service2, service3} {
 			Byf("Verifying Service %s is still in the workload cluster", serviceName)
 			Consistently(func() error {
@@ -210,14 +218,6 @@ var _ = Describe("Stale Resources", func() {
 					types.NamespacedName{Namespace: configMapNs, Name: serviceName}, currentService)
 			}, time.Minute, pollingInterval).Should(BeNil())
 		}
-
-		Byf("Verifying Service %s is not created the workload cluster", incorrectServiceName)
-		Consistently(func() bool {
-			currentService := &corev1.Service{}
-			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: configMapNs, Name: incorrectServiceName}, currentService)
-			return err != nil && apierrors.IsNotFound(err)
-		}, time.Minute, pollingInterval).ShouldNot(BeNil())
 
 		By("Updating ConfigMap to reference also a fourth Service")
 		service4 := randomString()

@@ -190,6 +190,13 @@ func verifyCAPICluster() {
 		if currentLabels == nil {
 			currentLabels = make(map[string]string)
 		}
+
+		// Early return only if BOTH conditions are already satisfied
+		val, exists := currentCluster.Labels[key]
+		if exists && val == value && !isTrue(currentCluster.Spec.Paused) {
+			return nil
+		}
+
 		currentLabels[key] = value
 		currentCluster.Labels = currentLabels
 		paused := false
@@ -198,6 +205,10 @@ func verifyCAPICluster() {
 		return k8sClient.Update(context.TODO(), currentCluster)
 	})
 	Expect(err).To(BeNil())
+}
+
+func isTrue(b *bool) bool {
+	return b != nil && *b
 }
 
 func verifySveltosCluster() {

@@ -984,8 +984,9 @@ var _ = Describe("ClusterPromotionController", func() {
 
 		reconciler := controllers.ClusterPromotionReconciler{Client: c}
 
-		canAdvance := controllers.CanManualAdvance(&reconciler, clusterPromotion,
+		canAdvance, err := controllers.CanManualAdvance(&reconciler, context.TODO(), clusterPromotion,
 			stage1, clusterPromotion.Spec.Stages[0].Trigger.Manual, logger)
+		Expect(err).To(BeNil())
 		Expect(canAdvance).To(BeFalse()) // Approved is not set in ManualTrigger
 
 		approved := true
@@ -1003,8 +1004,9 @@ var _ = Describe("ClusterPromotionController", func() {
 			},
 		}
 
-		canAdvance = controllers.CanManualAdvance(&reconciler, clusterPromotion,
+		canAdvance, err = controllers.CanManualAdvance(&reconciler, context.TODO(), clusterPromotion,
 			stage1, clusterPromotion.Spec.Stages[0].Trigger.Manual, logger)
+		Expect(err).To(BeNil())
 		Expect(canAdvance).To(BeTrue()) // Approved is set to true in ManualTrigger
 	})
 

@@ -825,7 +825,7 @@ func (r *ClusterPromotionReconciler) doMoveToNextStage(ctx context.Context,
 
 	if currentStageSpec.Trigger.Manual != nil {
 		logger.V(logs.LogDebug).Info("trigger is manual")
-		return r.canManualAdvance(clusterPromotion, currentStageName, currentStageSpec.Trigger.Manual, logger), nil
+		return r.canManualAdvance(ctx, clusterPromotion, currentStageName, currentStageSpec.Trigger.Manual, logger)
 	}
 
 	return true, nil
@@ -837,29 +837,21 @@ func (r *ClusterPromotionReconciler) canAutoAdvance(ctx context.Context,
 	autoTrigger *configv1beta1.AutoTrigger, logger logr.Logger) (bool, error) {
 
 	if autoTrigger.Delay != nil {
-		currentStageStatus := getStageStatusByName(clusterPromotion, currentStageName)
-		if currentStageStatus == nil {
-			errorMsg := fmt.Sprintf("status not present for stage %s", currentStageName)
-			logger.V(logs.LogDebug).Info(errorMsg)
-			return false, errors.New(errorMsg)
+		requiredReadyTime, err := r.getRequiredReadyTime(clusterPromotion, currentStageName,
+			autoTrigger.Delay)
+		if err != nil {
+			logger.V(logs.LogDebug).Info(err.Error())
+			return false, err
 		}
 
-		now := time.Now()
-
-		// Convert metav1.Duration (Delay) to time.Duration
-		delayDuration := autoTrigger.Delay.Duration
-
-		// Calculate the required wait time (Success Time + Delay Duration)
-		requiredReadyTime := currentStageStatus.LastSuccessfulAppliedTime.Add(delayDuration)
-
 		// 2. Check the delay condition
-		if now.Before(requiredReadyTime) {
+		if time.Now().Before(*requiredReadyTime) {
 			// The required delay time has NOT yet passed.
 			message := fmt.Sprintf("Delayed: Waiting for Time Window: %s",
 				requiredReadyTime.Format(time.RFC3339))
 			logger.V(logs.LogDebug).Info(message,
 				"stage", currentStageName,
-				"delay", delayDuration.String(),
+				"delay", autoTrigger.Delay.Duration.String(),
 				"ready_at", requiredReadyTime.Format(time.RFC3339),
 			)
 
@@ -870,7 +862,8 @@ func (r *ClusterPromotionReconciler) canAutoAdvance(ctx context.Context,
 
 	// --- DELAY HAS PASSED: Deploy PreHealthCheckDeployment --
 	stage := getStageSpecByName(clusterPromotion, currentStageName)
-	if err := r.reconcilePreHealthCheckDeployment(ctx, clusterPromotion, stage, logger); err != nil {
+	if err := r.reconcilePreHealthCheckDeployment(ctx, clusterPromotion, stage,
+		autoTrigger.PreHealthCheckDeployment, logger); err != nil {
 		return false, err
 	}
 
@@ -1028,11 +1021,9 @@ func (r *ClusterPromotionReconciler) deleteCheckDeploymentClusterProfile(ctx con
 // for the given stage
 func (r *ClusterPromotionReconciler) reconcilePreHealthCheckDeployment(ctx context.Context,
 	clusterPromotion *configv1beta1.ClusterPromotion, stage *configv1beta1.Stage,
-	logger logr.Logger) error {
+	preHealthCheckDeployment []configv1beta1.PolicyRef, logger logr.Logger) error {
 
-	if stage.Trigger == nil || stage.Trigger.Auto == nil ||
-		len(stage.Trigger.Auto.PreHealthCheckDeployment) == 0 {
-
+	if stage.Trigger == nil || len(preHealthCheckDeployment) == 0 {
 		return nil
 	}
 
@@ -1066,7 +1057,7 @@ func (r *ClusterPromotionReconciler) reconcilePreHealthCheckDeployment(ctx conte
 		ClusterSelector: stage.ClusterSelector,
 
 		// 3. Set PreHealthCheckDeployment
-		PolicyRefs: stage.Trigger.Auto.PreHealthCheckDeployment,
+		PolicyRefs: preHealthCheckDeployment,
 	}
 
 	clusterProfile.Spec = desiredSpec
@@ -1182,23 +1173,64 @@ func (r *ClusterPromotionReconciler) postDelayChecksAlreadyIncluded(
 }
 
 // canManualAdvance returns true if Sveltos should move to next stage based on Manual Trigger
-func (r *ClusterPromotionReconciler) canManualAdvance(clusterPromotion *configv1beta1.ClusterPromotion,
-	currentStageName string, manualTrigger *configv1beta1.ManualTrigger, logger logr.Logger) bool {
+func (r *ClusterPromotionReconciler) canManualAdvance(ctx context.Context,
+	clusterPromotion *configv1beta1.ClusterPromotion, currentStageName string,
+	manualTrigger *configv1beta1.ManualTrigger, logger logr.Logger) (bool, error) {
+
+	if manualTrigger.Delay != nil {
+		requiredReadyTime, err := r.getRequiredReadyTime(clusterPromotion, currentStageName,
+			manualTrigger.Delay)
+		if err != nil {
+			logger.V(logs.LogDebug).Info(err.Error())
+			return false, err
+		}
+
+		// 2. Check the delay condition
+		if time.Now().Before(*requiredReadyTime) {
+			// The required delay time has NOT yet passed.
+			message := fmt.Sprintf("Delayed: Waiting for Time Window: %s",
+				requiredReadyTime.Format(time.RFC3339))
+			logger.V(logs.LogDebug).Info(message,
+				"stage", currentStageName,
+				"delay", manualTrigger.Delay.Duration.String(),
+				"ready_at", requiredReadyTime.Format(time.RFC3339),
+			)
+
+			updateStageDescription(clusterPromotion, currentStageName, message)
+			return false, nil
+		}
+	}
+
+	// --- DELAY HAS PASSED: Deploy PreHealthCheckDeployment --
+	stage := getStageSpecByName(clusterPromotion, currentStageName)
+	if err := r.reconcilePreHealthCheckDeployment(ctx, clusterPromotion, stage,
+		manualTrigger.PreHealthCheckDeployment, logger); err != nil {
+		return false, err
+	}
+
+	// --- DELAY HAS PASSED: Reconcile Post-Delay Health Checks ---
+	if err := r.reconcilePostDelayHealthChecks(ctx, clusterPromotion, currentStageName,
+		manualTrigger.PostDelayHealthChecks, logger); err != nil {
+		logger.V(logs.LogDebug).Info("Running Post-Promotion Health Checks")
+		updateStageDescription(clusterPromotion, currentStageName, "Running Post-Promotion Health Checks")
+
+		return false, err
+	}
 
 	if manualTrigger.Approved == nil ||
 		!(*manualTrigger.Approved) {
 
-		message := "Paused: Awaiting Manual Approva"
+		message := "Paused: Awaiting Manual Approval"
 		logger.V(logs.LogDebug).Info(message)
 		updateStageDescription(clusterPromotion, currentStageName, message)
-		return false
+		return false, nil
 	}
 
 	if manualTrigger.AutomaticReset {
 		manualTrigger.Approved = nil
 	}
 
-	return true
+	return true, nil
 }
 
 func (r *ClusterPromotionReconciler) cleanClusterProfiles(ctx context.Context,
@@ -1312,4 +1344,23 @@ func (r *ClusterPromotionReconciler) updateStatusWithMissingLicenseError(
 	firstStage := promotionScope.ClusterPromotion.Spec.Stages[0]
 	addStageStatus(promotionScope.ClusterPromotion, firstStage.Name)
 	updateStageStatus(promotionScope.ClusterPromotion, firstStage.Name, false, &notEligibleError)
+}
+
+// getRequiredReadyTime returns the time when the delay is satisfied.
+func (r *ClusterPromotionReconciler) getRequiredReadyTime(clusterPromotion *configv1beta1.ClusterPromotion,
+	currentStageName string, delay *metav1.Duration) (*time.Time, error) {
+
+	currentStageStatus := getStageStatusByName(clusterPromotion, currentStageName)
+	if currentStageStatus == nil {
+		return nil, fmt.Errorf("status not present for stage %s", currentStageName)
+	}
+
+	if currentStageStatus.LastSuccessfulAppliedTime == nil {
+		return nil, fmt.Errorf("LastSuccessfulAppliedTime not set for stage %s", currentStageName)
+	}
+
+	// Calculate: Success Time + Delay Duration
+	requiredReadyTime := currentStageStatus.LastSuccessfulAppliedTime.Add(delay.Duration)
+
+	return &requiredReadyTime, nil
 }

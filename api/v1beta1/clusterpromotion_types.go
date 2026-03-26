@@ -240,6 +240,23 @@ type TimeWindow struct {
 
 // ManualTrigger is a placeholder to represent a manual trigger.
 type ManualTrigger struct {
+	// Delay is an optional time duration to wait after the WaitForStatus condition
+	// is met before proceeding with the promotion.
+	// +optional
+	Delay *metav1.Duration `json:"delay,omitempty"`
+
+	// PreHealthCheckDeployment is a slice of resources Sveltos will deploy after the Delay
+	// period has elapsed and before running PostDelayHealthChecks.
+	// This can be used, for example, to deploy a Job that performs validation tasks.
+	// The PostDelayHealthChecks can then validate the successful completion of these resources (e.g., a Job).
+	// +optional
+	PreHealthCheckDeployment []PolicyRef `json:"preHealthCheckDeployment,omitempty"`
+
+	// PostDelayHealthChecks is a slice of health checks Sveltos will run after the delay
+	// period has elapsed.
+	// +optional
+	PostDelayHealthChecks []libsveltosv1beta1.ValidateHealth `json:"postDelayHealthChecks,omitempty"`
+
 	// Approved, when set to true, signals to the controller that
 	// promotion to the next stage is approved.
 	// +optional

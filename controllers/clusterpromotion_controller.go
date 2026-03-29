@@ -172,7 +172,7 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 
 	isEligible, err := r.verifyStageEligibility(ctx, promotionScope, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{Requeue: true, RequeueAfter: licenseRequeueAfter}
 	}
 
 	if !isEligible {

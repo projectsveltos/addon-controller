@@ -8178,6 +8178,13 @@ spec:
           value: "true"
         image: docker.io/projectsveltos/addon-controller:main
         name: initialization
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
       securityContext:
         runAsNonRoot: true
       serviceAccountName: addon-controller

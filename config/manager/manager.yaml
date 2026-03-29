@@ -49,6 +49,13 @@ spec:
         image: controller:latest
         imagePullPolicy: IfNotPresent
         name: initialization
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - "ALL"
       containers:
       - command:
         - /manager

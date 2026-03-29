@@ -79,6 +79,9 @@ const (
 
 	// dryRunRequeueAfter is how long to wait before reconciling a ClusterSummary in DryRun mode
 	dryRunRequeueAfter = 60 * time.Second
+
+	// licenseRequeueAfter is how long to wait before retrying after a license fetch error
+	licenseRequeueAfter = 60 * time.Second
 )
 
 type ReportMode int
@@ -417,7 +420,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 
 	if !isEligible {
 		r.updateStatusWithMissingLicenseError(clusterSummaryScope, logger)
-		return reconcile.Result{}, nil
+		return reconcile.Result{Requeue: true, RequeueAfter: licenseRequeueAfter}, nil
 	}
 
 	updateMapErrs := r.updateMaps(ctx, clusterSummaryScope, logger)

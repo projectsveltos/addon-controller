@@ -128,7 +128,7 @@ spec:
         - --cluster-type=
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-updates
-        - --version=main
+        - --version=v1.7.0
         command:
         - /manager
         env:
@@ -140,7 +140,7 @@ spec:
           valueFrom:
             resourceFieldRef:
               resource: limits.cpu
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:1ae848af38303a45e56f3c66a64905fee1f8ea9fbaf475859425f430520d1d03
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:1796ea27479489f042fb3ecdf25cab4e8e0e574faec49982862eb5f7c179650b
         livenessProbe:
           failureThreshold: 3
           httpGet:

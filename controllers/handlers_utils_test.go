@@ -556,7 +556,7 @@ var _ = Describe("HandlersUtils", func() {
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
-			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
 		validateResourceReports(resourceReports, 2, 0, 0, 0)
@@ -587,7 +587,7 @@ var _ = Describe("HandlersUtils", func() {
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
-			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
 		validateResourceReports(resourceReports, 0, 0, 2, 0)
@@ -624,7 +624,7 @@ var _ = Describe("HandlersUtils", func() {
 		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": newContent},
-			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
 		validateResourceReports(resourceReports, 0, 2, 0, 0)
@@ -634,7 +634,7 @@ var _ = Describe("HandlersUtils", func() {
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
-			defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -660,27 +660,37 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
+		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: false}
 		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, defaultTier, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, secret, reference, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
 	})
 
-	It("deployContentOfConfigMap deploys all policies contained in a Secret", func() {
-		services := fmt.Sprintf(serviceTemplate, namespace, namespace)
-		depl := fmt.Sprintf(deplTemplate, namespace)
+	It("deployContentOfConfigMap deploys all policies contained in a ConfigMap", func() {
+		ns := randomString()
+		services := fmt.Sprintf(serviceTemplate, ns, namespace)
+		depl := fmt.Sprintf(deplTemplate, ns)
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), depl, services)
-
 		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
 
 		Expect(waitForObject(ctx, testEnv.Client, configMap)).To(Succeed())
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
+		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: true}
+		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
+			testEnv.Config, testEnv.Client, configMap, reference, clusterSummary, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		// SkipNamespaceCreation is set to true. Since Service namespace is missing this will fail
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("namespaces %q not found", ns)))
+
+		reference.SkipNamespaceCreation = false
 		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
-			testEnv.Config, testEnv.Client, configMap, defaultTier, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, configMap, reference, clusterSummary, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
@@ -1174,6 +1184,7 @@ stringData:
 	})
 
 	It("patchRessource with subresources correctly update instance", func() {
+		namespace := randomString()
 		serviceName := randomString()
 		key := randomString()
 		value := randomString()
@@ -1181,7 +1192,7 @@ stringData:
 kind: Service
 metadata:
   name: %s
-  namespace: default
+  namespace: %s
   labels:
     %s: %s
 spec:
@@ -1192,10 +1203,18 @@ status:
     ingress:
     - ip: 1.1.1.1`
 
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
+
 		service := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
-				Namespace: "default",
+				Namespace: namespace,
 			},
 			Spec: corev1.ServiceSpec{
 				Type: corev1.ServiceTypeLoadBalancer,
@@ -1217,25 +1236,27 @@ status:
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(servicePatch,
-			serviceName, key, value, key, value))
+			serviceName, namespace, key, value, key, value))
 		configMap.Annotations = map[string]string{
 			"projectsveltos.io/subresources": "status"}
+
+		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: false}
 		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configMap, defaultTier, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			configMap, reference, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		serviceOut := corev1.Service{}
 		// wait for cache to sync
 		Eventually(func() bool {
 			err := testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: "default", Name: serviceName},
+				types.NamespacedName{Namespace: namespace, Name: serviceName},
 				&serviceOut)
 			return err == nil &&
 				serviceOut.Status.LoadBalancer.Ingress != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{Namespace: "default", Name: serviceName}, &serviceOut)).To(Succeed())
+			types.NamespacedName{Namespace: namespace, Name: serviceName}, &serviceOut)).To(Succeed())
 
 		// verify status has been updated
 		Expect(serviceOut.Status.LoadBalancer.Ingress).ToNot(BeNil())

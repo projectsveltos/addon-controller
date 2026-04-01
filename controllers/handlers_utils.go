@@ -70,9 +70,10 @@ const (
 
 type referencedObject struct {
 	corev1.ObjectReference
-	Tier     int32
-	Optional bool
-	Path     string
+	Tier                  int32
+	SkipNamespaceCreation bool
+	Optional              bool
+	Path                  string
 }
 
 func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
@@ -86,12 +87,12 @@ func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSumma
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, configMap *corev1.ConfigMap, referenceTier int32, clusterSummary *configv1beta1.ClusterSummary,
+	destClient client.Client, configMap *corev1.ConfigMap, reference *referencedObject, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]libsveltosv1beta1.ResourceReport, error) {
 
 	resourceReports, err := deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, configMap.Data,
-		referenceTier, clusterSummary, mgmtResources, logger)
+		reference.Tier, reference.SkipNamespaceCreation, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		return resourceReports, fmt.Errorf("processing ConfigMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
 	}
@@ -104,7 +105,7 @@ func deployContentOfConfigMap(ctx context.Context, deployingToMgmtCluster bool, 
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, secret *corev1.Secret, referenceTier int32, clusterSummary *configv1beta1.ClusterSummary,
+	destClient client.Client, secret *corev1.Secret, reference *referencedObject, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) ([]libsveltosv1beta1.ResourceReport, error) {
 
@@ -114,7 +115,7 @@ func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, des
 	}
 
 	resourceReports, err := deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, secret, data,
-		referenceTier, clusterSummary, mgmtResources, logger)
+		reference.Tier, reference.SkipNamespaceCreation, clusterSummary, mgmtResources, logger)
 	if err != nil {
 		return resourceReports, fmt.Errorf("processing Secret %s/%s: %w", secret.Namespace, secret.Name, err)
 	}
@@ -123,7 +124,7 @@ func deployContentOfSecret(ctx context.Context, deployingToMgmtCluster bool, des
 }
 
 func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
-	destClient client.Client, source client.Object, referenceTier int32, path string,
+	destClient client.Client, source client.Object, reference *referencedObject, path string,
 	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured,
 	logger logr.Logger) ([]libsveltosv1beta1.ResourceReport, error) {
 
@@ -171,7 +172,7 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 	}
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, source, content,
-		referenceTier, clusterSummary, mgmtResources, logger)
+		reference.Tier, reference.SkipNamespaceCreation, clusterSummary, mgmtResources, logger)
 }
 
 func readFiles(dir string) (map[string]string, error) {
@@ -281,8 +282,8 @@ func prepareReports(resources []*unstructured.Unstructured) []libsveltosv1beta1.
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
 // and kind.group::name for cluster wide policies.
 func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config, destClient client.Client,
-	referencedObject client.Object, data map[string]string, referenceTier int32, clusterSummary *configv1beta1.ClusterSummary,
-	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
+	referencedObject client.Object, data map[string]string, referenceTier int32, skipNamespaceCreation bool,
+	clusterSummary *configv1beta1.ClusterSummary, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger,
 ) (reports []libsveltosv1beta1.ResourceReport, err error) {
 
 	subresources := getSubresources(referencedObject)
@@ -324,7 +325,7 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 	}
 
 	return deployUnstructured(ctx, deployingToMgmtCluster, destConfig, destClient, resources, ref, referenceTier,
-		libsveltosv1beta1.FeatureResources, clusterSummary, subresources, logger)
+		skipNamespaceCreation, libsveltosv1beta1.FeatureResources, clusterSummary, subresources, logger)
 }
 
 // adjustNamespace fixes namespace.
@@ -396,7 +397,7 @@ func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 //nolint:funlen // requires a lot of arguments because kustomize and plain resources are using this function
 func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, referencedUnstructured []*unstructured.Unstructured, referencedObject *corev1.ObjectReference,
-	referenceTier int32, featureID libsveltosv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary,
+	referenceTier int32, skipNamespaceCreation bool, featureID libsveltosv1beta1.FeatureID, clusterSummary *configv1beta1.ClusterSummary,
 	subresources []string, logger logr.Logger) (reports []libsveltosv1beta1.ResourceReport, err error) {
 
 	profile, profileTier, err := configv1beta1.GetProfileOwnerAndTier(ctx, getManagementClusterClient(), clusterSummary)
@@ -433,11 +434,13 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		resource, policyHash := deployer.GetResource(policy, deployer.HasIgnoreConfigurationDriftAnnotation(policy),
 			referencedObject, profile, profileTier, referenceTier, string(featureID), logger)
 
-		// If policy is namespaced, create namespace if not already existing
-		err = deployer.CreateNamespace(ctx, destClient, clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun,
-			policy.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", errorPrefix, err)
+		if !skipNamespaceCreation {
+			// If policy is namespaced, create namespace if not already existing
+			err = deployer.CreateNamespace(ctx, destClient, clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun,
+				policy.GetNamespace())
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", errorPrefix, err)
+			}
 		}
 
 		dr, err := k8s_utils.GetDynamicResourceInterface(destConfig, policy.GroupVersionKind(), policy.GetNamespace())
@@ -752,6 +755,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 		case string(libsveltosv1beta1.SecretReferencedResourceKind):
 			object.ObjectReference = corev1.ObjectReference{
 				APIVersion: "v1",
@@ -761,6 +765,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 		case sourcev1.GitRepositoryKind:
 			object.ObjectReference = corev1.ObjectReference{
 				APIVersion: sourcev1.GroupVersion.String(),
@@ -770,6 +775,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 			object.Path = reference.Path
 		case sourcev1.OCIRepositoryKind:
 			object.ObjectReference = corev1.ObjectReference{
@@ -780,6 +786,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 			object.Path = reference.Path
 		case sourcev1.BucketKind:
 			object.ObjectReference = corev1.ObjectReference{
@@ -790,6 +797,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			}
 			object.Tier = reference.Tier
 			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 			object.Path = reference.Path
 		}
 
@@ -923,14 +931,14 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)
 			l.V(logs.LogDebug).Info("deploying ConfigMap content")
 			tmpResourceReports, err =
-				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, referencedObjects[i].Tier,
+				deployContentOfConfigMap(ctx, deployingToMgmtCluster, destConfig, destClient, configMap, &referencedObjects[i],
 					clusterSummary, mgmtResources, l)
 		} else if referencedObjects[i].GetObjectKind().GroupVersionKind().Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 			secret := referencedObject.(*corev1.Secret)
 			l := logger.WithValues("secretNamespace", secret.Namespace, "secretName", secret.Name)
 			l.V(logs.LogDebug).Info("deploying Secret content")
 			tmpResourceReports, err =
-				deployContentOfSecret(ctx, deployingToMgmtCluster, destConfig, destClient, secret, referencedObjects[i].Tier,
+				deployContentOfSecret(ctx, deployingToMgmtCluster, destConfig, destClient, secret, &referencedObjects[i],
 					clusterSummary, mgmtResources, l)
 		} else {
 			source := referencedObject
@@ -938,7 +946,7 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			annotations := source.GetAnnotations()
 			path := annotations[pathAnnotation]
 			tmpResourceReports, err =
-				deployContentOfSource(ctx, deployingToMgmtCluster, destConfig, destClient, source, referencedObjects[i].Tier, path,
+				deployContentOfSource(ctx, deployingToMgmtCluster, destConfig, destClient, source, &referencedObjects[i], path,
 					clusterSummary, mgmtResources, logger)
 		}
 

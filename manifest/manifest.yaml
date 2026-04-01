@@ -1016,6 +1016,16 @@ spec:
                         When expressed as templates, the values are filled in using information from
                         resources within the management cluster before deployment (Cluster)
                       type: string
+                    skipNamespaceCreation:
+                      default: false
+                      description: |-
+                        SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                        for namespaced resources defined in this KustomizationRef.
+                        This field is ignored for cluster-scoped resources.
+                        By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                        Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                        permissions to manage namespaces at the cluster level.
+                      type: boolean
                     targetNamespace:
                       description: |-
                         TargetNamespace sets or overrides the namespace in the
@@ -1300,6 +1310,16 @@ spec:
                         Defaults to 'None', which translates to the root path of the SourceRef.
                         Used only for GitRepository;OCIRepository;Bucket
                       type: string
+                    skipNamespaceCreation:
+                      default: false
+                      description: |-
+                        SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                        for namespaced resources defined in this PolicyRef.
+                        This field is ignored for cluster-scoped resources.
+                        By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                        Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                        permissions to manage namespaces at the cluster level.
+                      type: boolean
                     tier:
                       default: 100
                       description: |-
@@ -2660,6 +2680,16 @@ spec:
                             When expressed as templates, the values are filled in using information from
                             resources within the management cluster before deployment (Cluster)
                           type: string
+                        skipNamespaceCreation:
+                          default: false
+                          description: |-
+                            SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                            for namespaced resources defined in this KustomizationRef.
+                            This field is ignored for cluster-scoped resources.
+                            By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                            Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                            permissions to manage namespaces at the cluster level.
+                          type: boolean
                         targetNamespace:
                           description: |-
                             TargetNamespace sets or overrides the namespace in the
@@ -2944,6 +2974,16 @@ spec:
                             Defaults to 'None', which translates to the root path of the SourceRef.
                             Used only for GitRepository;OCIRepository;Bucket
                           type: string
+                        skipNamespaceCreation:
+                          default: false
+                          description: |-
+                            SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                            for namespaced resources defined in this PolicyRef.
+                            This field is ignored for cluster-scoped resources.
+                            By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                            Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                            permissions to manage namespaces at the cluster level.
+                          type: boolean
                         tier:
                           default: 100
                           description: |-
@@ -3665,6 +3705,16 @@ spec:
                                       Defaults to 'None', which translates to the root path of the SourceRef.
                                       Used only for GitRepository;OCIRepository;Bucket
                                     type: string
+                                  skipNamespaceCreation:
+                                    default: false
+                                    description: |-
+                                      SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                                      for namespaced resources defined in this PolicyRef.
+                                      This field is ignored for cluster-scoped resources.
+                                      By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                                      Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                                      permissions to manage namespaces at the cluster level.
+                                    type: boolean
                                   tier:
                                     default: 100
                                     description: |-
@@ -3896,6 +3946,16 @@ spec:
                                       Defaults to 'None', which translates to the root path of the SourceRef.
                                       Used only for GitRepository;OCIRepository;Bucket
                                     type: string
+                                  skipNamespaceCreation:
+                                    default: false
+                                    description: |-
+                                      SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                                      for namespaced resources defined in this PolicyRef.
+                                      This field is ignored for cluster-scoped resources.
+                                      By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                                      Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                                      permissions to manage namespaces at the cluster level.
+                                    type: boolean
                                   tier:
                                     default: 100
                                     description: |-
@@ -5065,6 +5125,16 @@ spec:
                             When expressed as templates, the values are filled in using information from
                             resources within the management cluster before deployment (Cluster)
                           type: string
+                        skipNamespaceCreation:
+                          default: false
+                          description: |-
+                            SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                            for namespaced resources defined in this KustomizationRef.
+                            This field is ignored for cluster-scoped resources.
+                            By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                            Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                            permissions to manage namespaces at the cluster level.
+                          type: boolean
                         targetNamespace:
                           description: |-
                             TargetNamespace sets or overrides the namespace in the
@@ -5349,6 +5419,16 @@ spec:
                             Defaults to 'None', which translates to the root path of the SourceRef.
                             Used only for GitRepository;OCIRepository;Bucket
                           type: string
+                        skipNamespaceCreation:
+                          default: false
+                          description: |-
+                            SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                            for namespaced resources defined in this PolicyRef.
+                            This field is ignored for cluster-scoped resources.
+                            By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                            Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                            permissions to manage namespaces at the cluster level.
+                          type: boolean
                         tier:
                           default: 100
                           description: |-
@@ -6735,6 +6815,16 @@ spec:
                         When expressed as templates, the values are filled in using information from
                         resources within the management cluster before deployment (Cluster)
                       type: string
+                    skipNamespaceCreation:
+                      default: false
+                      description: |-
+                        SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                        for namespaced resources defined in this KustomizationRef.
+                        This field is ignored for cluster-scoped resources.
+                        By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                        Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                        permissions to manage namespaces at the cluster level.
+                      type: boolean
                     targetNamespace:
                       description: |-
                         TargetNamespace sets or overrides the namespace in the
@@ -7019,6 +7109,16 @@ spec:
                         Defaults to 'None', which translates to the root path of the SourceRef.
                         Used only for GitRepository;OCIRepository;Bucket
                       type: string
+                    skipNamespaceCreation:
+                      default: false
+                      description: |-
+                        SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+                        for namespaced resources defined in this PolicyRef.
+                        This field is ignored for cluster-scoped resources.
+                        By default, Sveltos attempts to get or create the target namespace if it does not exist.
+                        Setting this to true avoids those calls, which is necessary when Sveltos lacks
+                        permissions to manage namespaces at the cluster level.
+                      type: boolean
                     tier:
                       default: 100
                       description: |-

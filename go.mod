@@ -22,7 +22,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10
-	github.com/yuin/gopher-lua v1.1.1
+	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/text v0.35.0
 	helm.sh/helm/v4 v4.1.3
 	k8s.io/api v0.35.3

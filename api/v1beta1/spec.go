@@ -549,6 +549,16 @@ type KustomizationRef struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Tier int32 `json:"tier,omitempty"`
+
+	// SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+	// for namespaced resources defined in this KustomizationRef.
+	// This field is ignored for cluster-scoped resources.
+	// By default, Sveltos attempts to get or create the target namespace if it does not exist.
+	// Setting this to true avoids those calls, which is necessary when Sveltos lacks
+	// permissions to manage namespaces at the cluster level.
+	// +kubebuilder:default:=false
+	// +optional
+	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching
@@ -641,6 +651,16 @@ type PolicyRef struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	Tier int32 `json:"tier,omitempty"`
+
+	// SkipNamespaceCreation indicates whether Sveltos should skip creating the namespace
+	// for namespaced resources defined in this PolicyRef.
+	// This field is ignored for cluster-scoped resources.
+	// By default, Sveltos attempts to get or create the target namespace if it does not exist.
+	// Setting this to true avoids those calls, which is necessary when Sveltos lacks
+	// permissions to manage namespaces at the cluster level.
+	// +kubebuilder:default:=false
+	// +optional
+	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
 }
 
 type Clusters struct {

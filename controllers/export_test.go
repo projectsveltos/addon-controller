@@ -210,3 +210,7 @@ var (
 var (
 	GetSortedKeys = getSortedKeys
 )
+
+type (
+	ReferencedObject = referencedObject
+)

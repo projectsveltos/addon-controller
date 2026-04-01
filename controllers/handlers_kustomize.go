@@ -995,7 +995,8 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		Name:      kustomizationRef.Name,
 	}
 	localReports, err = deployUnstructured(ctx, true, localConfig, c, objectsToDeployLocally,
-		ref, kustomizationRef.Tier, libsveltosv1beta1.FeatureKustomize, clusterSummary, []string{}, logger)
+		ref, kustomizationRef.Tier, kustomizationRef.SkipNamespaceCreation, libsveltosv1beta1.FeatureKustomize,
+		clusterSummary, []string{}, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to management cluster %v", err))
 		return localReports, nil, err
@@ -1020,7 +1021,8 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 	}
 
 	remoteReports, err = deployUnstructured(ctx, false, remoteRestConfig, remoteClient, objectsToDeployRemotely,
-		ref, kustomizationRef.Tier, libsveltosv1beta1.FeatureKustomize, clusterSummary, []string{}, logger)
+		ref, kustomizationRef.Tier, kustomizationRef.SkipNamespaceCreation, libsveltosv1beta1.FeatureKustomize,
+		clusterSummary, []string{}, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to deploy to remote cluster %v", err))
 		return localReports, remoteReports, err

@@ -1105,9 +1105,9 @@ func getFailureMessageFromHelmChartSummary(requestedChart *configv1beta1.HelmCha
 	return nil
 }
 
-// getValueHashFromHelmChartSummary returns the valueHash stored for this chart
+// getValuesHashFromHelmChartSummary returns the valueHash stored for this chart
 // in the ClusterSummary
-func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
+func getValuesHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
 	clusterSummary *configv1beta1.ClusterSummary) []byte {
 
 	for i := range clusterSummary.Status.HelmReleaseSummaries {
@@ -1116,6 +1116,23 @@ func getValueHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
 			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
 			return rs.ValuesHash
+		}
+	}
+
+	return nil
+}
+
+// getPatchesHashFromHelmChartSummary returns the patchesHash stored for this chart
+// in the ClusterSummary
+func getPatchesHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
+	clusterSummary *configv1beta1.ClusterSummary) []byte {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.PatchesHash
 		}
 	}
 
@@ -2297,10 +2314,18 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, instantiate
 		return false
 	}
 
+	currentPatchesHash, err := getHelmChartPatchesHash(ctx, clusterSummary, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current patches hash: %v", err))
+		currentPatchesHash = []byte("")
+	}
+
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
 		if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-			oldValueHash := getValueHashFromHelmChartSummary(instantiatedChart, clusterSummary)
+			oldValueHash := getValuesHashFromHelmChartSummary(instantiatedChart, clusterSummary)
+			oldPatchesHash := getPatchesHashFromHelmChartSummary(instantiatedChart, clusterSummary)
 
+			// Compare Values
 			c := getManagementClusterClient()
 			currentValueHash, err := getHelmChartValuesHash(ctx, c, instantiatedChart, clusterSummary, mgmtResources, logger)
 			if err != nil {
@@ -2308,6 +2333,11 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, instantiate
 				currentValueHash = []byte("")
 			}
 			if !reflect.DeepEqual(oldValueHash, currentValueHash) {
+				return true
+			}
+
+			// Compare patches
+			if !reflect.DeepEqual(oldPatchesHash, currentPatchesHash) {
 				return true
 			}
 		}
@@ -2560,6 +2590,11 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 	conflict := false
 
+	patchesHash, err := getPatchesHash(ctx, clusterSummary, logger)
+	if err != nil {
+		return clusterSummary, false, err
+	}
+
 	currentClusterSummary := &configv1beta1.ClusterSummary{}
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err = c.Get(ctx,
@@ -2587,7 +2622,8 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 					ReleaseNamespace: instantiatedChart.ReleaseNamespace,
 					Status:           configv1beta1.HelmChartStatusManaging,
 					FailureMessage:   getFailureMessageFromHelmChartSummary(instantiatedChart, clusterSummary),
-					ValuesHash:       getValueHashFromHelmChartSummary(instantiatedChart, clusterSummary), // if a value is currently stored, keep it.
+					PatchesHash:      []byte(patchesHash),
+					ValuesHash:       getValuesHashFromHelmChartSummary(instantiatedChart, clusterSummary), // if a value is currently stored, keep it.
 					// after chart is deployed such value will be updated
 				}
 				currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
@@ -3866,6 +3902,19 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 	})
 
 	return helmChartValuesHash, err
+}
+
+func getHelmChartPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) ([]byte, error) {
+
+	patchesHash, err := getPatchesHash(ctx, clusterSummary, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	h := sha256.New()
+	h.Write([]byte(patchesHash))
+	return h.Sum(nil), nil
 }
 
 func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,

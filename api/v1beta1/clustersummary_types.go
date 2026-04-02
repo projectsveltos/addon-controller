@@ -110,6 +110,10 @@ type HelmChartSummary struct {
 	// +optional
 	ValuesHash []byte `json:"valuesHash,omitempty"`
 
+	// PatchesHash represents of a unique value for the patches section
+	// +optional
+	PatchesHash []byte `json:"patchesHash,omitempty"`
+
 	// Status indicates whether ClusterSummary can manage the helm
 	// chart or there is a conflict
 	// +optional

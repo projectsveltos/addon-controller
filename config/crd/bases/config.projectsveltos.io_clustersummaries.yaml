@@ -1674,6 +1674,11 @@ spec:
                       description: FailureMessage provides the specific error from
                         the Helm engine for this release
                       type: string
+                    patchesHash:
+                      description: PatchesHash represents of a unique value for the
+                        patches section
+                      format: byte
+                      type: string
                     releaseName:
                       description: ReleaseName is the chart release
                       minLength: 1

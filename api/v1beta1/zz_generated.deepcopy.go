@@ -816,6 +816,11 @@ func (in *HelmChartSummary) DeepCopyInto(out *HelmChartSummary) {
 		*out = make([]byte, len(*in))
 		copy(*out, *in)
 	}
+	if in.PatchesHash != nil {
+		in, out := &in.PatchesHash, &out.PatchesHash
+		*out = make([]byte, len(*in))
+		copy(*out, *in)
+	}
 	if in.FailureMessage != nil {
 		in, out := &in.FailureMessage, &out.FailureMessage
 		*out = new(string)

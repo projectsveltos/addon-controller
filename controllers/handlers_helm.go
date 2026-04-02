@@ -1466,6 +1466,7 @@ func deployHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 		return nil, nil, err
 	}
 	var report *configv1beta1.ReleaseReport
+	deployed := false
 
 	if shouldInstall(currentRelease, instantiatedChart) {
 		_, report, err = handleInstall(ctx, clusterSummary, mgmtResources, instantiatedChart, kubeconfig,
@@ -1473,12 +1474,14 @@ func deployHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 		if err != nil {
 			return nil, nil, err
 		}
+		deployed = true
 	} else if shouldUpgrade(ctx, currentRelease, instantiatedChart, clusterSummary, mgmtResources, logger) {
 		_, report, err = handleUpgrade(ctx, clusterSummary, mgmtResources, instantiatedChart, currentRelease, kubeconfig,
 			registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
+		deployed = true
 	} else if shouldUninstall(currentRelease, instantiatedChart) {
 		report, err = handleUninstall(ctx, clusterSummary, instantiatedChart, kubeconfig, registryOptions, logger)
 		if err != nil {
@@ -1497,6 +1500,15 @@ func deployHelmChart(ctx context.Context, clusterSummary *configv1beta1.ClusterS
 
 		report, err = generateReportForSameVersion(ctx, currentRelease.Values, clusterSummary, mgmtResources,
 			instantiatedChart, kubeconfig, registryOptions, logger)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if deployed && getRunTestsValue(instantiatedChart.Options) &&
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+
+		err = runHelmTests(instantiatedChart, kubeconfig, registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2944,7 +2956,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 				return nil, fmt.Errorf("unexpected release type %T", rawResults)
 			}
 
-			resources, err := collectHelmContent(results, install, false, logger)
+			resources, err := collectHelmContent(results, install, false, false, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -3140,7 +3152,7 @@ func hasHookDeleteAnnotation(obj *unstructured.Unstructured) bool {
 }
 
 func collectHelmContent(result *releasev1.Release, helmActionVar helmAction, includeHookResources bool,
-	logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	includeTestResources bool, logger logr.Logger) ([]*unstructured.Unstructured, error) {
 
 	resources := make([]*unstructured.Unstructured, 0)
 	if helmActionVar == uninstall {
@@ -3199,6 +3211,14 @@ func collectHelmContent(result *releasev1.Release, helmActionVar helmAction, inc
 			return nil, err
 		}
 		resources = append(resources, postHookResources...)
+	}
+
+	if includeTestResources && helmActionVar != uninstall {
+		testHookResources, err := collectTestHooks(result, logger)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, testHookResources...)
 	}
 
 	return resources, nil
@@ -3275,6 +3295,32 @@ func collectPostHooks(result *releasev1.Release, helmActionVar helmAction, logge
 		resources = append(resources, hookResources...)
 	}
 
+	return resources, nil
+}
+
+func collectTestHooks(result *releasev1.Release, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	resources := make([]*unstructured.Unstructured, 0)
+	for _, hook := range result.Hooks {
+		isTest := false
+		for _, event := range hook.Events {
+			if event == releasev1.HookTest {
+				isTest = true
+				break
+			}
+		}
+		if !isTest {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("Test Hook Kind: %s", hook.Kind))
+
+		hookResources, err := parseAndAppendResources(hook.Manifest, logger)
+		if err != nil {
+			logger.Error(err, "failed to parse test hook manifest")
+			return nil, err
+		}
+		resources = append(resources, hookResources...)
+	}
 	return resources, nil
 }
 
@@ -3625,6 +3671,76 @@ func getSubNotesValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
+func getRunTestsValue(options *configv1beta1.HelmOptions) bool {
+	if options != nil {
+		return options.RunTests
+	}
+
+	return false
+}
+
+// runHelmTests executes helm test hooks for the given release using action.ReleaseTesting.
+// It is called after a successful install or upgrade when RunTests is enabled in HelmOptions.
+// Any test failure is returned as an error, blocking the deployment lifecycle.
+func runHelmTests(requestedChart *configv1beta1.HelmChart, kubeconfig string,
+	registryOptions *registryClientOptions, logger logr.Logger) error {
+
+	logger.V(logs.LogDebug).Info("running helm tests",
+		"release", requestedChart.ReleaseName,
+		"namespace", requestedChart.ReleaseNamespace)
+
+	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
+		getEnableClientCacheValue(requestedChart.Options))
+	if err != nil {
+		return err
+	}
+
+	// Log which test hooks will be executed so operators can observe what is about to run.
+	// Note: test pods with hook-delete-policy "hook-succeeded" are removed immediately on
+	// success, so they may never be visible on the cluster even when tests pass.
+	statusObject := action.NewStatus(actionConfig)
+	rawRelease, statusErr := statusObject.Run(requestedChart.ReleaseName)
+	if statusErr == nil {
+		if rel, ok := rawRelease.(*releasev1.Release); ok {
+			var testHookNames []string
+			for _, hook := range rel.Hooks {
+				for _, event := range hook.Events {
+					if event == releasev1.HookTest {
+						testHookNames = append(testHookNames, hook.Name)
+						break
+					}
+				}
+			}
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d test hook(s) to execute: %v",
+				len(testHookNames), testHookNames))
+		}
+	}
+
+	testClient := action.NewReleaseTesting(actionConfig)
+	testClient.Namespace = requestedChart.ReleaseNamespace
+	testClient.Timeout = getTimeoutValue(requestedChart.Options).Duration
+
+	_, shutdown, err := testClient.Run(requestedChart.ReleaseName)
+	if shutdown != nil {
+		defer func() {
+			if shutdownErr := shutdown(); shutdownErr != nil {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("helm test shutdown error for release %s/%s: %v",
+					requestedChart.ReleaseNamespace, requestedChart.ReleaseName, shutdownErr))
+			}
+		}()
+	}
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("helm tests failed for release %s/%s: %v",
+			requestedChart.ReleaseNamespace, requestedChart.ReleaseName, err))
+		return fmt.Errorf("helm test failed for release %s/%s: %w",
+			requestedChart.ReleaseNamespace, requestedChart.ReleaseName, err)
+	}
+
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("helm tests passed for release %s/%s",
+		requestedChart.ReleaseNamespace, requestedChart.ReleaseName))
+	return nil
+}
+
 func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
 	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch, templateOnly bool, logger logr.Logger,
 ) (*action.Install, error) {
@@ -3785,7 +3901,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		return fmt.Errorf("unexpected release type %T", rawResults)
 	}
 
-	resources, err := collectHelmContent(results, install, true, logger)
+	resources, err := collectHelmContent(results, install, true, false, logger)
 	if err != nil {
 		return err
 	}
@@ -4517,7 +4633,7 @@ func prepareChartForAgent(ctx context.Context, clusterSummary *configv1beta1.Clu
 	if helmActionVar == uninstall && clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 		// if action is install=false and syncMode is dryRun, return empty resources.
 	} else {
-		resources, err = collectHelmContent(helmRelease, helmActionVar, true, logger)
+		resources, err = collectHelmContent(helmRelease, helmActionVar, true, getRunTestsValue(instantiatedChart.Options), logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -4608,6 +4724,7 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 		postRollbackHooks     []*unstructured.Unstructured
 		preDeleteHooks        []*unstructured.Unstructured
 		postDeleteHooks       []*unstructured.Unstructured
+		testHooks             []*unstructured.Unstructured
 		hookDeleteAnnotations []*unstructured.Unstructured
 		otherResources        []*unstructured.Unstructured
 	)
@@ -4642,6 +4759,9 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 		} else if isHookResource(resource, "post-delete") {
 			resource = setNamespace(resource, releaseNamespace)
 			postDeleteHooks = append(postDeleteHooks, resource)
+		} else if isHookResource(resource, "test") {
+			resource = setNamespace(resource, releaseNamespace)
+			testHooks = append(testHooks, resource)
 		} else if hasHookDeleteAnnotation(resource) {
 			resource = setNamespace(resource, releaseNamespace)
 			hookDeleteAnnotations = append(hookDeleteAnnotations, resource)
@@ -4681,6 +4801,9 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 
 	// Put post delete instances in subgroups of no more than 15
 	result = appendResources(result, postDeleteHooks)
+
+	// Put test hook instances in subgroups of no more than 15 (after all other resources)
+	result = appendResources(result, testHooks)
 
 	return result
 }

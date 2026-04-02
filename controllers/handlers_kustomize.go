@@ -1008,7 +1008,8 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		key := fmt.Sprintf("%s-%s-%s", ref.Kind, ref.Namespace, ref.Name)
 		bundleResources[key] = convertPointerSliceToValueSlice(objectsToDeployRemotely)
 
-		setters := prepareBundleSettersWithResourceInfo(ref.Kind, ref.Namespace, ref.Name, kustomizationRef.Tier)
+		setters := prepareBundleSettersWithResourceInfo(ref.Kind, ref.Namespace, ref.Name, kustomizationRef.Tier,
+			kustomizationRef.SkipNamespaceCreation)
 
 		return localReports, nil, pullmode.StageResourcesForDeployment(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,

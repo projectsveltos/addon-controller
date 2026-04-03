@@ -239,6 +239,16 @@ spec:
                               description: PassCredentialsAll is the flag to pass
                                 credentials to all domains
                               type: boolean
+                            runTests:
+                              default: false
+                              description: |-
+                                RunTests if set to true, Sveltos will run helm test after each successful install or upgrade
+                                operation. The tests are the test hooks defined in the chart (annotated with
+                                "helm.sh/hook: test"). If any test fails the deployment is considered failed and the
+                                error is surfaced in the ClusterSummary status, providing operational gating.
+                                Has no effect in DryRun mode.
+                                Default to false
+                              type: boolean
                             skipCRDs:
                               default: false
                               description: |-

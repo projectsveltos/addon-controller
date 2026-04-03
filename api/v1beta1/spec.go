@@ -223,6 +223,16 @@ type HelmOptions struct {
 	// +optional
 	PassCredentialsAll bool `json:"passCredentialsAll,omitempty"`
 
+	// RunTests if set to true, Sveltos will run helm test after each successful install or upgrade
+	// operation. The tests are the test hooks defined in the chart (annotated with
+	// "helm.sh/hook: test"). If any test fails the deployment is considered failed and the
+	// error is surfaced in the ClusterSummary status, providing operational gating.
+	// Has no effect in DryRun mode.
+	// Default to false
+	// +kubebuilder:default:=false
+	// +optional
+	RunTests bool `json:"runTests,omitempty"`
+
 	// HelmInstallOptions are options specific to helm install
 	// +optional
 	InstallOptions HelmInstallOptions `json:"installOptions,omitempty"`

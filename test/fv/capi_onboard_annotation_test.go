@@ -81,13 +81,16 @@ var _ = Describe("Helm", Serial, func() {
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
-					RepositoryURL:    "https://grafana.github.io/helm-charts",
+					RepositoryURL:    "https://grafana-community.github.io/helm-charts",
 					RepositoryName:   "grafana",
 					ChartName:        "grafana/grafana",
-					ChartVersion:     "8.3.4",
+					ChartVersion:     "11.3.6",
 					ReleaseName:      "grafana",
 					ReleaseNamespace: "grafana",
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Options: &configv1beta1.HelmOptions{
+						RunTests: true,
+					},
 				},
 			}
 			return k8sClient.Update(context.TODO(), currentClusterProfile)
@@ -145,7 +148,7 @@ var _ = Describe("Helm", Serial, func() {
 			libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "grafana", ChartVersion: "8.3.4", Namespace: "grafana"},
+			{ReleaseName: "grafana", ChartVersion: "11.3.6", Namespace: "grafana"},
 			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
 		}
 

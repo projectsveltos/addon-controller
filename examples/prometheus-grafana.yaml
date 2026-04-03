@@ -15,10 +15,10 @@ spec:
     releaseName:      prometheus
     releaseNamespace: prometheus
     helmChartAction:  Install
-  - repositoryURL:    https://grafana.github.io/helm-charts
+  - repositoryURL:    https://grafana-community.github.io/helm-charts
     repositoryName:   grafana
     chartName:        grafana/grafana
-    chartVersion:     10.5.15
+    chartVersion:     11.3.6
     releaseName:      grafana
     releaseNamespace: grafana
     helmChartAction:  Install

@@ -1659,13 +1659,33 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	return rel, nil
 }
 
+// locateChartWithCacheRetry calls locateFn to resolve the chart path. If the call fails (e.g.
+// because the local repository index is stale and does not yet contain a newly published version),
+// the cache is cleared and the call is retried once so that the current reconciliation can succeed
+// without waiting for the next cycle.
+func locateChartWithCacheRetry(
+	locateFn func(string, *cli.EnvSettings) (string, error),
+	chartName string, settings *cli.EnvSettings,
+	requestedChart *configv1beta1.HelmChart, registryOptions *registryClientOptions,
+	logger logr.Logger) (string, error) {
+
+	cp, err := locateFn(chartName, settings)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("LocateChart failed: %v; refreshing cache and retrying", err))
+		removeCachedData(settings, requestedChart.RepositoryName, requestedChart.RepositoryURL,
+			registryOptions, logger)
+		cp, err = locateFn(chartName, settings)
+	}
+	return cp, err
+}
+
 func locateLoadAndValidateChart(chartName string, settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
 	registryOptions *registryClientOptions, installClient *action.Install, logger logr.Logger,
 ) (*chart.Chart, error) {
 
-	cp, err := installClient.LocateChart(chartName, settings)
+	cp, err := locateChartWithCacheRetry(installClient.LocateChart, chartName, settings,
+		requestedChart, registryOptions, logger)
 	if err != nil {
-		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
 	}
 
@@ -1838,9 +1858,9 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, registryOptions, patches)
 
-	cp, err := upgradeClient.LocateChart(chartName, settings)
+	cp, err := locateChartWithCacheRetry(upgradeClient.LocateChart, chartName, settings,
+		requestedChart, registryOptions, logger)
 	if err != nil {
-		handleLocateChartError(settings, requestedChart, registryOptions, err, logger)
 		return nil, err
 	}
 
@@ -4938,19 +4958,6 @@ func getHelmActionInPullMode(ctx context.Context, clusterSummary *configv1beta1.
 	default:
 		// In case same version, treat it as an upgrade
 		return upgrade, nil
-	}
-}
-
-func handleLocateChartError(settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
-	registryOptions *registryClientOptions, err error, logger logr.Logger) {
-
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("LocateChart failed %v", err))
-
-	if strings.Contains(err.Error(), "no chart version found for") {
-		logger.V(logs.LogInfo).Info("Chart version not found, cleaning repository cache",
-			"repo", requestedChart.RepositoryName)
-		removeCachedData(settings, requestedChart.RepositoryName, requestedChart.RepositoryURL,
-			registryOptions, logger)
 	}
 }
 

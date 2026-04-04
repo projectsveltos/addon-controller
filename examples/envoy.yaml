@@ -1,0 +1,17 @@
+apiVersion: config.projectsveltos.io/v1beta1
+kind: ClusterProfile
+metadata:
+  name: deploy-envoy
+spec:
+  clusterSelector:
+    matchLabels:
+      env: fv
+  syncMode: Continuous
+  helmCharts:
+    - repositoryURL:    oci://docker.io/envoyproxy
+      repositoryName:   envoyproxy
+      chartName:        gateway-helm
+      chartVersion:     v1.7.1
+      releaseName:      envoy-gateway
+      releaseNamespace: envoy-gateway-system
+      helmChartAction:  Install

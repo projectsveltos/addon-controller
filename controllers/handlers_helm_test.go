@@ -164,7 +164,8 @@ var _ = Describe("HandlersHelm", func() {
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
-			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
 	})
 
 	It("UpdateStatusForeferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
@@ -367,8 +368,13 @@ var _ = Describe("HandlersHelm", func() {
 
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		clusterSummary, err = controllers.UpdateStatusForNonReferencedHelmReleases(context.TODO(), testEnv.Client,
-			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		Eventually(func() bool {
@@ -499,7 +505,13 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(), clusterSummary, helmChart, nil,
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(instaniatedChart.ReleaseName).To(Equal(helmChart.ReleaseName))
@@ -544,7 +556,13 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(), clusterSummary, helmChart, nil,
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeSveltos,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(instaniatedChart.ReleaseName).To(Equal(helmChart.ReleaseName))

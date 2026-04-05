@@ -332,13 +332,18 @@ var _ = Describe("Hash methods", func() {
 		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv, cluster)).To(Succeed())
 
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeSveltos,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		expectedHash, err := controllers.GetKustomizeReferenceResourceHash(context.TODO(), testEnv, clusterSummary,
-			&kustomizationRef, textlogger.NewLogger(textlogger.NewConfig()))
+			&kustomizationRef, clusterObjects, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		// Must be consistent
 		for range 10 {
 			hash, err := controllers.GetKustomizeReferenceResourceHash(context.TODO(), testEnv, clusterSummary,
-				&kustomizationRef, textlogger.NewLogger(textlogger.NewConfig()))
+				&kustomizationRef, clusterObjects, textlogger.NewLogger(textlogger.NewConfig()))
 			Expect(err).To(BeNil())
 			Expect(reflect.DeepEqual(hash, expectedHash)).To(BeTrue())
 		}
@@ -412,8 +417,14 @@ var _ = Describe("Hash methods", func() {
           {{ end }}`,
 		}
 
-		result, err := controllers.InstantiateKustomizeSubstituteValues(context.TODO(), clusterSummary,
-			mgmtResources, values, textlogger.NewLogger(textlogger.NewConfig()))
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		result, err := controllers.InstantiateKustomizeSubstituteValues(context.TODO(),
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, mgmtResources),
+			values, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		v, ok := result["region"]
 		Expect(ok).To(BeTrue())

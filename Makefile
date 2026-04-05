@@ -445,6 +445,9 @@ deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
 	# Install sveltoscluster-manager
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml
 
+	# Install register-mgmt-cluster
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/register-mgmt-cluster/$(TAG)/manifest/manifest.yaml
+
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 

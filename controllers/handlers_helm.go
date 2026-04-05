@@ -1009,7 +1009,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, clusterSummary *c
 		var currentRelease *releaseInfo
 		currentRelease, report, err = handleChart(ctx, clusterSummary, mgmtResources, instantiatedChart,
 			kubeconfig, isPullMode, logger)
-		setHelmFailureMessageOnHelmChartSummary(clusterSummary, currentChart, err)
+		setHelmFailureMessageOnHelmChartSummary(clusterSummary, instantiatedChart, err)
 		if err != nil {
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("chart: %s, release: %s, %v\n",
@@ -2729,11 +2729,23 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 		return clusterSummary, err
 	}
 
+	// Index the in-memory FailureMessages written by walkChartsAndDeploy so they are
+	// not lost when we overwrite the status from the freshly fetched currentClusterSummary.
+	inMemoryFailure := make(map[string]*string, len(clusterSummary.Status.HelmReleaseSummaries))
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		s := &clusterSummary.Status.HelmReleaseSummaries[i]
+		inMemoryFailure[helmInfo(s.ReleaseNamespace, s.ReleaseName)] = s.FailureMessage
+	}
+
 	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(currentClusterSummary.Status.HelmReleaseSummaries))
 	for i := range currentClusterSummary.Status.HelmReleaseSummaries {
 		summary := &currentClusterSummary.Status.HelmReleaseSummaries[i]
 		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
-			helmReleaseSummaries = append(helmReleaseSummaries, *summary)
+			entry := *summary
+			if msg, exists := inMemoryFailure[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; exists {
+				entry.FailureMessage = msg
+			}
+			helmReleaseSummaries = append(helmReleaseSummaries, entry)
 		}
 	}
 

@@ -68,6 +68,8 @@ var _ = Describe("Helm with conflicts", func() {
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.ContinueOnError = true
+			currentClusterProfile.Spec.ContinueOnConflict = true
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
 					RepositoryURL:    "oci://ghcr.io/k0rdent/catalog/charts",

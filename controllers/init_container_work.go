@@ -101,6 +101,13 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 		return err
 	}
 
+	clusterObjects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to fetch resources")
+		return err
+	}
+
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err := directClient.Get(ctx,
@@ -119,8 +126,12 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 
 		for i := range currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 			helmChart := &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-			instantiatedChart, err := getInstantiatedChart(ctx, currentClusterSummary, helmChart,
-				mgmtResources, logger)
+			innerDCtx := &deploymentContext{
+				clusterSummary: currentClusterSummary,
+				clusterObjects: clusterObjects,
+				mgmtResources:  mgmtResources,
+			}
+			instantiatedChart, err := getInstantiatedChart(ctx, innerDCtx, helmChart, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to get instantiated chart")
 				return err

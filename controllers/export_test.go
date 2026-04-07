@@ -16,6 +16,12 @@ limitations under the License.
 
 package controllers
 
+import (
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+)
+
 var (
 	UpdateClusterSummaries                = updateClusterSummaries
 	CreateClusterSummary                  = createClusterSummary
@@ -214,3 +220,17 @@ var (
 type (
 	ReferencedObject = referencedObject
 )
+
+// NewDeploymentContext constructs a deploymentContext for use in tests.
+func NewDeploymentContext(
+	clusterSummary *configv1beta1.ClusterSummary,
+	clusterObjects *currentClusterObjects,
+	mgmtResources map[string]*unstructured.Unstructured,
+) *deploymentContext {
+
+	return &deploymentContext{
+		clusterSummary: clusterSummary,
+		clusterObjects: clusterObjects,
+		mgmtResources:  mgmtResources,
+	}
+}

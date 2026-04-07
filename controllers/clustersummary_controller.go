@@ -1966,10 +1966,21 @@ func getClusterSummaryWithInstantiatedCharts(ctx context.Context, cs *configv1be
 	csCopy.Spec.ClusterProfileSpec.HelmCharts = make([]configv1beta1.HelmChart,
 		len(cs.Spec.ClusterProfileSpec.HelmCharts))
 
+	clusterObjects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+		cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to fetch resources")
+		return nil, err
+	}
+	innerDCtx := &deploymentContext{
+		clusterSummary: cs,
+		clusterObjects: clusterObjects,
+		mgmtResources:  mgmtResources,
+	}
+
 	for i := range cs.Spec.ClusterProfileSpec.HelmCharts {
 		helmChart := &cs.Spec.ClusterProfileSpec.HelmCharts[i]
-		instantiateHelmChart, err := getInstantiatedChart(ctx, cs,
-			helmChart, mgmtResources, logger)
+		instantiateHelmChart, err := getInstantiatedChart(ctx, innerDCtx, helmChart, logger)
 		if err != nil {
 			return nil, err
 		}

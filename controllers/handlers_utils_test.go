@@ -551,12 +551,18 @@ var _ = Describe("HandlersUtils", func() {
 		Expect(addTypeInformationToObject(testEnv.Scheme(), secret)).To(Succeed())
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		// Because those services do not exist in the workload cluster yet, both will be reported
 		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
-			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
 		validateResourceReports(resourceReports, 2, 0, 0, 0)
@@ -587,7 +593,8 @@ var _ = Describe("HandlersUtils", func() {
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
-			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
 		validateResourceReports(resourceReports, 0, 0, 2, 0)
@@ -624,7 +631,8 @@ var _ = Describe("HandlersUtils", func() {
 		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{"service": newContent},
-			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
 		validateResourceReports(resourceReports, 0, 2, 0, 0)
@@ -634,7 +642,8 @@ var _ = Describe("HandlersUtils", func() {
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
-			defaultTier, false, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
 		validateResourceReports(resourceReports, 0, 0, 0, 2)
@@ -660,9 +669,15 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: false}
 		resourceReports, err := controllers.DeployContentOfSecret(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, reference, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, secret, reference,
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
@@ -680,9 +695,15 @@ var _ = Describe("HandlersUtils", func() {
 
 		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
 
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: true}
-		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
-			testEnv.Config, testEnv.Client, configMap, reference, clusterSummary, nil,
+		_, err = controllers.DeployContentOfConfigMap(context.TODO(), false,
+			testEnv.Config, testEnv.Client, configMap, reference,
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		// SkipNamespaceCreation is set to true. Since Service namespace is missing this will fail
 		Expect(err).ToNot(BeNil())
@@ -690,7 +711,8 @@ var _ = Describe("HandlersUtils", func() {
 
 		reference.SkipNamespaceCreation = false
 		resourceReports, err := controllers.DeployContentOfConfigMap(context.TODO(), false,
-			testEnv.Config, testEnv.Client, configMap, reference, clusterSummary, nil,
+			testEnv.Config, testEnv.Client, configMap, reference,
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(resourceReports)).To(Equal(3))
@@ -1115,9 +1137,10 @@ subjects:
   name: contour-gateway-provisioner
   namespace: projectcontour
 `
+
 		data := map[string]string{"policy.yaml": content}
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, data, false,
-			false, textlogger.NewLogger(textlogger.NewConfig()))
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, nil,
+			data, false, false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(1))
 		Expect(u[0].GetName()).To(Equal("contour-gateway-provisioner"))
@@ -1177,8 +1200,8 @@ stringData:
 
 		policies := []string{service, deployment, secret}
 		configMap := createConfigMapWithPolicy(randomString(), randomString(), policies...)
-		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, configMap.Data, false,
-			false, textlogger.NewLogger(textlogger.NewConfig()))
+		u, err := controllers.CollectContent(context.TODO(), clusterSummary, nil, nil,
+			configMap.Data, false, false, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(len(u)).To(Equal(3))
 	})
@@ -1242,7 +1265,8 @@ status:
 
 		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: false}
 		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false, testEnv.Config, testEnv.Client,
-			configMap, reference, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+			configMap, reference, controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		serviceOut := corev1.Service{}

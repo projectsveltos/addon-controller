@@ -110,7 +110,7 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 
 	logger.V(logs.LogDebug).Info("Deploying drift-detection-manager")
 	// Deploy DriftDetectionManager
-	if startInMgmtCluster {
+	if startInMgmtCluster && !isPullMode {
 		restConfig := getManagementClusterConfig()
 		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace,
 			clusterName, "do-not-send-updates", clusterType, patches, logger)
@@ -125,7 +125,7 @@ func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName
 
 	// CRDs must be deployed alongside the agent. Since the management cluster already contains these CRDs,
 	// this operation is a no-op if the agent is deployed there.
-	if startInMgmtCluster {
+	if startInMgmtCluster && !isPullMode {
 		return nil
 	}
 

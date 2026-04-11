@@ -51,8 +51,8 @@ import (
 	"helm.sh/helm/v4/pkg/action"
 	chartbase "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common"
+	chartloader "helm.sh/helm/v4/pkg/chart/loader"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
-	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/getter"
@@ -99,6 +99,7 @@ const (
 	notInstalledMessage        = "Not installed yet and action is uninstall"
 	defaultMaxHistory          = 2
 	defaultDeletionPropagation = "background"
+	defaultChartVersion        = "0.1.0"
 )
 
 type registryClientOptions struct {
@@ -1606,9 +1607,15 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 	return nil
 }
 
-func getChartVersion(requestedChart *configv1beta1.HelmChart, chartRequested *chart.Chart) string {
+func getChartVersion(requestedChart *configv1beta1.HelmChart, chartRequested chartbase.Charter) string {
 	if requestedChart.ChartVersion == "" && isReferencingFluxSource(requestedChart) {
-		return chartRequested.AppVersion()
+		if ac, err := chartbase.NewAccessor(chartRequested); err == nil {
+			if meta := ac.MetadataAsMap(); meta != nil {
+				if appVersion, ok := meta["AppVersion"].(string); ok {
+					return appVersion
+				}
+			}
+		}
 	}
 
 	return requestedChart.ChartVersion
@@ -1716,7 +1723,7 @@ func locateChartWithCacheRetry(
 
 func locateLoadAndValidateChart(chartName string, settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
 	registryOptions *registryClientOptions, installClient *action.Install, logger logr.Logger,
-) (*chart.Chart, error) {
+) (chartbase.Charter, error) {
 
 	cp, err := locateChartWithCacheRetry(installClient.LocateChart, chartName, settings,
 		requestedChart, registryOptions, logger)
@@ -1724,7 +1731,7 @@ func locateLoadAndValidateChart(chartName string, settings *cli.EnvSettings, req
 		return nil, err
 	}
 
-	chartRequested, err := loader.Load(cp)
+	chartRequested, err := chartloader.Load(cp)
 	if err != nil {
 		logger.V(logs.LogDebug).Info("Load failed")
 		return nil, err
@@ -1744,20 +1751,20 @@ func locateLoadAndValidateChart(chartName string, settings *cli.EnvSettings, req
 	}
 
 	// Reload the chart with the updated Chart.lock file.
-	if chartRequested, err = loader.Load(cp); err != nil {
+	if chartRequested, err = chartloader.Load(cp); err != nil {
 		return nil, fmt.Errorf("%w: failed reloading chart after repo update", err)
 	}
 
 	return chartRequested, nil
 }
 
-func checkDependencies(chartRequested *chart.Chart, installClient *action.Install, cp string, settings *cli.EnvSettings) error {
-	if req := chartRequested.Metadata.Dependencies; req != nil {
-		deps := make([]chartbase.Dependency, len(req))
-		for i, d := range req {
-			deps[i] = d
-		}
-		err := action.CheckDependencies(chartRequested, deps)
+func checkDependencies(chartRequested chartbase.Charter, installClient *action.Install, cp string, settings *cli.EnvSettings) error {
+	ac, err := chartbase.NewAccessor(chartRequested)
+	if err != nil {
+		return err
+	}
+	if req := ac.MetaDependencies(); len(req) > 0 {
+		err := action.CheckDependencies(chartRequested, req)
 		if err != nil {
 			if installClient.DependencyUpdate {
 				man := &downloader.Manager{
@@ -1899,7 +1906,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		return nil, err
 	}
 
-	chartRequested, err := loader.Load(cp)
+	chartRequested, err := chartloader.Load(cp)
 	if err != nil {
 		return nil, err
 	}
@@ -1967,16 +1974,21 @@ func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1
 
 // prepareChartAndDependencies ensures chart dependencies are present and metadata is valid.
 func prepareChartAndDependencies(
-	chartRequested *chart.Chart,
+	chartRequested chartbase.Charter,
 	requestedChart *configv1beta1.HelmChart,
 	chartPath string,
 	settings *cli.EnvSettings,
 	registryOptions *registryClientOptions,
 	logger logr.Logger,
-) (*chart.Chart, error) {
+) (chartbase.Charter, error) {
 
-	req := chartRequested.Metadata.Dependencies
-	if req == nil {
+	ac, err := chartbase.NewAccessor(chartRequested)
+	if err != nil {
+		return nil, err
+	}
+
+	req := ac.MetaDependencies()
+	if len(req) == 0 {
 		return chartRequested, nil
 	}
 
@@ -1986,11 +1998,7 @@ func prepareChartAndDependencies(
 		return nil, fmt.Errorf("failed to get registry client: %w", err)
 	}
 
-	deps := make([]chartbase.Dependency, len(req))
-	for i, d := range req {
-		deps[i] = d
-	}
-	if err := action.CheckDependencies(chartRequested, deps); err != nil {
+	if err := action.CheckDependencies(chartRequested, req); err != nil {
 		logger.V(logs.LogInfo).Info("Dependencies missing or out of date, attempting to fetch")
 
 		man := &downloader.Manager{
@@ -2007,23 +2015,33 @@ func prepareChartAndDependencies(
 			return nil, fmt.Errorf("failed to update dependencies: %w", err)
 		}
 
-		chartRequested, err = loader.Load(chartPath)
+		chartRequested, err = chartloader.Load(chartPath)
 		if err != nil {
 			logger.V(logs.LogDebug).Info("standard loader failed, trying LoadDir", "err", err)
-			chartRequested, err = loader.LoadDir(chartPath)
+			chartRequested, err = chartloader.LoadDir(chartPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to reload chart: %w", err)
 			}
 		}
+
+		// Refresh accessor after reload.
+		ac, err = chartbase.NewAccessor(chartRequested)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if chartRequested.Metadata.Version == "" || !isValidSemver(chartRequested.Metadata.Version) {
-		logger.V(logs.LogInfo).Info("fixing invalid or empty chart version", "oldVersion",
-			chartRequested.Metadata.Version)
-		chartRequested.Metadata.Version = "0.1.0"
+	version, _ := ac.MetadataAsMap()["Version"].(string)
+	if version == "" || !isValidSemver(version) {
+		logger.V(logs.LogInfo).Info("fixing invalid or empty chart version", "oldVersion", version)
+		// For v2 charts, mutate version in-place so the release uses the corrected value.
+		if v2ch, ok := chartRequested.(*chart.Chart); ok {
+			v2ch.Metadata.Version = defaultChartVersion
+		}
+		version = defaultChartVersion
 	}
 
-	requestedChart.ChartVersion = chartRequested.Metadata.Version
+	requestedChart.ChartVersion = version
 
 	return chartRequested, nil
 }
@@ -2220,13 +2238,12 @@ func actionConfigInit(namespace, kubeconfig string, registryOptions *registryCli
 	return actionConfig, nil
 }
 
-func isChartInstallable(ch *chart.Chart) bool {
-	switch ch.Metadata.Type {
-	case "", "application":
-		return true
+func isChartInstallable(ch chartbase.Charter) bool {
+	ac, err := chartbase.NewAccessor(ch)
+	if err != nil {
+		return false
 	}
-
-	return false
+	return !ac.IsLibraryChart()
 }
 
 func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
@@ -5128,9 +5145,13 @@ func isValidSemver(v string) bool {
 	return err == nil
 }
 
-func getCRDObjects(ch *chart.Chart) []chart.CRD {
+func getCRDObjects(ch chartbase.Charter) []chart.CRD {
+	ac, err := chartbase.NewAccessor(ch)
+	if err != nil {
+		return nil
+	}
 	var crds []chart.CRD
-	for _, f := range ch.Files {
+	for _, f := range ac.Files() {
 		// Helm expects CRDs to be in the "crds/" directory
 		if strings.HasPrefix(f.Name, "crds/") {
 			crds = append(crds, chart.CRD{

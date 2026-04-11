@@ -1122,6 +1122,8 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 	// Walk UpdatingClusters:
 	// - if hash is same and cluster is provisioned, moved to UpdatedClusters. Remove from UpdatingClusters
 	// - if hash is different, update ClusterSummary and leave it in UpdatingClusters
+	clusterSummaryDeletedOutOfBand := false
+
 	updatingClusters := []corev1.ObjectReference{}
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
 		cluster := profileScope.GetStatus().UpdatingClusters.Clusters[i]
@@ -1129,6 +1131,12 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 		clusterSumary, err := clusterops.GetClusterSummary(ctx, c, profileScope.GetKind(), profileScope.Name(),
 			cluster.Namespace, cluster.Name, clusterType)
 		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// ClusterSummary was deleted out of band. Drop the cluster from updatingClusters
+				// so the main loop recreates the ClusterSummary on the next pass.
+				clusterSummaryDeletedOutOfBand = true
+				continue
+			}
 			return err
 		}
 		if isCluterSummaryProvisioned(clusterSumary) {
@@ -1142,6 +1150,10 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 	}
 
 	profileScope.GetStatus().UpdatingClusters.Clusters = updatingClusters
+
+	if clusterSummaryDeletedOutOfBand {
+		return fmt.Errorf("some ClusterSummaries were deleted out of band. Must reconcile again")
+	}
 
 	return nil
 }

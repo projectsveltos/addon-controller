@@ -37,6 +37,7 @@ var (
 	GetMaxUpdate                          = getMaxUpdate
 	ReviseUpdatedAndUpdatingClusters      = reviseUpdatedAndUpdatingClusters
 	GetUpdatedAndUpdatingClusters         = getUpdatedAndUpdatingClusters
+	ReviseUpdatingClusterList             = reviseUpdatingClusterList
 )
 
 var (

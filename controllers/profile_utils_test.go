@@ -1415,4 +1415,39 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(c.List(context.TODO(), clusterSummaries)).To(Succeed())
 		Expect(len(clusterSummaries.Items)).To(Equal(2))
 	})
+
+	It("reviseUpdatingClusterList drops cluster whose ClusterSummary was deleted out of band", func() {
+		currentHash := []byte(randomString())
+
+		cluster := corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		// UpdatingClusters.Hash matches currentHash so the function proceeds past the early return.
+		// The cluster is listed in UpdatingClusters but has no corresponding ClusterSummary.
+		clusterProfile.Status.UpdatingClusters = configv1beta1.Clusters{
+			Hash:     currentHash,
+			Clusters: []corev1.ObjectReference{cluster},
+		}
+
+		// No ClusterSummary objects exist — simulates an out-of-band deletion.
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(clusterProfile).Build()
+
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		// Must return an error to force a requeue so the main loop recreates the missing ClusterSummary.
+		Expect(controllers.ReviseUpdatingClusterList(context.TODO(), c, clusterProfileScope, currentHash)).ToNot(Succeed())
+
+		// The cluster must have been dropped from UpdatingClusters so the main loop recreates its ClusterSummary.
+		Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(BeEmpty())
+	})
 })

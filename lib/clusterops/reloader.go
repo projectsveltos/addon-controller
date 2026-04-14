@@ -112,7 +112,7 @@ func deployReloaderInstance(ctx context.Context, reloaderClient client.Client,
 	reloaderInfo := make([]libsveltosv1beta1.ReloaderInfo, 0, len(resources))
 	for i := range resources {
 		resource := &resources[i]
-		if watchForRollingUpgrade(resource) {
+		if watchForRollingUpgrade(resource) && resource.Namespace != "" {
 			reloaderInfo = append(reloaderInfo,
 				libsveltosv1beta1.ReloaderInfo{
 					Namespace: resource.Namespace,

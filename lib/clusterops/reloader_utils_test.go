@@ -99,6 +99,27 @@ var _ = Describe("Reloader utils", func() {
 		Expect(reflect.DeepEqual(reloaders.Items[0].Spec.ReloaderInfo, reloaderInfo)).To(BeTrue())
 	})
 
+	It("deployReloaderInstance skips resources with empty namespace", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		resources := []corev1.ObjectReference{
+			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
+			{Kind: "Deployment", Namespace: "", Name: randomString()},
+			{Kind: "DaemonSet", Namespace: "", Name: randomString()},
+		}
+
+		clusterProfileName := randomString()
+		feature := libsveltosv1beta1.FeatureHelm
+		Expect(clusterops.DeployReloaderInstance(context.TODO(), c, clusterProfileName,
+			feature, resources, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		reloaders := &libsveltosv1beta1.ReloaderList{}
+		Expect(c.List(context.TODO(), reloaders)).To(Succeed())
+		Expect(len(reloaders.Items)).To(Equal(1))
+		Expect(len(reloaders.Items[0].Spec.ReloaderInfo)).To(Equal(1))
+		Expect(reloaders.Items[0].Spec.ReloaderInfo[0].Namespace).ToNot(BeEmpty())
+	})
+
 	It("deployReloaderInstance creates/updates reloader instance", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 

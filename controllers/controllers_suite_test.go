@@ -177,7 +177,7 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		ClusterMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
 		ReferenceMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
 		DeletedInstances:   make(map[types.NamespacedName]time.Time),
-		NextReconcileTimes: make(map[types.NamespacedName]time.Time),
+		NextReconcileTimes: make(map[types.NamespacedName]controllers.ReconcileCooldown),
 		PolicyMux:          sync.Mutex{},
 	}
 }

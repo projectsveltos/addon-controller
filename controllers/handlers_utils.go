@@ -74,6 +74,10 @@ type referencedObject struct {
 	SkipNamespaceCreation bool
 	Optional              bool
 	Path                  string
+	// URL and related fields are set only for URL-based PolicyRefs (Kind == urlSourceKind).
+	URL        string
+	IsTemplate bool
+	SecretRef  *corev1.LocalObjectReference
 }
 
 func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
@@ -732,6 +736,26 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 		var object referencedObject
 		reference := &references[i]
 
+		if reference.RemoteURL != nil {
+			object.ObjectReference = corev1.ObjectReference{
+				Kind: urlSourceKind,
+				Name: reference.RemoteURL.URL,
+			}
+			object.URL = reference.RemoteURL.URL
+			object.IsTemplate = reference.RemoteURL.Template
+			object.SecretRef = reference.RemoteURL.SecretRef
+			object.Tier = reference.Tier
+			object.Optional = reference.Optional
+			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
+
+			if reference.DeploymentType == configv1beta1.DeploymentTypeLocal {
+				local = append(local, object)
+			} else {
+				remote = append(remote, object)
+			}
+			continue
+		}
+
 		switch reference.Kind {
 		case string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
 			object.ObjectReference = corev1.ObjectReference{
@@ -914,6 +938,20 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 
 	reports = make([]libsveltosv1beta1.ResourceReport, 0, len(referencedObjects))
 	for i := range referencedObjects {
+		var tmpResourceReports []libsveltosv1beta1.ResourceReport
+
+		if referencedObjects[i].URL != "" {
+			tmpResourceReports, err = deployContentOfURL(ctx, deployingToMgmtCluster, destConfig, destClient,
+				&referencedObjects[i], dCtx, logger)
+			if tmpResourceReports != nil {
+				reports = append(reports, tmpResourceReports...)
+			}
+			if err != nil {
+				return reports, err
+			}
+			continue
+		}
+
 		referencedObject, err := getReferencedObject(ctx, getManagementClusterClient(), clusterSummary,
 			&referencedObjects[i], logger)
 		if err != nil {
@@ -923,7 +961,6 @@ func deployObjects(ctx context.Context, deployingToMgmtCluster bool, destClient 
 			continue
 		}
 
-		var tmpResourceReports []libsveltosv1beta1.ResourceReport
 		if referencedObjects[i].GroupVersionKind().Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 			configMap := referencedObject.(*corev1.ConfigMap)
 			l := logger.WithValues("configMapNamespace", configMap.Namespace, "configMapName", configMap.Name)

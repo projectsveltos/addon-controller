@@ -166,7 +166,8 @@ var (
 )
 
 type (
-	ReleaseInfo = releaseInfo
+	ReleaseInfo       = releaseInfo
+	ReconcileCooldown = reconcileCooldown
 )
 
 var (

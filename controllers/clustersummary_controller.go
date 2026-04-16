@@ -126,7 +126,16 @@ type ClusterSummaryReconciler struct {
 	eventRecorder events.EventRecorder
 
 	DeletedInstances   map[types.NamespacedName]time.Time
-	NextReconcileTimes map[types.NamespacedName]time.Time // in-memory cooldown, survives status-patch conflicts
+	NextReconcileTimes map[types.NamespacedName]reconcileCooldown // in-memory cooldown, survives status-patch conflicts
+}
+
+// reconcileCooldown tracks when a ClusterSummary may next be reconciled and the spec
+// generation that was current when the cooldown was set. If the generation has advanced
+// (i.e. the spec changed) the cooldown is discarded so the new spec takes effect
+// immediately.
+type reconcileCooldown struct {
+	Until      time.Time
+	Generation int64
 }
 
 // If the drift-detection component is deployed in the management cluster, the addon-controller will deploy ResourceSummaries within the same cluster,
@@ -566,6 +575,16 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
 	}
 
+	// If any PolicyRef uses a URL source, schedule a periodic re-fetch so that
+	// remote content changes are detected even without a Kubernetes watch event.
+	// We deliberately do NOT call setNextReconcileTime here: the interval is a
+	// polling floor, not a cooldown — external events should still trigger
+	// immediate reconciliation.
+	if interval := minURLInterval(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs); interval > 0 {
+		r.setNextReconcileTime(clusterSummaryScope, interval)
+		return reconcile.Result{RequeueAfter: interval}, nil
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -577,18 +596,15 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 func (r *ClusterSummaryReconciler) setNextReconcileTime(
 	clusterSummaryScope *scope.ClusterSummaryScope, d time.Duration) {
 
+	cs := clusterSummaryScope.ClusterSummary
 	nextTime := time.Now().Add(d)
-	clusterSummaryScope.ClusterSummary.Status.NextReconcileTime =
-		&metav1.Time{Time: nextTime}
+	cs.Status.NextReconcileTime = &metav1.Time{Time: nextTime}
 
 	// Mirror in the in-memory map so skipReconciliation works even if scope.Close()
 	// encounters a conflict and the status field is never persisted.
-	key := types.NamespacedName{
-		Namespace: clusterSummaryScope.ClusterSummary.Namespace,
-		Name:      clusterSummaryScope.ClusterSummary.Name,
-	}
+	key := types.NamespacedName{Namespace: cs.Namespace, Name: cs.Name}
 	r.PolicyMux.Lock()
-	r.NextReconcileTimes[key] = nextTime
+	r.NextReconcileTimes[key] = reconcileCooldown{Until: nextTime, Generation: cs.Generation}
 	r.PolicyMux.Unlock()
 }
 
@@ -605,8 +621,8 @@ func (r *ClusterSummaryReconciler) remainingCooldown(
 	}
 
 	r.PolicyMux.Lock()
-	if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
-		if remaining := time.Until(v); remaining > requeueAfter {
+	if cd, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
+		if remaining := time.Until(cd.Until); remaining > requeueAfter {
 			requeueAfter = remaining
 		}
 	}
@@ -670,7 +686,7 @@ func (r *ClusterSummaryReconciler) SetupWithManager(ctx context.Context, mgr ctr
 	initializeManager(ctrl.Log.WithName("watchers"), mgr.GetConfig(), mgr.GetClient())
 
 	r.DeletedInstances = make(map[types.NamespacedName]time.Time)
-	r.NextReconcileTimes = make(map[types.NamespacedName]time.Time)
+	r.NextReconcileTimes = make(map[types.NamespacedName]reconcileCooldown)
 	r.eventRecorder = mgr.GetEventRecorder("event-recorder")
 	r.ctrl = c
 
@@ -1735,18 +1751,27 @@ func (r *ClusterSummaryReconciler) skipReconciliation(clusterSummaryScope *scope
 		}
 	}
 
-	// Checking if reconciliation should happen — check both the persisted status field
-	// and the in-memory map (which survives status-patch conflicts).
-	now := time.Now()
-	if cs.Status.NextReconcileTime != nil && now.Before(cs.Status.NextReconcileTime.Time) {
-		return true
-	}
-	if v, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
-		if now.Before(v) {
+	if cd, ok := r.NextReconcileTimes[req.NamespacedName]; ok {
+		// A spec change (generation bump) always wins over a running cooldown so that
+		// changes to Interval or other URL fields take effect immediately.
+		if cd.Generation < cs.Generation {
+			delete(r.NextReconcileTimes, req.NamespacedName)
+			cs.Status.NextReconcileTime = nil
+			return false
+		}
+		if time.Now().Before(cd.Until) {
 			return true
 		}
 		// Cooldown expired — remove from map
 		delete(r.NextReconcileTimes, req.NamespacedName)
+	} else if cs.Status.NextReconcileTime != nil && time.Now().Before(cs.Status.NextReconcileTime.Time) {
+		// No in-memory entry but status says we should wait — this is the post-restart case.
+		// Rebuild the in-memory entry so subsequent events use the faster map path.
+		r.NextReconcileTimes[req.NamespacedName] = reconcileCooldown{
+			Until:      cs.Status.NextReconcileTime.Time,
+			Generation: cs.Generation,
+		}
+		return true
 	}
 
 	cs.Status.NextReconcileTime = nil

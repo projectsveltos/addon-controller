@@ -977,6 +977,7 @@ spec:
                         Kind of the resource. Supported kinds are:
                         - ConfigMap/Secret
                         - flux GitRepository;OCIRepository;Bucket
+                        Required when RemoteURL is not set.
                       enum:
                       - GitRepository
                       - OCIRepository
@@ -988,7 +989,7 @@ spec:
                       description: |-
                         Name of the referenced resource.
                         Name can be expressed as a template and instantiate using any cluster field.
-                      minLength: 1
+                        Required when RemoteURL is not set.
                       type: string
                     namespace:
                       description: |-
@@ -997,6 +998,7 @@ spec:
                         be implicit set to cluster's namespace.
                         For Profile namespace must be left empty. Profile namespace will be used.
                         Namespace can be expressed as a template and instantiate using any cluster field.
+                        Not used when RemoteURL is set.
                       type: string
                     optional:
                       default: false
@@ -1011,6 +1013,52 @@ spec:
                         Defaults to 'None', which translates to the root path of the SourceRef.
                         Used only for GitRepository;OCIRepository;Bucket
                       type: string
+                    remoteURL:
+                      description: |-
+                        RemoteURL configures fetching content from an HTTP/HTTPS endpoint.
+                        When set, Kind/Name/Namespace must be omitted.
+                      properties:
+                        interval:
+                          description: |-
+                            Interval defines how often Sveltos re-fetches the URL to detect changes.
+                            Defaults to 5 minutes.
+                          type: string
+                        secretRef:
+                          description: |-
+                            SecretRef references a Secret in the management cluster containing optional
+                            credentials for fetching the URL. Supported Secret keys:
+                              "token"              — Bearer token (Authorization: Bearer <token>)
+                              "username"+"password" — HTTP Basic Auth
+                              "caFile"             — PEM-encoded CA certificate for TLS verification
+                          properties:
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        template:
+                          description: |-
+                            Template indicates that the content served at URL is a Go template that
+                            must be instantiated using cluster fields and templateResourceRefs values
+                            before deployment. Equivalent to the projectsveltos.io/template annotation
+                            on a ConfigMap or Secret.
+                          type: boolean
+                        url:
+                          description: |-
+                            URL is an HTTP/HTTPS endpoint serving raw YAML/JSON/KYAML content.
+                            Sveltos fetches the content on every reconciliation and redeploys if the
+                            content hash has changed.
+                          pattern: ^https?://
+                          type: string
+                      required:
+                      - url
+                      type: object
                     skipNamespaceCreation:
                       default: false
                       description: |-
@@ -1034,10 +1082,10 @@ spec:
                       format: int32
                       minimum: 1
                       type: integer
-                  required:
-                  - kind
-                  - name
                   type: object
+                  x-kubernetes-validations:
+                  - message: either remoteURL or kind must be set, but not both
+                    rule: has(self.remoteURL) != has(self.kind)
                 type: array
                 x-kubernetes-list-type: atomic
               postDeleteChecks:

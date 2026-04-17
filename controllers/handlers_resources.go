@@ -594,9 +594,43 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 		}
 	}
 
+	urlHash, err := urlPolicyRefsHash(ctx, clusterSummary, logger)
+	if err != nil {
+		return nil, err
+	}
+	config += urlHash
+
 	h := sha256.New()
 	h.Write([]byte(config))
 	return h.Sum(nil), nil
+}
+
+// urlPolicyRefsHash fetches each URL-based PolicyRef and returns a hash string
+// that covers their content, tier, and template flag.
+func urlPolicyRefsHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) (string, error) {
+
+	result := ""
+	for i := range clusterSummary.Spec.ClusterProfileSpec.PolicyRefs {
+		ref := &clusterSummary.Spec.ClusterProfileSpec.PolicyRefs[i]
+		if ref.RemoteURL == nil {
+			continue
+		}
+		body, err := fetchURL(ctx, ref.RemoteURL.URL, ref.RemoteURL.SecretRef, clusterSummary.Namespace, logger)
+		if err != nil {
+			if ref.Optional {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf(
+					"optional URL source %s could not be fetched for hashing, ignoring: %v", ref.RemoteURL.URL, err))
+				continue
+			}
+			return "", err
+		}
+		h := sha256.Sum256(body)
+		result += hex.EncodeToString(h[:])
+		result += fmt.Sprintf("%d", ref.Tier)
+		result += fmt.Sprintf("%t", ref.RemoteURL.Template)
+	}
+	return result, nil
 }
 
 func getInstantiatedPolicyRefInfo(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
@@ -607,6 +641,12 @@ func getInstantiatedPolicyRefInfo(ctx context.Context, c client.Client, clusterS
 	referencedObjectTiers = make(map[corev1.ObjectReference]int32, len(clusterSummary.Spec.ClusterProfileSpec.PolicyRefs))
 	for i := range sortedPolicyRefs {
 		reference := &sortedPolicyRefs[i]
+
+		// URL-based refs have no Kubernetes object to look up; they are hashed separately.
+		if reference.RemoteURL != nil {
+			continue
+		}
+
 		namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, reference.Namespace,
 			clusterSummary.Spec.ClusterType)

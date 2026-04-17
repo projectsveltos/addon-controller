@@ -611,25 +611,30 @@ type TemplateResourceRef struct {
 	IgnoreStatusChanges bool `json:"ignoreStatusChanges,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.remoteURL) != has(self.kind)",message="either remoteURL or kind must be set, but not both"
 type PolicyRef struct {
 	// Namespace of the referenced resource.
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. Profile namespace will be used.
 	// Namespace can be expressed as a template and instantiate using any cluster field.
+	// Not used when RemoteURL is set.
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
 	// Name can be expressed as a template and instantiate using any cluster field.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
+	// Required when RemoteURL is not set.
+	// +optional
+	Name string `json:"name,omitempty"`
 
 	// Kind of the resource. Supported kinds are:
 	// - ConfigMap/Secret
 	// - flux GitRepository;OCIRepository;Bucket
+	// Required when RemoteURL is not set.
 	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
-	Kind string `json:"kind"`
+	// +optional
+	Kind string `json:"kind,omitempty"`
 
 	// Path to the directory containing the YAML files.
 	// Defaults to 'None', which translates to the root path of the SourceRef.
@@ -671,6 +676,40 @@ type PolicyRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
+
+	// RemoteURL configures fetching content from an HTTP/HTTPS endpoint.
+	// When set, Kind/Name/Namespace must be omitted.
+	// +optional
+	RemoteURL *RemoteURL `json:"remoteURL,omitempty"`
+}
+
+// RemoteURL groups all fields related to fetching policy content from an HTTP/HTTPS endpoint.
+type RemoteURL struct {
+	// URL is an HTTP/HTTPS endpoint serving raw YAML/JSON/KYAML content.
+	// Sveltos fetches the content on every reconciliation and redeploys if the
+	// content hash has changed.
+	// +kubebuilder:validation:Pattern=`^https?://`
+	URL string `json:"url"`
+
+	// Interval defines how often Sveltos re-fetches the URL to detect changes.
+	// Defaults to 5 minutes.
+	// +optional
+	Interval *metav1.Duration `json:"interval,omitempty"`
+
+	// SecretRef references a Secret in the management cluster containing optional
+	// credentials for fetching the URL. Supported Secret keys:
+	//   "token"              — Bearer token (Authorization: Bearer <token>)
+	//   "username"+"password" — HTTP Basic Auth
+	//   "caFile"             — PEM-encoded CA certificate for TLS verification
+	// +optional
+	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+
+	// Template indicates that the content served at URL is a Go template that
+	// must be instantiated using cluster fields and templateResourceRefs values
+	// before deployment. Equivalent to the projectsveltos.io/template annotation
+	// on a ConfigMap or Secret.
+	// +optional
+	Template bool `json:"template,omitempty"`
 }
 
 type Clusters struct {

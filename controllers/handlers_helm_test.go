@@ -168,6 +168,294 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
 	})
 
+	It("desiredValuesAreSubset returns true when desired is a subset of full values", func() {
+		full := map[string]interface{}{
+			"replicaCount": 2,
+			"image": map[string]interface{}{
+				"repository": "nginx",
+				"tag":        "1.21",
+				"pullPolicy": "IfNotPresent",
+			},
+			"service": map[string]interface{}{
+				"port": 80,
+			},
+		}
+		// Desired only sets a subset — tag and pullPolicy come from chart defaults.
+		desired := map[string]interface{}{
+			"replicaCount": 2,
+			"image": map[string]interface{}{
+				"repository": "nginx",
+			},
+		}
+		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeTrue())
+	})
+
+	It("desiredValuesAreSubset returns false when a desired value differs from full", func() {
+		full := map[string]interface{}{
+			"replicaCount": 2,
+		}
+		desired := map[string]interface{}{
+			"replicaCount": 3,
+		}
+		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
+	})
+
+	It("desiredValuesAreSubset returns false when a desired key is absent from full", func() {
+		full := map[string]interface{}{
+			"replicaCount": 2,
+		}
+		desired := map[string]interface{}{
+			"replicaCount": 2,
+			"extraKey":     "value",
+		}
+		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
+	})
+
+	It("desiredValuesAreSubset returns false when desired value is a map but full value is a scalar", func() {
+		full := map[string]interface{}{
+			"image": "nginx:latest", // scalar, not a map
+		}
+		desired := map[string]interface{}{
+			"image": map[string]interface{}{
+				"repository": "nginx",
+			},
+		}
+		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
+	})
+
+	It("desiredValuesAreSubset returns false when desired value is a scalar but full value is a map", func() {
+		full := map[string]interface{}{
+			"image": map[string]interface{}{
+				"repository": "nginx",
+			},
+		}
+		desired := map[string]interface{}{
+			"image": "nginx:latest", // scalar, not a map
+		}
+		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
+	})
+
+	It("shouldUpgrade returns false when no stored state and desired values are subset of live release", func() {
+		// When ClusterSummary has no stored hash (first reconciliation), shouldUpgrade must
+		// not trigger a spurious upgrade if the desired values are already reflected in the
+		// deployed release's full values (chart defaults + Config).
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		// Live release: deployed, same version, FullValues includes chart defaults.
+		// Sveltos desires no values (empty), which is a subset of anything.
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			Values:       map[string]interface{}{},
+			FullValues:   map[string]interface{}{"replicaCount": 1, "service": map[string]interface{}{"port": 80}},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    "v1.0.0",
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
+	})
+
+	It("shouldUpgrade returns true when no stored state and desired values are not a subset of live release", func() {
+		// Same version, but the desired values include a key that differs from what is
+		// deployed — upgrade must be triggered even with no stored state.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			FullValues:   map[string]interface{}{"replicaCount": 1},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    "v1.0.0",
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+			Values:          "replicaCount: 3\n", // desired differs from live
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
+	It("shouldUpgrade returns true when no stored state but live release version differs", func() {
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			FullValues:   map[string]interface{}{},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    "v1.1.0",
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
+	It("shouldUpgrade returns false on first reconciliation with ContinuousWithDriftDetection when version and values already match", func() {
+		// When a new mgmt cluster takes over and the civo cluster already has the correct
+		// release deployed (same version, values subset, no patches), Sveltos should skip
+		// the helm upgrade even in ContinuousWithDriftDetection mode.
+		// ResourceSummary is still deployed by postProcessDeployedHelmCharts so the
+		// drift-detection agent is correctly informed.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			FullValues:   map[string]interface{}{"replicaCount": 1},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    "v1.0.0",
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
+	})
+
+	It("shouldUpgrade returns true on second reconciliation with ContinuousWithDriftDetection (stored ValuesHash present)", func() {
+		// Once a ValuesHash is stored in HelmReleaseSummaries, every reconciliation must
+		// trigger an upgrade so the drift-detection agent can repair configuration drift.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{
+				ReleaseName:      "nginx-latest",
+				ReleaseNamespace: "nginx",
+				ValuesHash:       []byte("previously-stored-hash"),
+				Status:           configv1beta1.HelmChartStatusManaging,
+			},
+		}
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			FullValues:   map[string]interface{}{"replicaCount": 1},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ReleaseName:      "nginx-latest",
+			ReleaseNamespace: "nginx",
+			ChartVersion:     "v1.0.0",
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
+	It("shouldUpgrade returns true when no stored state with ContinuousWithDriftDetection but patches are configured", func() {
+		// This is the nginx case: even though version and values are unchanged, patches are
+		// defined in the ClusterProfile. Sveltos cannot infer from the live release whether
+		// those patches were applied previously, so it must re-deploy to be safe.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+		clusterSummary.Spec.ClusterProfileSpec.Patches = []libsveltosv1beta1.Patch{
+			{
+				Patch: `- op: add
+  path: /metadata/annotations/projectsveltos.io~1managed
+  value: "true"`,
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind: "Deployment",
+				},
+			},
+		}
+
+		// Same version, desired values (empty) are a subset of live FullValues — the
+		// first-reconciliation skip would fire if there were no patches.
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: "v1.0.0",
+			FullValues:   map[string]interface{}{"replicaCount": 1},
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    "v1.0.0",
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
 	It("UpdateStatusForeferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
 		calicoChart := &configv1beta1.HelmChart{
 			RepositoryURL:    "https://projectcalico.docs.tigera.io/charts",

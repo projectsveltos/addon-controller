@@ -928,6 +928,21 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	}
 
 	if isPullMode {
+		// If any chart in this reconcile failed to stage (helm values schema
+		// error, template instantiation failure, unreachable repo, etc.),
+		// do not commit. Committing a partial staged set produces a
+		// ConfigurationGroup with missing bundles for the failed charts,
+		// which the agent in the managed cluster interprets as "these
+		// releases were removed from the profile" and uninstalls them.
+		// Returning early leaves the previously-committed ConfigurationGroup
+		// in place so the agent continues to run the last known good state
+		// until the reconcile can complete cleanly. This mirrors the
+		// deployError-before-commit pattern already used in
+		// handlers_resources.go and handlers_kustomize.go.
+		if deployError != nil {
+			return deployError
+		}
+
 		err = commitStagedResourcesForDeployment(ctx, clusterSummary, configurationHash, mgmtResources, logger)
 		if err != nil {
 			return err
@@ -936,10 +951,6 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 		err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
 		if err != nil {
 			return err
-		}
-
-		if deployError != nil {
-			return deployError
 		}
 	} else {
 		// First get the helm releases currently managed and uninstall all the ones

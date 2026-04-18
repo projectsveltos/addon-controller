@@ -374,7 +374,7 @@ func fluxCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
 		return
 	}
 
-	if gvk.Group == sourcev1.GroupVersion.Group {
+	if gvk.Group == sourcev1.GroupVersion.Group && gvk.Kind == sourcev1.GitRepositoryKind {
 		setupLog.V(logs.LogInfo).Info("Initiating graceful restart due to Flux CRD update",
 			"GVK", gvk.String(), "Action", string(action))
 

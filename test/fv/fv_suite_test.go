@@ -28,6 +28,7 @@ import (
 	"github.com/TwiN/go-color"
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
 	ginkgotypes "github.com/onsi/ginkgo/v2/types"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -96,6 +97,7 @@ var _ = BeforeSuite(func() {
 	Expect(configv1beta1.AddToScheme(scheme)).To(Succeed())
 	Expect(sourcev1.AddToScheme(scheme)).To(Succeed())
 	Expect(apiextensionsv1.AddToScheme(scheme)).To(Succeed())
+	Expect(networkingv1.AddToScheme(scheme)).To(Succeed())
 
 	var err error
 	k8sClient, err = client.New(restConfig, client.Options{Scheme: scheme})

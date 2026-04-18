@@ -137,6 +137,7 @@ var (
 	GetKustomizeSubstituteValues            = getKustomizeSubstituteValues
 	InstantiateResourceWithSubstituteValues = instantiateResourceWithSubstituteValues
 
+	GetHelmActionInPullMode                  = getHelmActionInPullMode
 	HelmHash                                 = helmHash
 	ShouldInstall                            = shouldInstall
 	ShouldUninstall                          = shouldUninstall
@@ -168,6 +169,14 @@ var (
 type (
 	ReleaseInfo       = releaseInfo
 	ReconcileCooldown = reconcileCooldown
+	HelmAction        = helmAction
+)
+
+const (
+	HelmActionInstall   = install
+	HelmActionUpgrade   = upgrade
+	HelmActionDowngrade = downgrade
+	HelmActionUninstall = uninstall
 )
 
 var (

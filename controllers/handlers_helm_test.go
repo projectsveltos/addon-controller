@@ -1254,7 +1254,110 @@ resources:
 		Expect(len(valuesToInstantiate)).To(Equal(1))
 		Expect(valuesToInstantiate[0]).To(Equal(toInstantiate))
 	})
+
+	It("getHelmActionInPullMode returns install when cache is empty", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("1.2.3")
+
+		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).To(BeNil())
+		Expect(action).To(Equal(controllers.HelmActionInstall))
+
+		// Sanity: nothing got registered by the call itself.
+		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, chart)).To(Equal(""))
+	})
+
+	It("getHelmActionInPullMode self-heals when cached version is not valid semver", func() {
+		// Simulate a poisoned cache populated by a pre-fix rebuildChartVersions
+		// that stored a raw template string.
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("1.20.2")
+		poisoned := &configv1beta1.HelmChart{
+			ReleaseName:      chart.ReleaseName,
+			ReleaseNamespace: chart.ReleaseNamespace,
+			ChartVersion:     `{{ (index .MgmtResources "config").data.chartVersion }}`,
+		}
+		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, poisoned)
+		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, chart)).To(Equal(poisoned.ChartVersion))
+
+		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).To(BeNil())
+		Expect(action).To(Equal(controllers.HelmActionInstall))
+
+		// Self-heal: the poisoned entry must be gone so a subsequent deploy path
+		// can RegisterVersionForChart with a valid value.
+		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
+			cs.Spec.ClusterName, chart)).To(Equal(""))
+	})
+
+	It("getHelmActionInPullMode returns upgrade when spec version is newer", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("1.20.2")
+		cached := &configv1beta1.HelmChart{
+			ReleaseName:      chart.ReleaseName,
+			ReleaseNamespace: chart.ReleaseNamespace,
+			ChartVersion:     "1.19.0",
+		}
+		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
+
+		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).To(BeNil())
+		Expect(action).To(Equal(controllers.HelmActionUpgrade))
+	})
+
+	It("getHelmActionInPullMode wraps spec semver errors with chart context", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("not-a-version")
+		cached := &configv1beta1.HelmChart{
+			ReleaseName:      chart.ReleaseName,
+			ReleaseNamespace: chart.ReleaseNamespace,
+			ChartVersion:     "1.19.0",
+		}
+		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
+
+		_, err = controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(ContainSubstring(chart.ReleaseName))
+		Expect(err.Error()).To(ContainSubstring(chart.ReleaseNamespace))
+		Expect(err.Error()).To(ContainSubstring("not-a-version"))
+	})
 })
+
+func newPullModeClusterSummary() *configv1beta1.ClusterSummary {
+	return &configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      randomString(),
+			Namespace: randomString(),
+		},
+		Spec: configv1beta1.ClusterSummarySpec{
+			ClusterNamespace: randomString(),
+			ClusterName:      randomString(),
+			ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+		},
+	}
+}
+
+func newChart(version string) *configv1beta1.HelmChart {
+	return &configv1beta1.HelmChart{
+		ReleaseName:      randomString(),
+		ReleaseNamespace: randomString(),
+		ChartVersion:     version,
+	}
+}
 
 func verifyFileContent(filePath string, data []byte) {
 	content, err := os.ReadFile(filePath)

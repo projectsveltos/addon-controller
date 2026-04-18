@@ -5036,12 +5036,22 @@ func getHelmActionInPullMode(ctx context.Context, clusterSummary *configv1beta1.
 
 	currVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
-		return "", err
+		// A poisoned cache (e.g. from a pre-fix controller that cached a raw
+		// template string) must not wedge reconciliation forever. Drop the bad
+		// entry and fall through to install; the deploy path will re-register
+		// the correctly-instantiated version.
+		chartManager.UnregisterVersionForChart(clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)
+		logr.FromContextOrDiscard(ctx).Info(fmt.Sprintf(
+			"cached version %q for release %s/%s is not a valid semver (%v); clearing cache and treating as install",
+			currentVersion, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName, err))
+		return install, nil
 	}
 
 	newVer, err := semver.NewVersion(instantiatedChart.ChartVersion)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid semantic version %q for release %s/%s (spec chartVersion): %w",
+			instantiatedChart.ChartVersion, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName, err)
 	}
 
 	switch {

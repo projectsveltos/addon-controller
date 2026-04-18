@@ -699,9 +699,24 @@ func (m *instance) getVersion(clusterSummary *configv1beta1.ClusterSummary,
 		if hc.ReleaseNamespace == releaseNamespace &&
 			hc.ReleaseName == releaseName {
 
+			// Spec holds raw (un-instantiated) template expressions. If ChartVersion
+			// still looks like a Go template, do not cache it: the deploy path will
+			// populate the cache with the instantiated version via RegisterVersionForChart.
+			// Caching the template string would poison the cache and cause a permanent
+			// "invalid semantic version" loop in pull mode.
+			if isTemplatedString(hc.ChartVersion) {
+				return ""
+			}
 			return hc.ChartVersion
 		}
 	}
 
 	return ""
+}
+
+// isTemplatedString reports whether s contains an un-instantiated Go template
+// action (e.g. "{{ .Foo }}"). Used to avoid caching raw spec values that have
+// not yet been rendered against management-cluster resources.
+func isTemplatedString(s string) bool {
+	return strings.Contains(s, "{{")
 }

@@ -386,6 +386,57 @@ var _ = Describe("Chart manager", func() {
 		Expect(manager.CanManageChart(tmpClusterSummary,
 			&tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeTrue())
 	})
+
+	It("isTemplatedString detects un-instantiated Go templates", func() {
+		Expect(chartmanager.IsTemplatedString("v1.2.3")).To(BeFalse())
+		Expect(chartmanager.IsTemplatedString("")).To(BeFalse())
+		Expect(chartmanager.IsTemplatedString(`{{ (index .MgmtResources "config").data.chartVersion }}`)).To(BeTrue())
+		Expect(chartmanager.IsTemplatedString("prefix-{{ .Foo }}-suffix")).To(BeTrue())
+	})
+
+	It("addHelmVersions skips templated chart versions to prevent cache poisoning", func() {
+		// GetVersionForChart/RegisterVersionForChart key on ClusterTypeSveltos (pull mode),
+		// so match that here to exercise the same key path.
+		clusterSummary.Spec.ClusterType = libsveltosv1beta1.ClusterTypeSveltos
+		// Two charts: one templated (must not be cached), one hardcoded (must be cached)
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ChartVersion =
+			`{{ (index .MgmtResources "config").data.chartVersion }}`
+		// HelmCharts[1].ChartVersion stays "0.17.1" from the fixture
+
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseName,
+					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0].ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+				},
+				{
+					ReleaseName:      clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseName,
+					ReleaseNamespace: clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1].ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+				},
+			},
+		}
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		chartmanager.AddHelmVersions(manager, clusterSummary)
+
+		// Templated spec must leave cache empty — GetVersionForChart returns "" so
+		// getHelmActionInPullMode falls through to `install`, which later calls
+		// RegisterVersionForChart with the instantiated version.
+		templatedCached := manager.GetVersionForChart(
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			&clusterSummary.Spec.ClusterProfileSpec.HelmCharts[0])
+		Expect(templatedCached).To(Equal(""))
+
+		// Hardcoded chart version must still be cached normally.
+		hardcodedCached := manager.GetVersionForChart(
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			&clusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])
+		Expect(hardcodedCached).To(Equal("0.17.1"))
+	})
 })
 
 func removeSubscriptions(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {

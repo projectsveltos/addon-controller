@@ -19,4 +19,6 @@ package chartmanager
 var (
 	IsClusterSummaryAlreadyRegistered = isClusterSummaryAlreadyRegistered
 	RebuildRegistrations              = (*instance).rebuildRegistrations
+	AddHelmVersions                   = (*instance).addHelmVersions
+	IsTemplatedString                 = isTemplatedString
 )

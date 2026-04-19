@@ -619,23 +619,33 @@ func (m *instance) rebuildRegistrations(ctx context.Context, c client.Client) er
 	return nil
 }
 
-// rebuildChartVersions rebuilds internal structures to identify current helm versions
-// deployed in pull mode clusetrs
-// Relies completely on ClusterSummary.Status
+// rebuildChartVersions rebuilds the in-memory chart version cache used by
+// pull-mode deploys. Source is ClusterConfiguration, not ClusterSummary.
+//
+// ClusterSummary.Spec.ClusterProfileSpec.HelmCharts can hold un-instantiated
+// Go templates (e.g. ChartVersion: "{{ .MgmtResources.config.data.version }}").
+// Reading from there at startup would cache the raw template string and send
+// pull-mode into a permanent "invalid semantic version" loop (upstream issue
+// projectsveltos/addon-controller#1722).
+//
+// ClusterConfiguration.Status, by contrast, is written by the deploy path
+// after templates have been rendered against the management cluster, so the
+// ChartVersion we read here is always the concrete version the agent actually
+// applied.
 func (m *instance) rebuildChartVersions(ctx context.Context, c client.Client) error {
 	// Lock here
 	m.chartMux.Lock()
 	defer m.chartMux.Unlock()
 
-	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
-	err := c.List(ctx, clusterSummaryList)
+	clusterConfigurations := &configv1beta1.ClusterConfigurationList{}
+	err := c.List(ctx, clusterConfigurations)
 	if err != nil {
 		return err
 	}
 
-	for i := range clusterSummaryList.Items {
-		cs := &clusterSummaryList.Items[i]
-		m.addHelmVersions(cs)
+	for i := range clusterConfigurations.Items {
+		cc := &clusterConfigurations.Items[i]
+		m.addHelmVersions(cc)
 	}
 
 	return nil
@@ -676,47 +686,78 @@ func (m *instance) addNonManagers(clusterSummary *configv1beta1.ClusterSummary) 
 	}
 }
 
-// addHelmVersions walks clusterSummary's status and register helm versions for each chart managed
-func (m *instance) addHelmVersions(clusterSummary *configv1beta1.ClusterSummary) {
-	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Spec.ClusterType)
+// addHelmVersions walks a ClusterConfiguration's status and registers helm
+// versions for each chart managed on the corresponding cluster.
+//
+// The cluster key is derived from ClusterConfiguration labels (name + type)
+// rather than spec fields: ClusterConfiguration has no spec, it is a pure
+// status object keyed by the cluster it belongs to.
+func (m *instance) addHelmVersions(clusterConfiguration *configv1beta1.ClusterConfiguration) {
+	lbls := clusterConfiguration.Labels
+	if lbls == nil {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterConfiguration %s/%s has no labels",
+			clusterConfiguration.Namespace, clusterConfiguration.Name))
+		return
+	}
 
-	for i := range clusterSummary.Status.HelmReleaseSummaries {
-		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
-		if summary.Status == configv1beta1.HelmChartStatusManaging {
-			chartVersion := m.getVersion(clusterSummary, summary.ReleaseNamespace, summary.ReleaseName)
-			releaseKey := m.GetReleaseKey(summary.ReleaseNamespace, summary.ReleaseName)
-			m.setChartVersion(clusterKey, releaseKey, chartVersion)
-		}
+	clusterName, ok := clusterConfiguration.Labels[configv1beta1.ClusterNameLabel]
+	if !ok {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterConfiguration %s/%s has no %s label",
+			clusterConfiguration.Namespace, clusterConfiguration.Name, configv1beta1.ClusterNameLabel))
+		return
+	}
+
+	var clusterKey string
+
+	rawValueClusterType, ok := clusterConfiguration.Labels[configv1beta1.ClusterTypeLabel]
+	if !ok {
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterConfiguration %s/%s has no %s label",
+			clusterConfiguration.Namespace, clusterConfiguration.Name, configv1beta1.ClusterTypeLabel))
+		return
+	}
+
+	var clusterType libsveltosv1beta1.ClusterType
+
+	// Normalize the input to match your defined constants
+	switch {
+	case strings.EqualFold(rawValueClusterType, string(libsveltosv1beta1.ClusterTypeCapi)):
+		clusterType = libsveltosv1beta1.ClusterTypeCapi
+	case strings.EqualFold(rawValueClusterType, string(libsveltosv1beta1.ClusterTypeSveltos)):
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+	default:
+		m.logger.V(logs.LogInfo).Info(fmt.Sprintf("ClusterConfiguration %s/%s label %s has unknown value %s",
+			clusterConfiguration.Namespace, clusterConfiguration.Name,
+			configv1beta1.ClusterTypeLabel, rawValueClusterType))
+		return
+	}
+
+	clusterKey = m.getClusterKey(clusterConfiguration.Namespace, clusterName, clusterType)
+
+	for i := range clusterConfiguration.Status.ClusterProfileResources {
+		m.walkClusterConfigurationFeature(clusterKey,
+			clusterConfiguration.Status.ClusterProfileResources[i].Features)
+	}
+
+	for i := range clusterConfiguration.Status.ProfileResources {
+		m.walkClusterConfigurationFeature(clusterKey,
+			clusterConfiguration.Status.ProfileResources[i].Features)
 	}
 }
 
-func (m *instance) getVersion(clusterSummary *configv1beta1.ClusterSummary,
-	releaseNamespace, releaseName string) string {
-
-	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-		hc := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		if hc.ReleaseNamespace == releaseNamespace &&
-			hc.ReleaseName == releaseName {
-
-			// Spec holds raw (un-instantiated) template expressions. If ChartVersion
-			// still looks like a Go template, do not cache it: the deploy path will
-			// populate the cache with the instantiated version via RegisterVersionForChart.
-			// Caching the template string would poison the cache and cause a permanent
-			// "invalid semantic version" loop in pull mode.
-			if isTemplatedString(hc.ChartVersion) {
-				return ""
-			}
-			return hc.ChartVersion
-		}
+func (m *instance) walkClusterConfigurationFeature(clusterKey string, features []configv1beta1.Feature) {
+	for i := range features {
+		m.walkClusterConfigurationCharts(clusterKey, features[i])
 	}
-
-	return ""
 }
 
-// isTemplatedString reports whether s contains an un-instantiated Go template
-// action (e.g. "{{ .Foo }}"). Used to avoid caching raw spec values that have
-// not yet been rendered against management-cluster resources.
-func isTemplatedString(s string) bool {
-	return strings.Contains(s, "{{")
+func (m *instance) walkClusterConfigurationCharts(clusterKey string, feature configv1beta1.Feature) {
+	for i := range feature.Charts {
+		chartVersion := feature.Charts[i].ChartVersion
+		releaseKey := m.GetReleaseKey(feature.Charts[i].Namespace,
+			feature.Charts[i].ReleaseName)
+
+		m.logger.V(logs.LogDebug).Info(fmt.Sprintf("cluster %s %s %s %s",
+			clusterKey, feature.Charts[i].Namespace, feature.Charts[i].ReleaseName, chartVersion))
+		m.setChartVersion(clusterKey, releaseKey, chartVersion)
+	}
 }

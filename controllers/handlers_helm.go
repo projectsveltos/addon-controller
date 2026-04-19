@@ -928,13 +928,21 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	}
 
 	if isPullMode {
-		err = commitStagedResourcesForDeployment(ctx, clusterSummary, configurationHash, mgmtResources, logger)
-		if err != nil {
-			return err
+		// In DryRun mode, commit staged resources even on error (e.g. helm conflict) so the
+		// sveltos-applier agent processes them and populates ClusterReport.HelmResourceReports.
+		// No action will be performed by the applier in DryRun except generating the reports.
+		if deployError == nil || clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+			if err := commitStagedResourcesForDeployment(ctx, clusterSummary, configurationHash, mgmtResources, logger); err != nil {
+				return err
+			}
+		} else {
+			_ = pullmode.DiscardStagedResourcesForDeployment(ctx, c, clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+				string(libsveltosv1beta1.FeatureHelm), logger)
 		}
 
-		err = updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports)
-		if err != nil {
+		// deployError might contain conflicts so continue. So create clusterReports irrespective
+		if err := updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports); err != nil {
 			return err
 		}
 

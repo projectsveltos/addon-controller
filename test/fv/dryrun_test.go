@@ -294,7 +294,7 @@ var _ = Describe("DryRun", Serial, func() {
 				return nil
 			}, timeout, pollingInterval).Should(BeNil())
 
-			By("Verifying ClusterReport for helm reports")
+			Byf("Verifying ClusterReport for helm reports for clusterProfile %s", currentClusterProfile.Name)
 			verifyClusterReportForHelm(clusterReportName, dryRunClusterSummary, currentClusterProfile)
 
 			verifyDeployedGroupVersionKind(clusterProfile.Name)
@@ -306,7 +306,7 @@ var _ = Describe("DryRun", Serial, func() {
 			// be upgrade for mysql helm chart and the Kong ServiceAccount (which were previously reported
 			// as conflict)
 
-			By("Verifying ClusterReport for helm reports")
+			Byf("Verifying ClusterReport for helm reports for clusterProfile %s", currentClusterProfile.Name)
 			verifyClusterReportForHelm(clusterReportName, dryRunClusterSummary, currentClusterProfile)
 
 			By("Verifying ClusterReport for policy reports")

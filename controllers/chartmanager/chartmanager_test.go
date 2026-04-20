@@ -386,6 +386,7 @@ var _ = Describe("Chart manager", func() {
 		Expect(manager.CanManageChart(tmpClusterSummary,
 			&tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeTrue())
 	})
+
 })
 
 func removeSubscriptions(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {

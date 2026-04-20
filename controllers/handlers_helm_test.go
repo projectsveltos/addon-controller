@@ -453,6 +453,63 @@ var _ = Describe("HandlersHelm", func() {
 			Equal(chartDeployed[0].ChartVersion))
 	})
 
+	It("updateChartsInClusterConfiguration stores the live release ChartVersion, not the spec version", func() {
+		// chartDeployed is built from currentRelease.ChartVersion (the actually-deployed version),
+		// not from the spec. This test verifies that what lands in ClusterConfiguration reflects
+		// what the cluster actually has, including multi-chart profiles.
+		chartsDeployed := []configv1beta1.Chart{
+			{
+				RepoURL:      "https://prometheus-community.github.io/helm-charts",
+				ReleaseName:  "prometheus",
+				Namespace:    "prometheus",
+				ChartVersion: "26.0.0",
+				AppVersion:   "v3.0.0",
+			},
+			{
+				RepoURL:      "https://grafana-community.github.io/helm-charts",
+				ReleaseName:  "grafana",
+				Namespace:    "grafana",
+				ChartVersion: "11.3.6",
+				AppVersion:   "12.4.2",
+			},
+		}
+
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      controllers.GetClusterConfigurationName(clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+			Status: configv1beta1.ClusterConfigurationStatus{
+				ClusterProfileResources: []configv1beta1.ClusterProfileResource{
+					{ClusterProfileName: clusterProfile.Name},
+				},
+			},
+		}
+
+		initObjects := []client.Object{clusterConfiguration}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		Expect(controllers.UpdateChartsInClusterConfiguration(context.TODO(), c, clusterSummary,
+			chartsDeployed, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		current := &configv1beta1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
+			current)).To(Succeed())
+
+		Expect(current.Status.ClusterProfileResources).To(HaveLen(1))
+		charts := current.Status.ClusterProfileResources[0].Features[0].Charts
+		Expect(charts).To(HaveLen(2))
+
+		for i, expected := range chartsDeployed {
+			Expect(charts[i].ChartVersion).To(Equal(expected.ChartVersion),
+				"chart %s: stored version must match the live release version", expected.ReleaseName)
+			Expect(charts[i].AppVersion).To(Equal(expected.AppVersion))
+			Expect(charts[i].ReleaseName).To(Equal(expected.ReleaseName))
+			Expect(charts[i].RepoURL).To(Equal(expected.RepoURL))
+		}
+	})
+
 	It("createReportForUnmanagedHelmRelease ", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
@@ -1254,7 +1311,67 @@ resources:
 		Expect(len(valuesToInstantiate)).To(Equal(1))
 		Expect(valuesToInstantiate[0]).To(Equal(toInstantiate))
 	})
+
+	It("getHelmActionInPullMode returns upgrade when spec version is newer", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("1.20.2")
+		cached := &configv1beta1.HelmChart{
+			ReleaseName:      chart.ReleaseName,
+			ReleaseNamespace: chart.ReleaseNamespace,
+			ChartVersion:     "1.19.0",
+		}
+		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
+
+		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).To(BeNil())
+		Expect(action).To(Equal(controllers.HelmActionUpgrade))
+	})
+
+	It("getHelmActionInPullMode wraps spec semver errors with chart context", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+
+		cs := newPullModeClusterSummary()
+		chart := newChart("not-a-version")
+		cached := &configv1beta1.HelmChart{
+			ReleaseName:      chart.ReleaseName,
+			ReleaseNamespace: chart.ReleaseNamespace,
+			ChartVersion:     "1.19.0",
+		}
+		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
+
+		_, err = controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
+		Expect(err).NotTo(BeNil())
+		Expect(err.Error()).To(ContainSubstring(chart.ReleaseName))
+		Expect(err.Error()).To(ContainSubstring(chart.ReleaseNamespace))
+		Expect(err.Error()).To(ContainSubstring("not-a-version"))
+	})
 })
+
+func newPullModeClusterSummary() *configv1beta1.ClusterSummary {
+	return &configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      randomString(),
+			Namespace: randomString(),
+		},
+		Spec: configv1beta1.ClusterSummarySpec{
+			ClusterNamespace: randomString(),
+			ClusterName:      randomString(),
+			ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+		},
+	}
+}
+
+func newChart(version string) *configv1beta1.HelmChart {
+	return &configv1beta1.HelmChart{
+		ReleaseName:      randomString(),
+		ReleaseNamespace: randomString(),
+		ChartVersion:     version,
+	}
+}
 
 func verifyFileContent(filePath string, data []byte) {
 	content, err := os.ReadFile(filePath)

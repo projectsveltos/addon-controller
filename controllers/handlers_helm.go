@@ -5044,12 +5044,14 @@ func getHelmActionInPullMode(ctx context.Context, clusterSummary *configv1beta1.
 
 	currVer, err := semver.NewVersion(currentVersion)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid semantic version %q for release %s/%s (cached): %w",
+			currentVersion, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName, err)
 	}
 
 	newVer, err := semver.NewVersion(instantiatedChart.ChartVersion)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid semantic version %q for release %s/%s (spec chartVersion): %w",
+			instantiatedChart.ChartVersion, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName, err)
 	}
 
 	switch {

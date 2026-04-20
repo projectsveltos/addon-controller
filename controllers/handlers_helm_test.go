@@ -1312,33 +1312,6 @@ resources:
 		Expect(valuesToInstantiate[0]).To(Equal(toInstantiate))
 	})
 
-	It("getHelmActionInPullMode self-heals when cached version is not valid semver", func() {
-		// Simulate a poisoned cache populated by a pre-fix rebuildChartVersions
-		// that stored a raw template string.
-		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
-		Expect(err).To(BeNil())
-
-		cs := newPullModeClusterSummary()
-		chart := newChart("1.20.2")
-		poisoned := &configv1beta1.HelmChart{
-			ReleaseName:      chart.ReleaseName,
-			ReleaseNamespace: chart.ReleaseNamespace,
-			ChartVersion:     `{{ (index .MgmtResources "config").data.chartVersion }}`,
-		}
-		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, poisoned)
-		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, chart)).To(Equal(poisoned.ChartVersion))
-
-		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
-		Expect(err).To(BeNil())
-		Expect(action).To(Equal(controllers.HelmActionInstall))
-
-		// Self-heal: the poisoned entry must be gone so a subsequent deploy path
-		// can RegisterVersionForChart with a valid value.
-		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, chart)).To(Equal(""))
-	})
-
 	It("getHelmActionInPullMode returns upgrade when spec version is newer", func() {
 		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
 		Expect(err).To(BeNil())

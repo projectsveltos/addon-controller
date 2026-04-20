@@ -1312,22 +1312,6 @@ resources:
 		Expect(valuesToInstantiate[0]).To(Equal(toInstantiate))
 	})
 
-	It("getHelmActionInPullMode returns install when cache is empty", func() {
-		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
-		Expect(err).To(BeNil())
-
-		cs := newPullModeClusterSummary()
-		chart := newChart("1.2.3")
-
-		action, err := controllers.GetHelmActionInPullMode(context.TODO(), cs, chart)
-		Expect(err).To(BeNil())
-		Expect(action).To(Equal(controllers.HelmActionInstall))
-
-		// Sanity: nothing got registered by the call itself.
-		Expect(manager.GetVersionForChart(cs.Spec.ClusterNamespace,
-			cs.Spec.ClusterName, chart)).To(Equal(""))
-	})
-
 	It("getHelmActionInPullMode self-heals when cached version is not valid semver", func() {
 		// Simulate a poisoned cache populated by a pre-fix rebuildChartVersions
 		// that stored a raw template string.

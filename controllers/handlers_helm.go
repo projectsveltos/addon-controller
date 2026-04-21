@@ -124,6 +124,9 @@ type releaseInfo struct {
 	ReleaseLabels    map[string]string      `json:"release_labels"`
 	Icon             string                 `json:"icon"`
 	Values           map[string]interface{} `json:"values"`
+	// FullValues is the coalesced result of chart defaults and user-supplied Config values.
+	// Used to check whether Sveltos's desired values are already reflected in the deployed release.
+	FullValues map[string]interface{} `json:"-"`
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -944,10 +947,6 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 		// deployError might contain conflicts so continue. So create clusterReports irrespective
 		if err := updateClusterReportWithHelmReports(ctx, c, clusterSummary, releaseReports); err != nil {
 			return err
-		}
-
-		if deployError != nil {
-			return deployError
 		}
 	} else {
 		// First get the helm releases currently managed and uninstall all the ones
@@ -2286,6 +2285,16 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOp
 		return nil, err
 	}
 
+	// Coalesce chart defaults with user-supplied Config so FullValues represents
+	// everything the chart is actually running with.
+	fullValues := make(map[string]interface{})
+	for k, v := range currentRelease.Chart.Values {
+		fullValues[k] = v
+	}
+	if err := mergo.Merge(&fullValues, currentRelease.Config, mergo.WithOverride); err != nil {
+		fullValues = currentRelease.Config
+	}
+
 	element := &releaseInfo{
 		ReleaseName:      currentRelease.Name,
 		ReleaseNamespace: currentRelease.Namespace,
@@ -2297,6 +2306,7 @@ func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOp
 		ReleaseLabels:    currentRelease.Labels,
 		Icon:             currentRelease.Chart.Metadata.Icon,
 		Values:           currentRelease.Config,
+		FullValues:       fullValues,
 	}
 
 	var t metav1.Time
@@ -2412,47 +2422,110 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, instantiate
 	}
 
 	if dCtx.clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeContinuousWithDriftDetection {
-		if dCtx.clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
-			oldValueHash := getValuesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary)
-			oldPatchesHash := getPatchesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary)
+		return shouldUpgradeForContinuousMode(ctx, currentRelease, instantiatedChart, dCtx, currentPatchesHash, logger)
+	}
 
-			// Compare Values
-			c := getManagementClusterClient()
-			currentValueHash, err := getHelmChartValuesHash(ctx, c, instantiatedChart, dCtx.clusterSummary, dCtx.mgmtResources, logger)
-			if err != nil {
-				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
-				currentValueHash = []byte("")
-			}
-			if !reflect.DeepEqual(oldValueHash, currentValueHash) {
-				return true
-			}
+	// ContinuousWithDriftDetection: always upgrade except on the very first reconciliation
+	// when the live release already matches desired state (no stored ValuesHash yet).
+	// Subsequent reconciliations always upgrade so the drift-detection agent can repair drift.
+	// ResourceSummary is deployed by postProcessDeployedHelmCharts regardless of this decision.
+	if driftDetectionFirstReconciliationCanSkip(ctx, currentRelease, instantiatedChart, dCtx, currentPatchesHash, logger) {
+		return false
+	}
+	return true
+}
 
-			// Compare patches
-			if !reflect.DeepEqual(oldPatchesHash, currentPatchesHash) {
-				return true
+// shouldUpgradeForContinuousMode handles the upgrade decision for Continuous and DryRun modes.
+func shouldUpgradeForContinuousMode(ctx context.Context, currentRelease *releaseInfo,
+	instantiatedChart *configv1beta1.HelmChart, dCtx *deploymentContext,
+	currentPatchesHash []byte, logger logr.Logger) bool {
+
+	if dCtx.clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
+		oldValueHash := getValuesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary)
+		oldPatchesHash := getPatchesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary)
+
+		c := getManagementClusterClient()
+		currentValueHash, err := getHelmChartValuesHash(ctx, c, instantiatedChart, dCtx.clusterSummary, dCtx.mgmtResources, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get current values hash: %v", err))
+			currentValueHash = []byte("")
+		}
+
+		// No stored state yet (first reconciliation or controller restart). Avoid a
+		// spurious upgrade by checking whether the desired values are already reflected
+		// in the deployed release. Compare against FullValues (chart defaults + Config)
+		// so values that match chart defaults are not missed — helm stores no Config
+		// entry when the desired value equals the default.
+		// We cannot infer whether patches were previously applied from the release
+		// alone, so only skip when no patches are configured now.
+		if oldValueHash == nil && currentRelease != nil &&
+			currentRelease.Status == releasecommon.StatusDeployed.String() {
+
+			desiredValues, desiredErr := getHelmChartInstantiatedValues(ctx, dCtx.clusterSummary,
+				dCtx.mgmtResources, instantiatedChart, logger)
+			if desiredErr == nil && desiredValuesAreSubset(desiredValues, currentRelease.FullValues) {
+				oldValueHash = currentValueHash
+			}
+		}
+		if oldPatchesHash == nil {
+			emptyHash := sha256.Sum256([]byte(""))
+			if reflect.DeepEqual(currentPatchesHash, emptyHash[:]) {
+				oldPatchesHash = currentPatchesHash
 			}
 		}
 
-		if currentRelease != nil {
-			if currentRelease.Status != releasecommon.StatusDeployed.String() {
-				return true
-			}
-
-			current, err := semver.NewVersion(currentRelease.ChartVersion)
-			if err != nil {
-				return true
-			}
-
-			expected, err := semver.NewVersion(instantiatedChart.ChartVersion)
-			if err != nil {
-				return true
-			}
-
-			return !current.Equal(expected)
+		if !reflect.DeepEqual(oldValueHash, currentValueHash) {
+			return true
+		}
+		if !reflect.DeepEqual(oldPatchesHash, currentPatchesHash) {
+			return true
 		}
 	}
 
-	return true
+	if currentRelease != nil {
+		if currentRelease.Status != releasecommon.StatusDeployed.String() {
+			return true
+		}
+		current, err := semver.NewVersion(currentRelease.ChartVersion)
+		if err != nil {
+			return true
+		}
+		expected, err := semver.NewVersion(instantiatedChart.ChartVersion)
+		if err != nil {
+			return true
+		}
+		return !current.Equal(expected)
+	}
+	return false
+}
+
+// driftDetectionFirstReconciliationCanSkip returns true when the live release already
+// reflects the desired state and this is the first reconciliation (no stored ValuesHash).
+// Conditions: no stored state, release deployed, same version, desired values are a subset
+// of the coalesced release values, and no patches configured.
+// Patches are not skipped: we cannot infer from the release whether they were applied before.
+func driftDetectionFirstReconciliationCanSkip(ctx context.Context, currentRelease *releaseInfo,
+	instantiatedChart *configv1beta1.HelmChart, dCtx *deploymentContext,
+	currentPatchesHash []byte, logger logr.Logger) bool {
+
+	if getValuesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary) != nil {
+		return false
+	}
+	if currentRelease == nil || currentRelease.Status != releasecommon.StatusDeployed.String() {
+		return false
+	}
+	emptyPatchesHash := sha256.Sum256([]byte(""))
+	if !reflect.DeepEqual(currentPatchesHash, emptyPatchesHash[:]) {
+		return false
+	}
+	current, err1 := semver.NewVersion(currentRelease.ChartVersion)
+	expected, err2 := semver.NewVersion(instantiatedChart.ChartVersion)
+	if err1 != nil || err2 != nil || !current.Equal(expected) {
+		return false
+	}
+	desiredValues, err := getHelmChartInstantiatedValues(ctx, dCtx.clusterSummary,
+		dCtx.mgmtResources, instantiatedChart, logger)
+	return err == nil && desiredValuesAreSubset(desiredValues, currentRelease.FullValues)
 }
 
 // shouldUninstall returns true if action is uninstall there is a release installed currently
@@ -4096,6 +4169,29 @@ func getResourceNamespace(ctx context.Context, r *unstructured.Unstructured, rel
 	}
 
 	return namespace, nil
+}
+
+// desiredValuesAreSubset returns true when every key-value pair in desired is present
+// with an equal value in full. Nested maps are checked recursively. This lets Sveltos
+// confirm that the values it would set are already reflected in the deployed release's
+// coalesced values (chart defaults + user Config) without requiring an exact full match.
+func desiredValuesAreSubset(desired, full map[string]interface{}) bool {
+	for k, dv := range desired {
+		fv, ok := full[k]
+		if !ok {
+			return false
+		}
+		dm, desiredIsMap := dv.(map[string]interface{})
+		fm, fullIsMap := fv.(map[string]interface{})
+		if desiredIsMap && fullIsMap {
+			if !desiredValuesAreSubset(dm, fm) {
+				return false
+			}
+		} else if !reflect.DeepEqual(dv, fv) {
+			return false
+		}
+	}
+	return true
 }
 
 func getHelmChartValuesHash(ctx context.Context, c client.Client, instantiatedChart *configv1beta1.HelmChart,

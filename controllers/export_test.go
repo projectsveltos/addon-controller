@@ -149,6 +149,7 @@ var (
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
 	HandleCharts                             = handleCharts
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
+	DesiredValuesAreSubset                   = desiredValuesAreSubset
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
 	GetInstantiatedChart                     = getInstantiatedChart
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom

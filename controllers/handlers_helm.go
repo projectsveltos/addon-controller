@@ -233,6 +233,10 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 		if err != nil {
 			return err
 		}
+		t := true
+		if fs := getFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureHelm); fs != nil {
+			fs.ResourceSummaryDeployed = &t
+		}
 	}
 
 	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)

@@ -357,10 +357,13 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		if !isDeleted {
 			// if cluster is marked for deletion do not try to remove ResourceSummaries.
 			// those are only deployed in the managed cluster so no need to cleanup on a deleted cluster
-			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-			if err != nil {
-				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			if r.anyFeatureNeedsResourceSummaryRemoval(clusterSummaryScope) {
+				err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+				if err != nil {
+					logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+					return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+				}
+				r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
 			}
 		}
 
@@ -487,11 +490,14 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 	}
 
 	if !clusterSummaryScope.IsContinuousWithDriftDetection() {
-		err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-			r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
-			return reconcile.Result{RequeueAfter: normalRequeueAfter}
+		if r.anyFeatureNeedsResourceSummaryRemoval(clusterSummaryScope) {
+			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
+				return reconcile.Result{RequeueAfter: normalRequeueAfter}
+			}
+			r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
 		}
 	}
 
@@ -1504,6 +1510,37 @@ func (r *ClusterSummaryReconciler) canRemoveFinalizer(ctx context.Context,
 		}
 	}
 	return true
+}
+
+// anyFeatureNeedsResourceSummaryRemoval returns true if any of the known features
+// has a ResourceSummary section that may still exist in the managed cluster.
+func (r *ClusterSummaryReconciler) anyFeatureNeedsResourceSummaryRemoval(
+	clusterSummaryScope *scope.ClusterSummaryScope) bool {
+
+	for _, fID := range []libsveltosv1beta1.FeatureID{
+		libsveltosv1beta1.FeatureHelm,
+		libsveltosv1beta1.FeatureResources,
+		libsveltosv1beta1.FeatureKustomize,
+	} {
+		if clusterSummaryScope.ShouldRemoveResourceSummary(fID) {
+			return true
+		}
+	}
+	return false
+}
+
+// markResourceSummaryRemovedForAllFeatures sets ResourceSummaryDeployed to false
+// for every known feature, recording that no ResourceSummary exists in the managed cluster.
+func (r *ClusterSummaryReconciler) markResourceSummaryRemovedForAllFeatures(
+	clusterSummaryScope *scope.ClusterSummaryScope) {
+
+	for _, fID := range []libsveltosv1beta1.FeatureID{
+		libsveltosv1beta1.FeatureHelm,
+		libsveltosv1beta1.FeatureResources,
+		libsveltosv1beta1.FeatureKustomize,
+	} {
+		clusterSummaryScope.SetResourceSummaryDeployed(fID, false)
+	}
 }
 
 // removeResourceSummary removes, if still present, ResourceSummary corresponding

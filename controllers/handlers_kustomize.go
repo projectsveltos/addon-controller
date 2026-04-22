@@ -1109,6 +1109,10 @@ func handleKustomizeResourceSummaryDeployment(ctx context.Context, clusterSummar
 		if err != nil {
 			return err
 		}
+		t := true
+		if fs := getFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureKustomize); fs != nil {
+			fs.ResourceSummaryDeployed = &t
+		}
 	}
 
 	return nil

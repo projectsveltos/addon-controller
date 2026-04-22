@@ -224,6 +224,31 @@ func (s *ClusterSummaryScope) IsContinuousWithDriftDetection() bool {
 	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 }
 
+// ShouldRemoveResourceSummary returns true if the FeatureSummary for featureID indicates
+// that a ResourceSummary section may still be present in the managed cluster:
+// nil means unknown (e.g. after an upgrade), true means currently deployed.
+// Returns false when the entry is explicitly marked false (already removed) or absent.
+func (s *ClusterSummaryScope) ShouldRemoveResourceSummary(featureID libsveltosv1beta1.FeatureID) bool {
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		fs := &s.ClusterSummary.Status.FeatureSummaries[i]
+		if fs.FeatureID == featureID {
+			return fs.ResourceSummaryDeployed == nil || *fs.ResourceSummaryDeployed
+		}
+	}
+	return false
+}
+
+// SetResourceSummaryDeployed sets ResourceSummaryDeployed on the FeatureSummary for featureID.
+// No-op if no FeatureSummary entry exists for featureID yet.
+func (s *ClusterSummaryScope) SetResourceSummaryDeployed(featureID libsveltosv1beta1.FeatureID, deployed bool) {
+	for i := range s.ClusterSummary.Status.FeatureSummaries {
+		if s.ClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			s.ClusterSummary.Status.FeatureSummaries[i].ResourceSummaryDeployed = &deployed
+			return
+		}
+	}
+}
+
 // IsContinuousSync returns true if ClusterProfile is set to keep updating workload cluster
 func (s *ClusterSummaryScope) IsContinuousSync() bool {
 	return s.ClusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuous ||

@@ -3,8 +3,17 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/projectsveltos/addon-controller.svg)](https://store.docker.com/community/images/projectsveltos/addon-controller)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/addon-controller)](https://github.com/projectsveltos/addon-controller/releases)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
-[![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
-[![Twitter Follow](https://img.shields.io/twitter/follow/projectsveltos?style=social)](https://twitter.com/projectsveltos)
+[![LinkedIn](https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff)](https://www.linkedin.com/company/projectsveltos/)
+[![X URL](https://img.shields.io/twitter/url/https/twitter.com/projectsveltos.svg?style=social&label=Follow%20%40projectsveltos)](https://x.com/projectsveltos)
+
+👋 Welcome to **Projectsveltos**!
+
+<div align="center">
+
+| 🌐 Website | 📚 Documentation | 📅 Book a Demo | 💼 Enterprise Support | 🏢 Adopters |
+|:---:|:---:|:---:|:---:|:---:|
+| [Visit](https://website.projectsveltos.io) | [Get Started](https://projectsveltos.github.io/sveltos/) | [Schedule 30 min](https://cal.com/gianluca-mardente-nuclsu/30min) | [Contact Us](mailto:gianluca@projectsveltos.io) | [View List](https://github.com/projectsveltos/adopters/blob/main/ADOPTERS.md) |
+
 
 # Sveltos: Kubernetes add-on controller
 

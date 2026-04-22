@@ -371,7 +371,7 @@ func (r *ClusterPromotionReconciler) getProfileSpecHash(profileSpec *configv1bet
 
 	h := sha256.New()
 
-	specCopy := profileSpec
+	specCopy := *profileSpec
 
 	specCopy.HelmCharts = getSortedHelmCharts(profileSpec.HelmCharts)
 	specCopy.KustomizationRefs = getSortedKustomizationRefs(profileSpec.KustomizationRefs)

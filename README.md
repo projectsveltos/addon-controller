@@ -2,6 +2,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/addon-controller)](https://goreportcard.com/report/github.com/projectsveltos/addon-controller)
 [![Docker Pulls](https://img.shields.io/docker/pulls/projectsveltos/addon-controller.svg)](https://store.docker.com/community/images/projectsveltos/addon-controller)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/addon-controller)](https://github.com/projectsveltos/addon-controller/releases)
+[![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)
 [![Slack](https://img.shields.io/badge/join%20slack-%23projectsveltos-brighteen)](https://join.slack.com/t/projectsveltos/shared_invite/zt-1hraownbr-W8NTs6LTimxLPB8Erj8Q6Q)
 [![LinkedIn](https://custom-icon-badges.demolab.com/badge/LinkedIn-0A66C2?logo=linkedin-white&logoColor=fff)](https://www.linkedin.com/company/projectsveltos/)
 [![X URL](https://img.shields.io/twitter/url/https/twitter.com/projectsveltos.svg?style=social&label=Follow%20%40projectsveltos)](https://x.com/projectsveltos)

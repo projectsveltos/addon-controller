@@ -288,6 +288,10 @@ func handleResourceSummaryDeployment(ctx context.Context, clusterSummary *config
 		if err != nil {
 			return err
 		}
+		t := true
+		if fs := getFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureResources); fs != nil {
+			fs.ResourceSummaryDeployed = &t
+		}
 	}
 
 	return nil

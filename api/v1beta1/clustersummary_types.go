@@ -77,6 +77,12 @@ type FeatureSummary struct {
 	// LastAppliedTime is the time feature was last reconciled
 	// +optional
 	LastAppliedTime *metav1.Time `json:"lastAppliedTime,omitempty"`
+
+	// ResourceSummaryDeployed tracks whether a ResourceSummary was deployed
+	// to the managed cluster for drift detection. nil means unknown (upgrade
+	// scenario); true means currently deployed; false means removed.
+	// +optional
+	ResourceSummaryDeployed *bool `json:"resourceSummaryDeployed,omitempty"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing

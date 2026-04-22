@@ -343,7 +343,7 @@ func capiCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
 	if action == crd.Modify {
 		return
 	}
-	if gvk.Group == clusterv1.GroupVersion.Group {
+	if gvk.Group == clusterv1.GroupVersion.Group && gvk.Version == clusterv1.GroupVersion.Version {
 		setupLog.V(logs.LogInfo).Info("Initiating graceful restart due to CAPI CRD update",
 			"GVK", gvk.String(), "Action", string(action))
 
@@ -353,8 +353,8 @@ func capiCRDHandler(gvk *schema.GroupVersionKind, action crd.ChangeType) {
 	}
 }
 
-// isCAPIInstalled returns true if CAPI is installed, false otherwise
-func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
+// isCAPIInstalled returns true if CAPI is installed with v1beta2 served, false otherwise
+func isCAPIInstalled(ctx context.Context, c client.Client, logger logr.Logger) (bool, error) {
 	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
 
 	err := c.Get(ctx, types.NamespacedName{Name: "clusters.cluster.x-k8s.io"}, clusterCRD)
@@ -365,7 +365,14 @@ func isCAPIInstalled(ctx context.Context, c client.Client) (bool, error) {
 		return false, err
 	}
 
-	return true, nil
+	for _, version := range clusterCRD.Spec.Versions {
+		if version.Name == clusterv1.GroupVersion.Version && version.Served {
+			return true, nil
+		}
+	}
+
+	logger.V(logs.LogInfo).Info("clusterCRD CRD present but v1beta2 not served")
+	return false, nil
 }
 
 // fluxCRDHandler restarts process if a Flux CRD is updated
@@ -404,7 +411,7 @@ func capiWatchers(ctx context.Context, mgr ctrl.Manager, watchersForCAPI []watch
 	const maxRetries = 20
 	retries := 0
 	for {
-		capiPresent, err := isCAPIInstalled(ctx, mgr.GetClient())
+		capiPresent, err := isCAPIInstalled(ctx, mgr.GetClient(), logger)
 		if err != nil {
 			if retries < maxRetries {
 				logger.Info(fmt.Sprintf("failed to verify if CAPI is present: %v", err))

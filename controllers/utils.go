@@ -521,6 +521,9 @@ func deplAssociatedClusterExist(ctx context.Context, c client.Client, depl *apps
 		if apierrors.IsNotFound(err) {
 			return false, clusterNamespace, clusterName, clusterType
 		}
+		if clusterType == libsveltosv1beta1.ClusterTypeCapi && meta.IsNoMatchError(err) {
+			return true, clusterNamespace, clusterName, clusterType
+		}
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
 			clusterNamespace, clusterName, clusterTypeString, err))
 	}

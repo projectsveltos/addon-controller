@@ -184,4 +184,4 @@ require (
 
 // Replace digest lib to master to gather access to BLAKE3.
 // xref: https://github.com/opencontainers/go-digest/pull/66
-replace github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.1-0.20260318163012-137fd2bb009d
+replace github.com/opencontainers/go-digest => github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c

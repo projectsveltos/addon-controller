@@ -1058,9 +1058,10 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, dCtx *deploymentC
 			kubeconfig, isPullMode, logger)
 		setHelmFailureMessageOnHelmChartSummary(dCtx.clusterSummary, instantiatedChart, err)
 		if err != nil {
+			err = fmt.Errorf("chart=%s, releaseNamespace=%s, releaseName=%s: %w",
+				instantiatedChart.ChartName, instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName, err)
 			if dCtx.clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
-				errorMsg += fmt.Sprintf("chart: %s, release: %s, %v\n",
-					instantiatedChart.ChartName, instantiatedChart.ReleaseName, err)
+				errorMsg += err.Error() + "\n"
 				continue
 			}
 			return releaseReports, chartDeployed, err

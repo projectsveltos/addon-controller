@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
+	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -182,9 +183,22 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 
 		r.updateFeatureStatus(clusterSummaryScope, f.id, deployerStatus, currentHash, deployerError, logger)
 		if deployerError != nil {
-			shouldReturn, err := r.handleDeployerError(deployerError, clusterSummaryScope, f, currentHash, logger)
-			if shouldReturn {
-				return err
+			// Race: when a blocking profile is deleted while this CS's deploy was still in
+			// progress (IsInProgress=true prevented requeueClusterSummary from running), the
+			// conflict may already be gone by the time we process this result. If so, skip
+			// FailedNonRetriable and fall through to submit a new deploy immediately.
+			var nonRetriableError *configv1beta1.NonRetriableError
+			if f.id == libsveltosv1beta1.FeatureHelm && errors.As(deployerError, &nonRetriableError) &&
+				r.helmConflictResolved(ctx, clusterSummaryScope, logger) {
+
+				provisioning := libsveltosv1beta1.FeatureStatusProvisioning
+				r.updateFeatureStatus(clusterSummaryScope, f.id, &provisioning, currentHash, nil, logger)
+				return fmt.Errorf("helm conflict resolved, requeuing")
+			} else {
+				shouldReturn, err := r.handleDeployerError(deployerError, clusterSummaryScope, f, currentHash, logger)
+				if shouldReturn {
+					return err
+				}
 			}
 		}
 		if *deployerStatus == libsveltosv1beta1.FeatureStatusProvisioning {
@@ -870,6 +884,44 @@ func (r *ClusterSummaryReconciler) shouldRedeploy(ctx context.Context,
 		return false
 	}
 
+	return true
+}
+
+// helmConflictResolved returns true when all Helm charts previously in HelmChartStatusConflict
+// can now be managed by this ClusterSummary according to the in-memory chart manager.
+// HelmReleaseSummaries contain instantiated release names, so chart-manager lookups are exact.
+func (r *ClusterSummaryReconciler) helmConflictResolved(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) bool {
+
+	cs := clusterSummaryScope.ClusterSummary
+
+	var conflicted []configv1beta1.HelmChartSummary
+	for i := range cs.Status.HelmReleaseSummaries {
+		if cs.Status.HelmReleaseSummaries[i].Status == configv1beta1.HelmChartStatusConflict {
+			conflicted = append(conflicted, cs.Status.HelmReleaseSummaries[i])
+		}
+	}
+	if len(conflicted) == 0 {
+		return false
+	}
+
+	chartMgr, err := chartmanager.GetChartManagerInstance(ctx, r.Client)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to get chart manager instance")
+		return false
+	}
+
+	for i := range conflicted {
+		chart := &configv1beta1.HelmChart{
+			ReleaseNamespace: conflicted[i].ReleaseNamespace,
+			ReleaseName:      conflicted[i].ReleaseName,
+		}
+		if !chartMgr.CanManageChart(cs, chart) {
+			return false
+		}
+	}
+
+	logger.V(logs.LogDebug).Info("all previously conflicting helm charts can now be managed")
 	return true
 }
 

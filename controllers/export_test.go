@@ -222,7 +222,8 @@ var (
 )
 
 var (
-	SkipUpgrading = skipUpgrading
+	SkipUpgrading                            = skipUpgrading
+	IsDriftDetectionManagerDeployedInCluster = isDriftDetectionManagerDeployedInCluster
 )
 
 var (

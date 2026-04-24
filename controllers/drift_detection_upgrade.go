@@ -296,7 +296,12 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return true, err
 	}
 
-	// Verify if ResourceSummary CRD is present. Th
+	_, hasDrift := clustersWithDriftDetection[*clusterRef]
+	if !hasDrift && !isDriftDetectionManagerDeployedInCluster(ctx, managedClient) {
+		return true, nil // nothing to upgrade
+	}
+
+	// Verify if ResourceSummary CRD is present. The CRD is installed when drift detection manager is deployed.
 	resourceCRDPresent, err := isResourceSummaryCRDPresent(ctx, managedClient, logger)
 	if err != nil {
 		return true, err
@@ -307,6 +312,18 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 	}
 
 	return false, nil
+}
+
+func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) bool {
+	deployments := &appsv1.DeploymentList{}
+	listOptions := []client.ListOption{
+		client.InNamespace(projectsveltos),
+		client.MatchingLabels{driftDetectionFeatureLabelKey: driftDetectionFeatureLabelValue},
+	}
+	if err := c.List(ctx, deployments, listOptions...); err != nil {
+		return false
+	}
+	return len(deployments.Items) > 0
 }
 
 func isResourceSummaryCRDPresent(ctx context.Context, c client.Client, logger logr.Logger) (bool, error) {

@@ -23,10 +23,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -205,7 +207,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 
 		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused, nil, logger)
 		Expect(err).To(BeNil())
-		Expect(skip).To(BeFalse())
+		Expect(skip).To(BeTrue())
 
 		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterPaused, nil, logger)
 		Expect(err).To(BeNil())
@@ -213,6 +215,53 @@ var _ = Describe("Drift Detection Upgrade", func() {
 
 		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterNotPaused, nil, logger)
 		Expect(err).To(BeNil())
-		Expect(skip).To(BeFalse())
+		Expect(skip).To(BeTrue())
+	})
+
+	It("isDriftDetectionManagerDeployedInCluster returns false when no deployment exists", func() {
+		c := fake.NewClientBuilder().WithScheme(scheme).Build()
+		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeFalse())
+	})
+
+	It("isDriftDetectionManagerDeployedInCluster returns true when drift-detection deployment exists", func() {
+		depl := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "drift-detection-manager",
+				Namespace: "projectsveltos",
+				Labels: map[string]string{
+					"feature": "drift-detection",
+				},
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(depl).Build()
+		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeTrue())
+	})
+
+	It("isDriftDetectionManagerDeployedInCluster returns false when deployment has wrong label", func() {
+		depl := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "drift-detection-manager",
+				Namespace: "projectsveltos",
+				Labels: map[string]string{
+					"feature": "something-else",
+				},
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(depl).Build()
+		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeFalse())
+	})
+
+	It("isDriftDetectionManagerDeployedInCluster returns false when deployment is in wrong namespace", func() {
+		depl := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "drift-detection-manager",
+				Namespace: "default",
+				Labels: map[string]string{
+					"feature": "drift-detection",
+				},
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(depl).Build()
+		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeFalse())
 	})
 })

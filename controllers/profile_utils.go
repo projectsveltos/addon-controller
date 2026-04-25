@@ -977,12 +977,10 @@ func createClusterReport(ctx context.Context, c client.Client, profile client.Ob
 }
 
 // cleanClusterReports deletes ClusterReports created by this ClusterProfile/Profile instance.
+// In DryRun mode, it only removes reports for clusters that no longer match the selector.
+// In non-DryRun mode, it removes all reports created by this profile.
 func cleanClusterReports(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) error {
 	listOptions := []client.ListOption{}
-
-	if profileScope.IsDryRunSync() {
-		return nil
-	}
 
 	if profileScope.GetKind() == configv1beta1.ClusterProfileKind {
 		listOptions = append(listOptions, client.MatchingLabels{clusterops.ClusterProfileLabelName: profileScope.Name()})
@@ -998,8 +996,31 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 		return err
 	}
 
+	// In DryRun mode, only clean reports for clusters no longer matching the selector.
+	// Build a set of currently matching ClusterReport names.
+	matching := make(map[string]bool)
+	if profileScope.IsDryRunSync() {
+		for i := range profileScope.GetStatus().MatchingClusterRefs {
+			reference := profileScope.GetStatus().MatchingClusterRefs[i]
+			reportName := clusterops.GetClusterReportName(
+				profileScope.GetKind(),
+				profileScope.Name(),
+				reference.Name,
+				clusterproxy.GetClusterType(&reference),
+			)
+			matching[reportName] = true
+		}
+	}
+
 	for i := range clusterReportList.Items {
 		cr := &clusterReportList.Items[i]
+
+		// In DryRun mode, skip reports for currently matching clusters.
+		if profileScope.IsDryRunSync() {
+			if matching[cr.Name] {
+				continue
+			}
+		}
 
 		err = c.Delete(ctx, cr)
 		if err != nil {

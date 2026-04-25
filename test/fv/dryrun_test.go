@@ -711,6 +711,71 @@ var _ = Describe("DryRun", Serial, func() {
 			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
+
+		const selectorChangeNamePrefix = "dry-run-selector-change-"
+
+		It("Cleans up ClusterReports for clusters no longer matching selector",
+			Label("NEW-FV", "EXTENDED"), func() {
+			// This test verifies the fix for: when a ClusterProfile's clusterSelector
+			// changes in DryRun mode, old ClusterReports for non-matching clusters
+			// are properly cleaned up instead of lingering and causing "not found" errors.
+
+			configMapNs := randomString()
+			Byf("Create configMap's namespace %s", configMapNs)
+			ns := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configMapNs,
+				},
+			}
+			Expect(k8sClient.Create(context.TODO(), ns)).To(Succeed())
+
+			Byf("Create a configMap with kong ServiceAccount")
+			kongSAConfigMap := createConfigMapWithPolicy(configMapNs, selectorChangeNamePrefix+randomString(), kongServiceAccount)
+			Expect(k8sClient.Create(context.TODO(), kongSAConfigMap)).To(Succeed())
+
+			// Create a ClusterProfile in DryRun mode matching kindWorkloadCluster
+			clusterProfile := getClusterProfile(selectorChangeNamePrefix, map[string]string{key: value})
+			clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+			Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+
+			// Wait for ClusterReport to be created for the matching cluster
+			clusterReportName := clusterops.GetClusterReportName(
+				configv1beta1.ClusterProfileKind,
+				clusterProfile.Name,
+				kindWorkloadCluster.GetName(),
+				libsveltosv1beta1.ClusterType(kindWorkloadCluster.GetKind()),
+			)
+			Byf("Waiting for ClusterReport %s to be created", clusterReportName)
+			Eventually(func() bool {
+				currentClusterReport := &configv1beta1.ClusterReport{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: clusterReportName},
+					currentClusterReport)
+				return err == nil
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			// Now change the selector so it no longer matches kindWorkloadCluster
+			Byf("Updating ClusterProfile selector to no longer match %s/%s",
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			currentClusterProfile := &configv1beta1.ClusterProfile{}
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name},
+				currentClusterProfile)).To(Succeed())
+			currentClusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
+				LabelSelector: metav1.LabelSelector{MatchLabels: map[string]string{"different": "label"}},
+			}
+			Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+			// Verify the old ClusterReport is cleaned up
+			Byf("Verifying ClusterReport %s is deleted after selector change", clusterReportName)
+			Eventually(func() bool {
+				currentClusterReport := &configv1beta1.ClusterReport{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: clusterReportName},
+					currentClusterReport)
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
 })
 
 func verifyReleaseReport(clusterReport *configv1beta1.ClusterReport,

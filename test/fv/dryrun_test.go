@@ -585,7 +585,7 @@ var _ = Describe("DryRun", Serial, func() {
 			// Since ClusterProfile is in DryRun mode, ClusterSummary should be marked as deleted but not removed
 			// In DryRun mode ClusterReport still needs to be updated.
 
-			// First wait for clusterSummary to be marked for deletion
+			// First wait for clusterSummary to be marked for removal (helmCharts/PolicyRefs are all nil)
 			Eventually(func() bool {
 				currentClusterSummary := &configv1beta1.ClusterSummary{}
 				err = k8sClient.Get(context.TODO(),
@@ -593,7 +593,8 @@ var _ = Describe("DryRun", Serial, func() {
 				if err != nil {
 					return false
 				}
-				return !currentClusterSummary.DeletionTimestamp.IsZero()
+				return len(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 &&
+					len(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs) == 0
 			}, timeout, pollingInterval).Should(BeTrue())
 
 			// Then verify ClusterSummary is not removed.
@@ -604,7 +605,8 @@ var _ = Describe("DryRun", Serial, func() {
 				if err != nil {
 					return false
 				}
-				return !currentClusterSummary.DeletionTimestamp.IsZero()
+				return len(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts) == 0 &&
+					len(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs) == 0
 			}, timeout/2, pollingInterval).Should(BeTrue())
 
 			mariadDBRR = &libsveltosv1beta1.ResourceReport{

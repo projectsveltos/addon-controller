@@ -603,6 +603,125 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(BeZero())
 	})
 
+	It("cleanClusterSummaries in DryRun mode keeps ClusterSummary alive with cleared refs when cluster stops matching", func() {
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+
+		// ClusterSummary has Continuous syncMode and non-empty refs — as it was before the profile changed
+		clusterSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+			clusterProfile.Name, nonMatchingCluster.Name, false)
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummaryName,
+				Namespace: nonMatchingCluster.Namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: clusterProfile.APIVersion,
+						Kind:       clusterProfile.Kind,
+						Name:       clusterProfile.Name,
+					},
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: nonMatchingCluster.Namespace,
+				ClusterName:      nonMatchingCluster.Name,
+				ClusterProfileSpec: configv1beta1.Spec{
+					SyncMode:   configv1beta1.SyncModeContinuous,
+					PolicyRefs: clusterProfile.Spec.PolicyRefs,
+				},
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, nonMatchingCluster.Name,
+			libsveltosv1beta1.ClusterTypeCapi)
+
+		initObjects := []client.Object{
+			clusterProfile,
+			nonMatchingCluster,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		// DryRun: cleanClusterSummaries must not delete the ClusterSummary and must not return an error
+		Expect(controllers.CleanClusterSummaries(context.TODO(), c, profileScope)).To(Succeed())
+
+		// ClusterSummary is still present
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+
+		// Refs are cleared and syncMode is updated to DryRun
+		Expect(currentClusterSummary.Spec.ClusterProfileSpec.PolicyRefs).To(BeNil())
+		Expect(currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts).To(BeNil())
+		Expect(currentClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs).To(BeNil())
+		Expect(currentClusterSummary.Spec.ClusterProfileSpec.SyncMode).To(Equal(configv1beta1.SyncModeDryRun))
+
+		// A ClusterReport is created for the deselected cluster
+		clusterReportList := &configv1beta1.ClusterReportList{}
+		Expect(c.List(context.TODO(), clusterReportList)).To(Succeed())
+		Expect(len(clusterReportList.Items)).To(Equal(1))
+	})
+
+	It("cleanClusterConfigurations in DryRun mode keeps ClusterConfiguration intact when cluster stops matching", func() {
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeDryRun
+
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nonMatchingCluster.Namespace,
+				Name:      controllers.GetClusterConfigurationName(nonMatchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi),
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Kind:       clusterProfile.Kind,
+						Name:       clusterProfile.Name,
+						APIVersion: clusterProfile.APIVersion,
+						UID:        clusterProfile.UID,
+					},
+				},
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterProfile,
+			nonMatchingCluster,
+			clusterConfiguration,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		// No matching clusters: the ClusterConfiguration is not in the matching set
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: "clusterprofile",
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.CleanClusterConfigurations(context.TODO(), c, profileScope)).To(Succeed())
+
+		// ClusterConfiguration must still exist — the DryRun reconciler needs it
+		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name},
+			currentClusterConfiguration)).To(Succeed())
+	})
+
 	It("updateClusterSummarySyncMode updates ClusterSummary SyncMode", func() {
 		clusterSummary := &configv1beta1.ClusterSummary{
 			ObjectMeta: metav1.ObjectMeta{

@@ -397,6 +397,13 @@ func cleanClusterConfigurations(ctx context.Context, c client.Client, profileSco
 			continue
 		}
 
+		// In DryRun mode, keep the ClusterConfiguration intact so the ClusterSummary
+		// reconciler can access it during DryRun reconciliation (e.g., ChartManager init).
+		// Cleanup happens when the user commits the change and DryRun is disabled.
+		if profileScope.IsDryRunSync() {
+			continue
+		}
+
 		err = cleanClusterConfiguration(ctx, c, profileScope.Profile, cc)
 		if err != nil && !apierrors.IsNotFound(err) {
 			return err
@@ -840,6 +847,26 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 		if util.IsOwnedByObject(cs, profileScope.Profile, targetGK) {
 			if _, ok := matching[getClusterInfo(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)]; !ok {
 				clusterRef := getClusterObjectReferenceFromClusterSummary(cs)
+
+				if profileScope.IsDryRunSync() {
+					// In DryRun mode do not delete the ClusterSummary. Instead clear its
+					// helmCharts/policyRefs/kustomizationRefs and set syncMode to DryRun so
+					// that the next DryRun reconciliation shows all resources as being removed.
+					// The ClusterSummary stays alive so that if the user reverts the selector
+					// change there is no unnecessary undeploy+redeploy cycle.
+					if err := clearClusterSummaryRefs(ctx, c, cs, profileScope.GetSpec().SyncMode); err != nil {
+						profileScope.Error(err, fmt.Sprintf("failed to clear ClusterSummary refs for cluster %s/%s",
+							cs.Namespace, cs.Name))
+						return err
+					}
+					if err := createClusterReport(ctx, c, profileScope.Profile, clusterRef); err != nil {
+						profileScope.Error(err, fmt.Sprintf("failed to create ClusterReport for cluster %s/%s",
+							cs.Namespace, cs.Name))
+						return err
+					}
+					continue
+				}
+
 				currentClusterSummary, err := updateClusterSummary(ctx, c, profileScope, cs, clusterRef)
 				if err != nil {
 					profileScope.Error(err, fmt.Sprintf("failed to update ClusterSummary for cluster %s/%s",
@@ -865,6 +892,33 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 		return fmt.Errorf("clusterSummaries still present")
 	}
 	return nil
+}
+
+// clearClusterSummaryRefs zeros out the deployable content of a ClusterSummary and sets its
+// syncMode without deleting it. Used in DryRun mode when a cluster stops matching: the next
+// DryRun reconciliation will report all resources as pending removal, while the ClusterSummary
+// remains so it can be recovered cheaply if the selector is reverted.
+func clearClusterSummaryRefs(ctx context.Context, c client.Client,
+	clusterSummary *configv1beta1.ClusterSummary, syncMode configv1beta1.SyncMode) error {
+
+	cs := &configv1beta1.ClusterSummary{}
+	if err := c.Get(ctx, types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, cs); err != nil {
+		return err
+	}
+
+	if cs.Spec.ClusterProfileSpec.HelmCharts == nil &&
+		cs.Spec.ClusterProfileSpec.PolicyRefs == nil &&
+		cs.Spec.ClusterProfileSpec.KustomizationRefs == nil &&
+		cs.Spec.ClusterProfileSpec.SyncMode == syncMode {
+
+		return nil
+	}
+
+	cs.Spec.ClusterProfileSpec.HelmCharts = nil
+	cs.Spec.ClusterProfileSpec.PolicyRefs = nil
+	cs.Spec.ClusterProfileSpec.KustomizationRefs = nil
+	cs.Spec.ClusterProfileSpec.SyncMode = syncMode
+	return c.Update(ctx, cs)
 }
 
 func updateClusterSummarySyncMode(ctx context.Context, c client.Client,

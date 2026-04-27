@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -198,7 +199,14 @@ var (
 )
 
 var (
-	CollectResourceSummariesFromCluster = collectResourceSummariesFromCluster
+	CollectResourceSummariesFromCluster   = collectResourceSummariesFromCluster
+	CollectAndProcessAllResourceSummaries = collectAndProcessAllResourceSummaries
+	IsResourceSummaryInstalledCached      = isResourceSummaryInstalledCached
+	ResetResourceSummaryInstalledCache    = func() {
+		resourceSummaryInstalledCacheMu.Lock()
+		resourceSummaryInstalledCache = make(map[corev1.ObjectReference]bool)
+		resourceSummaryInstalledCacheMu.Unlock()
+	}
 )
 
 var (

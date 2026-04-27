@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -36,6 +37,16 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
+)
+
+var (
+	// resourceSummaryInstalledCache records clusters where the ResourceSummary CRD is
+	// confirmed installed. Only positive results are cached: once drift-detection is
+	// deployed it is never removed while the controller is running, so there is no need
+	// to re-check. Negative results are not cached so we keep checking until installation
+	// is complete.
+	resourceSummaryInstalledCacheMu sync.RWMutex
+	resourceSummaryInstalledCache   = make(map[corev1.ObjectReference]bool)
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
@@ -61,27 +72,107 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, sh
 			continue
 		}
 
-		for i := range clusterList {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				cluster := &clusterList[i]
-				if _, ok := clustersWithDD[*cluster]; !ok {
-					continue
-				}
+		// In agentless mode all ResourceSummaries live in the management cluster.
+		// A single List call covers every cluster, avoiding N per-cluster API calls.
+		// skipCollecting is also only invoked for clusters that actually have changes.
+		if getAgentInMgmtCluster() {
+			if err := collectAndProcessAllResourceSummaries(ctx, c, clusterList, clustersWithDD, logger); err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to collect ResourceSummaries")
+			}
+			continue
+		}
 
-				l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
-				err = collectResourceSummariesFromCluster(ctx, c, cluster, version, l)
-				if err != nil {
-					if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
-						l.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries from cluster: %s/%s %v",
-							cluster.Namespace, cluster.Name, err))
-					}
-				}
+		// Intersect clusterList (shard-filtered) with clustersWithDD. clustersWithDD is
+		// built from all ClusterProfiles/Profiles without shard awareness, so it can
+		// contain clusters owned by other addon-controller shards. Only process clusters
+		// that belong to this shard AND have drift detection deployed.
+		var shardLocalDDClusters []corev1.ObjectReference
+		for i := range clusterList {
+			if _, ok := clustersWithDD[clusterList[i]]; ok {
+				shardLocalDDClusters = append(shardLocalDDClusters, clusterList[i])
+			}
+		}
+
+		if err = processShardLocalDDClusters(ctx, c, shardLocalDDClusters, version, logger); err != nil {
+			return
+		}
+	}
+}
+
+// collectAndProcessAllResourceSummaries is used in agentless mode. It fetches all
+// ResourceSummaries from the management cluster in a single List call, groups the
+// changed ones by cluster, and processes only those clusters — skipping the N
+// per-cluster List calls that the standard path would otherwise make.
+func collectAndProcessAllResourceSummaries(ctx context.Context, c client.Client,
+	clusterList []corev1.ObjectReference, clustersWithDD map[corev1.ObjectReference]bool,
+	logger logr.Logger) error {
+
+	// Build a lookup of shard-local clusters that have drift detection deployed,
+	// keyed by namespace/name/clusterType to correctly distinguish a SveltosCluster
+	// from a CAPI Cluster that share the same namespace and name.
+	type clusterKey struct{ ns, name, clusterType string }
+	localClustersWithDD := make(map[clusterKey]corev1.ObjectReference, len(clusterList))
+	for i := range clusterList {
+		ref := clusterList[i]
+		if _, ok := clustersWithDD[ref]; ok {
+			ct := strings.ToLower(string(clusterproxy.GetClusterType(&ref)))
+			localClustersWithDD[clusterKey{ref.Namespace, ref.Name, ct}] = ref
+		}
+	}
+
+	rsList := libsveltosv1beta1.ResourceSummaryList{}
+	if err := getManagementClusterClient().List(ctx, &rsList); err != nil {
+		return err
+	}
+
+	// Group changed ResourceSummaries by cluster.
+	changedByCluster := make(map[clusterKey][]*libsveltosv1beta1.ResourceSummary)
+	for i := range rsList.Items {
+		rs := &rsList.Items[i]
+		if !rs.DeletionTimestamp.IsZero() {
+			continue
+		}
+		if !rs.Status.ResourcesChanged && !rs.Status.HelmResourcesChanged && !rs.Status.KustomizeResourcesChanged {
+			continue
+		}
+		clusterNamespace, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+		if !ok {
+			continue
+		}
+		if rs.Labels == nil {
+			continue
+		}
+		clusterName := rs.Labels[sveltos_upgrade.ClusterNameLabel]
+		clusterType := rs.Labels[sveltos_upgrade.ClusterTypeLabel]
+		if clusterName == "" || clusterType == "" {
+			continue
+		}
+		key := clusterKey{clusterNamespace, clusterName, clusterType}
+		if _, ok := localClustersWithDD[key]; !ok {
+			continue
+		}
+		changedByCluster[key] = append(changedByCluster[key], rs)
+	}
+
+	mgmtClient := getManagementClusterClient()
+	for key, changed := range changedByCluster {
+		ref := localClustersWithDD[key]
+		l := logger.WithValues("cluster", fmt.Sprintf("%s/%s/%s", key.ns, key.name, key.clusterType))
+
+		skip, err := skipCollecting(ctx, c, &ref, l)
+		if err != nil || skip {
+			continue
+		}
+
+		for _, rs := range changed {
+			if err := processResourceSummary(ctx, mgmtClient, rs, l); err != nil {
+				l.V(logs.LogInfo).Error(err, fmt.Sprintf("failed to process ResourceSummary %s/%s",
+					rs.Namespace, rs.Name))
 			}
 		}
 	}
+
+	return nil
 }
 
 func skipCollecting(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
@@ -117,6 +208,83 @@ func skipCollecting(ctx context.Context, c client.Client, cluster *corev1.Object
 	return false, nil
 }
 
+const (
+	// clustersPerWorker controls how many clusters each worker goroutine is responsible for.
+	clustersPerWorker = 50
+	// maxCollectionWorkers caps the number of concurrent goroutines collecting ResourceSummaries.
+	maxCollectionWorkers = 5
+)
+
+// processShardLocalDDClusters collects and processes ResourceSummaries for the given
+// clusters. It runs sequentially when there are fewer than clustersPerWorker clusters,
+// and spawns up to maxCollectionWorkers goroutines otherwise.
+func processShardLocalDDClusters(ctx context.Context, c client.Client,
+	clusters []corev1.ObjectReference, version string, logger logr.Logger) error {
+
+	logErr := func(cluster *corev1.ObjectReference, err error) {
+		if !strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs") {
+			logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)).
+				V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ResourceSummaries: %v", err))
+		}
+	}
+
+	numWorkers := len(clusters) / clustersPerWorker
+	if numWorkers > maxCollectionWorkers {
+		numWorkers = maxCollectionWorkers
+	}
+
+	if numWorkers == 0 {
+		// Sequential: fewer than clustersPerWorker clusters, goroutine overhead not justified.
+		for i := range clusters {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+			cluster := clusters[i]
+			l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+			if err := collectResourceSummariesFromCluster(ctx, c, &cluster, version, l); err != nil {
+				logErr(&cluster, err)
+			}
+		}
+		return nil
+	}
+
+	// Parallel: one worker per clustersPerWorker clusters, capped at maxCollectionWorkers.
+	work := make(chan corev1.ObjectReference, len(clusters))
+	for _, cluster := range clusters {
+		work <- cluster
+	}
+	close(work)
+
+	var wg sync.WaitGroup
+	for range numWorkers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for cluster := range work {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				l := logger.WithValues("cluster", fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name))
+				if err := collectResourceSummariesFromCluster(ctx, c, &cluster, version, l); err != nil {
+					logErr(&cluster, err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
+}
+
 func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
 	version string, logger logr.Logger) error {
 
@@ -149,7 +317,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 	if clusterClient != nil {
 		// not in pull mode
 		var installed bool
-		installed, err = isResourceSummaryInstalled(ctx, clusterClient)
+		installed, err = isResourceSummaryInstalledCached(ctx, clusterClient, cluster)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to verify if ResourceSummary is installed")
 			return err
@@ -216,6 +384,32 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 	}
 
 	return nil
+}
+
+// isResourceSummaryInstalledCached returns true if the ResourceSummary CRD is installed
+// in the managed cluster identified by cluster. Positive results are cached for the
+// lifetime of the process: drift-detection is never removed from a cluster while the
+// controller is running, so a confirmed installation never needs to be re-checked.
+func isResourceSummaryInstalledCached(ctx context.Context, c client.Client,
+	cluster *corev1.ObjectReference) (bool, error) {
+
+	resourceSummaryInstalledCacheMu.RLock()
+	cached := resourceSummaryInstalledCache[*cluster]
+	resourceSummaryInstalledCacheMu.RUnlock()
+	if cached {
+		return true, nil
+	}
+
+	installed, err := isResourceSummaryInstalled(ctx, c)
+	if err != nil {
+		return false, err
+	}
+	if installed {
+		resourceSummaryInstalledCacheMu.Lock()
+		resourceSummaryInstalledCache[*cluster] = true
+		resourceSummaryInstalledCacheMu.Unlock()
+	}
+	return installed, nil
 }
 
 // isResourceSummaryInstalled returns true if ResourceSummary CRD is installed, false otherwise

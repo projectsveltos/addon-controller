@@ -223,13 +223,13 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeFalse())
 	})
 
-	It("isDriftDetectionManagerDeployedInCluster returns true when drift-detection deployment exists", func() {
+	It("isDriftDetectionManagerDeployedInCluster returns true when drift-detection-manager deployment exists", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "drift-detection-manager",
 				Namespace: "projectsveltos",
 				Labels: map[string]string{
-					"feature": "drift-detection",
+					"control-plane": "drift-detection-manager",
 				},
 			},
 		}
@@ -237,13 +237,13 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		Expect(controllers.IsDriftDetectionManagerDeployedInCluster(context.TODO(), c)).To(BeTrue())
 	})
 
-	It("isDriftDetectionManagerDeployedInCluster returns false when deployment has wrong label", func() {
+	It("isDriftDetectionManagerDeployedInCluster returns false when deployment has wrong name", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "drift-detection-manager",
+				Name:      "some-other-deployment",
 				Namespace: "projectsveltos",
 				Labels: map[string]string{
-					"feature": "something-else",
+					"control-plane": "drift-detection-manager",
 				},
 			},
 		}
@@ -257,7 +257,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 				Name:      "drift-detection-manager",
 				Namespace: "default",
 				Labels: map[string]string{
-					"feature": "drift-detection",
+					"control-plane": "drift-detection-manager",
 				},
 			},
 		}

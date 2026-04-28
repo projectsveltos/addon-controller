@@ -259,8 +259,6 @@ github.com/onsi/ginkgo/v2 v2.28.1 h1:S4hj+HbZp40fNKuLUQOYLDgZLwNUVn19N3Atb98NCyI
 github.com/onsi/ginkgo/v2 v2.28.1/go.mod h1:CLtbVInNckU3/+gC8LzkGUb9oF+e8W8TdUsxPwvdOgE=
 github.com/onsi/gomega v1.39.1 h1:1IJLAad4zjPn2PsnhH70V4DKRFlrCzGBNrNaru+Vf28=
 github.com/onsi/gomega v1.39.1/go.mod h1:hL6yVALoTOxeWudERyfppUcZXjMwIMLnuSfruD2lcfg=
-github.com/opencontainers/go-digest v1.0.1-0.20260318163012-137fd2bb009d h1:QZUC8fu3Kn4FhwIPx+9tnSZWtfcoNCXAKPX6yyJCoss=
-github.com/opencontainers/go-digest v1.0.1-0.20260318163012-137fd2bb009d/go.mod h1:RqnyioA3pIEZMkSbOIcrw32YSgETfn/VrLuEikEdPNU=
 github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c h1:dTJQx6HDrRNmA3p5JlfVYw81R3g2RfWdG0+ZBaJeqcc=
 github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c/go.mod h1:RqnyioA3pIEZMkSbOIcrw32YSgETfn/VrLuEikEdPNU=
 github.com/opencontainers/go-digest/blake3 v0.0.0-20250116041648-1e56c6daea3b h1:nAiL9bmUK4IzFrKoVMRykv0iYGdoit5vpbPaVCZ+fI4=
@@ -276,8 +274,6 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v1.8.1-0.20260422123949-ee3c3d0f960e h1:6U0OrYtquxjcuHLROBpcva1fofBae9c+nGhRg6xqgRI=
-github.com/projectsveltos/libsveltos v1.8.1-0.20260422123949-ee3c3d0f960e/go.mod h1:0K9ZLuYL/g0OonfhRVkHMyDYWuFt24EhvTtjTbUu3+Y=
 github.com/projectsveltos/libsveltos v1.8.1-0.20260422193357-a670bbae8df8 h1:XR0ebx6/L4q+GvYlmvNEhyrF5ALMMVSySgkJ5bW6iAw=
 github.com/projectsveltos/libsveltos v1.8.1-0.20260422193357-a670bbae8df8/go.mod h1:0K9ZLuYL/g0OonfhRVkHMyDYWuFt24EhvTtjTbUu3+Y=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=

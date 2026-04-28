@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -296,34 +295,17 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return true, err
 	}
 
-	// Verify if ResourceSummary CRD is present. Th
-	resourceCRDPresent, err := isResourceSummaryCRDPresent(ctx, managedClient, logger)
-	if err != nil {
-		return true, err
-	}
-
-	if !resourceCRDPresent {
-		return true, nil
+	if !isDriftDetectionManagerDeployedInCluster(ctx, managedClient) {
+		return true, nil // nothing to upgrade
 	}
 
 	return false, nil
 }
 
-func isResourceSummaryCRDPresent(ctx context.Context, c client.Client, logger logr.Logger) (bool, error) {
-	resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
-
-	err := c.Get(ctx, types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"},
-		resourceSummaryCRD)
-
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		logger.V(logs.LogInfo).Error(err, "failed to verify presence of ResourceSummary CRD")
-		return false, err
-	}
-
-	return true, nil
+func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) bool {
+	deployment := &appsv1.Deployment{}
+	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: "drift-detection-manager"}, deployment)
+	return err == nil
 }
 
 func getListOfClustersWithDriftDetection(ctx context.Context, c client.Client,

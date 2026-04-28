@@ -33,7 +33,7 @@ require (
 	k8s.io/component-base v0.35.4
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5
-	sigs.k8s.io/cluster-api v1.13.0
+	sigs.k8s.io/cluster-api v1.13.1
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/kustomize/kyaml v0.21.1
@@ -172,14 +172,14 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 	k8s.io/apiserver v0.35.4 // indirect
-	k8s.io/cluster-bootstrap v0.35.3 // indirect
+	k8s.io/cluster-bootstrap v0.35.4 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/kubectl v0.35.1 // indirect
 	oras.land/oras-go/v2 v2.6.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 )
 
 // Replace digest lib to master to gather access to BLAKE3.

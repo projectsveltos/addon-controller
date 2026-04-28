@@ -295,17 +295,28 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return true, err
 	}
 
-	if !isDriftDetectionManagerDeployedInCluster(ctx, managedClient) {
-		return true, nil // nothing to upgrade
+	present, err := isDriftDetectionManagerDeployedInCluster(ctx, managedClient)
+	if err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to verify presence of drift-detection-manager deployment")
+		return true, err
 	}
 
-	return false, nil
+	return present, nil
 }
 
-func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) bool {
+func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) (bool, error) {
 	deployment := &appsv1.Deployment{}
+	// A test in pkg/drift-detection makes sure this name is correct
 	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: "drift-detection-manager"}, deployment)
-	return err == nil
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }
 
 func getListOfClustersWithDriftDetection(ctx context.Context, c client.Client,

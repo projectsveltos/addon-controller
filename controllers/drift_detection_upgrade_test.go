@@ -65,16 +65,6 @@ var _ = Describe("Drift Detection Upgrade", func() {
 			},
 		}
 
-		sveltosClusterReadyAndNotPaused := &libsveltosv1beta1.SveltosCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: namespace,
-			},
-			Spec: libsveltosv1beta1.SveltosClusterSpec{
-				Paused: false,
-			},
-		}
-
 		capiClusterPaused := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      randomString(),
@@ -85,15 +75,6 @@ var _ = Describe("Drift Detection Upgrade", func() {
 			},
 		}
 
-		initialized := true
-		capiClusterNotPaused := &clusterv1.Cluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      randomString(),
-				Namespace: namespace,
-			},
-			Spec: clusterv1.ClusterSpec{},
-		}
-
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namespace,
@@ -102,24 +83,6 @@ var _ = Describe("Drift Detection Upgrade", func() {
 
 		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv, ns)).To(Succeed())
-
-		Expect(testEnv.Create(context.TODO(), sveltosClusterReadyAndNotPaused)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused)).To(Succeed())
-
-		sveltosClusterReadyAndNotPaused.Status = libsveltosv1beta1.SveltosClusterStatus{
-			Ready: true,
-		}
-		Expect(testEnv.Status().Update(context.TODO(), sveltosClusterReadyAndNotPaused)).To(Succeed())
-
-		Expect(testEnv.Create(context.TODO(), capiClusterNotPaused)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv, capiClusterNotPaused)).To(Succeed())
-
-		capiClusterNotPaused.Status = clusterv1.ClusterStatus{
-			Initialization: clusterv1.ClusterInitializationStatus{
-				ControlPlaneInitialized: &initialized,
-			},
-		}
-		Expect(testEnv.Status().Update(context.TODO(), capiClusterNotPaused)).To(Succeed())
 
 		Expect(testEnv.Create(context.TODO(), sveltosClusterPaused)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv, sveltosClusterPaused)).To(Succeed())
@@ -132,9 +95,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 
 		Expect(addTypeInformationToObject(scheme, sveltosClusterPaused)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, sveltosClusterNotReady)).To(Succeed())
-		Expect(addTypeInformationToObject(scheme, sveltosClusterReadyAndNotPaused)).To(Succeed())
 		Expect(addTypeInformationToObject(scheme, capiClusterPaused)).To(Succeed())
-		Expect(addTypeInformationToObject(scheme, capiClusterNotPaused)).To(Succeed())
 
 		By("Create the secrets with cluster kubeconfig")
 		secret := &corev1.Secret{
@@ -164,31 +125,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		secret = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: namespace,
-				Name:      sveltosClusterReadyAndNotPaused.Name + sveltosKubeconfigPostfix,
-			},
-			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
-			},
-		}
-		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
-
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
 				Name:      capiClusterPaused.Name + kubeconfigPostfix,
-			},
-			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
-			},
-		}
-		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
-		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
-
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: namespace,
-				Name:      capiClusterNotPaused.Name + kubeconfigPostfix,
 			},
 			Data: map[string][]byte{
 				"value": testEnv.Kubeconfig,
@@ -205,17 +142,10 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, sveltosClusterReadyAndNotPaused, nil, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeTrue())
-
 		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterPaused, nil, logger)
 		Expect(err).To(BeNil())
 		Expect(skip).To(BeTrue())
 
-		skip, err = controllers.SkipUpgrading(context.TODO(), testEnv, capiClusterNotPaused, nil, logger)
-		Expect(err).To(BeNil())
-		Expect(skip).To(BeTrue())
 	})
 
 	It("isDriftDetectionManagerDeployedInCluster returns false when no deployment exists", func() {

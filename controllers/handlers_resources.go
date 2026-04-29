@@ -82,6 +82,15 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if !isPullMode {
+		// In pullMode this is validated by the agent
+		err = validatePreDeployChecks(ctx, c, clusterSummary, libsveltosv1beta1.FeatureResources, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to validate preDeployChecks: %v")
+			return fmt.Errorf("failed to validate preDeployChecks %w", err)
+		}
+	}
+
 	featureHandler := getHandlersForFeature(libsveltosv1beta1.FeatureResources)
 	localResourceReports, remoteResourceReports, deployError := deployPolicyRefs(ctx, c, remoteRestConfig, remoteClient,
 		clusterSummary, featureHandler, logger)

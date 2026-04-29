@@ -1146,6 +1146,13 @@ func (in *ProfileSpec) DeepCopyInto(out *ProfileSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.PreDeployChecks != nil {
+		in, out := &in.PreDeployChecks, &out.PreDeployChecks
+		*out = make([]apiv1beta1.ValidateHealth, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.ValidateHealths != nil {
 		in, out := &in.ValidateHealths, &out.ValidateHealths
 		*out = make([]apiv1beta1.ValidateHealth, len(*in))
@@ -1314,6 +1321,13 @@ func (in *Spec) DeepCopyInto(out *Spec) {
 	if in.KustomizationRefs != nil {
 		in, out := &in.KustomizationRefs, &out.KustomizationRefs
 		*out = make([]KustomizationRef, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.PreDeployChecks != nil {
+		in, out := &in.PreDeployChecks, &out.PreDeployChecks
+		*out = make([]apiv1beta1.ValidateHealth, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

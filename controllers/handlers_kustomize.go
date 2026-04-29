@@ -127,6 +127,15 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if !isPullMode {
+		// In pullMode this is validated by the agent
+		err = validatePreDeployChecks(ctx, c, clusterSummary, libsveltosv1beta1.FeatureKustomize, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to validate preDeployChecks: %v")
+			return errors.Wrapf(err, "failed to validate preDeployChecks")
+		}
+	}
+
 	localResourceReports, remoteResourceReports, deployError := deployEachKustomizeRefs(ctx, c, remoteRestConfig,
 		clusterSummary, logger)
 

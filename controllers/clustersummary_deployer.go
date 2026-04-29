@@ -274,6 +274,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	var pullmodeStatus *libsveltosv1beta1.FeatureStatus
+	var isProcessingMismatch bool
 
 	if isConfigSame {
 		pullmodeHash, err := pullmode.GetRequestorHash(ctx, getManagementClusterClient(),
@@ -293,7 +294,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 	if isConfigSame {
 		// only if configuration hash matches, check if feature is deployed
 		logger.V(logs.LogDebug).Info("hash has not changed")
-		pullmodeStatus = r.proceesAgentDeploymentStatus(ctx, clusterSummaryScope, f, logger)
+		pullmodeStatus, isProcessingMismatch = r.proceesAgentDeploymentStatus(ctx, clusterSummaryScope, f, logger)
 	}
 
 	if pullmodeStatus != nil {
@@ -314,9 +315,20 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 			return pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
 				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
 		case libsveltosv1beta1.FeatureStatusProvisioning:
+			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
+			if isProcessingMismatch {
+				// The agent has not yet processed the current ConfigurationGroup generation or
+				// requestor hash. Back off using HealthErrorRetryTime so the addon-controller
+				// does not update the ConfigurationGroup again before the agent is done.
+				logger.V(logs.LogInfo).Info("MGIANLUC isProcessingMismatch")
+				return &clusterops.HealthCheckError{
+					FeatureID:   f.id,
+					CheckName:   "agent-processing",
+					InternalErr: errors.New("ConfigurationGroup generation or requestor hash not yet processed by agent"),
+				}
+			}
 			msg := "agent is provisioning the content"
 			logger.V(logs.LogDebug).Info(msg)
-			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
 			return errors.New(msg)
 		case libsveltosv1beta1.FeatureStatusFailed:
 			logger.V(logs.LogDebug).Info("agent failed provisioning the content")
@@ -647,10 +659,12 @@ func genericUndeploy(ctx context.Context, c client.Client,
 }
 
 // If SveltosCluster is in pull mode, verify whether agent has pulled and successuffly deployed it.
-// Updates the ClusterSummary status accordingly
+// Updates the ClusterSummary status accordingly.
+// Returns the feature status and whether the result was a processing mismatch (agent has not yet
+// finished processing the current ConfigurationGroup generation or hash).
 func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, f feature, logger logr.Logger,
-) *libsveltosv1beta1.FeatureStatus {
+) (*libsveltosv1beta1.FeatureStatus, bool) {
 
 	logger.V(logs.LogDebug).Info("Verify if agent has deployed content and process it")
 
@@ -688,8 +702,13 @@ func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Cont
 
 	if err != nil {
 		if pullmode.IsProcessingMismatch(err) {
+			// Always surface any error the agent already recorded, even though the
+			// generation/hash hasn't settled yet, so it appears in ClusterSummary.
+			if status != nil && status.FailureMessage != nil {
+				clusterSummaryScope.SetFailureMessage(f.id, status.FailureMessage)
+			}
 			provisioning := libsveltosv1beta1.FeatureStatusProvisioning
-			return &provisioning
+			return &provisioning, true
 		}
 		errorMsg := err.Error()
 		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
@@ -700,7 +719,7 @@ func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Cont
 		clusterSummaryScope.SetFailureMessage(f.id, status.FailureMessage)
 	}
 
-	return status.DeploymentStatus
+	return status.DeploymentStatus, false
 }
 
 // isFeatureStatusPresent returns true if feature status is set.

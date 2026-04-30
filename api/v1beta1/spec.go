@@ -850,9 +850,18 @@ type Spec struct {
 	// +optional
 	KustomizationRefs []KustomizationRef `json:"kustomizationRefs,omitempty"`
 
-	// ValidateHealths is a slice of Lua functions to run against
-	// the managed cluster to validate the state of those add-ons/applications
-	// is healthy
+	// PreDeployChecks is a slice of checks to run against the managed cluster
+	// *before* Sveltos starts deploying resources.
+	// Each check can use Lua scripts or CEL expressions to validate the cluster state.
+	// If any check fails, the deployment of the associated feature is halted.
+	// +listType=atomic
+	// +optional
+	PreDeployChecks []libsveltosv1beta1.ValidateHealth `json:"preDeployChecks,omitempty"`
+
+	// ValidateHealths is a slice of checks to run against the managed cluster
+	// *after* resources are deployed to validate that the state of the
+	// add-ons/applications is healthy.
+	// Each check can select resources and validate them using Lua scripts or CEL expressions.
 	// +listType=atomic
 	// +optional
 	ValidateHealths []libsveltosv1beta1.ValidateHealth `json:"validateHealths,omitempty"`
@@ -886,16 +895,18 @@ type Spec struct {
 	// +optional
 	MaxConsecutiveFailures *uint `json:"maxConsecutiveFailures,omitempty"`
 
-	// PreDeleteChecks is a slice of Lua functions to run against
-	// the managed cluster *before* Sveltos starts deleting resources.
+	// PreDeleteChecks is a slice of checks to run against the managed cluster
+	// *before* Sveltos starts deleting resources.
 	// If any of these fail, the deletion process is halted.
+	// Each check can select resources and validate them using Lua scripts or CEL expressions.
 	// +listType=atomic
 	// +optional
 	PreDeleteChecks []libsveltosv1beta1.ValidateHealth `json:"preDeleteChecks,omitempty"`
 
-	// PostDeleteChecks is a slice of Lua functions to run against
-	// the managed cluster *after* Sveltos has deleted all resources.
+	// PostDeleteChecks is a slice of checks to run against the managed cluster
+	// *after* Sveltos has deleted all resources.
 	// This ensures that the environment has reached the desired clean state.
+	// Each check can select resources and validate them using Lua scripts or CEL expressions.
 	// +listType=atomic
 	// +optional
 	PostDeleteChecks []libsveltosv1beta1.ValidateHealth `json:"postDeleteChecks,omitempty"`

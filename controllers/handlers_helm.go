@@ -179,6 +179,15 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		return err
 	}
 
+	if !isPullMode {
+		// In pullMode this is validated by the agent
+		err = validatePreDeployChecks(ctx, c, clusterSummary, libsveltosv1beta1.FeatureHelm, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to validate preDeployChecks: %v")
+			return errors.Wrapf(err, "failed to validate preDeployChecks")
+		}
+	}
+
 	configurationHash, _ := o.HandlerOptions[configurationHash].([]byte)
 	err = handleCharts(ctx, clusterSummary, c, remoteClient, kubeconfig, isPullMode, configurationHash, mgmtResources, logger)
 	if err != nil {

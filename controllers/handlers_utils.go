@@ -1604,6 +1604,7 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 	setters = append(setters, pullmode.WithTier(clusterSummary.Spec.ClusterProfileSpec.Tier),
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
+		pullmode.WithPreDeployChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks),
 		pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths),
 		pullmode.WithDeployedGVKs(gvks))
 
@@ -1774,4 +1775,24 @@ func getValuesFrom(ctx context.Context, c client.Client, clusterSummary *configv
 		}
 	}
 	return valuesToInstantiate, valuesToUse, nil
+}
+
+func validatePreDeployChecks(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	featureID libsveltosv1beta1.FeatureID, logger logr.Logger) error {
+
+	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+	clusterNamespace := clusterSummary.Spec.ClusterNamespace
+	clusterName := clusterSummary.Spec.ClusterName
+	clusterType := clusterSummary.Spec.ClusterType
+
+	cacheMgr := clustercache.GetManager()
+
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+		adminNamespace, adminName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+
+	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig,
+		clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, featureID, false, logger)
 }

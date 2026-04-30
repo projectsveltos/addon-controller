@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -161,7 +162,13 @@ type ClusterConfigurationList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterConfiguration{}, &ClusterConfigurationList{})
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(GroupVersion,
+			&ClusterConfiguration{},
+			&ClusterConfigurationList{},
+		)
+		return nil
+	})
 }
 
 // GetClusterConfigurationSectionIndex returns Status.ClusterProfileResources index for given ClusterProfile.

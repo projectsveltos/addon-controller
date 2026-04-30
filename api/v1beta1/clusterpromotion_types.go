@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -425,5 +426,11 @@ type ClusterPromotionList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ClusterPromotion{}, &ClusterPromotionList{})
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(GroupVersion,
+			&ClusterPromotion{},
+			&ClusterPromotionList{},
+		)
+		return nil
+	})
 }

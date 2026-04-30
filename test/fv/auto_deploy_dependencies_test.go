@@ -97,7 +97,7 @@ var _ = Describe("Feature", func() {
 
 	It("With AutoDeployDependencies set Sveltos resolves all prerequesities",
 		Label("NEW-FV", "NEW-FV-PULLMODE"), func() {
-			Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector is not set
+			Byf("Create a ClusterProfile matching NO Cluster") // clusterSelector intentionally matches nothing
 			helmClusterProfile := getClusterProfile(namePrefix, map[string]string{})
 			Byf("Create ClusterProfile %s to deploy Kyverno helm chart", helmClusterProfile.Name)
 			helmClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{

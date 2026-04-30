@@ -229,14 +229,12 @@ func (m *instance) GetClusterDeployments(profile *corev1.ObjectReference) []core
 	}
 
 	m.chartMux.RLock()
-	clusters := m.profileClusterRequests.getClusterDeployments(profile)
-	m.chartMux.RUnlock()
+	defer m.chartMux.RUnlock()
 
-	results := make([]corev1.ObjectReference, len(clusters.Clusters))
-	i := 0
+	clusters := m.profileClusterRequests.getClusterDeployments(profile)
+	results := make([]corev1.ObjectReference, 0, len(clusters.Clusters))
 	for c := range clusters.Clusters {
-		results[i] = c
-		i++
+		results = append(results, c)
 	}
 
 	return results

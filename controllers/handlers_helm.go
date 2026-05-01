@@ -404,6 +404,9 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to GetDeploymentStatus: %v", err))
+			_ = pullmode.TerminateDeploymentTracking(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+				string(libsveltosv1beta1.FeatureHelm), logger)
 			return err
 		}
 	} else {

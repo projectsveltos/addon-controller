@@ -403,6 +403,12 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 		string(libsveltosv1beta1.FeatureHelm), logger)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			if pullmode.IsActionNotSetToDeploy(err) {
+				// CG is already in ActionRemove state — RemoveDeployedResources was called in a previous
+				// cycle. processUndeployResultInPullMode monitors completion via GetRemoveStatus and will
+				// call TerminateDeploymentTracking once the agent finishes. Nothing to do here.
+				return nil
+			}
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to GetDeploymentStatus: %v", err))
 			return err
 		}

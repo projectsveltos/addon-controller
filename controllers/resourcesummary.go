@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -46,6 +45,7 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	pullmode "github.com/projectsveltos/libsveltos/lib/pullmode"
+	"github.com/projectsveltos/libsveltos/lib/randutils"
 )
 
 const (
@@ -507,7 +507,7 @@ func getInstantiatedObjectName(objects []client.Object) (name string, err error)
 		// be picked
 		prefix := "drift-detection-"
 		const nameLength = 20
-		name = prefix + util.RandomString(nameLength)
+		name = prefix + randutils.RandomString(nameLength)
 		err = nil
 	case 1:
 		name = objects[0].GetName()

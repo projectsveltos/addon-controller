@@ -320,7 +320,6 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 				// The agent has not yet processed the current ConfigurationGroup generation or
 				// requestor hash. Back off using HealthErrorRetryTime so the addon-controller
 				// does not update the ConfigurationGroup again before the agent is done.
-				logger.V(logs.LogInfo).Info("MGIANLUC isProcessingMismatch")
 				return &clusterops.HealthCheckError{
 					FeatureID:   f.id,
 					CheckName:   "agent-processing",
@@ -589,6 +588,7 @@ func (r *ClusterSummaryReconciler) processUndeployResultInPullMode(ctx context.C
 		}
 		errorMsg := err.Error()
 		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+		return err
 	} else {
 		if agentStatus != nil {
 			if agentStatus.DeploymentStatus != nil && *agentStatus.DeploymentStatus == libsveltosv1beta1.FeatureStatusRemoved {

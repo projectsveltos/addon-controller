@@ -275,9 +275,10 @@ func updateClusterConfigurationOwnerReferences(ctx context.Context, c client.Cli
 			return err
 		}
 
-		currentClusterConfiguration.OwnerReferences = util.EnsureOwnerRef(clusterConfiguration.OwnerReferences, ownerRef)
+		currentClusterConfiguration.OwnerReferences = util.EnsureOwnerRef(currentClusterConfiguration.OwnerReferences, ownerRef)
 		return c.Update(ctx, currentClusterConfiguration)
 	})
+
 	return err
 }
 
@@ -347,7 +348,6 @@ func updateClusterConfigurations(ctx context.Context, c client.Client, profileSc
 				cluster.Namespace, cluster.Name))
 			return err
 		}
-
 		// Update ClusterConfiguration
 		err = updateClusterConfigurationWithProfile(ctx, c, profileScope.Profile, &cluster)
 		if err != nil {

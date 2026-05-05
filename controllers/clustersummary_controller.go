@@ -394,18 +394,36 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		return reconcile.Result{}, fmt.Errorf("failed to remove finalizer")
 	}
 
-	if err := r.deleteChartMap(ctx, clusterSummaryScope, logger); err != nil {
+	if err := r.postFinalizerCleanup(ctx, clusterSummaryScope, logger); err != nil {
 		return reconcile.Result{}, err
 	}
-
-	r.cleanMaps(clusterSummaryScope)
-
-	manager := getManager()
-	manager.stopStaleWatchForTemplateResourceRef(ctx, clusterSummaryScope.ClusterSummary, true)
 
 	logger.V(logs.LogDebug).Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
+}
+
+func (r *ClusterSummaryReconciler) postFinalizerCleanup(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
+
+	if err := r.deleteChartMap(ctx, clusterSummaryScope, logger); err != nil {
+		return err
+	}
+
+	r.cleanMaps(clusterSummaryScope)
+
+	cs := clusterSummaryScope.ClusterSummary
+	if err := sharding.UnregisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
+		string(libsveltosv1beta1.FeatureHelm), cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+		cs.Spec.ClusterType); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to unregister cluster shard: %v", err))
+		return err
+	}
+
+	manager := getManager()
+	manager.stopStaleWatchForTemplateResourceRef(ctx, clusterSummaryScope.ClusterSummary, true)
+
+	return nil
 }
 
 func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
@@ -1568,6 +1586,20 @@ func (r *ClusterSummaryReconciler) removeResourceSummary(ctx context.Context,
 
 func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
+
+	// When the cluster no longer exists every pod is considered a shard match (so cleanup can
+	// proceed), but that also means every pod would write its own ShardKey for the same clusterId
+	// to the shared ConfigMap. Whichever pod reads back a key written by a different pod would see
+	// hasShardChanged=true and restart — causing a restart storm at scale. Skip shard tracking for
+	// non-existent clusters; the cleanup path does not need it.
+	_, err := clusterproxy.GetCluster(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
 
 	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
 		string(libsveltosv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,

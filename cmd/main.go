@@ -611,15 +611,6 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 
 	var err error
 
-	if err := (&controllers.ClusterPromotionReconciler{
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		Config:               mgr.GetConfig(),
-		ConcurrentReconciles: concurrentReconciles,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
-		os.Exit(1)
-	}
 	//+kubebuilder:scaffold:builder
 	if err = (&controllers.SveltosClusterReconciler{
 		Client: mgr.GetClient(),
@@ -667,6 +658,16 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 			os.Exit(1)
 		}
 		watchersForCAPI = append(watchersForCAPI, setReconciler)
+
+		if err := (&controllers.ClusterPromotionReconciler{
+			Client:               mgr.GetClient(),
+			Scheme:               mgr.GetScheme(),
+			Config:               mgr.GetConfig(),
+			ConcurrentReconciles: concurrentReconciles,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
+			os.Exit(1)
+		}
 	}
 
 	clusterSummaryReconciler := getClusterSummaryReconciler(ctx, mgr)

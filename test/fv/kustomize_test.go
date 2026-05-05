@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -72,6 +73,10 @@ var _ = Describe("Kustomize with GitRepository", func() {
 			mgmtClusterProfile.Name, &mgmtClusterProfile.Spec,
 			mgmt, mgmt, string(libsveltosv1beta1.ClusterTypeSveltos))
 
+		fluxValues := `sourceController:
+  create: true
+installCRDs: true`
+
 		By("Deploying Flux on the management cluster")
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -90,6 +95,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 					ReleaseName:      "flux2",
 					ReleaseNamespace: gitRepositoryNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values:           fluxValues,
 				},
 			}
 			return k8sClient.Update(context.TODO(), currentClusterProfile)
@@ -119,6 +125,18 @@ var _ = Describe("Kustomize with GitRepository", func() {
 			return err == nil && deployment.Status.AvailableReplicas == 1
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Waiting for Sveltos addon-controller for shard1 to be healthy")
+		Eventually(func() bool {
+			deployment := &appsv1.Deployment{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller-shard1 "},
+				deployment)
+			if err != nil {
+				return apierrors.IsNotFound(err)
+			}
+			return deployment.Status.AvailableReplicas == 1
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		Byf("Verifying Flux deployments are present")
 		Eventually(func() bool {
 			deployments := &appsv1.DeploymentList{}
@@ -136,6 +154,16 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		for i := range netPolList.Items {
 			Expect(k8sClient.Delete(context.TODO(), &netPolList.Items[i])).To(Succeed())
 		}
+
+		Byf("Verifying GitRepository CRD is present")
+		Eventually(func() bool {
+			gitRepositoryCRD := &apiextensionsv1.CustomResourceDefinition{}
+
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: "gitrepositories.source.toolkit.fluxcd.io"},
+				gitRepositoryCRD)
+			return err == nil
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		gitRepositoryName := gitRepositoryNamespace
 
@@ -312,6 +340,20 @@ var _ = Describe("Kustomize with GitRepository", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(managedClusterProfile)
+
+		Byf("Deleting GitRepository %s/%s", gitRepositoryNamespace, gitRepositoryName)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: gitRepositoryNamespace, Name: gitRepositoryName},
+			gitRepository)).To(Succeed())
+		Expect(k8sClient.Delete(context.TODO(), gitRepository)).To(Succeed())
+
+		Byf("Verifying GitRepository %s/%s is gone", gitRepositoryNamespace, gitRepositoryName)
+		Eventually(func() bool {
+			gitRepository := &sourcev1.GitRepository{}
+			err := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: gitRepositoryNamespace, Name: gitRepositoryName},
+				gitRepository)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		deleteClusterProfile(mgmtClusterProfile)
 	})
 })

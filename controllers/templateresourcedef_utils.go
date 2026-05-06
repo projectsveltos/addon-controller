@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -85,7 +86,9 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 			return nil, err
 		}
 
-		if ref.IgnoreStatusChanges {
+		if len(ref.WatchFields) > 0 {
+			u = extractWatchedFields(u, ref.WatchFields)
+		} else if ref.IgnoreStatusChanges {
 			unstructured.RemoveNestedField(u.Object, "status")
 			// Status update changes resourceVersion and managedFields. Since the goal
 			// is to ignore status changes, implicitly remove those fields
@@ -97,4 +100,20 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 	}
 
 	return result, nil
+}
+
+// extractWatchedFields returns a new Unstructured that contains only the field
+// paths listed in watchFields. Paths are dot-separated (e.g. "status.readyReplicas").
+// Missing or unreadable paths are silently skipped.
+func extractWatchedFields(u *unstructured.Unstructured, watchFields []string) *unstructured.Unstructured {
+	extracted := map[string]interface{}{}
+	for _, path := range watchFields {
+		parts := strings.Split(path, ".")
+		val, found, err := unstructured.NestedFieldNoCopy(u.Object, parts...)
+		if err != nil || !found {
+			continue
+		}
+		_ = unstructured.SetNestedField(extracted, val, parts...)
+	}
+	return &unstructured.Unstructured{Object: extracted}
 }

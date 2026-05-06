@@ -25,6 +25,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
@@ -236,5 +237,91 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 		value, err = controllers.GetTemplateResourceNamespace(context.TODO(), clusterSummary, ref)
 		Expect(err).To(BeNil())
 		Expect(value).To(Equal(ref.Resource.Namespace))
+	})
+})
+
+var _ = Describe("extractWatchedFields", func() {
+	It("returns only the listed top-level field", func() {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{
+			"spec":   map[string]interface{}{"replicas": int64(3)},
+			"status": map[string]interface{}{"readyReplicas": int64(3)},
+		}}
+
+		result := controllers.ExtractWatchedFields(u, []string{"status"})
+
+		_, found, err := unstructured.NestedMap(result.Object, "status")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+
+		_, found, err = unstructured.NestedMap(result.Object, "spec")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeFalse())
+	})
+
+	It("extracts a specific nested field, excluding sibling fields", func() {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{
+			"status": map[string]interface{}{
+				"readyReplicas": int64(2),
+				"conditions":    []interface{}{"cond1", "cond2"},
+			},
+		}}
+
+		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas"})
+
+		val, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(val).To(Equal(int64(2)))
+
+		_, found, err = unstructured.NestedSlice(result.Object, "status", "conditions")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeFalse())
+	})
+
+	It("handles multiple fields across different sections", func() {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{
+			"metadata": map[string]interface{}{"labels": map[string]interface{}{"env": "prod"}},
+			"spec":     map[string]interface{}{"replicas": int64(3)},
+			"status":   map[string]interface{}{"readyReplicas": int64(3)},
+		}}
+
+		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas", "metadata.labels"})
+
+		_, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+
+		_, found, err = unstructured.NestedMap(result.Object, "metadata", "labels")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+
+		_, found, err = unstructured.NestedMap(result.Object, "spec")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeFalse())
+	})
+
+	It("returns an empty object when all paths are missing", func() {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{
+			"status": map[string]interface{}{"readyReplicas": int64(3)},
+		}}
+
+		result := controllers.ExtractWatchedFields(u, []string{"status.nonExistent"})
+		Expect(result.Object).To(BeEmpty())
+	})
+
+	It("includes existing paths and silently skips missing ones", func() {
+		u := &unstructured.Unstructured{Object: map[string]interface{}{
+			"status": map[string]interface{}{"readyReplicas": int64(3)},
+		}}
+
+		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas", "status.nonExistent"})
+
+		val, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(val).To(Equal(int64(3)))
+
+		_, found, _ = unstructured.NestedFieldNoCopy(result.Object, "status", "nonExistent")
+		Expect(found).To(BeFalse())
 	})
 })

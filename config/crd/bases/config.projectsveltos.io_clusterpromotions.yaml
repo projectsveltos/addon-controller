@@ -1434,6 +1434,16 @@ spec:
                               type: string
                           type: object
                           x-kubernetes-map-type: atomic
+                        watchFields:
+                          description: |-
+                            WatchFields is an optional list of dot-separated field paths to include
+                            when computing the hash for this resource (e.g. "status.readyReplicas",
+                            "metadata.labels"). When non-empty, only the listed fields are hashed and
+                            IgnoreStatusChanges is ignored. Use this when you need to react to a
+                            specific field without being sensitive to every other change on the object.
+                          items:
+                            type: string
+                          type: array
                       required:
                       - identifier
                       - resource

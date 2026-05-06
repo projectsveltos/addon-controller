@@ -1372,6 +1372,143 @@ status:
 			Expect(reflect.DeepEqual(tmpHash, hash))
 		}
 	})
+
+	It("WatchFields: hash is stable when a non-watched field changes", func() {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "trs-" + randomString(),
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"watched":   "value1",
+				"unwatched": "value2",
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+					Namespace:  namespace,
+					Name:       cm.Name,
+				},
+				Identifier:  randomString(),
+				WatchFields: []string{"data.watched"},
+			},
+		}
+
+		hash1, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash1).ToNot(BeEmpty())
+
+		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: namespace, Name: cm.Name}, cm); err != nil {
+				return err
+			}
+			cm.Data["unwatched"] = randomString()
+			return testEnv.Client.Update(context.TODO(), cm)
+		})).To(Succeed())
+
+		hash2, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash2).To(Equal(hash1))
+	})
+
+	It("WatchFields: hash changes when a watched field changes", func() {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "trs-" + randomString(),
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"watched": "value1",
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+					Namespace:  namespace,
+					Name:       cm.Name,
+				},
+				Identifier:  randomString(),
+				WatchFields: []string{"data.watched"},
+			},
+		}
+
+		hash1, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash1).ToNot(BeEmpty())
+
+		Expect(retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := testEnv.Client.Get(context.TODO(),
+				types.NamespacedName{Namespace: namespace, Name: cm.Name}, cm); err != nil {
+				return err
+			}
+			cm.Data["watched"] = randomString()
+			return testEnv.Client.Update(context.TODO(), cm)
+		})).To(Succeed())
+
+		hash2, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash2).ToNot(Equal(hash1))
+	})
+
+	It("WatchFields takes precedence over IgnoreStatusChanges", func() {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "trs-" + randomString(),
+				Namespace: namespace,
+			},
+			Data: map[string]string{
+				"watched": "value1",
+				"other":   "value2",
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
+		ref := corev1.ObjectReference{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+			Namespace:  namespace,
+			Name:       cm.Name,
+		}
+
+		// Hash with WatchFields only considers data.watched
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource:            ref,
+				Identifier:          randomString(),
+				WatchFields:         []string{"data.watched"},
+				IgnoreStatusChanges: true,
+			},
+		}
+		hashWithWatchFields, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Hash with IgnoreStatusChanges only considers the full object minus status fields
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource:            ref,
+				Identifier:          randomString(),
+				IgnoreStatusChanges: true,
+			},
+		}
+		hashIgnoreStatus, err := controllers.GetTemplateResourceRefHash(context.TODO(), clusterSummary)
+		Expect(err).ToNot(HaveOccurred())
+
+		// WatchFields produces a different (more restrictive) hash than IgnoreStatusChanges alone
+		Expect(hashWithWatchFields).ToNot(Equal(hashIgnoreStatus))
+	})
 })
 
 // validateResourceReports validates that number of resourceResources with certain actions

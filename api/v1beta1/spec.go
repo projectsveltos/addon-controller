@@ -609,6 +609,14 @@ type TemplateResourceRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	IgnoreStatusChanges bool `json:"ignoreStatusChanges,omitempty"`
+
+	// WatchFields is an optional list of dot-separated field paths to include
+	// when computing the hash for this resource (e.g. "status.readyReplicas",
+	// "metadata.labels"). When non-empty, only the listed fields are hashed and
+	// IgnoreStatusChanges is ignored. Use this when you need to react to a
+	// specific field without being sensitive to every other change on the object.
+	// +optional
+	WatchFields []string `json:"watchFields,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="has(self.remoteURL) != has(self.kind)",message="either remoteURL or kind must be set, but not both"

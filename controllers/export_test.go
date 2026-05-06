@@ -167,6 +167,7 @@ var (
 	ParseMapFromString                 = parseMapFromString
 
 	GetTemplateResourceRefHash = getTemplateResourceRefHash
+	ExtractWatchedFields       = extractWatchedFields
 )
 
 type (

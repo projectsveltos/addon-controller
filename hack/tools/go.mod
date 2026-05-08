@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-controller/hack/tools
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/a8m/envsubst v1.4.3

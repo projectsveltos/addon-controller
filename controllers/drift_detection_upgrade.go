@@ -301,7 +301,8 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return true, err
 	}
 
-	return present, nil
+	// skip upgrade if not present
+	return !present, nil
 }
 
 func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) (bool, error) {

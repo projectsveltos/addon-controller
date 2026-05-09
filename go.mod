@@ -23,7 +23,7 @@ require (
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/gopher-lua v1.1.2
-	golang.org/x/text v0.36.0
+	golang.org/x/text v0.37.0
 	helm.sh/helm/v4 v4.1.4
 	k8s.io/api v0.36.0
 	k8s.io/apiextensions-apiserver v0.36.0

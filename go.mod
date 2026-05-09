@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.26.2
+go 1.26.3
 
 require (
 	dario.cat/mergo v1.0.2
@@ -8,9 +8,9 @@ require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v29.4.3+incompatible
-	github.com/fluxcd/pkg/apis/meta v1.26.0
-	github.com/fluxcd/pkg/http/fetch v0.24.0
-	github.com/fluxcd/pkg/tar v1.1.0
+	github.com/fluxcd/pkg/apis/meta v1.27.0
+	github.com/fluxcd/pkg/http/fetch v0.25.0
+	github.com/fluxcd/pkg/tar v1.2.0
 	github.com/fluxcd/source-controller/api v1.8.3
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.3

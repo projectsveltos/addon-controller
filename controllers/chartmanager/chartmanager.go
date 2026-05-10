@@ -327,6 +327,31 @@ func (m *instance) removeClusterSummaryFromChartRegistration(clusterKey, release
 	}
 }
 
+// GetRegisteredChartsCount returns the number of Helm charts this ClusterSummary has
+// registered with the chart manager for its cluster, regardless of whether it is
+// currently the manager (position 0 in the list) or waiting behind another registrant.
+// When this count equals len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts), the
+// ClusterSummary's reconciler has fully processed all its charts.
+func (m *instance) GetRegisteredChartsCount(clusterSummary *configv1beta1.ClusterSummary) int {
+	clusterKey := m.getClusterKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType)
+	clusterSummaryKey := m.getClusterSummaryKey(clusterSummary.Name)
+
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
+	count := 0
+	for releaseKey := range m.perClusterChartMap[clusterKey] {
+		for _, csKey := range m.perClusterChartMap[clusterKey][releaseKey] {
+			if csKey == clusterSummaryKey {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
 // GetManagedHelmReleases returns info on all the helm releases currently managed by clusterSummary
 func (m *instance) GetManagedHelmReleases(clusterSummary *configv1beta1.ClusterSummary) []HelmReleaseInfo {
 	info := make([]HelmReleaseInfo, 0)

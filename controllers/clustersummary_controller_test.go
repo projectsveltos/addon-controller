@@ -1107,6 +1107,35 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(err).To(BeNil())
 		Expect(deployed).To(BeTrue())
 	})
+
+	It("processUndeployError requeues with deleteRequeueAfter and no error for WaitForProfileProcessingError", func() {
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: "clustersummary",
+		})
+		Expect(err).To(BeNil())
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		waitErr := &configv1beta1.WaitForProfileProcessingError{
+			Message: "waiting for ClusterProfile B to process charts",
+		}
+
+		result, err := controllers.ProcessUndeployError(clusterSummaryReconciler, clusterSummaryScope, waitErr,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+	})
 })
 
 var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {

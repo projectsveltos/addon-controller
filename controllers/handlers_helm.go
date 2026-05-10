@@ -68,12 +68,14 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -377,6 +379,24 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 	return err
 }
 
+// handleProvisionedStatusInPullMode is called when the deployment status of a ClusterSummary's
+// Helm feature is Provisioned and the ClusterSummary is being undeployed.
+func handleProvisionedStatusInPullMode(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	setters []pullmode.Option, logger logr.Logger) error {
+
+	if isLeavePolicies(clusterSummary, logger) {
+		logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
+	}
+
+	if err := clearRegisteredChartVersions(ctx, clusterSummary); err != nil {
+		return err
+	}
+
+	return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
+		string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+}
+
 func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
 
@@ -415,18 +435,7 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 	} else {
 		// if the status is deployed it means pre/post delete hooks have been deployed. So proceed undeploying
 		if status != nil && status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned {
-			if isLeavePolicies(clusterSummary, logger) {
-				logger.V(logs.LogInfo).Info("ClusterProfile StopMatchingBehavior set to LeavePolicies")
-			}
-
-			err = clearRegisteredChartVersions(ctx, clusterSummary)
-			if err != nil {
-				return err
-			}
-
-			return pullmode.RemoveDeployedResources(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name,
-				string(libsveltosv1beta1.FeatureHelm), logger, setters...)
+			return handleProvisionedStatusInPullMode(ctx, clusterSummary, setters, logger)
 		} else if status != nil && status.DeploymentStatus != nil && *status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioning {
 			logger.V(logs.LogInfo).Info("Applier is handling delete hooks")
 			return nil
@@ -470,7 +479,6 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 	if err != nil {
 		return err
 	}
-	requeued := false
 
 	clusterObjects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
@@ -487,6 +495,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 	// If this ClusterSummary is currently managing Helm charts that other ClusterProfiles are also attempting to
 	// manage, it should not uninstall them. Instead, it should change its tier to allow the other ClusterProfiles to take
 	// over management.
+	requeued := false
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
@@ -555,7 +564,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 	if requeued {
 		msg := "ClusterSummary tier adjusted to yield Helm chart management. Conflicting ClusterSummaries requeued."
 		logger.V(logs.LogInfo).Info(msg, "newTier", clusterSummary.Spec.ClusterProfileSpec.Tier)
-		// HandOverError is returned. This ClusterSummary will be reconciled back allowining the other clusterSummary
+		// HandOverError is returned. This ClusterSummary will be reconciled back allowing the other clusterSummary
 		// instance to take over first
 		// Setting the next reconcile time
 		return &configv1beta1.HandOverError{Message: msg}
@@ -686,10 +695,211 @@ func canUninstallHelmChart(ctx context.Context, c client.Client, clusterSummary 
 			}
 			return false, nil
 		}
+		// No other ClusterSummary is registered yet, but a ClusterProfile/Profile that
+		// just started matching this cluster may not have run its reconciler and
+		// registered with the chart manager. Wait until every matching profile has
+		// fully processed its charts so the len > 1 check above is authoritative.
+		allProcessed, err := allMatchingProfilesProcessed(ctx, c, clusterSummary, logger)
+		if err != nil {
+			return false, err
+		}
+		if !allProcessed {
+			return false, &configv1beta1.WaitForProfileProcessingError{
+				Message: fmt.Sprintf("waiting for other profiles to process charts for cluster %s/%s",
+					clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName),
+			}
+		}
 		return true, nil
 	}
 
 	return false, nil
+}
+
+// allMatchingProfilesProcessed returns true when every ClusterProfile and Profile
+// (other than the one that owns clusterSummary) that currently matches the cluster
+// and declares at least one HelmChart has had its ClusterSummary fully registered
+// with the chart manager. "Fully registered" means the ClusterSummary exists and
+// GetRegisteredChartsCount equals the number of HelmCharts in the profile spec.
+//
+// Profiles created after the ClusterSummary's DeletionTimestamp are excluded: they
+// were not present when the deletion started, so waiting for them would block
+// deletion indefinitely.
+func allMatchingProfilesProcessed(ctx context.Context, c client.Client,
+	clusterSummary *configv1beta1.ClusterSummary,
+	logger logr.Logger) (bool, error) {
+
+	cluster, err := clusterproxy.GetCluster(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return true, nil // cluster gone, nothing to wait for
+		}
+		return false, err
+	}
+	clusterLabels := labels.Set(cluster.GetLabels())
+
+	hasDeletionTimestamp := clusterSummary.DeletionTimestamp != nil && !clusterSummary.DeletionTimestamp.IsZero()
+	var deletionTime time.Time
+	if hasDeletionTimestamp {
+		deletionTime = clusterSummary.DeletionTimestamp.Time
+	}
+
+	ownerCPName := clusterSummary.Labels[clusterops.ClusterProfileLabelName]
+	clusterProfiles := &configv1beta1.ClusterProfileList{}
+	if err := c.List(ctx, clusterProfiles); err != nil {
+		return false, err
+	}
+	for i := range clusterProfiles.Items {
+		cp := &clusterProfiles.Items[i]
+		if cp.Spec.SyncMode == configv1beta1.SyncModeDryRun {
+			continue
+		}
+		processed, err := isClusterProfileProcessed(ctx, c, cp, ownerCPName,
+			hasDeletionTimestamp, deletionTime, clusterSummary, clusterLabels, logger)
+		if err != nil {
+			return false, err
+		}
+		if !processed {
+			return false, nil
+		}
+	}
+
+	ownerProfileName := clusterSummary.Labels[clusterops.ProfileLabelName]
+	profiles := &configv1beta1.ProfileList{}
+	if err := c.List(ctx, profiles); err != nil {
+		return false, err
+	}
+	for i := range profiles.Items {
+		p := &profiles.Items[i]
+		processed, err := isProfileProcessed(ctx, c, p, ownerProfileName,
+			hasDeletionTimestamp, deletionTime, clusterSummary, clusterLabels, logger)
+		if err != nil {
+			return false, err
+		}
+		if !processed {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func isClusterProfileProcessed(ctx context.Context, c client.Client,
+	cp *configv1beta1.ClusterProfile, ownerName string,
+	hasDeletionTimestamp bool, deletionTime time.Time,
+	clusterSummary *configv1beta1.ClusterSummary, clusterLabels labels.Set,
+	logger logr.Logger) (bool, error) {
+
+	if cp.Name == ownerName || len(cp.Spec.HelmCharts) == 0 {
+		return true, nil
+	}
+	if hasDeletionTimestamp && cp.CreationTimestamp.After(deletionTime) {
+		return true, nil
+	}
+	if !selectorMatchesCluster(cp.Spec.ClusterSelector, cp.Spec.ClusterRefs, clusterSummary, clusterLabels) {
+		return true, nil
+	}
+	processed, err := isProfileFullyProcessed(ctx, c,
+		cp.Name, clusterops.ClusterProfileLabelName, clusterSummary, len(cp.Spec.HelmCharts))
+	if err != nil {
+		return false, err
+	}
+	if !processed {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf(
+			"ClusterProfile %s matches cluster %s/%s but ClusterSummary not fully processed yet",
+			cp.Name, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+	}
+	return processed, nil
+}
+
+func isProfileProcessed(ctx context.Context, c client.Client,
+	p *configv1beta1.Profile, ownerName string,
+	hasDeletionTimestamp bool, deletionTime time.Time,
+	clusterSummary *configv1beta1.ClusterSummary, clusterLabels labels.Set,
+	logger logr.Logger) (bool, error) {
+
+	if p.Name == ownerName || len(p.Spec.HelmCharts) == 0 {
+		return true, nil
+	}
+	if hasDeletionTimestamp && p.CreationTimestamp.After(deletionTime) {
+		return true, nil
+	}
+	if !selectorMatchesCluster(p.Spec.ClusterSelector, p.Spec.ClusterRefs, clusterSummary, clusterLabels) {
+		return true, nil
+	}
+	processed, err := isProfileFullyProcessed(ctx, c,
+		p.Name, clusterops.ProfileLabelName, clusterSummary, len(p.Spec.HelmCharts))
+	if err != nil {
+		return false, err
+	}
+	if !processed {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf(
+			"Profile %s matches cluster %s/%s but ClusterSummary not fully processed yet",
+			p.Name, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+	}
+	return processed, nil
+}
+
+// selectorMatchesCluster returns true if the given selector/clusterRefs currently
+// matches the cluster identified by clusterSummary.
+func selectorMatchesCluster(clusterSelector libsveltosv1beta1.Selector,
+	clusterRefs []corev1.ObjectReference,
+	clusterSummary *configv1beta1.ClusterSummary,
+	clusterLabels labels.Set) bool {
+
+	selector, err := clusterSelector.ToSelector()
+	if err == nil && !selector.Empty() && selector.Matches(clusterLabels) {
+		return true
+	}
+	for _, ref := range clusterRefs {
+		if ref.Namespace == clusterSummary.Spec.ClusterNamespace &&
+			ref.Name == clusterSummary.Spec.ClusterName {
+
+			return true
+		}
+	}
+	return false
+}
+
+// isProfileFullyProcessed returns true if the ClusterSummary owned by the given
+// profile for this cluster exists and has registered all its HelmCharts with the
+// chart manager (GetRegisteredChartsCount >= expectedCount).
+func isProfileFullyProcessed(ctx context.Context, c client.Client,
+	profileName, profileLabelKey string,
+	clusterSummary *configv1beta1.ClusterSummary,
+	expectedCount int) (bool, error) {
+
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return false, err
+	}
+
+	csList := &configv1beta1.ClusterSummaryList{}
+	if err := c.List(ctx, csList,
+		client.InNamespace(clusterSummary.Spec.ClusterNamespace),
+		client.MatchingLabels{
+			profileLabelKey:                profileName,
+			configv1beta1.ClusterNameLabel: clusterSummary.Spec.ClusterName,
+			configv1beta1.ClusterTypeLabel: string(clusterSummary.Spec.ClusterType),
+		},
+	); err != nil {
+		return false, err
+	}
+
+	// The label filter uniquely identifies at most one ClusterSummary.
+	if len(csList.Items) == 0 {
+		// ClusterSummary not created yet — profile reconciler hasn't run.
+		return false, nil
+	}
+
+	// For every profile/cluster pair there is only one clusterSummary
+	cs := &csList.Items[0]
+	// ignore paused clusterSummary instances
+	if annotations.HasPaused(cs) {
+		return true, nil
+	}
+	return chartManager.GetRegisteredChartsCount(cs) >= expectedCount, nil
 }
 
 func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
@@ -1037,7 +1247,7 @@ func walkChartsAndDeploy(ctx context.Context, c client.Client, dCtx *deploymentC
 		l := logger.WithValues("chart", fmt.Sprintf("%s/%s", instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName))
 		l.V(logs.LogDebug).Info(fmt.Sprintf("Deploying chart: %v", instantiatedChart))
 
-		// Eventual conflicts are already resolved before this method is called (in updateStatusForeferencedHelmReleases)
+		// Eventual conflicts are already resolved before this method is called
 		// So it is safe to call CanManageChart here
 		canManage, err := canManageChart(ctx, c, dCtx.clusterSummary, instantiatedChart, logger)
 		if err != nil {
@@ -3355,23 +3565,23 @@ func isHookRelevantForPostDelete(hook *releasev1.Hook) bool {
 
 // hasHookAnnotation checks if the resource has the helm.sh/hook annotation.
 func hasHookAnnotation(obj *unstructured.Unstructured) bool {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
+	annts := obj.GetAnnotations()
+	if annts == nil {
 		return false
 	}
 
-	_, exists := annotations["helm.sh/hook "]
+	_, exists := annts["helm.sh/hook "]
 	return exists
 }
 
 // hasHookDeleteAnnotation checks if the resource has the helm.sh/hook-delete-policy annotation.
 func hasHookDeleteAnnotation(obj *unstructured.Unstructured) bool {
-	annotations := obj.GetAnnotations()
-	if annotations == nil {
+	annts := obj.GetAnnotations()
+	if annts == nil {
 		return false
 	}
 
-	_, exists := annotations["helm.sh/hook-delete-policy"]
+	_, exists := annts["helm.sh/hook-delete-policy"]
 	return exists
 }
 
@@ -4902,8 +5112,8 @@ func prepareChartForAgent(ctx context.Context, dCtx *deploymentContext,
 
 // getHookWeight extracts the helm.sh/hook-weight annotation as an int. Defaults to 0 on error or missing.
 func getHookWeight(obj *unstructured.Unstructured) int {
-	annotations := obj.GetAnnotations()
-	if weightStr, ok := annotations["helm.sh/hook-weight"]; ok {
+	annts := obj.GetAnnotations()
+	if weightStr, ok := annts["helm.sh/hook-weight"]; ok {
 		if weight, err := strconv.Atoi(weightStr); err == nil {
 			return weight
 		}
@@ -5112,12 +5322,12 @@ func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *con
 }
 
 func isHookResource(u *unstructured.Unstructured, hookType string) bool {
-	annotations := u.GetAnnotations()
-	if annotations == nil {
+	annots := u.GetAnnotations()
+	if annots == nil {
 		return false
 	}
 
-	hook, found := annotations["helm.sh/hook"]
+	hook, found := annots["helm.sh/hook"]
 	if !found {
 		return false
 	}

@@ -1989,6 +1989,12 @@ func (r *ClusterSummaryReconciler) removeFinalizer(clusterSummaryScope *scope.Cl
 func (r *ClusterSummaryReconciler) processUndeployError(clusterSummaryScope *scope.ClusterSummaryScope,
 	undeployError error, logger logr.Logger) (reconcile.Result, error) {
 
+	var waitError *configv1beta1.WaitForProfileProcessingError
+	if errors.As(undeployError, &waitError) {
+		logger.V(logs.LogDebug).Info("waiting for other profiles to process charts", "message", waitError.Message)
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	}
+
 	// In DryRun mode it is expected to always get an error back
 	if !clusterSummaryScope.IsDryRunSync() {
 		logger.V(logs.LogInfo).Error(undeployError, "failed to undeploy")

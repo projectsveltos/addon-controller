@@ -476,6 +476,11 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 			return result.Err
 		}
 
+		var waitError *configv1beta1.WaitForProfileProcessingError
+		if errors.As(result.Err, &waitError) {
+			return result.Err
+		}
+
 		var nonRetriableError *configv1beta1.NonRetriableError
 		if errors.As(result.Err, &nonRetriableError) {
 			removing := libsveltosv1beta1.FeatureStatusRemoving

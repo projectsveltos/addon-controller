@@ -168,6 +168,14 @@ var (
 
 	GetTemplateResourceRefHash = getTemplateResourceRefHash
 	ExtractWatchedFields       = extractWatchedFields
+
+	SelectorMatchesCluster       = selectorMatchesCluster
+	AllMatchingProfilesProcessed = allMatchingProfilesProcessed
+	IsProfileFullyProcessed      = isProfileFullyProcessed
+)
+
+var (
+	ProcessUndeployError = (*ClusterSummaryReconciler).processUndeployError
 )
 
 type (

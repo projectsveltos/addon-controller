@@ -39,3 +39,15 @@ type TemplateInstantiationError struct {
 func (r *TemplateInstantiationError) Error() string {
 	return r.Message
 }
+
+// WaitForProfileProcessingError is returned when a ClusterSummary cannot yet
+// uninstall a Helm chart because another ClusterProfile/Profile that currently
+// matches the cluster has not finished processing its charts via the chart
+// manager. The caller should requeue and retry.
+type WaitForProfileProcessingError struct {
+	Message string
+}
+
+func (r *WaitForProfileProcessingError) Error() string {
+	return r.Message
+}

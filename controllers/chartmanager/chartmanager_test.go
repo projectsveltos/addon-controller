@@ -387,6 +387,65 @@ var _ = Describe("Chart manager", func() {
 			&tmpClusterSummary.Spec.ClusterProfileSpec.HelmCharts[1])).To(BeTrue())
 	})
 
+	It("getRegisteredChartsCount returns 0 when clusterSummary has no registrations", func() {
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		unregistered := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: clusterSummary.Spec,
+		}
+
+		Expect(manager.GetRegisteredChartsCount(unregistered)).To(Equal(0))
+	})
+
+	It("getRegisteredChartsCount returns the number of charts a managing clusterSummary has registered", func() {
+		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) > 0).To(BeTrue())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		By(fmt.Sprintf("Verifying GetRegisteredChartsCount returns %d for the managing ClusterSummary",
+			len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)))
+		Expect(manager.GetRegisteredChartsCount(clusterSummary)).To(Equal(
+			len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)))
+	})
+
+	It("getRegisteredChartsCount counts charts even when clusterSummary is registered but not managing", func() {
+		Expect(len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts) > 0).To(BeTrue())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+
+		// clusterSummary registers first and becomes the manager for all charts
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		// tmpClusterSummary registers for the same charts but cannot manage them
+		tmpClusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterSummary.Name + randomString(),
+			},
+			Spec: clusterSummary.Spec,
+		}
+		manager.RegisterClusterSummaryForCharts(tmpClusterSummary)
+		defer removeSubscriptions(c, tmpClusterSummary)
+
+		for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
+			chart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+			By(fmt.Sprintf("Confirming ClusterSummary %s does NOT manage helm release %s/%s",
+				tmpClusterSummary.Name, chart.ReleaseNamespace, chart.ReleaseName))
+			Expect(manager.CanManageChart(tmpClusterSummary, chart)).To(BeFalse())
+		}
+
+		By("Verifying GetRegisteredChartsCount still returns the full count for the non-managing ClusterSummary")
+		Expect(manager.GetRegisteredChartsCount(tmpClusterSummary)).To(Equal(
+			len(clusterSummary.Spec.ClusterProfileSpec.HelmCharts)))
+	})
+
 })
 
 func removeSubscriptions(c client.Client, clusterSummary *configv1beta1.ClusterSummary) {

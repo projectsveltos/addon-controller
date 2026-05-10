@@ -681,3 +681,33 @@ func setAnnotationOnCluster(key, value string) {
 	})
 	Expect(err).To(BeNil())
 }
+
+func setLabelOnCluster(labelKey, labelValue string) {
+	var currentCluster client.Object
+
+	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+		currentCluster = &libsveltosv1beta1.SveltosCluster{}
+	} else {
+		currentCluster = &clusterv1.Cluster{}
+	}
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := k8sClient.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: kindWorkloadCluster.GetNamespace(),
+				Name:      kindWorkloadCluster.GetName()},
+			currentCluster)
+		if err != nil {
+			return err
+		}
+
+		updatedLabels := currentCluster.GetLabels()
+		if updatedLabels == nil {
+			updatedLabels = map[string]string{}
+		}
+		updatedLabels[labelKey] = labelValue
+		currentCluster.SetLabels(updatedLabels)
+		return k8sClient.Update(context.TODO(), currentCluster)
+	})
+	Expect(err).To(BeNil())
+}

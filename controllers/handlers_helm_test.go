@@ -33,6 +33,7 @@ import (
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -1666,3 +1667,367 @@ func verifyFileContent(filePath string, data []byte) {
 	Expect(err).To(BeNil())
 	Expect(reflect.DeepEqual(content, data)).To(BeTrue())
 }
+
+var _ = Describe("selectorMatchesCluster", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+
+	BeforeEach(func() {
+		clusterSummary = &configv1beta1.ClusterSummary{
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: randomString(),
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	})
+
+	It("returns true when cluster labels match the selector", func() {
+		matchKey := randomString()
+		matchVal := randomString()
+
+		selector := libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{matchKey: matchVal},
+			},
+		}
+		clusterLabels := labels.Set{matchKey: matchVal, randomString(): randomString()}
+
+		Expect(controllers.SelectorMatchesCluster(selector, nil, clusterSummary, clusterLabels)).To(BeTrue())
+	})
+
+	It("returns false when cluster labels do not match the selector", func() {
+		selector := libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{randomString(): randomString()},
+			},
+		}
+		clusterLabels := labels.Set{randomString(): randomString()}
+
+		Expect(controllers.SelectorMatchesCluster(selector, nil, clusterSummary, clusterLabels)).To(BeFalse())
+	})
+
+	It("returns true when cluster is listed in clusterRefs even if selector does not match", func() {
+		selector := libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{randomString(): randomString()},
+			},
+		}
+		clusterLabels := labels.Set{randomString(): randomString()}
+
+		refs := []corev1.ObjectReference{
+			{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      clusterSummary.Spec.ClusterName,
+			},
+		}
+
+		Expect(controllers.SelectorMatchesCluster(selector, refs, clusterSummary, clusterLabels)).To(BeTrue())
+	})
+
+	It("returns false when neither selector nor clusterRefs match", func() {
+		selector := libsveltosv1beta1.Selector{
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{randomString(): randomString()},
+			},
+		}
+		clusterLabels := labels.Set{randomString(): randomString()}
+
+		refs := []corev1.ObjectReference{
+			{Namespace: randomString(), Name: randomString()},
+		}
+
+		Expect(controllers.SelectorMatchesCluster(selector, refs, clusterSummary, clusterLabels)).To(BeFalse())
+	})
+})
+
+var _ = Describe("isProfileFullyProcessed", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+	var otherCS *configv1beta1.ClusterSummary
+	var c client.Client
+
+	BeforeEach(func() {
+		clusterNamespace := randomString()
+		clusterName := randomString()
+
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+
+		otherCS = nil
+		c = nil
+	})
+
+	AfterEach(func() {
+		if otherCS == nil || c == nil {
+			return
+		}
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		otherCS.Spec.ClusterProfileSpec.HelmCharts = nil
+		manager.RemoveStaleRegistrations(otherCS)
+	})
+
+	It("returns false when no ClusterSummary exists for the profile", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+		c = fake.NewClientBuilder().WithScheme(s).Build()
+
+		processed, err := controllers.IsProfileFullyProcessed(context.TODO(), c,
+			randomString(), clusterops.ClusterProfileLabelName,
+			clusterSummary, 1)
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeFalse())
+	})
+
+	It("returns false when ClusterSummary exists but is not registered with the chart manager", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		profileName := randomString()
+
+		otherCS = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Labels: map[string]string{
+					clusterops.ClusterProfileLabelName: profileName,
+					configv1beta1.ClusterNameLabel:     clusterSummary.Spec.ClusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+				ClusterName:      clusterSummary.Spec.ClusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
+						{
+							ReleaseName: randomString(), ReleaseNamespace: randomString(),
+							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+						},
+					},
+				},
+			},
+		}
+		c = fake.NewClientBuilder().WithScheme(s).WithObjects(otherCS).Build()
+
+		// otherCS is in the fake client but has not been registered with the chart manager
+		processed, err := controllers.IsProfileFullyProcessed(context.TODO(), c,
+			profileName, clusterops.ClusterProfileLabelName,
+			clusterSummary, len(otherCS.Spec.ClusterProfileSpec.HelmCharts))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeFalse())
+	})
+
+	It("returns true when ClusterSummary has registered all its charts with the chart manager", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		profileName := randomString()
+
+		otherCS = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Labels: map[string]string{
+					clusterops.ClusterProfileLabelName: profileName,
+					configv1beta1.ClusterNameLabel:     clusterSummary.Spec.ClusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+				ClusterName:      clusterSummary.Spec.ClusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
+						{
+							ReleaseName: randomString(), ReleaseNamespace: randomString(),
+							RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+						},
+					},
+				},
+			},
+		}
+		c = fake.NewClientBuilder().WithScheme(s).WithObjects(otherCS).Build()
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(otherCS)
+
+		processed, err := controllers.IsProfileFullyProcessed(context.TODO(), c,
+			profileName, clusterops.ClusterProfileLabelName,
+			clusterSummary, len(otherCS.Spec.ClusterProfileSpec.HelmCharts))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
+})
+
+var _ = Describe("allMatchingProfilesProcessed", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+	var cluster *clusterv1.Cluster
+	var ownerCPName string
+
+	BeforeEach(func() {
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		ownerCPName = randomString()
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterName,
+				Namespace: clusterNamespace,
+				Labels:    map[string]string{"env": "production"},
+			},
+		}
+
+		now := metav1.Now()
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              randomString(),
+				Namespace:         clusterNamespace,
+				DeletionTimestamp: &now,
+				Labels: map[string]string{
+					clusterops.ClusterProfileLabelName: ownerCPName,
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	})
+
+	It("returns true when no other ClusterProfile with HelmCharts matches the cluster", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		// cpNoMatch has HelmCharts but its selector does not match the cluster
+		cpNoMatch := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"env": "staging"},
+					},
+				},
+				HelmCharts: []configv1beta1.HelmChart{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString(),
+						RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString()},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(cluster, cpNoMatch).Build()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
+
+	It("returns true when the cluster does not exist", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		// no cluster object in the fake client
+		c := fake.NewClientBuilder().WithScheme(s).Build()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
+
+	It("returns false when a matching ClusterProfile's ClusterSummary has not been registered yet", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		// cpB matches the cluster and has a HelmChart but its ClusterSummary does not exist yet
+		cpB := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"env": "production"},
+					},
+				},
+				HelmCharts: []configv1beta1.HelmChart{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString(),
+						RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString()},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(cluster, cpB).Build()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeFalse())
+	})
+
+	It("returns true when all matching ClusterProfiles have fully registered ClusterSummaries", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		// cpB matches the cluster and has a HelmChart
+		cpB := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{"env": "production"},
+					},
+				},
+				HelmCharts: []configv1beta1.HelmChart{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString(),
+						RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString()},
+				},
+			},
+		}
+
+		// csB is the ClusterSummary for cpB targeting the same cluster
+		csB := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Labels: map[string]string{
+					clusterops.ClusterProfileLabelName: cpB.Name,
+					configv1beta1.ClusterNameLabel:     clusterSummary.Spec.ClusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace:   clusterSummary.Spec.ClusterNamespace,
+				ClusterName:        clusterSummary.Spec.ClusterName,
+				ClusterType:        libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: cpB.Spec,
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(cluster, cpB, csB).Build()
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(csB)
+		defer func() {
+			csB.Spec.ClusterProfileSpec.HelmCharts = nil
+			manager.RemoveStaleRegistrations(csB)
+		}()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
+})

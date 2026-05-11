@@ -57,7 +57,7 @@ The idea is simple:
 2. lists which `addons` need to be deployed on such clusters.
 
 where term:
-1. `clusters` represents both [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/v1beta1/cluster_types.go) or any other Kubernetes cluster registered with Sveltos;
+1. `clusters` represents both [CAPI cluster](https://github.com/kubernetes-sigs/cluster-api/blob/main/api/core/v1beta2/cluster_types.go) or any other Kubernetes cluster registered with Sveltos;
 2. `addons` represents either an [helm release](https://helm.sh), Kubernetes resource YAMLs or [kustomize](https://github.com/kubernetes-sigs/kustomize) resources.
 
 Here is an example of how to require that any CAPI Cluster with label *env: prod* has following features deployed:
@@ -135,8 +135,8 @@ Refer to [examples](./examples/) for more complex examples.
 - *OneTime*: This mode is designed for bootstrapping critical components during the initial cluster setup. Think of it as a one-shot configuration injection:
     1. Deploying essential infrastructure components like CNI plugins, cloud controllers, or the workload cluster's package manager itself;
     2. Simplifies initial cluster setup;
-    3. Hands over management to the workload cluster's own tools, promoting modularity and potentially simplifying ongoing maintenance. 
-- *Continuous*: This mode continuously monitors ClusterProfiles or Profiles for changes and automatically applies them to matching clusters. It ensures ongoing consistency between your desired configuration and the actual cluster state: 
+    3. Hands over management to the workload cluster's own tools, promoting modularity and potentially simplifying ongoing maintenance.
+- *Continuous*: This mode continuously monitors ClusterProfiles or Profiles for changes and automatically applies them to matching clusters. It ensures ongoing consistency between your desired configuration and the actual cluster state:
     1. Centralized control over deployments across multiple clusters for consistency and compliance;
     2. Simplifies management of configurations across multiple clusters.
 - *ContinuousWithDriftDetection*: Detects and automatically corrects configuration drifts in managed clusters, ensuring they remain aligned with the desired state defined in the management cluster.
@@ -168,9 +168,9 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 # Useful links
 
 - Projectsveltos [documentation](https://projectsveltos.github.io/sveltos/)
-- [Quick Start](https://projectsveltos.github.io/sveltos/install/quick_start/)
+- [Quick Start](https://projectsveltos.io/main/getting_started/install/quick_start/)
 
-## Contributing 
+## Contributing
 
 ❤️ Your contributions are always welcome! If you want to contribute, have questions, noticed any bug or want to get the latest project news, you can connect with us in the following ways:
 

@@ -7,7 +7,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
-	github.com/docker/cli v29.4.3+incompatible
+	github.com/docker/cli v29.5.0+incompatible
 	github.com/fluxcd/pkg/apis/meta v1.27.0
 	github.com/fluxcd/pkg/http/fetch v0.25.0
 	github.com/fluxcd/pkg/tar v1.2.0
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.9.1-0.20260513071741-2e3047a7cd36
+	github.com/projectsveltos/libsveltos v1.10.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10
@@ -83,7 +83,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/flock v0.13.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/cel-go v0.28.0 // indirect
+	github.com/google/cel-go v0.28.1 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect

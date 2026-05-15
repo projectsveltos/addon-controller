@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -82,6 +83,12 @@ func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1be
 		if err != nil {
 			if apierrors.IsNotFound(err) && ref.Optional {
 				continue
+			}
+			if apierrors.IsNotFound(err) {
+				// Wrap with a descriptive message so callers can surface a clear failure.
+				// Use %w so apierrors.IsNotFound still returns true for existing callers.
+				return nil, fmt.Errorf("referenced resource: %s %s/%s does not exist: %w",
+					ref.Resource.Kind, ref.Resource.Namespace, ref.Resource.Name, err)
 			}
 			return nil, err
 		}

@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -237,6 +238,120 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 		value, err = controllers.GetTemplateResourceNamespace(context.TODO(), clusterSummary, ref)
 		Expect(err).To(BeNil())
 		Expect(value).To(Equal(ref.Resource.Namespace))
+	})
+})
+
+var _ = Describe("collectTemplateResourceRefs", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+	var cluster *clusterv1.Cluster
+	var ns *corev1.Namespace
+	var nsName string
+
+	BeforeEach(func() {
+		var err error
+		scheme, err = setupScheme()
+		Expect(err).ToNot(HaveOccurred())
+
+		nsName = randomString()
+		ns = &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: nsName,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Namespace: nsName,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: nsName,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: nsName,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	})
+
+	It("returns a descriptive NotFound error for a required missing resource", func() {
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+					Namespace:  nsName,
+					Name:       "does-not-exist-" + randomString(),
+				},
+				Identifier: "MissingResource",
+				Optional:   false,
+			},
+		}
+
+		result, err := controllers.CollectTemplateResourceRefs(context.TODO(), clusterSummary)
+		Expect(result).To(BeNil())
+		Expect(err).NotTo(BeNil())
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("referenced resource: ConfigMap"))
+		Expect(err.Error()).To(ContainSubstring("does not exist"))
+	})
+
+	It("skips an optional missing resource without returning an error", func() {
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+					Namespace:  nsName,
+					Name:       "does-not-exist-" + randomString(),
+				},
+				Identifier: "OptionalResource",
+				Optional:   true,
+			},
+		}
+
+		result, err := controllers.CollectTemplateResourceRefs(context.TODO(), clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(result).To(BeEmpty())
+	})
+
+	It("returns the resource when it exists", func() {
+		cm := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: nsName,
+				Name:      randomString(),
+			},
+			Data: map[string]string{"key": "value"},
+		}
+		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
+
+		identifier := randomString()
+		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
+			{
+				Resource: corev1.ObjectReference{
+					Kind:       "ConfigMap",
+					APIVersion: "v1",
+					Namespace:  nsName,
+					Name:       cm.Name,
+				},
+				Identifier: identifier,
+			},
+		}
+
+		result, err := controllers.CollectTemplateResourceRefs(context.TODO(), clusterSummary)
+		Expect(err).To(BeNil())
+		Expect(result).To(HaveKey(identifier))
+		Expect(result[identifier].GetName()).To(Equal(cm.Name))
 	})
 })
 

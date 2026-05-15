@@ -225,6 +225,7 @@ var (
 var (
 	GetTemplateResourceName      = getTemplateResourceName
 	GetTemplateResourceNamespace = getTemplateResourceNamespace
+	CollectTemplateResourceRefs  = collectTemplateResourceRefs
 )
 
 var (

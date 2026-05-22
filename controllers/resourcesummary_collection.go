@@ -50,8 +50,8 @@ var (
 )
 
 // Periodically collects ResourceSummaries from each CAPI/Sveltos cluster.
-func collectAndProcessResourceSummaries(ctx context.Context, c client.Client, shardkey, version string,
-	logger logr.Logger) {
+func collectAndProcessResourceSummaries(ctx context.Context, c client.Client,
+	shardkey, version string, logger logr.Logger) {
 
 	const interval = 10 * time.Second
 
@@ -327,8 +327,8 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 			return nil
 		}
 
-		if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), version, cluster.Namespace,
-			cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
+		if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), getSveltosNamespace(), version,
+			cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
 
 			msg := "compatibility checks failed"
 			logger.V(logs.LogDebug).Info(msg)

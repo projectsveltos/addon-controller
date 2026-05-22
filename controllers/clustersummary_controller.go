@@ -414,7 +414,7 @@ func (r *ClusterSummaryReconciler) postFinalizerCleanup(ctx context.Context,
 
 	cs := clusterSummaryScope.ClusterSummary
 	if err := sharding.UnregisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
-		string(libsveltosv1beta1.FeatureHelm), cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+		getSveltosNamespace(), string(libsveltosv1beta1.FeatureHelm), cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
 		cs.Spec.ClusterType); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to unregister cluster shard: %v", err))
 		return err
@@ -1048,7 +1048,7 @@ func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummar
 			currentReferences.Insert(&corev1.ObjectReference{
 				APIVersion: corev1.SchemeGroupVersion.String(),
 				Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-				Namespace:  projectsveltos,
+				Namespace:  getSveltosNamespace(),
 				Name:       driftDetectionConfigMap,
 			})
 		}
@@ -1608,8 +1608,8 @@ func (r *ClusterSummaryReconciler) updateClusterShardPair(ctx context.Context,
 	}
 
 	if hasShardChanged, err := sharding.RegisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
-		string(libsveltosv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
-		clusterSummary.Spec.ClusterType); err != nil {
+		getSveltosNamespace(), string(libsveltosv1beta1.FeatureHelm), r.ShardKey, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType); err != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to check/update cluster:shard pair %v", err))
 		return err
 	} else if hasShardChanged {
@@ -1938,7 +1938,7 @@ func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context
 		return false, err
 	}
 
-	result := license.VerifyLicenseSecret(ctx, r.Client, publicKey, logger)
+	result := license.VerifyLicenseSecret(ctx, r.Client, getSveltosNamespace(), publicKey, logger)
 	maxClusters := 0
 	if result.Payload != nil {
 		maxClusters = result.Payload.MaxClusters

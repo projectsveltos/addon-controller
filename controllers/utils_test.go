@@ -586,7 +586,7 @@ metadata:
 			driftDetectionManager := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      randomString(),
-					Namespace: "projectsveltos",
+					Namespace: sveltosNamespace,
 					Labels:    lbls,
 				},
 				Spec: appsv1.DeploymentSpec{

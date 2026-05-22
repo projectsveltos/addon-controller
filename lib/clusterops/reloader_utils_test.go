@@ -41,9 +41,8 @@ import (
 )
 
 const (
-	kubeconfigPostfix        = "-kubeconfig"
-	resourceSummaryNamespace = "projectsveltos"
-	version                  = "v0.31.0"
+	kubeconfigPostfix = "-kubeconfig"
+	version           = "v0.31.0"
 )
 
 var _ = Describe("Reloader utils", func() {
@@ -412,7 +411,7 @@ func prepareCluster() *clusterv1.Cluster {
 	By("Create the ConfigMap with drift-detection version")
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: resourceSummaryNamespace,
+			Namespace: sveltosNamespace,
 			Name:      "drift-detection-version",
 		},
 		Data: map[string]string{

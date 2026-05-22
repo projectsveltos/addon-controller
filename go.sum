@@ -66,8 +66,6 @@ github.com/distribution/reference v0.6.0 h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5Qvfr
 github.com/distribution/reference v0.6.0/go.mod h1:BbU0aIcezP1/5jX/8MP0YiH4SdvB5Y4f/wlDRiLyi3E=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
-github.com/docker/cli v29.5.0+incompatible h1:FPUvKJoKpeP4Njz8NrQdeUN8o247P7ndTiILtaP5/l4=
-github.com/docker/cli v29.5.0+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli v29.5.2+incompatible h1:ubykJ1Y8LmNRGJ2BuMQ0kHOt/RO1YzGNswqWMJgivuQ=
 github.com/docker/cli v29.5.2+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/docker-credential-helpers v0.9.5 h1:EFNN8DHvaiK8zVqFA2DT6BjXE0GzfLOZ38ggPTKePkY=
@@ -104,8 +102,6 @@ github.com/fluxcd/pkg/tar v1.2.0 h1:T6WFB5M0YRHktlrgdKNskqpdp76TVDdWTOeuWz33CFs=
 github.com/fluxcd/pkg/tar v1.2.0/go.mod h1:Wlalp5vIVe+BbckkKkqExKcoHAeeWJPAzwK7ONeFcS0=
 github.com/fluxcd/pkg/testserver v0.14.0 h1:wVv/JPY3i4OEJ8xakfriuN2oHiUyZZ+BfhC/6RCD2nI=
 github.com/fluxcd/pkg/testserver v0.14.0/go.mod h1:6D6/SeGl8jT8L8pb5+k+mkE5CtqV1ozC5uqXRuTEBas=
-github.com/fluxcd/source-controller/api v1.8.4 h1:ZJIh7OFhjxZgsD81ahxxbu3ggA7qySIjKWbK5+PKmOI=
-github.com/fluxcd/source-controller/api v1.8.4/go.mod h1:sio4t49RDx+S1etHRFAEEw8qfVuw0KKlOg8bRVlEYPM=
 github.com/fluxcd/source-controller/api v1.8.5 h1:mLKc9YVMk46JCt1BQbkG6irkrpBZp95kiXh2+GYB6KQ=
 github.com/fluxcd/source-controller/api v1.8.5/go.mod h1:sio4t49RDx+S1etHRFAEEw8qfVuw0KKlOg8bRVlEYPM=
 github.com/foxcpp/go-mockdns v1.2.0 h1:omK3OrHRD1IWJz1FuFBCFquhXslXoF17OvBS6JPzZF0=
@@ -260,8 +256,6 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/onsi/ginkgo/v2 v2.28.3 h1:4JvMdwtFU0imd8fHx25OJXoDMRexnf8v5NHKYSTTji4=
 github.com/onsi/ginkgo/v2 v2.28.3/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
-github.com/onsi/gomega v1.40.0 h1:Vtol0e1MghCD2ZVIilPDIg44XSL9l2QAn8ZNaljWcJc=
-github.com/onsi/gomega v1.40.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
 github.com/onsi/gomega v1.41.0 h1:OwKp4pXNgVxf6sCplzYo794OFNuoL2q2SBMU5NSWOjA=
 github.com/onsi/gomega v1.41.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
 github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c h1:dTJQx6HDrRNmA3p5JlfVYw81R3g2RfWdG0+ZBaJeqcc=
@@ -279,8 +273,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v1.10.0 h1:+Gk34qCEOryHMT7xDFSIniiqk3VymhiKs/3EdK5gJ58=
-github.com/projectsveltos/libsveltos v1.10.0/go.mod h1:AzKBiyMTL3KSTLYMii5QdR3ieWyUKBHZCMFWIVCfm6A=
+github.com/projectsveltos/libsveltos v1.10.1-0.20260521153750-a1f348424b3f h1:XrgpnRRH59AwSkSEIcKPUDpAME0Sl4sXLeEhDIaYQMU=
+github.com/projectsveltos/libsveltos v1.10.1-0.20260521153750-a1f348424b3f/go.mod h1:AzKBiyMTL3KSTLYMii5QdR3ieWyUKBHZCMFWIVCfm6A=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=

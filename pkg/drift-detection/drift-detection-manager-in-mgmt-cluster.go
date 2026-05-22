@@ -44,10 +44,23 @@ spec:
         - --cluster-type=
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-updates
-        - --version=v1.10.0
+        - --version=main
         command:
         - /manager
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:f843e92513ee60cc7f19c1921b894634fdfdca05e4e9cb31b7fa529223dc85bd
+        env:
+        - name: TOTAL_MEMORY_LIMIT
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.memory
+        - name: GOMAXPROCS
+          valueFrom:
+            resourceFieldRef:
+              resource: limits.cpu
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:308c6983cf12a4fe6abedf0dae98d22f3b68001683de56c1a45a51712c32db89
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -77,7 +90,7 @@ spec:
             cpu: 500m
             memory: 512Mi
           requests:
-            cpu: 10m
+            cpu: 100m
             memory: 128Mi
         securityContext:
           allowPrivilegeEscalation: false

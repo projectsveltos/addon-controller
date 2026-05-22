@@ -157,7 +157,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "drift-detection-manager",
-				Namespace: "projectsveltos",
+				Namespace: sveltosNamespace,
 				Labels: map[string]string{
 					"control-plane": "drift-detection-manager",
 				},
@@ -171,7 +171,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "some-other-deployment",
-				Namespace: "projectsveltos",
+				Namespace: sveltosNamespace,
 				Labels: map[string]string{
 					"control-plane": "drift-detection-manager",
 				},

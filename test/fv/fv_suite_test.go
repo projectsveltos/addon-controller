@@ -19,6 +19,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -49,7 +50,15 @@ var (
 	k8sClient           client.Client
 	scheme              *runtime.Scheme
 	kindWorkloadCluster *unstructured.Unstructured // This is the name of the kind workload cluster, in the form namespace/name
+	sveltosNamespace    string
 )
+
+func init() {
+	sveltosNamespace = os.Getenv("SVELTOS_NAMESPACE")
+	if sveltosNamespace == "" {
+		sveltosNamespace = "projectsveltos"
+	}
+}
 
 const (
 	timeout         = 4 * time.Minute
@@ -82,6 +91,7 @@ func TestFv(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	By(fmt.Sprintf("Running with Sveltos namespace: %s", sveltosNamespace))
 	restConfig := ctrl.GetConfigOrDie()
 	// To get rid of the annoying request.go log
 	restConfig.QPS = 100

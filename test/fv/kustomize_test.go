@@ -120,7 +120,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			deployment := &appsv1.Deployment{}
 			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller"},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "addon-controller"},
 				deployment)
 			return err == nil && deployment.Status.AvailableReplicas == 1
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -129,7 +129,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			deployment := &appsv1.Deployment{}
 			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller-shard1 "},
+				types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller-shard1"},
 				deployment)
 			if err != nil {
 				return apierrors.IsNotFound(err)

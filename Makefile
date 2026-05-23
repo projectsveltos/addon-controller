@@ -267,13 +267,9 @@ fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existin
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
-.PHONY: create-cluster
-create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
+.PHONY: create-cluster-infra
+create-cluster-infra: $(KIND) $(CLUSTERCTL) $(KUBECTL) ## Create cluster infrastructure without deploying Sveltos
 	$(MAKE) create-control-cluster
-
-	@echo "Start projectsveltos"
-	$(MAKE) deploy-projectsveltos
-
 	$(MAKE) create-workload-cluster
 
 	@echo "prepare configMap with kustomize files"
@@ -282,8 +278,35 @@ create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kin
 	@echo "prepare configMap with flux resources"
 	$(KUBECTL) create configmap install-flux --from-file=test/flux-install.yaml
 
-	@echo apply reloader CRD to managed cluster
+	@echo "apply reloader CRD to managed cluster"
 	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaders.lib.projectsveltos.io.yaml
+
+.PHONY: fv-namespace
+fv-namespace: $(GINKGO) $(KUBECTL) $(KUSTOMIZE) $(ENVSUBST) ## Run FV tests with addon-controller deployed in a random namespace
+	$(MAKE) load-image
+	$(MAKE) deploy-crds
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	SVELTOS_NS="sveltos-$$(openssl rand -hex 4)"; \
+	echo "Deploying addon-controller in namespace: $$SVELTOS_NS"; \
+	$(KUSTOMIZE) build config/default | $(ENVSUBST) | \
+		sed -E 's/^([[:space:]]+)(name|namespace): projectsveltos$$/\1\2: '"$$SVELTOS_NS"'/' | \
+		$(KUBECTL) apply -f-; \
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/configuration/default-debuggingconfiguration.yaml; \
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/sveltoscluster-manager/$(TAG)/manifest/manifest.yaml; \
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/register-mgmt-cluster/$(TAG)/manifest/manifest.yaml; \
+	echo "Waiting for addon-controller to be available in namespace $$SVELTOS_NS..."; \
+	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n "$$SVELTOS_NS" --timeout=$(TIMEOUT); \
+	cd test/fv && SVELTOS_NAMESPACE="$$SVELTOS_NS" $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: kind-test-namespace
+kind-test-namespace: test create-cluster-infra fv-namespace ## Build docker image; start kind cluster; run fv in a random namespace
+
+.PHONY: create-cluster
+create-cluster: $(KIND) $(CLUSTERCTL) $(KUBECTL) $(ENVSUBST) ## Create a new kind cluster designed for development
+	$(MAKE) create-cluster-infra
+
+	@echo "Start projectsveltos"
+	$(MAKE) deploy-projectsveltos
 
 .PHONY: delete-cluster
 delete-cluster: $(KIND) ## Deletes the kind cluster $(CONTROL_CLUSTER_NAME)
@@ -419,11 +442,8 @@ create-cluster-pullmode: $(KIND) $(KUBECTL) $(ENVSUBST) $(KUSTOMIZE)
 	@echo "Switching to cluster1..."
 	$(KUBECTL) config use-context kind-$(CONTROL_CLUSTER_NAME)
 
-deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
-	# Load projectsveltos image into cluster
-	@echo 'Load projectsveltos image into cluster'
-	$(MAKE) load-image
-
+.PHONY: deploy-crds
+deploy-crds: $(KUBECTL) ## Install libsveltos CRDs
 	@echo 'Install libsveltos CRDs'
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_debuggingconfigurations.lib.projectsveltos.io.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_classifiers.lib.projectsveltos.io.yaml
@@ -435,6 +455,13 @@ deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_configurationgroups.lib.projectsveltos.io.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_configurationbundles.lib.projectsveltos.io.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_sveltoslicenses.lib.projectsveltos.io.yaml
+
+deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
+	# Load projectsveltos image into cluster
+	@echo 'Load projectsveltos image into cluster'
+	$(MAKE) load-image
+
+	$(MAKE) deploy-crds
 
 	# Install projectsveltos addon-controller components
 	@echo 'Install projectsveltos addon-controller components'

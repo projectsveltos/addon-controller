@@ -20,6 +20,7 @@ import (
 	"context"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached"
@@ -126,6 +127,39 @@ func getAgentInMgmtCluster() bool {
 
 func getSveltosNamespace() string {
 	return sveltosNamespace
+}
+
+func updateResourceNamespace(policy *unstructured.Unstructured, namespace string) error {
+	if policy.GetKind() == namespaceKind {
+		policy.SetName(namespace)
+		return nil
+	}
+
+	if policy.GetNamespace() != "" {
+		policy.SetNamespace(namespace)
+	}
+
+	if policy.GetKind() != clusterRoleBindingKind {
+		return nil
+	}
+
+	subjects, found, err := unstructured.NestedSlice(policy.Object, "subjects")
+	if err != nil || !found {
+		return err
+	}
+
+	for i := range subjects {
+		subject, ok := subjects[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if subject["kind"] == "ServiceAccount" {
+			subject["namespace"] = namespace
+			subjects[i] = subject
+		}
+	}
+
+	return unstructured.SetNestedSlice(policy.Object, subjects, "subjects")
 }
 
 func resetManagementClusterMapper() {

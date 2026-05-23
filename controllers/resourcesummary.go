@@ -49,7 +49,9 @@ import (
 )
 
 const (
-	deploymentKind = "Deployment"
+	deploymentKind         = "Deployment"
+	namespaceKind          = "Namespace"
+	clusterRoleBindingKind = "ClusterRoleBinding"
 
 	driftDetectionClusterNamespaceLabel = "cluster-namespace"
 	driftDetectionClusterNameLabel      = "cluster-name"
@@ -337,8 +339,9 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 			}
 		}
 
-		if policy.GetNamespace() != "" {
-			policy.SetNamespace(getSveltosNamespace())
+		if err := updateResourceNamespace(policy, getSveltosNamespace()); err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to update resource namespace")
+			return err
 		}
 
 		var referencedUnstructured []*unstructured.Unstructured
@@ -612,7 +615,9 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 			return err
 		}
 
-		if policy.GetNamespace() != "" {
+		if policy.GetKind() == namespaceKind {
+			policy.SetName(getSveltosNamespace())
+		} else if policy.GetNamespace() != "" {
 			policy.SetNamespace(getSveltosNamespace())
 		}
 

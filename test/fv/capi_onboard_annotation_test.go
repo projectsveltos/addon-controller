@@ -42,20 +42,19 @@ var _ = Describe("Helm", Serial, func() {
 		namePrefix        = "onboard-"
 		onboardAnnotation = "onboard-capi"
 
-		addonDeplNamespace = "projectsveltos"
-		addonDeplName      = "addon-controller"
+		addonDeplName = "addon-controller"
 	)
 
 	BeforeEach(func() {
-		Byf("Set capi-onboard-annotation for deployment %s/%s", addonDeplNamespace, addonDeplName)
-		updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, onboardAnnotation)
+		Byf("Set capi-onboard-annotation for deployment %s/%s", sveltosNamespace, addonDeplName)
+		updateOnboardAnnotationArg(sveltosNamespace, addonDeplName, onboardAnnotation)
 
 		removeAnnotationFromCluster(onboardAnnotation)
 	})
 
 	AfterEach(func() {
-		Byf("Reset capi-onboard-annotation for deployment %s/%s", addonDeplNamespace, addonDeplName)
-		updateOnboardAnnotationArg(addonDeplNamespace, addonDeplName, "")
+		Byf("Reset capi-onboard-annotation for deployment %s/%s", sveltosNamespace, addonDeplName)
+		updateOnboardAnnotationArg(sveltosNamespace, addonDeplName, "")
 
 		removeAnnotationFromCluster(onboardAnnotation)
 	})

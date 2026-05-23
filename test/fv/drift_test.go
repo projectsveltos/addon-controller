@@ -311,7 +311,7 @@ reportsController:
 			Eventually(func() bool {
 				depl := &appsv1.Deployment{}
 				err = workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "projectsveltos", Name: "drift-detection-manager"}, depl)
+					types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl)
 				if err != nil {
 					return false
 				}
@@ -529,7 +529,7 @@ func isAgentLessMode() bool {
 	By("Getting addon-controller pod")
 	addonControllerDepl := &appsv1.Deployment{}
 	Expect(k8sClient.Get(context.TODO(),
-		types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller"},
+		types.NamespacedName{Namespace: sveltosNamespace, Name: "addon-controller"},
 		addonControllerDepl)).To(Succeed())
 
 	Expect(len(addonControllerDepl.Spec.Template.Spec.Containers)).To(Equal(1))

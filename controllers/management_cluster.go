@@ -34,6 +34,7 @@ var (
 	managementClusterMapper          *restmapper.DeferredDiscoveryRESTMapper
 	managementClusterCachedDiscovery discovery.CachedDiscoveryInterface
 
+	sveltosNamespace        string
 	driftdetectionConfigMap string
 	luaConfigMap            string
 	capiOnboardAnnotation   string
@@ -79,6 +80,10 @@ func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
 }
 
+func SetSveltosNamespace(namespace string) {
+	sveltosNamespace = namespace
+}
+
 func getManagementClusterConfig() *rest.Config {
 	return managementClusterConfig
 }
@@ -119,6 +124,10 @@ func getAgentInMgmtCluster() bool {
 	return agentInMgmtCluster
 }
 
+func getSveltosNamespace() string {
+	return sveltosNamespace
+}
+
 func resetManagementClusterMapper() {
 	managementClusterMapper.Reset()
 }
@@ -131,7 +140,7 @@ func collectDriftDetectionConfigMap(ctx context.Context) (*corev1.ConfigMap, err
 	c := getManagementClusterClient()
 	configMap := &corev1.ConfigMap{}
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: getDriftDetectionConfigMap()},
+	err := c.Get(ctx, types.NamespacedName{Namespace: sveltosNamespace, Name: getDriftDetectionConfigMap()},
 		configMap)
 	if err != nil {
 		return nil, err
@@ -144,7 +153,7 @@ func collectLuaConfigMap(ctx context.Context) (*corev1.ConfigMap, error) {
 	c := getManagementClusterClient()
 	configMap := &corev1.ConfigMap{}
 
-	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: getLuaConfigMap()},
+	err := c.Get(ctx, types.NamespacedName{Namespace: sveltosNamespace, Name: getLuaConfigMap()},
 		configMap)
 	if err != nil {
 		return nil, err

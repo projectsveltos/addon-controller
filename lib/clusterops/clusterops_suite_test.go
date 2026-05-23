@@ -53,10 +53,11 @@ import (
 )
 
 var (
-	testEnv *helpers.TestEnvironment
-	cancel  context.CancelFunc
-	ctx     context.Context
-	scheme  *runtime.Scheme
+	testEnv          *helpers.TestEnvironment
+	cancel           context.CancelFunc
+	ctx              context.Context
+	scheme           *runtime.Scheme
+	sveltosNamespace string
 )
 
 const (
@@ -134,9 +135,10 @@ var _ = BeforeSuite(func() {
 	Expect(testEnv.Create(context.TODO(), clusterSetCRD)).To(Succeed())
 	Expect(waitForObject(context.TODO(), testEnv, clusterSetCRD)).To(Succeed())
 
+	sveltosNamespace = randomString()
 	projectsveltosNs := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "projectsveltos",
+			Name: sveltosNamespace,
 		},
 	}
 	Expect(testEnv.Create(context.TODO(), projectsveltosNs)).To(Succeed())

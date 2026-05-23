@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -74,19 +75,6 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		cluster := prepareCluster()
 		clusterSummaryName := randomString()
 
-		// In managed cluster this is the namespace where ResourceSummaries
-		// are created
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: resourceSummaryNamespace,
-			},
-		}
-		err := testEnv.Create(context.TODO(), ns)
-		if err != nil {
-			Expect(apierrors.IsAlreadyExists(err)).To(BeTrue())
-		}
-		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
-
 		// Just verify result is success (testEnv is used to simulate both management and workload cluster and because
 		// classifier is expected in the management cluster, above line is required
 		Expect(controllers.DeployDriftDetectionManagerInCluster(context.TODO(), testEnv.Client, cluster.Namespace,
@@ -113,7 +101,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
 
 		listOptions := []client.ListOption{
-			client.InNamespace(controllers.GetDriftDetectionNamespaceInMgmtCluster()),
+			client.InNamespace(controllers.GetDriftDetectionNamespaceInMgmtCluster(sveltosNamespace)),
 		}
 		Eventually(func() bool {
 			deployments := &appsv1.DeploymentList{}
@@ -156,7 +144,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 	})
 
 	It("getGlobalDriftDetectionManagerPatches reads old post render patches from ConfigMap", func() {
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-patch: |-
             image-patch: |-
@@ -176,7 +164,7 @@ data:
 kind: ConfigMap
 metadata:
   name: drift-detection-config-old
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -196,7 +184,7 @@ metadata:
 	})
 
 	It("getDriftDetectionManagerPatches reads post render patches from ConfigMap", func() {
-		cmYAML := `apiVersion: v1
+		cmYAML := fmt.Sprintf(`apiVersion: v1
 data:
   deployment-patch: |-
       patch: |-
@@ -227,7 +215,7 @@ data:
 kind: ConfigMap
 metadata:
   name: drift-detection-config
-  namespace: projectsveltos`
+  namespace: %s`, sveltosNamespace)
 
 		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
 		Expect(err).To(BeNil())
@@ -324,7 +312,7 @@ func prepareCluster() *clusterv1.Cluster {
 	By("Create the ConfigMap with drift-detection version")
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: resourceSummaryNamespace,
+			Namespace: sveltosNamespace,
 			Name:      "drift-detection-version",
 		},
 		Data: map[string]string{

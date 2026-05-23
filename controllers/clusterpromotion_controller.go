@@ -1319,7 +1319,7 @@ func (r *ClusterPromotionReconciler) verifyStageEligibility(ctx context.Context,
 		return false, err
 	}
 
-	result := license.VerifyLicenseSecret(ctx, r.Client, publicKey, logger)
+	result := license.VerifyLicenseSecret(ctx, r.Client, getSveltosNamespace(), publicKey, logger)
 	if result.Message != "" {
 		logger.V(logs.LogDebug).Info(result.Message)
 	}

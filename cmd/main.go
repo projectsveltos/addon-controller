@@ -110,6 +110,7 @@ const (
 	defaulReportMode    = int(controllers.CollectFromManagementCluster)
 	mebibytes_bytes     = 1 << 20
 	gibibytes_per_bytes = 1 << 30
+	sveltosNamespace    = "NAMESPACE"
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -124,15 +125,17 @@ func main() {
 
 	setupLogging()
 
+	sveltosNamespace := os.Getenv(sveltosNamespace)
+	if sveltosNamespace == "" {
+		setupLog.V(logs.LogInfo).Error(nil, "Missing required environment variables NAMESPACE")
+		os.Exit(1)
+	}
+
 	reportMode = controllers.ReportMode(tmpReportMode)
 	ctrl.SetLogger(klog.Background())
 	ctrlOptions := getCtrlOptions(scheme)
 
-	restConfig := ctrl.GetConfigOrDie()
-	restConfig.QPS = restConfigQPS
-	restConfig.Burst = restConfigBurst
-	restConfig.UserAgent = remote.DefaultClusterAPIUserAgent("addon-controller")
-	restConfig.WarningHandler = apiwarnings.DefaultHandler(klog.Background().WithName("API Server Warning"))
+	restConfig := getRestConfig()
 
 	ctx := ctrl.SetupSignalHandler()
 
@@ -143,6 +146,7 @@ func main() {
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetSveltosNamespace(sveltosNamespace)
 
 	if isInitContainer() {
 		runInitContainerWork(ctx, restConfig, scheme)
@@ -175,7 +179,7 @@ func main() {
 	controllers.NewLicenseManager()
 
 	if shardKey == "" && !disableTelemetry {
-		err = telemetry.StartCollecting(ctx, mgr.GetConfig(), mgr.GetClient(), version)
+		err = telemetry.StartCollecting(ctx, mgr.GetConfig(), mgr.GetClient(), sveltosNamespace, version)
 		if err != nil {
 			setupLog.Error(err, "failed starting telemetry client")
 		}
@@ -256,10 +260,10 @@ func initFlags(fs *pflag.FlagSet) {
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
 
 	fs.StringVar(&driftDetectionConfigMap, "drift-detection-config", "",
-		"The name of the ConfigMap in the projectsveltos namespace containing the drift-detection-manager configuration")
+		"The name of the ConfigMap in the namespace where projectsveltos is deployed containing the drift-detection-manager configuration")
 
 	fs.StringVar(&luaConfigMap, "lua-methods", "",
-		"The name of the ConfigMap in the projectsveltos namespace containing lua utilities to be loaded."+
+		"The name of the ConfigMap in the namespace where projectsveltos is deployed containing lua utilities to be loaded."+
 			"Changing the content of the ConfigMap does not cause Sveltos to redeploy.")
 
 	fs.StringVar(&registry, "registry", "",
@@ -796,4 +800,13 @@ func setupLogging() {
 	pflag.Parse()
 
 	ctrl.SetLogger(klog.Background())
+}
+
+func getRestConfig() *rest.Config {
+	restConfig := ctrl.GetConfigOrDie()
+	restConfig.QPS = restConfigQPS
+	restConfig.Burst = restConfigBurst
+	restConfig.UserAgent = remote.DefaultClusterAPIUserAgent("addon-controller")
+	restConfig.WarningHandler = apiwarnings.DefaultHandler(klog.Background().WithName("API Server Warning"))
+	return restConfig
 }

@@ -39,10 +39,6 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
-const (
-	resourceSummaryNamespace = "projectsveltos"
-)
-
 var _ = Describe("ResourceSummary Collection", func() {
 	It("collectResourceSummariesFromCluster collects and processes ResourceSummaries from clusters", func() {
 		cluster := prepareCluster()
@@ -86,7 +82,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		// are created
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: resourceSummaryNamespace,
+				Name: sveltosNamespace,
 			},
 		}
 		err := testEnv.Create(context.TODO(), ns)
@@ -105,20 +101,20 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
 		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummary.Name},
+			types.NamespacedName{Namespace: sveltosNamespace, Name: resourceSummary.Name},
 			currentResourceSummary)).To(Succeed())
 		currentResourceSummary.Status.HelmResourcesChanged = true
 		Expect(testEnv.Status().Update(context.TODO(), currentResourceSummary))
 
 		Eventually(func() bool {
 			err = testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummary.Name},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: resourceSummary.Name},
 				currentResourceSummary)
 			return err == nil && currentResourceSummary.Status.HelmResourcesChanged
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(testEnv.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummary.Name},
+			types.NamespacedName{Namespace: sveltosNamespace, Name: resourceSummary.Name},
 			currentResourceSummary)).To(Succeed())
 		Expect(currentResourceSummary.Status.HelmResourcesChanged).To(BeTrue())
 
@@ -150,7 +146,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		// Eventual loop so testEnv Cache is synced
 		Eventually(func() bool {
 			err = testEnv.Get(context.TODO(),
-				types.NamespacedName{Namespace: resourceSummaryNamespace, Name: resourceSummary.Name},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: resourceSummary.Name},
 				currentResourceSummary)
 			return err == nil && !currentResourceSummary.Status.HelmResourcesChanged
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -319,7 +315,7 @@ func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsvel
 	rs := &libsveltosv1beta1.ResourceSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      randomString(),
-			Namespace: resourceSummaryNamespace,
+			Namespace: sveltosNamespace,
 		},
 	}
 

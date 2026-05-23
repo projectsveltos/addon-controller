@@ -49,7 +49,6 @@ import (
 )
 
 const (
-	projectsveltos = "projectsveltos"
 	deploymentKind = "Deployment"
 
 	driftDetectionClusterNamespaceLabel = "cluster-namespace"
@@ -76,13 +75,14 @@ const (
 	driftDetectionOverrideAnnotation = "driftdetection.projectsveltos.io/config-override-ref"
 )
 
-func getDriftDetectionNamespaceInMgmtCluster() string {
-	return projectsveltos
+func getDriftDetectionNamespaceInMgmtCluster(sveltosNamespace string) string {
+	return sveltosNamespace
 }
 
 func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
-	clusterNamespace, clusterName, applicant, featureID string, clusterType libsveltosv1beta1.ClusterType,
-	isPullMode, startInMgmtCluster bool, logger logr.Logger) error {
+	clusterNamespace, clusterName, applicant, featureID string,
+	clusterType libsveltosv1beta1.ClusterType, isPullMode, startInMgmtCluster bool,
+	logger logr.Logger) error {
 
 	logger = logger.WithValues("clustersummary", applicant)
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
@@ -112,8 +112,8 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	// Deploy DriftDetectionManager
 	if startInMgmtCluster && !isPullMode {
 		restConfig := getManagementClusterConfig()
-		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace,
-			clusterName, "do-not-send-updates", clusterType, patches, logger)
+		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace, clusterName,
+			"do-not-send-updates", clusterType, patches, logger)
 	}
 
 	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace, clusterName,
@@ -269,7 +269,7 @@ func deployDriftDetectionManagerInManagedCluster(ctx context.Context,
 // deployDriftDetectionManagerInManagementCluster deploys drift-detection-manager in the management cluster
 // When deploying drift-detection-manager in the management cluster, there is one Deployment instance
 // of drift-detection-manager per cluster.
-// Those instances are all running in the "projectsveltos" namespace.
+// Those instances are all running in the namespace where projectsveltos is deployed
 func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
 	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
@@ -335,6 +335,10 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 					return err
 				}
 			}
+		}
+
+		if policy.GetNamespace() != "" {
+			policy.SetNamespace(getSveltosNamespace())
 		}
 
 		var referencedUnstructured []*unstructured.Unstructured
@@ -453,7 +457,8 @@ func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clus
 
 // getDriftDetectionManagerDeploymentName returns the name for a given drift-detection-manager deployment
 // started in the management cluster for a given cluster.
-func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *rest.Config, lbls map[string]string,
+func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *rest.Config,
+	lbls map[string]string,
 ) (name string, err error) {
 
 	labelSelector := metav1.LabelSelector{
@@ -472,7 +477,8 @@ func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *res
 	}
 
 	// using client and a List would require permission at cluster level. So using clientset instead
-	deployments, err := clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster()).List(ctx, listOptions)
+	deployments, err := clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster(getSveltosNamespace())).
+		List(ctx, listOptions)
 	if err != nil {
 		return "", err
 	}
@@ -483,8 +489,9 @@ func getDriftDetectionManagerDeploymentName(ctx context.Context, restConfig *res
 		// doesn't exist.
 		for i := range deployments.Items {
 			// Ignore eventual error, since we are returning an error anyway
-			_ = clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster()).Delete(ctx,
-				deployments.Items[i].Name, metav1.DeleteOptions{})
+			_ = clientset.AppsV1().Deployments(getDriftDetectionNamespaceInMgmtCluster(getSveltosNamespace())).
+				Delete(ctx,
+					deployments.Items[i].Name, metav1.DeleteOptions{})
 		}
 		err = fmt.Errorf("more than one drift-detection deployment found")
 		return name, err
@@ -605,6 +612,10 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 			return err
 		}
 
+		if policy.GetNamespace() != "" {
+			policy.SetNamespace(getSveltosNamespace())
+		}
+
 		dr, err := k8s_utils.GetDynamicResourceInterface(restConfig, policy.GroupVersionKind(), policy.GetNamespace())
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get dynamic client: %v", err))
@@ -629,7 +640,7 @@ func getDriftDetectionManagerPatchesOld(ctx context.Context, c client.Client,
 	configMap := &corev1.ConfigMap{}
 	if configMapName != "" {
 		err := c.Get(ctx,
-			types.NamespacedName{Namespace: projectsveltos, Name: configMapName},
+			types.NamespacedName{Namespace: getSveltosNamespace(), Name: configMapName},
 			configMap)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ConfigMap %s: %v",
@@ -733,7 +744,7 @@ func getGlobalDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 
 	configMapName := getDriftDetectionConfigMap()
 
-	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, projectsveltos, configMapName, logger)
+	patches, err := getDriftDetectionManagerPatchesNew(ctx, c, getSveltosNamespace(), configMapName, logger)
 	if err == nil {
 		return patches, nil
 	}
@@ -823,7 +834,7 @@ func getResourceSummaryNameInfo(clusterNamespace, clusterSummaryName string) typ
 		resourceSummaryNamespace = clusterNamespace
 		resourceSummaryName = clusterops.GetResourceSummaryNameInManagemntCluster(clusterSummaryName)
 	} else {
-		resourceSummaryNamespace = clusterops.GetResourceSummaryNamespaceInManagedCluster()
+		resourceSummaryNamespace = clusterops.GetResourceSummaryNamespaceInManagedCluster(getSveltosNamespace())
 		resourceSummaryName = clusterops.GetResourceSummaryNameInManagedCluster(clusterNamespace, clusterSummaryName)
 	}
 

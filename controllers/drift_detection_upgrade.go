@@ -49,7 +49,9 @@ func upgradeDriftDetection(ctx context.Context, shardKey string, logger logr.Log
 	upgradeDriftDetectionDeploymentsInManagedClusters(ctx, shardKey, logger)
 }
 
-func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shardKey string, logger logr.Logger) {
+func upgradeDriftDetectionDeploymentsInManagedClusters(ctx context.Context, shardKey string,
+	logger logr.Logger) {
+
 	const two = 2
 	const maxRetryAfter = two * time.Minute // Maximum sleep duration
 	retryAfter := 10 * time.Second
@@ -308,7 +310,7 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) (bool, error) {
 	deployment := &appsv1.Deployment{}
 	// A test in pkg/drift-detection makes sure this name is correct
-	err := c.Get(ctx, types.NamespacedName{Namespace: projectsveltos, Name: "drift-detection-manager"}, deployment)
+	err := c.Get(ctx, types.NamespacedName{Namespace: getSveltosNamespace(), Name: "drift-detection-manager"}, deployment)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {

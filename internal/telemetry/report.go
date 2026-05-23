@@ -46,7 +46,8 @@ import (
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=clusterhealthchecks,verbs=get;list;watch
 
 type instance struct {
-	version string
+	sveltosNamespace string
+	version          string
 	client.Client
 	config *rest.Config
 }
@@ -61,15 +62,18 @@ const (
 	domain          = "http://telemetry.projectsveltos.io/"
 )
 
-func StartCollecting(ctx context.Context, config *rest.Config, c client.Client, sveltosVersion string) error {
+func StartCollecting(ctx context.Context, config *rest.Config, c client.Client,
+	sveltosNamespace, sveltosVersion string) error {
+
 	if telemetryInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if telemetryInstance == nil {
 			telemetryInstance = &instance{
-				Client:  c,
-				version: sveltosVersion,
-				config:  config,
+				Client:           c,
+				sveltosNamespace: sveltosNamespace,
+				version:          sveltosVersion,
+				config:           config,
 			}
 
 			go telemetryInstance.reportData(ctx)
@@ -98,7 +102,7 @@ func (m *instance) reportData(ctx context.Context) {
 
 func (m *instance) retrieveUUID(ctx context.Context) (string, error) {
 	var sveltosNS corev1.Namespace
-	if err := m.Get(ctx, types.NamespacedName{Name: "projectsveltos"}, &sveltosNS); err != nil {
+	if err := m.Get(ctx, types.NamespacedName{Name: m.sveltosNamespace}, &sveltosNS); err != nil {
 		return "", errors.Wrap(err, "cannot start the telemetry controller")
 	}
 

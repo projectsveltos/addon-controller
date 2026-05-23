@@ -30,7 +30,7 @@ import (
 var (
 	programResourceDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Namespace: "projectsveltos",
+			Namespace: getSveltosNamespace(),
 			Name:      "program_resources_time_seconds",
 			Help:      "Program Resources on a workload cluster duration distribution",
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
@@ -39,7 +39,7 @@ var (
 
 	programChartDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Namespace: "projectsveltos",
+			Namespace: getSveltosNamespace(),
 			Name:      "program_charts_time_seconds",
 			Help:      "Program Helm charts on a workload cluster duration distribution",
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
@@ -48,7 +48,7 @@ var (
 
 	reconciliationCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "projectsveltos",
+			Namespace: getSveltosNamespace(),
 			Name:      "reconcile_operations_total",
 			Help:      "Total number of reconcile operations for Helm, Resources, and Kustomization",
 		},
@@ -57,7 +57,7 @@ var (
 
 	driftCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: "projectsveltos",
+			Namespace: getSveltosNamespace(),
 			Name:      "total_drifts",
 			Help:      "Total number of drifts for a given cluster indexed via type, namespace/name and feature id",
 		},

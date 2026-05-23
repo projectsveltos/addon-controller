@@ -20,12 +20,8 @@ import (
 	"fmt"
 )
 
-const (
-	projectsveltos = "projectsveltos"
-)
-
-func GetResourceSummaryNamespaceInManagedCluster() string {
-	return projectsveltos
+func GetResourceSummaryNamespaceInManagedCluster(sveltosNamespacxe string) string {
+	return sveltosNamespacxe
 }
 
 func GetResourceSummaryNameInManagedCluster(clusterSummaryNamespace, clusterSummaryName string) string {

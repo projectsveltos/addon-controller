@@ -17,6 +17,23 @@
 
 </div>
 
+## Trusted in Production
+
+<div align="center">
+
+<a href="https://mirantis.com"><img src="https://website.projectsveltos.io/images/companies/mirantis.svg" height="40" alt="Mirantis"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://corporate.comcast.com"><img src="https://website.projectsveltos.io/images/companies/comcast.png" height="40" alt="Comcast"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://www.renaultgroup.com"><img src="https://website.projectsveltos.io/images/companies/renault.png" height="40" alt="Renault"></a>
+&nbsp;&nbsp;&nbsp;&nbsp;
+<a href="https://platform9.com"><img src="https://website.projectsveltos.io/images/companies/platform9.jpg" height="40" alt="Platform9"></a>
+
+<br/><br/>
+<a href="https://website.projectsveltos.io/companies">View all adopters →</a>
+
+</div>
+
 # Sveltos: Kubernetes add-on controller
 
 <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">

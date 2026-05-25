@@ -110,7 +110,6 @@ const (
 	defaulReportMode    = int(controllers.CollectFromManagementCluster)
 	mebibytes_bytes     = 1 << 20
 	gibibytes_per_bytes = 1 << 30
-	sveltosNamespace    = "NAMESPACE"
 )
 
 // Add RBAC for the authorized diagnostics endpoint.
@@ -125,7 +124,7 @@ func main() {
 
 	setupLogging()
 
-	sveltosNamespace := os.Getenv(sveltosNamespace)
+	sveltosNamespace := os.Getenv("NAMESPACE")
 	if sveltosNamespace == "" {
 		setupLog.V(logs.LogInfo).Error(nil, "Missing required environment variables NAMESPACE")
 		os.Exit(1)

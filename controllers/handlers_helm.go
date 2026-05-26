@@ -3904,8 +3904,8 @@ func getTakeOwnershipHelmValue(options *configv1beta1.HelmOptions, isUpgrade boo
 }
 
 func getCreateNamespaceHelmValue(options *configv1beta1.HelmOptions) bool {
-	if options != nil {
-		return options.InstallOptions.CreateNamespace
+	if options != nil && options.InstallOptions.CreateNamespace != nil {
+		return *options.InstallOptions.CreateNamespace
 	}
 
 	return true // for backward compatibility
@@ -4012,8 +4012,8 @@ func getLabelsValue(options *configv1beta1.HelmOptions) map[string]string {
 }
 
 func getReplaceValue(options *configv1beta1.HelmOptions) bool {
-	if options != nil {
-		return options.InstallOptions.Replace
+	if options != nil && options.InstallOptions.Replace != nil {
+		return *options.InstallOptions.Replace
 	}
 	return true
 }

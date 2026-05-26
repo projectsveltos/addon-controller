@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,7 +69,7 @@ var _ = Describe("HelmOptions", func() {
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
 						InstallOptions: configv1beta1.HelmInstallOptions{
-							Replace: false,
+							Replace: ptr.To(false),
 						},
 					},
 				},

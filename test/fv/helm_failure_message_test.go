@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
@@ -81,8 +82,8 @@ var _ = Describe("Helm with conflicts", func() {
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						InstallOptions: configv1beta1.HelmInstallOptions{
-							CreateNamespace: true,
-							Replace:         true,
+							CreateNamespace: ptr.To(true),
+							Replace:         ptr.To(true),
 						},
 						Timeout: &metav1.Duration{Duration: time.Second},
 					},

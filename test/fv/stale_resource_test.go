@@ -164,14 +164,7 @@ var _ = Describe("Stale Resources", func() {
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
-		By("Updating ConfigMap to reference incorrect Service")
-		Expect(k8sClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
-		allClusterRoleName := randomString()
-		currentConfigMap = updateConfigMapWithPolicy(currentConfigMap, fmt.Sprintf(allClusterRole, allClusterRoleName))
-		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
-
-		By("Updating ConfigMap to reference also an incorrect Service")
+		By("Updating ConfigMap to reference an incorrect Service")
 		incorrectServiceName := randomString()
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())

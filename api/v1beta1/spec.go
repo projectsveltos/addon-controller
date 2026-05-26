@@ -250,12 +250,12 @@ type HelmInstallOptions struct {
 	// Create the release namespace if not present. Defaults to true
 	// +kubebuilder:default:=true
 	// +optional
-	CreateNamespace bool `json:"createNamespace,omitempty"`
+	CreateNamespace *bool `json:"createNamespace,omitempty"`
 
 	// Replaces if set indicates to replace an older release with this one
 	// +kubebuilder:default:=true
 	// +optional
-	Replace bool `json:"replace,omitempty"`
+	Replace *bool `json:"replace,omitempty"`
 
 	// prevent hooks from running during install. If set to true, overrides
 	// DisableHooks in HelmOptions. Use this one when you want to selective

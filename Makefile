@@ -21,7 +21,14 @@ SHELL = /usr/bin/env bash -o pipefail
 # Define Docker related variables.
 REGISTRY ?= projectsveltos
 IMAGE_NAME ?= addon-controller
-ARCH ?= $(shell go env GOARCH)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_M),x86_64)
+ARCH ?= amd64
+else ifeq ($(UNAME_M),aarch64)
+ARCH ?= arm64
+else
+ARCH ?= $(UNAME_M)
+endif
 
 OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
@@ -74,6 +81,7 @@ KUBECTL := $(TOOLS_BIN_DIR)/kubectl
 GOVULNCHECK_VERSION := "v1.1.4"
 GOLANGCI_LINT_VERSION := "v2.11.4"
 CLUSTERCTL_VERSION := v1.13.2
+KIND_VERSION := v0.31.0
 
 KUSTOMIZE_VER := v5.8.0
 KUSTOMIZE_BIN := kustomize
@@ -128,8 +136,10 @@ $(GOIMPORTS):
 $(GINKGO): $(TOOLS_DIR)/go.mod
 	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) github.com/onsi/ginkgo/v2/ginkgo
 
-$(KIND): $(TOOLS_DIR)/go.mod
-	cd $(TOOLS_DIR) && $(GOBUILD) -tags tools -o $(subst $(TOOLS_DIR)/hack/tools/,,$@) sigs.k8s.io/kind
+$(KIND):
+	mkdir -p $(dir $@)
+	curl -L https://github.com/kubernetes-sigs/kind/releases/download/$(KIND_VERSION)/kind-$(OS)-$(ARCH) -o $@
+	chmod +x $@
 
 $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
 	curl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/$(CLUSTERCTL_VERSION)/clusterctl-$(OS)-$(ARCH) -o $@
@@ -224,6 +234,9 @@ quickstart:  ## start kind cluster; install all cluster api components; create a
 
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
+
+.PHONY: undeploy-quickstart
+undeploy-quickstart: delete-cluster
 
 .PHONY: test
 test: | check-manifests generate fmt vet $(SETUP_ENVTEST) ## Run uts.

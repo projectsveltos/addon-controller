@@ -531,12 +531,23 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
 
+	// Snapshot existing failure messages before deploying so we can detect
+	// new conflicts vs. ongoing ones and avoid re-raising an event every retry.
+	preDeployFailures := collectFailureMessages(clusterSummaryScope.ClusterSummary)
+
 	err := r.deploy(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		var conflictErr *deployer.ConflictError
 		ok := errors.As(err, &conflictErr)
 		if ok {
 			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
+			if _, alreadyKnown := preDeployFailures[conflictErr.Error()]; !alreadyKnown {
+				clusterSummary := clusterSummaryScope.ClusterSummary
+				r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "Conflict",
+					configv1beta1.ClusterSummaryKind, "Conflict detected for cluster %s %s/%s: %s",
+					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
+					clusterSummary.Spec.ClusterName, conflictErr.Error())
+			}
 			r.setNextReconcileTime(clusterSummaryScope, r.ConflictRetryTime)
 			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
 		}
@@ -2094,4 +2105,17 @@ func getClusterSummaryWithInstantiatedCharts(ctx context.Context, cs *configv1be
 	}
 
 	return &csCopy, nil
+}
+
+// collectFailureMessages returns the set of FailureMessages currently recorded
+// across all FeatureSummaries. Used to detect whether a conflict is new (not
+// yet in the status) versus ongoing (already reported in a previous reconcile).
+func collectFailureMessages(cs *configv1beta1.ClusterSummary) map[string]struct{} {
+	msgs := make(map[string]struct{}, len(cs.Status.FeatureSummaries))
+	for i := range cs.Status.FeatureSummaries {
+		if msg := cs.Status.FeatureSummaries[i].FailureMessage; msg != nil {
+			msgs[*msg] = struct{}{}
+		}
+	}
+	return msgs
 }

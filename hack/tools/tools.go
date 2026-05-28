@@ -28,5 +28,4 @@ import (
 	_ "golang.org/x/tools/cmd/goimports"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
-	_ "sigs.k8s.io/kind"
 )

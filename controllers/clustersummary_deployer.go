@@ -238,17 +238,29 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clusterSummaryScope *scope.ClusterSummaryScope,
 	f feature, currentHash []byte, logger logr.Logger) (bool, error) {
 
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
 	// Check if error is a NonRetriableError type
 	var nonRetriableError *configv1beta1.NonRetriableError
 	if errors.As(deployerError, &nonRetriableError) {
 		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
+		r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "FailedNonRetriable",
+			configv1beta1.ClusterSummaryKind,
+			"Feature %s for cluster %s %s/%s failed with non-retriable error: %s",
+			f.id, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, deployerError.Error())
 		return true, nil
 	}
 	var templateError *configv1beta1.TemplateInstantiationError
 	if errors.As(deployerError, &templateError) {
 		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, deployerError, logger)
+		r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "FailedNonRetriable",
+			configv1beta1.ClusterSummaryKind,
+			"Feature %s for cluster %s %s/%s failed to instantiate template: %s",
+			f.id, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, deployerError.Error())
 		return true, nil
 	}
 	var healthCheckError *clusterops.HealthCheckError
@@ -261,6 +273,11 @@ func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clus
 		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
 		resultError := errors.New("the maximum number of consecutive errors has been reached")
 		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
+		r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "FailedNonRetriable",
+			configv1beta1.ClusterSummaryKind,
+			"Feature %s for cluster %s %s/%s will no longer be retried: maximum consecutive failures reached",
+			f.id, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName)
 		return true, nil
 	}
 

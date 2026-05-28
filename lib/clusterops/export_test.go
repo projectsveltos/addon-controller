@@ -26,4 +26,9 @@ var (
 var (
 	IsHealthy      = isHealthyBasedOnLua
 	FetchResources = fetchResources
+	ExtractScalar  = extractScalar
+	ParsePromValue = parsePromValue
 )
+
+// PrometheusData is exported for use in tests.
+type PrometheusData = prometheusData

@@ -94,8 +94,6 @@ github.com/fluxcd/cli-utils v1.2.0 h1:1o07pXTMxJ/XJ1GpAbLtjdXwfCUMq4Ku1OcnvJHLoh
 github.com/fluxcd/cli-utils v1.2.0/go.mod h1:d5HdTDdR5sCbsIbgtOQ7x7srKYwYeZORU6CD2yn4j/M=
 github.com/fluxcd/pkg/apis/acl v0.9.0 h1:wBpgsKT+jcyZEcM//OmZr9RiF8klL3ebrDp2u2ThsnA=
 github.com/fluxcd/pkg/apis/acl v0.9.0/go.mod h1:TttNS+gocsGLwnvmgVi3/Yscwqrjc17+vhgYfqkfrV4=
-github.com/fluxcd/pkg/apis/meta v1.27.0 h1:EspByEk5j8w3rs1cGbEh9AjSmpDwQIz7DFG/zzqf6uI=
-github.com/fluxcd/pkg/apis/meta v1.27.0/go.mod h1:2t6JyrRfvIBhx6EBnXfFh/6sCCJ1db9WGaqko0JmNOE=
 github.com/fluxcd/pkg/apis/meta v1.28.0 h1:eJjMlLnfObnh23cyUB6xiIwDbgJaRU2MgfzzuilLFxI=
 github.com/fluxcd/pkg/apis/meta v1.28.0/go.mod h1:3DmYMnyH3XdY8/g2gXfsVIGEd/zpcB2PEkuurv2vgHU=
 github.com/fluxcd/pkg/http/fetch v0.25.0 h1:BM2sv9MygBBQ7+G+ISuTEGLVRV4GX9bpKK5UoAKLiQo=
@@ -256,8 +254,6 @@ github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 h1:n6/
 github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00/go.mod h1:Pm3mSP3c5uWn86xMLZ5Sa7JB9GsEZySvHYXCTK4E9q4=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/onsi/ginkgo/v2 v2.28.3 h1:4JvMdwtFU0imd8fHx25OJXoDMRexnf8v5NHKYSTTji4=
-github.com/onsi/ginkgo/v2 v2.28.3/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
 github.com/onsi/ginkgo/v2 v2.29.0 h1:rfh+ZFjgJhYWRoIqVf3Uwx/W20yLrcrE2h2GmYVRaag=
 github.com/onsi/ginkgo/v2 v2.29.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
 github.com/onsi/gomega v1.41.0 h1:OwKp4pXNgVxf6sCplzYo794OFNuoL2q2SBMU5NSWOjA=
@@ -277,8 +273,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/poy/onpar v1.1.2 h1:QaNrNiZx0+Nar5dLgTVp5mXkyoVFIbepjyEoGSnhbAY=
 github.com/poy/onpar v1.1.2/go.mod h1:6X8FLNoxyr9kkmnlqpK6LSoiOtrO6MICtWwEuWkLjzg=
-github.com/projectsveltos/libsveltos v1.10.1-0.20260521153750-a1f348424b3f h1:XrgpnRRH59AwSkSEIcKPUDpAME0Sl4sXLeEhDIaYQMU=
-github.com/projectsveltos/libsveltos v1.10.1-0.20260521153750-a1f348424b3f/go.mod h1:AzKBiyMTL3KSTLYMii5QdR3ieWyUKBHZCMFWIVCfm6A=
+github.com/projectsveltos/libsveltos v1.10.1-0.20260529122402-5f1c02139fd0 h1:MK7tWuz0RKKJS6SITR9fHsRXH9rRq4uYN4QmQbtHehc=
+github.com/projectsveltos/libsveltos v1.10.1-0.20260529122402-5f1c02139fd0/go.mod h1:AzKBiyMTL3KSTLYMii5QdR3ieWyUKBHZCMFWIVCfm6A=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=

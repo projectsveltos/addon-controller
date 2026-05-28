@@ -1605,8 +1605,11 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
 		pullmode.WithPreDeployChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks),
-		pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths),
 		pullmode.WithDeployedGVKs(gvks))
+
+	if clusterSummary.DeletionTimestamp.IsZero() {
+		setters = append(setters, pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths))
+	}
 
 	if includeDeleteChecks {
 		setters = append(setters,

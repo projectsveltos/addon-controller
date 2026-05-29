@@ -18,6 +18,7 @@ package clusterops_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -170,7 +171,7 @@ func verifyHealthLuaPolicy(dirName string) {
 		By("Verifying valid resource")
 		for i := range validResources {
 			resource := validResources[i]
-			healthy, _, err := clusterops.IsHealthy(resource, string(luaPolicy), textlogger.NewLogger(textlogger.NewConfig()))
+			healthy, _, err := clusterops.IsHealthy(resource, string(luaPolicy), nil, textlogger.NewLogger(textlogger.NewConfig()))
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeTrue())
 		}
@@ -183,12 +184,150 @@ func verifyHealthLuaPolicy(dirName string) {
 		By("Verifying non-matching content")
 		for i := range invalidResources {
 			resource := invalidResources[i]
-			healthy, _, err := clusterops.IsHealthy(resource, string(luaPolicy), textlogger.NewLogger(textlogger.NewConfig()))
+			healthy, _, err := clusterops.IsHealthy(resource, string(luaPolicy), nil, textlogger.NewLogger(textlogger.NewConfig()))
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeFalse())
 		}
 	}
 }
+
+var _ = Describe("Metric health checks", func() {
+
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+
+	Context("parsePromValue", func() {
+		It("parses an integer value string", func() {
+			v, err := clusterops.ParsePromValue(json.RawMessage(`"42"`))
+			Expect(err).To(BeNil())
+			Expect(v).To(Equal(float64(42)))
+		})
+
+		It("parses a float value string", func() {
+			v, err := clusterops.ParsePromValue(json.RawMessage(`"3.14"`))
+			Expect(err).To(BeNil())
+			Expect(v).To(BeNumerically("~", 3.14, 0.001))
+		})
+
+		It("returns error for non-string JSON", func() {
+			_, err := clusterops.ParsePromValue(json.RawMessage(`123`))
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("returns error for non-numeric string", func() {
+			_, err := clusterops.ParsePromValue(json.RawMessage(`"abc"`))
+			Expect(err).NotTo(BeNil())
+		})
+	})
+
+	Context("extractScalar", func() {
+		It("extracts value from scalar result type", func() {
+			data := clusterops.PrometheusData{
+				ResultType: "scalar",
+				Result:     json.RawMessage(`[1234567890.123, "7.5"]`),
+			}
+			v, err := clusterops.ExtractScalar(data)
+			Expect(err).To(BeNil())
+			Expect(v).To(Equal(7.5))
+		})
+
+		It("extracts value from single-element vector", func() {
+			data := clusterops.PrometheusData{
+				ResultType: "vector",
+				Result:     json.RawMessage(`[{"metric":{"job":"app"},"value":[1234567890.123,"2.0"]}]`),
+			}
+			v, err := clusterops.ExtractScalar(data)
+			Expect(err).To(BeNil())
+			Expect(v).To(Equal(2.0))
+		})
+
+		It("returns error for empty vector", func() {
+			data := clusterops.PrometheusData{
+				ResultType: "vector",
+				Result:     json.RawMessage(`[]`),
+			}
+			_, err := clusterops.ExtractScalar(data)
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("returns error for multi-element vector", func() {
+			data := clusterops.PrometheusData{
+				ResultType: "vector",
+				Result: json.RawMessage(
+					`[{"metric":{},"value":[1,"1"]},{"metric":{},"value":[2,"2"]}]`),
+			}
+			_, err := clusterops.ExtractScalar(data)
+			Expect(err).NotTo(BeNil())
+		})
+
+		It("returns error for unsupported result type", func() {
+			data := clusterops.PrometheusData{
+				ResultType: "matrix",
+				Result:     json.RawMessage(`[]`),
+			}
+			_, err := clusterops.ExtractScalar(data)
+			Expect(err).NotTo(BeNil())
+		})
+	})
+
+	Context("isHealthyBasedOnLua with metrics", func() {
+		const errorRateScript = `
+function evaluate()
+  if metrics["errorRate"] > 0.05 then
+    return {healthy=false, message="error rate too high"}
+  end
+  return {healthy=true, message=""}
+end`
+
+		It("evaluates metrics-only check as healthy", func() {
+			healthy, _, err := clusterops.IsHealthy(nil, errorRateScript,
+				map[string]float64{"errorRate": 0.01}, logger)
+			Expect(err).To(BeNil())
+			Expect(healthy).To(BeTrue())
+		})
+
+		It("evaluates metrics-only check as unhealthy when threshold exceeded", func() {
+			healthy, msg, err := clusterops.IsHealthy(nil, errorRateScript,
+				map[string]float64{"errorRate": 0.10}, logger)
+			Expect(err).To(BeNil())
+			Expect(healthy).To(BeFalse())
+			Expect(msg).NotTo(BeEmpty())
+		})
+
+		It("makes metrics available alongside resource obj", func() {
+			obj := &unstructured.Unstructured{}
+			obj.SetKind("Deployment")
+			obj.SetNamespace("default")
+			obj.SetName("my-app")
+			obj.Object["spec"] = map[string]interface{}{"replicas": int64(2)}
+			obj.Object["status"] = map[string]interface{}{"availableReplicas": int64(2)}
+
+			script := `
+function evaluate(obj)
+  if obj.status.availableReplicas ~= obj.spec.replicas then
+    return {healthy=false, message="replicas not ready"}
+  end
+  if metrics["p99Ms"] > 500 then
+    return {healthy=false, message="latency too high"}
+  end
+  return {healthy=true, message=""}
+end`
+			healthy, _, err := clusterops.IsHealthy(obj, script,
+				map[string]float64{"p99Ms": 200}, logger)
+			Expect(err).To(BeNil())
+			Expect(healthy).To(BeTrue())
+		})
+
+		It("empty metrics table does not cause script error", func() {
+			script := `
+function evaluate()
+  return {healthy=true, message=""}
+end`
+			healthy, _, err := clusterops.IsHealthy(nil, script, nil, logger)
+			Expect(err).To(BeNil())
+			Expect(healthy).To(BeTrue())
+		})
+	})
+})
 
 func getResources(dirName, fileName string) []*unstructured.Unstructured {
 	resourceFileName := filepath.Join(dirName, fileName)

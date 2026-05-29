@@ -229,7 +229,7 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 
 	if isPullMode {
 		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureKustomize, profileRef,
-			configurationHash, false)
+			configurationHash, true, false)
 		err = pullmode.CommitStagedResourcesForDeployment(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
 			clusterSummary.Name, string(libsveltosv1beta1.FeatureKustomize),

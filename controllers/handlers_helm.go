@@ -414,7 +414,7 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 	if err != nil {
 		return err
 	}
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil, true)
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil, false, true)
 
 	// If charts have pre/post delete hooks, those need to be deployed. A ConfigurationGroup to deploy those
 	// is created. If this does not exist yet assume we still have to deploy those.
@@ -570,7 +570,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 		return &configv1beta1.HandOverError{Message: msg}
 	}
 
-	err = commitStagedResourcesForDeployment(ctx, clusterSummary, nil, mgmtResources, logger)
+	err = commitStagedResourcesForDeployment(ctx, clusterSummary, nil, mgmtResources, false, logger)
 	if err != nil {
 		return err
 	}
@@ -1164,7 +1164,7 @@ func handleCharts(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 		// sveltos-applier agent processes them and populates ClusterReport.HelmResourceReports.
 		// No action will be performed by the applier in DryRun except generating the reports.
 		if deployError == nil || clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
-			if err := commitStagedResourcesForDeployment(ctx, clusterSummary, configurationHash, mgmtResources, logger); err != nil {
+			if err := commitStagedResourcesForDeployment(ctx, clusterSummary, configurationHash, mgmtResources, true, logger); err != nil {
 				return err
 			}
 		} else {
@@ -5300,7 +5300,7 @@ func prepareBundleSettersWithHelmInfo(currentChart *configv1beta1.HelmChart, isU
 }
 
 func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
-	configurationHash []byte, mgmtResources map[string]*unstructured.Unstructured, logger logr.Logger) error {
+	configurationHash []byte, mgmtResources map[string]*unstructured.Unstructured, includeDeployChecks bool, logger logr.Logger) error {
 
 	profileRef, err := configv1beta1.GetProfileRef(clusterSummary)
 	if err != nil {
@@ -5314,7 +5314,7 @@ func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *con
 	}
 
 	// if a stale helm release is being deleted, run the pre/post delete checks
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash, len(staleReleases) != 0)
+	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash, includeDeployChecks, len(staleReleases) != 0)
 	// Commit deployment
 	return pullmode.CommitStagedResourcesForDeployment(ctx, getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,

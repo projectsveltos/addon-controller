@@ -1566,7 +1566,7 @@ func getPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 }
 
 func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
-	profileRef *corev1.ObjectReference, configurationHash []byte, includeDeleteChecks bool) []pullmode.Option {
+	profileRef *corev1.ObjectReference, configurationHash []byte, includeDeployChecks, includeDeleteChecks bool) []pullmode.Option {
 
 	setters := make([]pullmode.Option, 0)
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
@@ -1604,11 +1604,12 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 	setters = append(setters, pullmode.WithTier(clusterSummary.Spec.ClusterProfileSpec.Tier),
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
-		pullmode.WithPreDeployChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks),
 		pullmode.WithDeployedGVKs(gvks))
 
-	if clusterSummary.DeletionTimestamp.IsZero() {
-		setters = append(setters, pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths))
+	if includeDeployChecks {
+		setters = append(setters,
+			pullmode.WithPreDeployChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks),
+			pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths))
 	}
 
 	if includeDeleteChecks {

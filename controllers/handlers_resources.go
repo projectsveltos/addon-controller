@@ -185,7 +185,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 
 	if isPullMode {
 		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureResources, profileRef,
-			configurationHash, false)
+			configurationHash, true, false)
 		err = pullmode.CommitStagedResourcesForDeployment(ctx, c,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
 			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
@@ -500,7 +500,7 @@ func pullModeUndeployResources(ctx context.Context, c client.Client, clusterSumm
 		return err
 	}
 
-	setters := prepareSetters(clusterSummary, fID, profileRef, nil, true)
+	setters := prepareSetters(clusterSummary, fID, profileRef, nil, false, true)
 
 	// discard all previous staged resources. This will instruct agent to undeploy
 	err = pullmode.RemoveDeployedResources(ctx, c, clusterSummary.Spec.ClusterNamespace,

@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -60,6 +62,10 @@ var (
 const (
 	contentTypeJSON = "application/json"
 	domain          = "http://telemetry.projectsveltos.io/"
+
+	providerEKS = "eks"
+	providerGKE = "gke"
+	providerAKS = "aks"
 )
 
 func StartCollecting(ctx context.Context, config *rest.Config, c client.Client,
@@ -161,7 +167,7 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 		}
 	}
 
-	clusterProfiles, profiles, clusterSummaries, err := m.collectConfigurationData(ctx)
+	clusterProfiles, profiles, clusterSummaries, clusterPromotions, err := m.collectConfigurationData(ctx)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Sveltos configuration data: %v", err))
 		return nil, err
@@ -169,6 +175,7 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 	data.ClusterProfiles = clusterProfiles
 	data.Profiles = profiles
 	data.ClusterSummaries = clusterSummaries
+	data.ClusterPromotions = clusterPromotions
 
 	et, chc, err := m.collectEventData(ctx)
 	if err != nil {
@@ -178,34 +185,46 @@ func (m *instance) collectData(ctx context.Context, uuid string) (*libsveltostel
 		data.ClusterHealthChecks = chc
 	}
 
+	provider, k8sVersion, nodeCount := m.collectManagementClusterInfo(ctx)
+	data.ManagementClusterProvider = provider
+	data.KubernetesVersion = k8sVersion
+	data.ManagementClusterNodes = nodeCount
+
 	return &data, nil
 }
 
-func (m *instance) collectConfigurationData(ctx context.Context) (cpInstances, pInstances, csInstances int, err error) {
+func (m *instance) collectConfigurationData(ctx context.Context) (cpInstances, pInstances, csInstances, promotionInstances int, err error) {
 	logger := log.FromContext(ctx)
 
 	var clusterProfiles configv1beta1.ClusterProfileList
 	if err = m.List(ctx, &clusterProfiles); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect clusterProfiles: %v", err))
-		return
+		return 0, 0, 0, 0, err
 	}
 	cpInstances = len(clusterProfiles.Items)
 
 	var profiles configv1beta1.ProfileList
 	if err = m.List(ctx, &profiles); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect Profiles: %v", err))
-		return
+		return 0, 0, 0, 0, err
 	}
 	pInstances = len(profiles.Items)
 
 	var clusterSummaries configv1beta1.ClusterSummaryList
 	if err = m.List(ctx, &clusterSummaries); err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClusterSummaries: %v", err))
-		return
+		return 0, 0, 0, 0, err
 	}
 	csInstances = len(clusterSummaries.Items)
 
-	return
+	var clusterPromotions configv1beta1.ClusterPromotionList
+	if err = m.List(ctx, &clusterPromotions); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to collect ClusterPromotions: %v", err))
+		return cpInstances, pInstances, csInstances, 0, nil
+	}
+	promotionInstances = len(clusterPromotions.Items)
+
+	return cpInstances, pInstances, csInstances, promotionInstances, nil
 }
 
 func (m *instance) collectEventData(ctx context.Context) (eventTriggers, clusterHealthChecks int, err error) {
@@ -245,6 +264,84 @@ func (m *instance) collectEventData(ctx context.Context) (eventTriggers, cluster
 	}
 
 	return eventTriggers, clusterHealthChecks, nil
+}
+
+func (m *instance) collectManagementClusterInfo(ctx context.Context) (provider, k8sVersion string, nodeCount int) {
+	logger := log.FromContext(ctx)
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(m.config)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to create discovery client: %v", err))
+	} else {
+		serverVersion, err := discoveryClient.ServerVersion()
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get server version: %v", err))
+		} else {
+			k8sVersion = serverVersion.GitVersion
+		}
+	}
+
+	var nodes corev1.NodeList
+	if err := m.List(ctx, &nodes); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list nodes: %v", err))
+		return
+	}
+	nodeCount = len(nodes.Items)
+	provider = detectClusterProvider(nodes.Items)
+	return
+}
+
+func detectClusterProvider(nodes []corev1.Node) string {
+	for i := range nodes {
+		node := &nodes[i]
+		labels := node.Labels
+
+		if _, ok := labels["eks.amazonaws.com/nodegroup"]; ok {
+			return providerEKS
+		}
+		if _, ok := labels["cloud.google.com/gke-nodepool"]; ok {
+			return providerGKE
+		}
+		if _, ok := labels["kubernetes.azure.com/agentpool"]; ok {
+			return providerAKS
+		}
+		if _, ok := labels["node.openshift.io/os_id"]; ok {
+			return "openshift"
+		}
+
+		providerID := node.Spec.ProviderID
+		switch {
+		case strings.HasPrefix(providerID, "aws://"):
+			return providerEKS
+		case strings.HasPrefix(providerID, "gce://"):
+			return providerGKE
+		case strings.HasPrefix(providerID, "azure://"):
+			return providerAKS
+		case strings.HasPrefix(providerID, "vsphere://"):
+			return "vsphere"
+		}
+
+		kubeletVersion := node.Status.NodeInfo.KubeletVersion
+		switch {
+		case strings.Contains(kubeletVersion, "+k3s"):
+			return "k3s"
+		case strings.Contains(kubeletVersion, "k0s"):
+			return "k0s"
+		case strings.Contains(kubeletVersion, "+rke2"):
+			return "rke2"
+		case strings.Contains(kubeletVersion, "+rke"):
+			return "rke"
+		case strings.Contains(kubeletVersion, "-eks-"):
+			return "eks"
+		case strings.Contains(kubeletVersion, "-gke."):
+			return "gke"
+		}
+
+		if hostname := labels["kubernetes.io/hostname"]; strings.HasPrefix(hostname, "kind-") {
+			return "kind"
+		}
+	}
+	return "unknown"
 }
 
 func (m *instance) sendData(ctx context.Context, payload *libsveltostelemetry.Cluster) {

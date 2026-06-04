@@ -166,6 +166,11 @@ Sveltos can automatically detect drift between the desired state, defined in the
   <img alt="Configuration drift recovery" src="https://github.com/projectsveltos/demos/blob/main/configuration_drift/reconcile_configuration_drift.gif" width="600"/>
 </p>
 
+## Pull Mode: Air-Gapped and Edge Clusters
+
+Sveltos supports a pull mode for environments where managed clusters cannot accept inbound connections — air-gapped networks, edge deployments, or clusters behind firewalls.
+
+In pull mode, a lightweight agent on the managed cluster initiates outbound connections to the management cluster to fetch its desired state. No inbound ports need to be open on the managed cluster, reducing attack surface and removing the need for VPN tunnels or firewall rules. It also handles intermittent connectivity, making it suitable for edge deployments.
 
 [![Projectsveltos intro](https://img.youtube.com/vi/bsWEo79w09c/0.jpg)](https://www.youtube.com/watch?v=bsWEo79w09c)
 [![Projectsveltos event driven framework](https://img.youtube.com/vi/4mOWuOF0gWY/0.jpg)](https://www.youtube.com/watch?v=4mOWuOF0gWY)
@@ -174,7 +179,15 @@ Sveltos can automatically detect drift between the desired state, defined in the
 
 ## Quick Start
 
-💡 🏃‍♂️ To try projectsveltos on a test cluster, follow these [instructions](https://projectsveltos.github.io/sveltos/getting_started/install/quick_start/)
+The fastest way to try Sveltos locally — no cloud account needed:
+
+```sh
+make quickstart
+```
+
+This creates a kind cluster with Sveltos and ClusterAPI, then provisions a workload cluster using Docker as the infrastructure provider. You get the full fleet management flow on your laptop in a few minutes.
+
+For other installation options, see the [Quick Start guide](https://projectsveltos.github.io/sveltos/getting_started/install/quick_start/).
 
 ## Sveltos in action
 
@@ -185,7 +198,6 @@ To see the full demo, have a look at this [youtube video](https://youtu.be/Ai5Mr
 # Useful links
 
 - Projectsveltos [documentation](https://projectsveltos.github.io/sveltos/)
-- [Quick Start](https://projectsveltos.io/main/getting_started/install/quick_start/)
 
 ## Contributing
 

@@ -27,7 +27,7 @@
 &nbsp;&nbsp;&nbsp;&nbsp;
 <a href="https://www.renaultgroup.com"><img src="https://website.projectsveltos.io/images/companies/renault.png" height="40" alt="Renault"></a>
 &nbsp;&nbsp;&nbsp;&nbsp;
-<a href="https://platform9.com"><img src="https://website.projectsveltos.io/images/companies/platform9.jpg" height="40" alt="Platform9"></a>
+<a href="https://mistral.ai"><img src="https://website.projectsveltos.io/images/companies/mistral-ai.svg" height="40" alt="Mistral AI"></a>
 
 <br/><br/>
 <a href="https://website.projectsveltos.io/companies">View all adopters →</a>

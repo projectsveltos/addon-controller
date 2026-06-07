@@ -433,6 +433,9 @@ func (m *instance) GetManagerForChart(clusterNamespace, clusterName string,
 	clusterKey := m.getClusterKey(clusterNamespace, clusterName, clusterType)
 	releaseKey := m.GetReleaseKey(chart.ReleaseNamespace, chart.ReleaseName)
 
+	m.chartMux.Lock()
+	defer m.chartMux.Unlock()
+
 	if _, ok := m.perClusterChartMap[clusterKey]; !ok {
 		return "", fmt.Errorf("no ClusterSummary manging helm chart %s (release %s)",
 			chart.ChartName, chart.ReleaseName)

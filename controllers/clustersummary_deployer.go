@@ -77,7 +77,7 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
-		"clustername", clusterSummary.Spec.ClusterNamespace,
+		"clustername", clusterSummary.Spec.ClusterName,
 		"applicant", clusterSummary.Name,
 		"feature", string(f.id))
 	logger.V(logs.LogDebug).Info("request to deploy")
@@ -414,7 +414,7 @@ func (r *ClusterSummaryReconciler) undeployFeature(ctx context.Context, clusterS
 	clusterSummary := clusterSummaryScope.ClusterSummary
 
 	logger = logger.WithValues("clusternamespace", clusterSummary.Spec.ClusterNamespace,
-		"clustername", clusterSummary.Spec.ClusterNamespace,
+		"clustername", clusterSummary.Spec.ClusterName,
 		"applicant", clusterSummary.Name,
 		"feature", string(f.id))
 	logger.V(logs.LogDebug).Info("request to un-deploy")
@@ -732,15 +732,20 @@ func (r *ClusterSummaryReconciler) proceesAgentDeploymentStatus(ctx context.Cont
 			provisioning := libsveltosv1beta1.FeatureStatusProvisioning
 			return &provisioning, true
 		}
-		errorMsg := err.Error()
-		clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
-	} else if pullmode.IsActionNotSetToDeploy(err) {
-		_ = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName, clusterSummary.Kind, clusterSummary.Name, string(f.id), logger)
-	} else if status.FailureMessage != nil {
+		if pullmode.IsActionNotSetToDeploy(err) {
+			_ = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, clusterSummary.Kind, clusterSummary.Name, string(f.id), logger)
+		} else {
+			errorMsg := err.Error()
+			clusterSummaryScope.SetFailureMessage(f.id, &errorMsg)
+		}
+	} else if status != nil && status.FailureMessage != nil {
 		clusterSummaryScope.SetFailureMessage(f.id, status.FailureMessage)
 	}
 
+	if status == nil {
+		return nil, false
+	}
 	return status.DeploymentStatus, false
 }
 

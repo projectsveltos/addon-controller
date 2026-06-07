@@ -489,10 +489,22 @@ func (m *instance) updateClusterProfile(ctx context.Context, c client.Client, cl
 func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger logr.Logger) {
 	const interval = 30 * time.Second
 	for {
+		// Snapshot the dirty set and their cluster deployments under the lock.
 		m.chartMux.Lock()
-
-		canceled := false
+		toUpdate := make([]corev1.ObjectReference, 0, len(m.profileToBeUpdated))
 		for profile := range m.profileToBeUpdated {
+			toUpdate = append(toUpdate, profile)
+		}
+		clustersByProfile := make(map[corev1.ObjectReference]ClusterDeployments, len(toUpdate))
+		for i := range toUpdate {
+			clustersByProfile[toUpdate[i]] = m.profileClusterRequests.getClusterDeployments(&toUpdate[i])
+		}
+		m.chartMux.Unlock()
+
+		// Make API calls without holding the lock.
+		succeeded := make([]corev1.ObjectReference, 0, len(toUpdate))
+		canceled := false
+		for i := range toUpdate {
 			select {
 			case <-ctx.Done():
 				canceled = true
@@ -501,15 +513,22 @@ func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger l
 			if canceled {
 				break
 			}
-			clusters := m.profileClusterRequests.getClusterDeployments(&profile)
+			profile := toUpdate[i]
+			clusters := clustersByProfile[profile]
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("updating prerequestite profile %s/%s", profile.Namespace, profile.Name))
-			err := m.updateProfileInstance(ctx, c, &profile, clusters)
-			if err == nil {
-				delete(m.profileToBeUpdated, profile)
+			if err := m.updateProfileInstance(ctx, c, &profile, clusters); err == nil {
+				succeeded = append(succeeded, profile)
 			}
 		}
 
-		m.chartMux.Unlock()
+		// Remove successfully updated entries under the lock.
+		if len(succeeded) > 0 {
+			m.chartMux.Lock()
+			for i := range succeeded {
+				delete(m.profileToBeUpdated, succeeded[i])
+			}
+			m.chartMux.Unlock()
+		}
 
 		if canceled {
 			return
@@ -524,11 +543,22 @@ func (m *instance) updateProfiles(ctx context.Context, c client.Client, logger l
 }
 
 func (m *instance) rebuildState(ctx context.Context, c client.Client, logger logr.Logger) {
+	const retryInterval = 5 * time.Second
 	for {
 		if err := m.rebuildStateWithProfiles(ctx, c, logger); err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(retryInterval):
+			}
 			continue
 		}
 		if err := m.rebuildStateWithClusterProfiles(ctx, c, logger); err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(retryInterval):
+			}
 			continue
 		}
 		break

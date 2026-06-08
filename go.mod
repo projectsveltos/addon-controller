@@ -1,6 +1,6 @@
 module github.com/projectsveltos/addon-controller
 
-go 1.26.3
+go 1.26.4
 
 require (
 	dario.cat/mergo v1.0.2
@@ -18,7 +18,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.10.1-0.20260601130048-ace88648a3f5
+	github.com/projectsveltos/libsveltos v1.10.1-0.20260608095342-7d10ad02760d
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/spf13/pflag v1.0.10

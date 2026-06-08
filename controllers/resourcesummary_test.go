@@ -67,7 +67,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		Eventually(func() error {
 			classifierCRD := &apiextensionsv1.CustomResourceDefinition{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, classifierCRD)
+				types.NamespacedName{Name: testResourceSummaryCRDName}, classifierCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
@@ -85,7 +85,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		Eventually(func() error {
 			resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
 			return testEnv.Get(context.TODO(),
-				types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
+				types.NamespacedName{Name: testResourceSummaryCRDName}, resourceSummaryCRD)
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
@@ -243,7 +243,7 @@ metadata:
 
 		found = false
 		for i := range patches {
-			if patches[i].Target.Kind == "Deployment" {
+			if patches[i].Target.Kind == testKindDeployment {
 				found = true
 			}
 		}
@@ -274,7 +274,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      randomString(),
 			Labels: map[string]string{
 				clusterv1.ClusterNameLabel:         cluster.Name,
-				clusterv1.MachineControlPlaneLabel: "ok",
+				clusterv1.MachineControlPlaneLabel: testOkValue,
 			},
 		},
 	}
@@ -303,7 +303,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      cluster.Name + kubeconfigPostfix,
 		},
 		Data: map[string][]byte{
-			"value": testEnv.Kubeconfig,
+			testValueKey: testEnv.Kubeconfig,
 		},
 	}
 	Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -316,7 +316,7 @@ func prepareCluster() *clusterv1.Cluster {
 			Name:      "drift-detection-version",
 		},
 		Data: map[string]string{
-			"version": version,
+			testVersionKey: version,
 		},
 	}
 	err := testEnv.Create(context.TODO(), cm)

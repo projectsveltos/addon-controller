@@ -71,7 +71,7 @@ var _ = Describe("Helm", func() {
 						RepositoryURL:    "https://operator.min.io",
 						RepositoryName:   "minio-operator",
 						ChartName:        "minio-operator/operator",
-						ChartVersion:     "7.1.1",
+						ChartVersion:     leaveHelmVersion,
 						ReleaseName:      minioReleaseName,
 						ReleaseNamespace: minioNamespace,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -104,7 +104,7 @@ var _ = Describe("Helm", func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 			charts := []configv1beta1.Chart{
-				{ReleaseName: minioReleaseName, ChartVersion: "7.1.1", Namespace: minioNamespace},
+				{ReleaseName: minioReleaseName, ChartVersion: leaveHelmVersion, Namespace: minioNamespace},
 			}
 
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

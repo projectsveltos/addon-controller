@@ -117,9 +117,9 @@ var _ = Describe("Remote URL", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
-			{kind: "ClusterRole", name: clusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-			{kind: "Deployment", name: deploymentName, namespace: deploymentNamespace, group: "apps"},
-			{kind: "ServiceAccount", name: saName, namespace: saNamespace, group: ""},
+			{kind: kindClusterRole, name: clusterRoleName, namespace: "", group: rbacAuthGroup},
+			{kind: kindDeployment, name: deploymentName, namespace: deploymentNamespace, group: appsGroupName},
+			{kind: kindServiceAccount, name: saName, namespace: saNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

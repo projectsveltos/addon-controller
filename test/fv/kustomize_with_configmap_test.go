@@ -74,7 +74,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		labelsConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
 			fmt.Sprintf(labelsValues, clusterKey))
 		labelsConfigMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
 
@@ -132,7 +132,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdServiceName}, currentService)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -140,7 +140,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdDeployName}, currentDeployment)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -148,7 +148,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdMapName}, currentConfigMap)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -157,20 +157,20 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdMapName}, currentConfigMap)).To(Succeed())
 
 		currentService := &corev1.Service{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdServiceName}, currentService)).To(Succeed())
 
 		currentDeployment := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdDeployName}, currentDeployment)).To(Succeed())
 
 		policies := []policy{
-			{kind: "Service", name: currentService.Name, namespace: targetNamespace, group: ""},
-			{kind: "ConfigMap", name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
-			{kind: "Deployment", name: currentDeployment.Name, namespace: targetNamespace, group: "apps"},
+			{kind: kindService, name: currentService.Name, namespace: targetNamespace, group: ""},
+			{kind: kindConfigMap, name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
+			{kind: kindDeployment, name: currentDeployment.Name, namespace: targetNamespace, group: appsGroupName},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureKustomize,
@@ -189,7 +189,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdServiceName}, currentService)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -198,7 +198,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-deployment"}, currentDeployment)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdDeployName}, currentDeployment)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -207,7 +207,7 @@ var _ = Describe("Kustomize with ConfigMap", func() {
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "production-the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeProdMapName}, currentConfigMap)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

@@ -65,7 +65,7 @@ var _ = Describe("Template with copy", func() {
 		Byf("Add configMap containing a template policy with copy function.")
 		configMap := createConfigMapWithPolicy(ns.Name, namePrefix+randomString(), `{{ (copy "ExternalSecret") }}`)
 		configMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
@@ -75,8 +75,8 @@ var _ = Describe("Template with copy", func() {
 		clusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					Kind:       "Secret",
-					APIVersion: "v1",
+					Kind:       kindSecret,
+					APIVersion: apiVersionV1,
 					Namespace:  secret.Namespace,
 					Name:       secret.Name,
 				},

@@ -41,8 +41,6 @@ var _ = Describe("Helm", Serial, func() {
 	const (
 		namePrefix        = "onboard-"
 		onboardAnnotation = "onboard-capi"
-
-		addonDeplName = "addon-controller"
 	)
 
 	BeforeEach(func() {
@@ -71,21 +69,21 @@ var _ = Describe("Helm", Serial, func() {
 			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-					RepositoryName:   "prometheus-community",
-					ChartName:        "prometheus-community/prometheus",
-					ChartVersion:     "25.24.0",
-					ReleaseName:      "prometheus",
-					ReleaseNamespace: "prometheus",
+					RepositoryURL:    prometheusCommunityURL,
+					RepositoryName:   prometheusCommunityName,
+					ChartName:        prometheusChartName,
+					ChartVersion:     prometheusVersion2524,
+					ReleaseName:      prometheusRelease,
+					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
 					RepositoryURL:    "https://grafana-community.github.io/helm-charts",
-					RepositoryName:   "grafana",
-					ChartName:        "grafana/grafana",
-					ChartVersion:     "11.3.6",
-					ReleaseName:      "grafana",
-					ReleaseNamespace: "grafana",
+					RepositoryName:   grafanaRepoName,
+					ChartName:        grafanaChartName,
+					ChartVersion:     grafanaVersion1136,
+					ReleaseName:      grafanaRepoName,
+					ReleaseNamespace: grafanaRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						RunTests: true,
@@ -147,8 +145,8 @@ var _ = Describe("Helm", Serial, func() {
 			libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "grafana", ChartVersion: "11.3.6", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1136, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2524, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

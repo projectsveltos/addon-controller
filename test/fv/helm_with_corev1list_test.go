@@ -80,12 +80,12 @@ var _ = Describe("Feature", func() {
 		Byf("Create ClusterProfile %s to deploy kube-prometheus-stack helm chart", clusterProfile.Name)
 		clusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-				RepositoryName:   "prometheus-community",
+				RepositoryURL:    prometheusCommunityURL,
+				RepositoryName:   prometheusCommunityName,
 				ChartName:        "prometheus-community/kube-prometheus-stack",
-				ChartVersion:     "75.9.0",
-				ReleaseName:      "kube-prometheus-stack",
-				ReleaseNamespace: "kube-prometheus-stack",
+				ChartVersion:     kubePrometheusVersion,
+				ReleaseName:      deplNamespace,
+				ReleaseNamespace: deplNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				Values:           values,
 			},
@@ -102,7 +102,7 @@ var _ = Describe("Feature", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kube-prometheus-stack", ChartVersion: "75.9.0", Namespace: "kube-prometheus-stack"},
+			{ReleaseName: deplNamespace, ChartVersion: kubePrometheusVersion, Namespace: deplNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

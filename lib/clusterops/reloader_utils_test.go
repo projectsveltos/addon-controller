@@ -54,15 +54,15 @@ var _ = Describe("Reloader utils", func() {
 
 		testData := []resourceData{
 			{
-				resource: &corev1.ObjectReference{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
+				resource: &corev1.ObjectReference{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
 				result:   true,
 			},
 			{
-				resource: &corev1.ObjectReference{Kind: "StatefulSet", Namespace: randomString(), Name: randomString()},
+				resource: &corev1.ObjectReference{Kind: testKindStatefulSet, Namespace: randomString(), Name: randomString()},
 				result:   true,
 			},
 			{
-				resource: &corev1.ObjectReference{Kind: "DaemonSet", Namespace: randomString(), Name: randomString()},
+				resource: &corev1.ObjectReference{Kind: testKindDaemonSet, Namespace: randomString(), Name: randomString()},
 				result:   true,
 			},
 			{
@@ -81,8 +81,8 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		reloaderInfo := []libsveltosv1beta1.ReloaderInfo{
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
 		}
 
 		clusterProfileName := randomString()
@@ -102,9 +102,9 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		resources := []corev1.ObjectReference{
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
-			{Kind: "Deployment", Namespace: "", Name: randomString()},
-			{Kind: "DaemonSet", Namespace: "", Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: "", Name: randomString()},
+			{Kind: testKindDaemonSet, Namespace: "", Name: randomString()},
 		}
 
 		clusterProfileName := randomString()
@@ -123,9 +123,9 @@ var _ = Describe("Reloader utils", func() {
 		c := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 		resources := []corev1.ObjectReference{
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
-			{Kind: "StatefulSet", Namespace: randomString(), Name: randomString()},
-			{Kind: "DaemonSet", Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindStatefulSet, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDaemonSet, Namespace: randomString(), Name: randomString()},
 		}
 
 		clusterProfileName := randomString()
@@ -151,10 +151,10 @@ var _ = Describe("Reloader utils", func() {
 		}
 
 		resources = []corev1.ObjectReference{
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
-			{Kind: "Deployment", Namespace: randomString(), Name: randomString()},
-			{Kind: "StatefulSet", Namespace: randomString(), Name: randomString()},
-			{Kind: "DaemonSet", Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDeployment, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindStatefulSet, Namespace: randomString(), Name: randomString()},
+			{Kind: testKindDaemonSet, Namespace: randomString(), Name: randomString()},
 		}
 
 		// Reloader Spec.ReloaderInfo is updated now
@@ -211,12 +211,12 @@ var _ = Describe("Reloader utils", func() {
 	It("updateReloaderWithDeployedResources creates reloader instance", func() {
 		resources := []corev1.ObjectReference{
 			{
-				Kind:      "Deployment",
+				Kind:      testKindDeployment,
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
 			{
-				Kind:      "DaemonSet",
+				Kind:      testKindDaemonSet,
 				Name:      randomString(),
 				Namespace: randomString(),
 			},
@@ -269,21 +269,21 @@ var _ = Describe("Reloader utils", func() {
 		resourceReports := []libsveltosv1beta1.ResourceReport{
 			{
 				Resource: libsveltosv1beta1.Resource{
-					Kind:      "StatefulSet",
+					Kind:      testKindStatefulSet,
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
 				Resource: libsveltosv1beta1.Resource{
-					Kind:      "DaemonSet",
+					Kind:      testKindDaemonSet,
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
 			},
 			{
 				Resource: libsveltosv1beta1.Resource{
-					Kind:      "Deployment",
+					Kind:      testKindDeployment,
 					Name:      randomString(),
 					Namespace: randomString(),
 				},
@@ -307,12 +307,12 @@ var _ = Describe("Reloader utils", func() {
 			{
 				Resources: []libsveltosv1beta1.ResourceSummaryResource{
 					{
-						Kind:      "StatefulSet",
+						Kind:      testKindStatefulSet,
 						Name:      randomString(),
 						Namespace: randomString(),
 					},
 					{
-						Kind:      "StatefulSet",
+						Kind:      testKindStatefulSet,
 						Name:      randomString(),
 						Namespace: randomString(),
 					},
@@ -321,12 +321,12 @@ var _ = Describe("Reloader utils", func() {
 			{
 				Resources: []libsveltosv1beta1.ResourceSummaryResource{
 					{
-						Kind:      "Deployment",
+						Kind:      testKindDeployment,
 						Name:      randomString(),
 						Namespace: randomString(),
 					},
 					{
-						Kind:      "DaemonSet",
+						Kind:      testKindDaemonSet,
 						Name:      randomString(),
 						Namespace: randomString(),
 					},

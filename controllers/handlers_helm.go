@@ -1531,7 +1531,6 @@ func handleInstall(ctx context.Context, dCtx *deploymentContext,
 
 	logger.V(logs.LogDebug).Info("install helm release")
 
-	//nolint: gosec // maxHistory is guaranteed to be non-negative
 	maxHistory := uint(getMaxHistoryValue(currentChart.Options))
 
 	if !isPullMode {
@@ -2293,7 +2292,7 @@ func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartF
 
 	forceConflict := true
 	options := metav1.PatchOptions{
-		FieldManager: "application/apply-patch",
+		FieldManager: applyPatchFieldManager,
 		Force:        &forceConflict,
 	}
 
@@ -3815,7 +3814,7 @@ func parseAndAppendResources(yamlStr string, logger logr.Logger) ([]*unstructure
 			return nil, err
 		}
 
-		if policy.GetKind() == "List" && policy.GetAPIVersion() == "v1" {
+		if policy.GetKind() == "List" && policy.GetAPIVersion() == coreAPIVersion {
 			list := &corev1.List{}
 			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(policy.Object, list); err != nil {
 				return nil, err
@@ -4271,7 +4270,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.CaFile = registryOptions.caPath
 	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	upgradeClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, true)
-	upgradeClient.ServerSideApply = "true"
+	upgradeClient.ServerSideApply = stringTrue
 	upgradeClient.ForceConflicts = true
 
 	if actionConfig.RegistryClient != nil {

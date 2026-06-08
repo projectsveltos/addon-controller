@@ -74,7 +74,7 @@ var _ = Describe("Clustercache", func() {
 			secretObj := &corev1.ObjectReference{
 				Namespace:  secret.Namespace,
 				Name:       secret.Name,
-				Kind:       "Secret",
+				Kind:       testKindSecret,
 				APIVersion: corev1.SchemeGroupVersion.String(),
 			}
 			storedCluster := cacheMgr.GetClusterFromSecret(secretObj)
@@ -107,7 +107,7 @@ var _ = Describe("Clustercache", func() {
 		secretObj := &corev1.ObjectReference{
 			Namespace:  secret.Namespace,
 			Name:       secret.Name,
-			Kind:       "Secret",
+			Kind:       testKindSecret,
 			APIVersion: corev1.SchemeGroupVersion.String(),
 		}
 		cacheMgr.RemoveSecret(secretObj)

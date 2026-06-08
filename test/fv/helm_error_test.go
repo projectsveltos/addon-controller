@@ -58,10 +58,7 @@ data:
 )
 
 var _ = Describe("Feature", Serial, func() {
-	const (
-		namePrefix  = "helm-error-"
-		certManager = "cert-manager"
-	)
+	const namePrefix = "helm-error-"
 
 	It("An error in helm values does not remove helm chart", Label("FV", "PULLMODE"), func() {
 		Byf("Create a configMap with valid helm values")
@@ -91,12 +88,12 @@ var _ = Describe("Feature", Serial, func() {
 
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://charts.jetstack.io",
-					RepositoryName:   "jetstack",
-					ChartName:        "jetstack/cert-manager",
+					RepositoryURL:    jetstackURL,
+					RepositoryName:   jetstackName,
+					ChartName:        jetstackCertManagerChart,
 					ChartVersion:     "v1.19.4",
-					ReleaseName:      "cert-manager",
-					ReleaseNamespace: "cert-manager",
+					ReleaseName:      certManager,
+					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					ValuesFrom: []configv1beta1.ValueFrom{
 						{

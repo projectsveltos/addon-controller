@@ -56,7 +56,7 @@ var (
 func init() {
 	sveltosNamespace = os.Getenv("SVELTOS_NAMESPACE")
 	if sveltosNamespace == "" {
-		sveltosNamespace = "projectsveltos"
+		sveltosNamespace = defaultSveltosNamespace
 	}
 }
 
@@ -159,7 +159,7 @@ func verifyCAPICluster() {
 	clusterList := &clusterv1.ClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
-			map[string]string{clusterv1.ClusterNameLabel: "clusterapi-workload"},
+			map[string]string{clusterv1.ClusterNameLabel: clusterapiWorkloadName},
 		),
 	}
 
@@ -227,7 +227,7 @@ func verifySveltosCluster() {
 	clusterList := &libsveltosv1beta1.SveltosClusterList{}
 	listOptions := []client.ListOption{
 		client.MatchingLabels(
-			map[string]string{"cluster-name": "clusterapi-workload"}, // This label is added by Makefile
+			map[string]string{clusterNameKey: clusterapiWorkloadName}, // This label is added by Makefile
 		),
 	}
 

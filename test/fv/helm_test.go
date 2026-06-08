@@ -75,24 +75,24 @@ var _ = Describe("Helm", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kyverno.github.io/kyverno/",
-					RepositoryName:   "kyverno",
-					ChartName:        "kyverno/kyverno",
+					RepositoryURL:    kyvernoRepoURL,
+					RepositoryName:   kyvernoNamespace,
+					ChartName:        kyvernoChartName,
 					ChartVersion:     "v3.7.1",
-					ReleaseName:      "kyverno-latest",
-					ReleaseNamespace: "kyverno",
+					ReleaseName:      kyvernoLatestRelease,
+					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						RunTests: true,
 					},
 				},
 				{
-					RepositoryURL:    "https://docs.wildfly.org/wildfly-charts/",
-					RepositoryName:   "wildfly",
-					ChartName:        "wildfly/wildfly",
-					ChartVersion:     "2.4.0",
-					ReleaseName:      "wildfly",
-					ReleaseNamespace: "wildfly",
+					RepositoryURL:    wildflyRepoURL,
+					RepositoryName:   wildflyName,
+					ChartName:        wildflyChartName,
+					ChartVersion:     wildflyVersion,
+					ReleaseName:      wildflyName,
+					ReleaseNamespace: wildflyName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 			}
@@ -101,10 +101,10 @@ var _ = Describe("Helm", func() {
 				{
 					Name:      "kyverno-deployment-health",
 					FeatureID: libsveltosv1beta1.FeatureHelm,
-					Namespace: "kyverno",
-					Group:     "apps",
-					Version:   "v1",
-					Kind:      "Deployment",
+					Namespace: kyvernoNamespace,
+					Group:     appsGroupName,
+					Version:   apiVersionV1,
+					Kind:      kindDeployment,
 					Script:    luaEvaluateDeploymentHealth,
 				},
 			}
@@ -129,13 +129,13 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying kyverno deployment has proper labels/annotations")
 		depl := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl))
+			types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl))
 		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(depl)
 		Expect(err).To(BeNil())
 		var u unstructured.Unstructured
@@ -145,15 +145,15 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "wildfly", Name: "wildfly"}, depl)
+				types.NamespacedName{Namespace: wildflyName, Name: wildflyName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.7.1", Namespace: "kyverno"},
-			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: "3.7.1", Namespace: kyvernoNamespace},
+			{ReleaseName: wildflyName, ChartVersion: wildflyVersion, Namespace: wildflyName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -164,21 +164,21 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.7.0",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
+				RepositoryURL:    kyvernoRepoURL,
+				RepositoryName:   kyvernoNamespace,
+				ChartName:        kyvernoChartName,
+				ChartVersion:     kyvernoVersion370,
+				ReleaseName:      kyvernoLatestRelease,
+				ReleaseNamespace: kyvernoNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 			{
-				RepositoryURL:    "https://docs.wildfly.org/wildfly-charts/",
-				RepositoryName:   "wildfly",
-				ChartName:        "wildfly/wildfly",
-				ChartVersion:     "2.4.0",
-				ReleaseName:      "wildfly",
-				ReleaseNamespace: "wildfly",
+				RepositoryURL:    wildflyRepoURL,
+				RepositoryName:   wildflyName,
+				ChartName:        wildflyChartName,
+				ChartVersion:     wildflyVersion,
+				ReleaseName:      wildflyName,
+				ReleaseNamespace: wildflyName,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -189,8 +189,8 @@ var _ = Describe("Helm", func() {
 		currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
-					Kind: "Deployment",
-					Name: ".*",
+					Kind: kindDeployment,
+					Name: matchAllPattern,
 				},
 				Patch: fmt.Sprintf(`- op: add
   path: /metadata/labels/%s
@@ -208,22 +208,22 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying wildfly deployment is still in the workload cluster")
 		Eventually(func() error {
 			depl = &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "wildfly", Name: "wildfly"}, depl)
+				types.NamespacedName{Namespace: wildflyName, Name: wildflyName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.7.0", Namespace: "kyverno"},
-			{ReleaseName: "wildfly", ChartVersion: "2.4.0", Namespace: "wildfly"},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion370S, Namespace: kyvernoNamespace},
+			{ReleaseName: wildflyName, ChartVersion: wildflyVersion, Namespace: wildflyName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -232,7 +232,7 @@ var _ = Describe("Helm", func() {
 
 		Byf("Verifying kyverno deployment has proper labels/annotations")
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl))
+			types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl))
 		content, err = runtime.DefaultUnstructuredConverter.ToUnstructured(depl)
 		Expect(err).To(BeNil())
 		u.SetUnstructuredContent(content)
@@ -245,12 +245,12 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.7.0",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
+				RepositoryURL:    kyvernoRepoURL,
+				RepositoryName:   kyvernoNamespace,
+				ChartName:        kyvernoChartName,
+				ChartVersion:     kyvernoVersion370,
+				ReleaseName:      kyvernoLatestRelease,
+				ReleaseNamespace: kyvernoNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -264,19 +264,19 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying wildfly deployment is removed from workload cluster")
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "wildfly", Name: "wildfly"}, depl)
+				types.NamespacedName{Namespace: wildflyName, Name: wildflyName}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.7.0", Namespace: "kyverno"},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion370S, Namespace: kyvernoNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -292,7 +292,7 @@ var _ = Describe("Helm", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-latest"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: kyvernoLatestRelease}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

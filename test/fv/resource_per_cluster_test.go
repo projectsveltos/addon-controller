@@ -122,8 +122,8 @@ var _ = Describe("Feature", func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			policies := []policy{
-				{kind: "ClusterRole", name: updateClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-				{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
+				{kind: kindClusterRole, name: updateClusterRoleName, namespace: "", group: rbacAuthGroup},
+				{kind: kindPod, name: podName, namespace: defaultNamespace, group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
@@ -154,8 +154,8 @@ var _ = Describe("Feature", func() {
 			}, timeout, pollingInterval).Should(BeTrue())
 
 			policies = []policy{
-				{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-				{kind: "Pod", name: podName, namespace: defaultNamespace, group: ""},
+				{kind: kindClusterRole, name: allClusterRoleName, namespace: "", group: rbacAuthGroup},
+				{kind: kindPod, name: podName, namespace: defaultNamespace, group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
@@ -187,8 +187,8 @@ var _ = Describe("Feature", func() {
 			}, timeout, pollingInterval).Should(BeTrue())
 
 			policies = []policy{
-				{kind: "ClusterRole", name: allClusterRoleName, namespace: "", group: "rbac.authorization.k8s.io"},
-				{kind: "Pod", name: newPodName, namespace: defaultNamespace, group: ""},
+				{kind: kindClusterRole, name: allClusterRoleName, namespace: "", group: rbacAuthGroup},
+				{kind: kindPod, name: newPodName, namespace: defaultNamespace, group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

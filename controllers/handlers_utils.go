@@ -759,7 +759,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 		switch reference.Kind {
 		case string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: "v1",
+				APIVersion: coreAPIVersion,
 				Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,
@@ -769,7 +769,7 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			object.SkipNamespaceCreation = reference.SkipNamespaceCreation
 		case string(libsveltosv1beta1.SecretReferencedResourceKind):
 			object.ObjectReference = corev1.ObjectReference{
-				APIVersion: "v1",
+				APIVersion: coreAPIVersion,
 				Kind:       string(libsveltosv1beta1.SecretReferencedResourceKind),
 				Namespace:  reference.Namespace,
 				Name:       reference.Name,

@@ -162,7 +162,7 @@ func instantiateStructFields(ctx context.Context, config *rest.Config, c client.
 
 	value := reflect.ValueOf(s)
 
-	if value.Kind() == reflect.Ptr {
+	if value.Kind() == reflect.Pointer {
 		value = value.Elem()
 	}
 

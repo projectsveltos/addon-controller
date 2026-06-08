@@ -64,8 +64,8 @@ var _ = Describe("WatchFields", func() {
 				Namespace: ns.Name,
 			},
 			Data: map[string]string{
-				"watched":   "value1",
-				"unwatched": "extra",
+				watchedFieldKey: testValue1,
+				"unwatched":     "extra",
 			},
 		}
 		Expect(k8sClient.Create(context.TODO(), refCM)).To(Succeed())
@@ -73,7 +73,7 @@ var _ = Describe("WatchFields", func() {
 		Byf("Create policy ConfigMap containing a template that references the watched field")
 		policyConfigMap := createConfigMapWithPolicy(ns.Name, namePrefix+randomString(), watchFieldsPolicy)
 		policyConfigMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), policyConfigMap)).To(Succeed())
 
@@ -83,8 +83,8 @@ var _ = Describe("WatchFields", func() {
 		clusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
+					APIVersion: apiVersionV1,
+					Kind:       kindConfigMap,
 					Namespace:  refCM.Namespace,
 					Name:       refCM.Name,
 				},
@@ -120,8 +120,8 @@ var _ = Describe("WatchFields", func() {
 		Eventually(func() bool {
 			result := &corev1.ConfigMap{}
 			err := workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: defaultNamespace, Name: "watchfields-result"}, result)
-			return err == nil && result.Data["watchedValue"] == "value1"
+				types.NamespacedName{Namespace: defaultNamespace, Name: watchfieldsResultName}, result)
+			return err == nil && result.Data["watchedValue"] == testValue1
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Updating non-watched field in the referenced ConfigMap")
@@ -154,8 +154,8 @@ var _ = Describe("WatchFields", func() {
 		Byf("Verifying workload cluster ConfigMap still shows the original watched value")
 		result := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: defaultNamespace, Name: "watchfields-result"}, result)).To(Succeed())
-		Expect(result.Data["watchedValue"]).To(Equal("value1"))
+			types.NamespacedName{Namespace: defaultNamespace, Name: watchfieldsResultName}, result)).To(Succeed())
+		Expect(result.Data["watchedValue"]).To(Equal(testValue1))
 
 		deleteClusterProfile(clusterProfile)
 	})

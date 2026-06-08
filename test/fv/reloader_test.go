@@ -152,7 +152,7 @@ var _ = Describe("Reloader", func() {
 			Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
 			Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
 				libsveltosv1beta1.ReloaderInfo{
-					Kind:      "Deployment",
+					Kind:      kindDeployment,
 					Namespace: ns,
 					Name:      deploymentName,
 				},
@@ -167,7 +167,7 @@ var _ = Describe("Reloader", func() {
 			Expect(len(currentReloader.Spec.ReloaderInfo)).To(Equal(1))
 			Expect(currentReloader.Spec.ReloaderInfo).To(ContainElement(
 				libsveltosv1beta1.ReloaderInfo{
-					Kind:      "Deployment",
+					Kind:      kindDeployment,
 					Namespace: ns,
 					Name:      deploymentName,
 				},

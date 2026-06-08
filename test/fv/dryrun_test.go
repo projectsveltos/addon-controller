@@ -74,10 +74,7 @@ rules:
 )
 
 var _ = Describe("DryRun", Serial, func() {
-	const (
-		namePrefix  = "dry-run-"
-		certManager = "cert-manager"
-	)
+	const namePrefix = "dry-run-"
 
 	It("Correctly reports helm chart that would be installed, uninstalled or have conflicts",
 		Label("NEW-FV", "NEW-FV-PULLMODE", "EXTENDED"), func() {
@@ -134,7 +131,7 @@ var _ = Describe("DryRun", Serial, func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			policies := []policy{
-				{kind: "ServiceAccount", name: "kong-serviceaccount", namespace: "kong", group: ""},
+				{kind: kindServiceAccount, name: kongServiceAccountName, namespace: kongRepoName, group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
@@ -148,12 +145,12 @@ var _ = Describe("DryRun", Serial, func() {
 					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 				currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 					{
-						RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-						RepositoryName:   "mariadb-operator",
-						ChartName:        "mariadb-operator/mariadb-operator",
-						ChartVersion:     "0.35.1",
-						ReleaseName:      "mariadb",
-						ReleaseNamespace: "mariadb",
+						RepositoryURL:    mariadbOperatorURL,
+						RepositoryName:   mariadbOperatorName,
+						ChartName:        mariadbOperatorChart,
+						ChartVersion:     mariadbVersion0351,
+						ReleaseName:      mariadbRelease,
+						ReleaseNamespace: mariadbRelease,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					},
 				}
@@ -175,7 +172,7 @@ var _ = Describe("DryRun", Serial, func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			charts := []configv1beta1.Chart{
-				{ReleaseName: "mariadb", ChartVersion: "0.35.1", Namespace: "mariadb"},
+				{ReleaseName: mariadbRelease, ChartVersion: mariadbVersion0351, Namespace: mariadbRelease},
 			}
 
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -229,32 +226,31 @@ var _ = Describe("DryRun", Serial, func() {
 					currentClusterProfile)).To(Succeed())
 				currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 					{
-						RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-						RepositoryName:   "mariadb-operator",
-						ChartName:        "mariadb-operator/mariadb-operator",
-						ChartVersion:     "25.8.4",
-						ReleaseName:      "mariadb",
-						ReleaseNamespace: "mariadb",
+						RepositoryURL:    mariadbOperatorURL,
+						RepositoryName:   mariadbOperatorName,
+						ChartName:        mariadbOperatorChart,
+						ChartVersion:     prometheusVersion2584,
+						ReleaseName:      mariadbRelease,
+						ReleaseNamespace: mariadbRelease,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					},
 					{
-						RepositoryURL:    "https://charts.jetstack.io",
-						RepositoryName:   "jetstack",
-						ChartName:        "jetstack/cert-manager",
-						ChartVersion:     "v1.18.2",
+						RepositoryURL:    jetstackURL,
+						RepositoryName:   jetstackName,
+						ChartName:        jetstackCertManagerChart,
+						ChartVersion:     externalDNSVersion1182,
 						ReleaseName:      certManager,
 						ReleaseNamespace: certManager,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
-						Values: `crds:
-  enabled: true`,
+						Values:           crdsEnabledValues,
 					},
 					{
-						RepositoryURL:    "https://cloudnative-pg.github.io/charts",
-						RepositoryName:   "cloudnative-pg",
-						ChartName:        "cloudnative-pg/cloudnative-pg",
-						ChartVersion:     "0.26.0",
-						ReleaseName:      "cnpg",
-						ReleaseNamespace: "cnpg-system",
+						RepositoryURL:    cloudnativePGURL,
+						RepositoryName:   cloudnativePGName,
+						ChartName:        cloudnativePGChart,
+						ChartVersion:     cloudnativePGVersion,
+						ReleaseName:      cnpgRelease,
+						ReleaseNamespace: cnpgSystem,
 						HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 					},
 				}
@@ -281,12 +277,12 @@ var _ = Describe("DryRun", Serial, func() {
 				}
 				// If not in DryRun, it would create Kong Role
 				err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-					"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.CreateResourceAction))
+					"Role", rbacAuthGroup, string(libsveltosv1beta1.CreateResourceAction))
 				if err != nil {
 					return err
 				}
 				// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
-				err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
+				err = verifyResourceReport(currentClusterReport, kongRepoName, kongServiceAccountName,
 					"ServiceAccount", "", string(libsveltosv1beta1.ConflictResourceAction))
 				if err != nil {
 					return err
@@ -319,12 +315,12 @@ var _ = Describe("DryRun", Serial, func() {
 				}
 				// If not in DryRun, it would create Kong Role
 				err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-					"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.CreateResourceAction))
+					"Role", rbacAuthGroup, string(libsveltosv1beta1.CreateResourceAction))
 				if err != nil {
 					return err
 				}
 				// Another ClusterProfile is managing this, even though by referencing same ConfigMap this ClusterProfile is, so conflict.
-				err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
+				err = verifyResourceReport(currentClusterReport, kongRepoName, kongServiceAccountName,
 					"ServiceAccount", "", string(libsveltosv1beta1.UpdateResourceAction))
 				if err != nil {
 					return err
@@ -342,7 +338,7 @@ var _ = Describe("DryRun", Serial, func() {
 
 			currentServiceAccount := &corev1.ServiceAccount{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+				types.NamespacedName{Namespace: kongRepoName, Name: kongServiceAccountName}, currentServiceAccount)
 			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
@@ -351,32 +347,31 @@ var _ = Describe("DryRun", Serial, func() {
 			currentClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-					RepositoryName:   "mariadb-operator",
-					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "25.8.4",
-					ReleaseName:      "mariadb",
-					ReleaseNamespace: "mariadb",
+					RepositoryURL:    mariadbOperatorURL,
+					RepositoryName:   mariadbOperatorName,
+					ChartName:        mariadbOperatorChart,
+					ChartVersion:     prometheusVersion2584,
+					ReleaseName:      mariadbRelease,
+					ReleaseNamespace: mariadbRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
-					RepositoryURL:    "https://charts.jetstack.io",
-					RepositoryName:   "jetstack",
-					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.18.2",
+					RepositoryURL:    jetstackURL,
+					RepositoryName:   jetstackName,
+					ChartName:        jetstackCertManagerChart,
+					ChartVersion:     externalDNSVersion1182,
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Values: `crds:
-  enabled: true`,
+					Values:           crdsEnabledValues,
 				},
 				{
-					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
-					RepositoryName:   "cloudnative-pg",
-					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.26.0",
-					ReleaseName:      "cnpg",
-					ReleaseNamespace: "cnpg-system",
+					RepositoryURL:    cloudnativePGURL,
+					RepositoryName:   cloudnativePGName,
+					ChartName:        cloudnativePGChart,
+					ChartVersion:     cloudnativePGVersion,
+					ReleaseName:      cnpgRelease,
+					ReleaseNamespace: cnpgSystem,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 			}
@@ -390,7 +385,7 @@ var _ = Describe("DryRun", Serial, func() {
 			Eventually(func() bool {
 				Byf("Verifying ServiceAccount kong/kong-serviceaccount is deployed managed cluster")
 				err = workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+					types.NamespacedName{Namespace: kongRepoName, Name: kongServiceAccountName}, currentServiceAccount)
 				if err != nil {
 					return false
 				}
@@ -404,14 +399,14 @@ var _ = Describe("DryRun", Serial, func() {
 
 				Byf("Verifying Deployment mariadb/mariadb-mariadb-operator is deployed managed cluster")
 				err = workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "mariadb", Name: "mariadb-mariadb-operator"}, currentDepl)
+					types.NamespacedName{Namespace: mariadbRelease, Name: mariadbOperatorDeployName}, currentDepl)
 				if err != nil {
 					return false
 				}
 
 				Byf("Verifying Deployment cnpg-system/cnpg-cloudnative-pg is deployed managed cluster")
 				err = workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "cnpg-system", Name: "cnpg-cloudnative-pg"}, currentDepl)
+					types.NamespacedName{Namespace: cnpgSystem, Name: cnpgDeployName}, currentDepl)
 				return err == nil
 			}, timeout, pollingInterval).Should(BeTrue())
 
@@ -432,34 +427,32 @@ var _ = Describe("DryRun", Serial, func() {
 			}
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://helm.mariadb.com/mariadb-operator",
-					RepositoryName:   "mariadb-operator",
-					ChartName:        "mariadb-operator/mariadb-operator",
-					ChartVersion:     "25.8.4",
-					ReleaseName:      "mariadb",
-					ReleaseNamespace: "mariadb",
+					RepositoryURL:    mariadbOperatorURL,
+					RepositoryName:   mariadbOperatorName,
+					ChartName:        mariadbOperatorChart,
+					ChartVersion:     prometheusVersion2584,
+					ReleaseName:      mariadbRelease,
+					ReleaseNamespace: mariadbRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Values: `crds:
-  enabled: true`,
+					Values:           crdsEnabledValues,
 				},
 				{
-					RepositoryURL:    "https://charts.jetstack.io",
-					RepositoryName:   "jetstack",
-					ChartName:        "jetstack/cert-manager",
-					ChartVersion:     "v1.18.2",
+					RepositoryURL:    jetstackURL,
+					RepositoryName:   jetstackName,
+					ChartName:        jetstackCertManagerChart,
+					ChartVersion:     externalDNSVersion1182,
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Values: `crds:
-  enabled: true`,
+					Values:           crdsEnabledValues,
 				},
 				{
-					RepositoryURL:    "https://cloudnative-pg.github.io/charts",
-					RepositoryName:   "cloudnative-pg",
-					ChartName:        "cloudnative-pg/cloudnative-pg",
-					ChartVersion:     "0.26.0",
-					ReleaseName:      "cnpg",
-					ReleaseNamespace: "cnpg-system",
+					RepositoryURL:    cloudnativePGURL,
+					RepositoryName:   cloudnativePGName,
+					ChartName:        cloudnativePGChart,
+					ChartVersion:     cloudnativePGVersion,
+					ReleaseName:      cnpgRelease,
+					ReleaseNamespace: cnpgSystem,
 					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 				},
 			}
@@ -479,7 +472,7 @@ var _ = Describe("DryRun", Serial, func() {
 
 			certManagerRR := &libsveltosv1beta1.ResourceReport{
 				Resource: libsveltosv1beta1.Resource{
-					Kind: "ServiceAccount",
+					Kind: kindServiceAccount,
 					Name: certManager,
 				},
 				Action: string(libsveltosv1beta1.NoResourceAction),
@@ -536,13 +529,13 @@ var _ = Describe("DryRun", Serial, func() {
 				}
 				// If not in DryRun, it would create Kong Role
 				err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-					"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.NoResourceAction))
+					"Role", rbacAuthGroup, string(libsveltosv1beta1.NoResourceAction))
 				if err != nil {
 					return err
 				}
 				// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 				// So action would be delete
-				err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
+				err = verifyResourceReport(currentClusterReport, kongRepoName, kongServiceAccountName,
 					"ServiceAccount", "", string(libsveltosv1beta1.DeleteResourceAction))
 				if err != nil {
 					return err
@@ -552,7 +545,7 @@ var _ = Describe("DryRun", Serial, func() {
 
 			Byf("Verifying ServiceAccount kong/kong-serviceaccount is still on managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+				types.NamespacedName{Namespace: kongRepoName, Name: kongServiceAccountName}, currentServiceAccount)
 			Expect(err).To(BeNil())
 
 			Byf("Verifying ServiceAccount cert-manager/cert-manager is still on managed cluster")
@@ -562,12 +555,12 @@ var _ = Describe("DryRun", Serial, func() {
 
 			Byf("Verifying Deployment mariadb/mariadb-mariadb-operator is still on managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "mariadb", Name: "mariadb-mariadb-operator"}, currentDepl)
+				types.NamespacedName{Namespace: mariadbRelease, Name: mariadbOperatorDeployName}, currentDepl)
 			Expect(err).To(BeNil())
 
 			Byf("Verifying Deployment cnpg-system/cnpg-cloudnative-pg is still on managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "cnpg-system", Name: "cnpg-cloudnative-pg"}, currentDepl)
+				types.NamespacedName{Namespace: cnpgSystem, Name: cnpgDeployName}, currentDepl)
 			Expect(err).To(BeNil())
 
 			Byf("Changing clusterSelector for ClusterProfile %s so to not match any cluster", dryRunClusterProfile.Name)
@@ -611,8 +604,8 @@ var _ = Describe("DryRun", Serial, func() {
 
 			mariadDBRR = &libsveltosv1beta1.ResourceReport{
 				Resource: libsveltosv1beta1.Resource{
-					Kind: "ServiceAccount",
-					Name: "mariadb-mariadb-operator",
+					Kind: kindServiceAccount,
+					Name: mariadbOperatorDeployName,
 				},
 				Action: string(libsveltosv1beta1.DeleteResourceAction),
 			}
@@ -663,13 +656,13 @@ var _ = Describe("DryRun", Serial, func() {
 				}
 				// If not in DryRun, it would create Kong Role
 				err = verifyResourceReport(currentClusterReport, "kong2", "kong-leader-election",
-					"Role", "rbac.authorization.k8s.io", string(libsveltosv1beta1.DeleteResourceAction))
+					"Role", rbacAuthGroup, string(libsveltosv1beta1.DeleteResourceAction))
 				if err != nil {
 					return err
 				}
 				// Previously installed this resource. Now not referencing the ConfigMap with this resource anymore.
 				// So action would be delete
-				err = verifyResourceReport(currentClusterReport, "kong", "kong-serviceaccount",
+				err = verifyResourceReport(currentClusterReport, kongRepoName, kongServiceAccountName,
 					"ServiceAccount", "", string(libsveltosv1beta1.DeleteResourceAction))
 				if err != nil {
 					return err
@@ -691,7 +684,7 @@ var _ = Describe("DryRun", Serial, func() {
 
 			Byf("Verifying ServiceAccount kong/kong-serviceaccount is removed from managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kong", Name: "kong-serviceaccount"}, currentServiceAccount)
+				types.NamespacedName{Namespace: kongRepoName, Name: kongServiceAccountName}, currentServiceAccount)
 			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
@@ -703,13 +696,13 @@ var _ = Describe("DryRun", Serial, func() {
 
 			Byf("Verifying Deployment mariadb/mariadb-mariadb-operator is removed from managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "mariadb", Name: "mariadb-mariadb-operator"}, currentDepl)
+				types.NamespacedName{Namespace: mariadbRelease, Name: mariadbOperatorDeployName}, currentDepl)
 			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
 			Byf("Verifying Deployment cnpg-system/cnpg-cloudnative-pg is removed from managed cluster")
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "cnpg-system", Name: "cnpg-cloudnative-pg"}, currentDepl)
+				types.NamespacedName{Namespace: cnpgSystem, Name: cnpgDeployName}, currentDepl)
 			Expect(err).ToNot(BeNil())
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})

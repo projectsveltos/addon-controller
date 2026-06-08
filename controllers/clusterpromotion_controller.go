@@ -561,7 +561,7 @@ func (r *ClusterPromotionReconciler) reconcileStageProfile(ctx context.Context,
 
 	forceConflict := true
 	options := metav1.PatchOptions{
-		FieldManager: "application/apply-patch",
+		FieldManager: applyPatchFieldManager,
 		Force:        &forceConflict,
 	}
 
@@ -667,7 +667,7 @@ func getPreCheckDeploymentClusterProfileLabels(clusterPromotion *configv1beta1.C
 	return map[string]string{
 		clusterPromotionNameLabel: clusterPromotion.Name,
 		// Adding a distinct label to easily identify this ClusterProfile as part of the pre-verification step.
-		preVerificationClusterProfileLabel: "true",
+		preVerificationClusterProfileLabel: stringTrue,
 	}
 }
 
@@ -1086,7 +1086,7 @@ func (r *ClusterPromotionReconciler) reconcilePreHealthCheckDeployment(ctx conte
 
 	forceConflict := true
 	options := metav1.PatchOptions{
-		FieldManager: "application/apply-patch",
+		FieldManager: applyPatchFieldManager,
 		Force:        &forceConflict,
 	}
 

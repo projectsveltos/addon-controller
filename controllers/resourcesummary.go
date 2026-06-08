@@ -305,7 +305,7 @@ func deployDriftDetectionManagerResources(ctx context.Context, restConfig *rest.
 	lbls map[string]string, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
 
 	resources := make(map[string][]unstructured.Unstructured)
-	index := "drift-detection-manager"
+	index := driftDetectionManagerDeploymentName
 	resources[index] = []unstructured.Unstructured{}
 
 	elements, err := deployer.CustomSplit(driftDetectionManagerYAML)
@@ -394,7 +394,7 @@ func deployUnstructuredResources(ctx context.Context, restConfig *rest.Config,
 		}
 
 		options := metav1.ApplyOptions{
-			FieldManager: "application/apply-patch",
+			FieldManager: applyPatchFieldManager,
 			Force:        true,
 		}
 
@@ -429,7 +429,7 @@ func unDeployResourceSummaryInstance(ctx context.Context, clusterNamespace, clus
 
 	resourceSummaryCRD := &apiextensionsv1.CustomResourceDefinition{}
 	err = clusterClient.Get(ctx,
-		types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, resourceSummaryCRD)
+		types.NamespacedName{Name: resourceSummaryCRDName}, resourceSummaryCRD)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.V(logs.LogVerbose).Info("resourceSummary CRD not present.")
@@ -660,7 +660,7 @@ func getDriftDetectionManagerPatchesOld(ctx context.Context, c client.Client,
 			Patch: configMap.Data[k],
 			Target: &libsveltosv1beta1.PatchSelector{
 				Kind:  deploymentKind,
-				Group: "apps",
+				Group: appsGroupName,
 			},
 		}
 		patches = append(patches, patch)
@@ -777,7 +777,7 @@ func getPatchesFromConfigMap(configMap *corev1.ConfigMap, logger logr.Logger,
 		if patch.Target == nil {
 			patch.Target = &libsveltosv1beta1.PatchSelector{
 				Kind:  "Deployment",
-				Group: "apps",
+				Group: appsGroupName,
 			}
 		}
 

@@ -285,7 +285,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 
 	It("isNamespaced returns true for namespaced resources", func() {
 		logger := textlogger.NewLogger(textlogger.NewConfig())
-		clusterNamespace := "default"
+		clusterNamespace := defaultNamespace
 		clusterName := randomString()
 
 		cluster := &clusterv1.Cluster{
@@ -303,7 +303,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 				Name:      clusterName + kubeconfigPostfix,
 			},
 			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
+				testValueKey: testEnv.Kubeconfig,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -419,7 +419,7 @@ var _ = Describe("getClusterProfileOwner ", func() {
 			randomString(): fmt.Sprintf("{{ %s }}", randomString()),
 			randomString(): `{{ .Cluster.spec.clusterNetwork.pods.cidrBlocks }}`,
 			randomString(): `{{ (index .MgmtResources "AutoscalerSecret").data.token }}`,
-			randomString(): `{{ index .Cluster.metadata.labels "region" }}`,
+			randomString(): testRegionLabelTemplate,
 			randomString(): `{{ .Cluster.metadata.spec.topology.version }}`,
 			randomString(): randomString() + randomString(),
 		}
@@ -577,7 +577,7 @@ metadata:
 
 			lbls := map[string]string{
 				"cluster-namespace": namespace,
-				"cluster-name":      clusterName,
+				testClusterNameKey:  clusterName,
 				"cluster-type":      strings.ToLower(string(libsveltosv1beta1.ClusterTypeSveltos)),
 				"feature":           "drift-detection",
 			}

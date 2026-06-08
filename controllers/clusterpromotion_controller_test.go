@@ -440,7 +440,7 @@ var _ = Describe("ClusterPromotionController", func() {
 
 		check := libsveltosv1beta1.ValidateHealth{
 			Group:   "",
-			Version: "v1",
+			Version: testV1APIVersion,
 			Kind:    "Pod",
 			LabelFilters: []libsveltosv1beta1.LabelFilter{
 				{Key: randomString(), Value: randomString(), Operation: libsveltosv1beta1.OperationEqual},

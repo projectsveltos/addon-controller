@@ -72,7 +72,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 
 	It("Update returns true when data has changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
-		configMap.Data = map[string]string{"change": "now"}
+		configMap.Data = map[string]string{testChangeKey: "now"}
 
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
@@ -96,7 +96,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   configMap.Name,
-				Labels: map[string]string{"env": "testing"},
+				Labels: map[string]string{testEnvLabelKey: testTestingValue},
 			},
 			Data: configMap.Data,
 		}
@@ -136,7 +136,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 		oldConfigMap := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   configMap.Name,
-				Labels: map[string]string{"env": "testing"},
+				Labels: map[string]string{testEnvLabelKey: testTestingValue},
 			},
 			BinaryData: configMap.BinaryData,
 		}
@@ -153,7 +153,7 @@ var _ = Describe("Clustersummary Predicates: ConfigMapPredicates", func() {
 	It("Update returns true when annotations changed", func() {
 		configMapPredicate := controllers.ConfigMapPredicates(logger)
 		configMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: testTrueValue,
 		}
 
 		oldConfigMap := &corev1.ConfigMap{
@@ -210,7 +210,7 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 	It("Update returns true when data has changed", func() {
 		secretPredicate := controllers.SecretPredicates(logger)
 		str := base64.StdEncoding.EncodeToString([]byte("password"))
-		secret.Data = map[string][]byte{"change": []byte(str)}
+		secret.Data = map[string][]byte{testChangeKey: []byte(str)}
 
 		oldSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -233,7 +233,7 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 		oldSecret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   secret.Name,
-				Labels: map[string]string{"env": "testing"},
+				Labels: map[string]string{testEnvLabelKey: testTestingValue},
 			},
 		}
 
@@ -249,7 +249,7 @@ var _ = Describe("Clustersummary Predicates: SecretPredicates", func() {
 	It("Update returns true when annotations changed", func() {
 		secretPredicate := controllers.SecretPredicates(logger)
 		secret.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: testTrueValue,
 		}
 
 		oldSecret := &corev1.Secret{

@@ -102,7 +102,7 @@ var _ = Describe("Feature", func() {
 				},
 				Rules: []rbacv1.PolicyRule{
 					{
-						APIGroups: []string{"apps"},
+						APIGroups: []string{appsGroupName},
 						Resources: []string{"deployments"},
 						Verbs:     []string{"*"},
 					},
@@ -117,13 +117,13 @@ var _ = Describe("Feature", func() {
 					Name: randomString(),
 				},
 				RoleRef: rbacv1.RoleRef{
-					APIGroup: "rbac.authorization.k8s.io",
-					Kind:     "ClusterRole",
+					APIGroup: rbacAuthGroup,
+					Kind:     kindClusterRole,
 					Name:     clusterRole.Name,
 				},
 				Subjects: []rbacv1.Subject{
 					{
-						Kind:      "ServiceAccount",
+						Kind:      kindServiceAccount,
 						Namespace: tenantServiceAccount.Namespace,
 						Name:      tenantServiceAccount.Name,
 					},
@@ -225,7 +225,7 @@ var _ = Describe("Feature", func() {
 			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)).To(Succeed())
 			currentClusterRole.Rules = append(currentClusterRole.Rules, rbacv1.PolicyRule{
 				APIGroups: []string{""},
-				Resources: []string{"secrets"},
+				Resources: []string{resourceTypeSecrets},
 				Verbs:     []string{"*"},
 			})
 

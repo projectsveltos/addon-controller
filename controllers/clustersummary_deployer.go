@@ -221,7 +221,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeature(ctx context.Context, 
 	// Feature must be (re)deployed.
 	options := deployer.Options{HandlerOptions: make(map[string]any)}
 	if getAgentInMgmtCluster() {
-		options.HandlerOptions[driftDetectionInMgtmCluster] = "ok"
+		options.HandlerOptions[driftDetectionInMgtmCluster] = annotationValueOk
 	}
 	options.HandlerOptions[configurationHash] = currentHash
 	logger.V(logs.LogDebug).Info("queueing request to deploy")

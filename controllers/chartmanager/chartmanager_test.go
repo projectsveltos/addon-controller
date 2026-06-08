@@ -60,11 +60,11 @@ var _ = Describe("Chart manager", func() {
 					HelmCharts: []configv1beta1.HelmChart{
 						{
 							RepositoryURL:    "https://kyverno.github.io/kyverno/",
-							RepositoryName:   "kyverno",
+							RepositoryName:   testKyvernoName,
 							ChartName:        "kyverno/kyverno",
 							ChartVersion:     "v3.0.1",
 							ReleaseName:      "kyverno-latest",
-							ReleaseNamespace: "kyverno",
+							ReleaseNamespace: testKyvernoName,
 							HelmChartAction:  configv1beta1.HelmChartActionInstall,
 						},
 						{
@@ -219,12 +219,12 @@ var _ = Describe("Chart manager", func() {
 		}
 
 		prometheusChart := configv1beta1.HelmChart{
-			RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-			RepositoryName:   "prometheus-community",
-			ChartName:        "prometheus-community/kube-prometheus-stack",
-			ChartVersion:     "40.0.0",
-			ReleaseName:      "prometheus-latest",
-			ReleaseNamespace: "prometheus",
+			RepositoryURL:    testPrometheusCommunityURL,
+			RepositoryName:   testPrometheusCommunityName,
+			ChartName:        testPrometheusKubeStackChart,
+			ChartVersion:     testPrometheusKubeStackVersion,
+			ReleaseName:      testPrometheusLatestRelease,
+			ReleaseNamespace: testPrometheusNamespace,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
@@ -271,12 +271,12 @@ var _ = Describe("Chart manager", func() {
 		}
 
 		prometheusChart := configv1beta1.HelmChart{
-			RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-			RepositoryName:   "prometheus-community",
-			ChartName:        "prometheus-community/kube-prometheus-stack",
-			ChartVersion:     "40.0.0",
-			ReleaseName:      "prometheus-latest",
-			ReleaseNamespace: "prometheus",
+			RepositoryURL:    testPrometheusCommunityURL,
+			RepositoryName:   testPrometheusCommunityName,
+			ChartName:        testPrometheusKubeStackChart,
+			ChartVersion:     testPrometheusKubeStackVersion,
+			ReleaseName:      testPrometheusLatestRelease,
+			ReleaseNamespace: testPrometheusNamespace,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 

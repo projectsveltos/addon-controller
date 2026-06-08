@@ -108,8 +108,8 @@ var _ = Describe("PreDeployChecks", func() {
 				Name:      "sa-exists",
 				FeatureID: libsveltosv1beta1.FeatureResources,
 				Group:     "",
-				Version:   "v1",
-				Kind:      "ServiceAccount",
+				Version:   apiVersionV1,
+				Kind:      kindServiceAccount,
 				Namespace: deployNs,
 				LabelFilters: []libsveltosv1beta1.LabelFilter{
 					{

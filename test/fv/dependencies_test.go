@@ -70,8 +70,8 @@ var _ = Describe("Dependencies", func() {
 						RepositoryName:   "apache-airflow",
 						ChartName:        "apache-airflow/airflow",
 						ChartVersion:     "1.15.0",
-						ReleaseName:      "airflow",
-						ReleaseNamespace: "airflow",
+						ReleaseName:      airflowRelease,
+						ReleaseNamespace: airflowRelease,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
 						Values: `createUserJob:
   useHelmHooks: false
@@ -98,12 +98,12 @@ migrateDatabaseJob:
 					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 				currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 					{
-						RepositoryURL:    "https://charts.bitnami.com/bitnami",
-						RepositoryName:   "bitnami",
+						RepositoryURL:    bitnamiURL,
+						RepositoryName:   bitnamiName,
 						ChartName:        "bitnami/flink",
 						ChartVersion:     "1.4.0",
-						ReleaseName:      "flink",
-						ReleaseNamespace: "flink",
+						ReleaseName:      flinkRelease,
+						ReleaseNamespace: flinkRelease,
 						HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					},
 				}

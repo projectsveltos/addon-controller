@@ -138,7 +138,7 @@ var _ = Describe("LeavePolicies", func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			policies := []policy{
-				{kind: "Deployment", name: deploymentName, namespace: deploymentNamespace, group: "apps"},
+				{kind: kindDeployment, name: deploymentName, namespace: deploymentNamespace, group: appsGroupName},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

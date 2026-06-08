@@ -77,9 +77,9 @@ var _ = Describe("Feature", func() {
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clusterRole := &rbacv1.ClusterRole{}
 			Expect(k8sClient.Get(context.TODO(),
-				types.NamespacedName{Name: "addon-controller-role-extra"}, clusterRole)).To(Succeed())
+				types.NamespacedName{Name: addonControllerRoleExtra}, clusterRole)).To(Succeed())
 			clusterRole.Rules = []rbacv1.PolicyRule{
-				{Verbs: []string{"*"}, APIGroups: []string{""}, Resources: []string{"serviceaccounts", "secrets"}},
+				{Verbs: []string{"*"}, APIGroups: []string{""}, Resources: []string{serviceAccountsResource, "secrets"}},
 			}
 			return k8sClient.Update(context.TODO(), clusterRole)
 		})
@@ -106,7 +106,7 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Define it as template as content of autoscalerServiceAccount and autoscalerSecret is a template
 		currentConfigMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationTrueValue,
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
@@ -118,7 +118,7 @@ var _ = Describe("Feature", func() {
 			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
 		// Defined it as template as content of autoscalerInfo is a template
 		currentConfigMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "true",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationTrueValue,
 		}
 		Expect(k8sClient.Update(context.TODO(), currentConfigMap)).To(Succeed())
 
@@ -131,7 +131,7 @@ var _ = Describe("Feature", func() {
 			currentClusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 				{
 					Resource: corev1.ObjectReference{
-						Kind: "Secret",
+						Kind: kindSecret,
 						Name: autoscaler,
 					},
 					Identifier: "AutoscalerSecret",

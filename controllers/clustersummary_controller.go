@@ -1233,7 +1233,7 @@ func getPolicyRefGroupVersionKind(ref *configv1beta1.PolicyRef) *schema.GroupVer
 	switch ref.Kind {
 	case string(libsveltosv1beta1.SecretReferencedResourceKind),
 		string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
-		return &schema.GroupVersionKind{Group: "", Version: "v1", Kind: ref.Kind}
+		return &schema.GroupVersionKind{Group: "", Version: coreAPIVersion, Kind: ref.Kind}
 	case sourcev1.GitRepositoryKind:
 		return &schema.GroupVersionKind{Group: sourcev1.GroupVersion.Group,
 			Version: sourcev1.GroupVersion.Version, Kind: ref.Kind}
@@ -1919,7 +1919,7 @@ func (r *ClusterSummaryReconciler) getClusterSummaryScope(ctx context.Context,
 		Logger:         logger,
 		ClusterSummary: clusterSummary,
 		Profile:        profile,
-		ControllerName: "clustersummary",
+		ControllerName: controllerNameClusterSummary,
 	})
 
 	return clusterSummaryScope, err

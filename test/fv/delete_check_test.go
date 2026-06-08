@@ -101,12 +101,12 @@ spec:
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-					RepositoryName:   "external-dns",
-					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.20.0",
-					ReleaseName:      "external-dns",
-					ReleaseNamespace: "external-dns",
+					RepositoryURL:    externalDNSURL,
+					RepositoryName:   externalDNSRepoName,
+					ChartName:        externalDNSChartName,
+					ChartVersion:     externalDNSVersion,
+					ReleaseName:      externalDNSRepoName,
+					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
@@ -120,8 +120,8 @@ spec:
 				{
 					Name:      "dns-endpoint-gone",
 					FeatureID: libsveltosv1beta1.FeatureHelm,
-					Group:     "externaldns.k8s.io",
-					Version:   "v1alpha1",
+					Group:     externaldnsGroup,
+					Version:   apiVersionV1alpha1,
 					Kind:      "DNSEndpoint",
 					Script:    luaEvaluateDNSEndpointHealth,
 				},
@@ -140,7 +140,7 @@ spec:
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)
+				types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Expect(k8sClient.Get(context.TODO(),
@@ -206,8 +206,8 @@ spec:
 		Expect(dynamicClient).ToNot(BeNil())
 
 		gvr := schema.GroupVersionResource{
-			Group:    "externaldns.k8s.io",
-			Version:  "v1alpha1",
+			Group:    externaldnsGroup,
+			Version:  apiVersionV1alpha1,
 			Resource: "dnsendpoints",
 		}
 		dnsEndpointList, err := dynamicClient.Resource(gvr).Namespace("").List(context.TODO(), metav1.ListOptions{})
@@ -257,7 +257,7 @@ spec:
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)
+				types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

@@ -108,7 +108,7 @@ var _ = Describe("SyncMode one time", func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			policies := []policy{
-				{kind: "Namespace", name: oneTimeNamespaceName, namespace: "", group: ""},
+				{kind: kindNamespace, name: oneTimeNamespaceName, namespace: "", group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

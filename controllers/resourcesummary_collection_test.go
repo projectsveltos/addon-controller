@@ -156,7 +156,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		crd := &apiextensionsv1.CustomResourceDefinition{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "resourcesummaries.lib.projectsveltos.io",
+				Name: testResourceSummaryCRDName,
 			},
 		}
 		withCRD := fake.NewClientBuilder().WithScheme(scheme).WithObjects(crd).Build()
@@ -179,7 +179,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		crd := &apiextensionsv1.CustomResourceDefinition{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "resourcesummaries.lib.projectsveltos.io",
+				Name: testResourceSummaryCRDName,
 			},
 		}
 		withCRD := fake.NewClientBuilder().WithScheme(scheme).WithObjects(crd).Build()
@@ -275,7 +275,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		capiClusterRef := corev1.ObjectReference{
 			Namespace:  capiCluster.Namespace,
 			Name:       capiCluster.Name,
-			Kind:       "Cluster",
+			Kind:       clusterKind,
 			APIVersion: clusterv1.GroupVersion.String(),
 		}
 		clustersWithDD := map[corev1.ObjectReference]bool{capiClusterRef: true}

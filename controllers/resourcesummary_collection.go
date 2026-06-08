@@ -416,7 +416,7 @@ func isResourceSummaryInstalledCached(ctx context.Context, c client.Client,
 func isResourceSummaryInstalled(ctx context.Context, c client.Client) (bool, error) {
 	clusterCRD := &apiextensionsv1.CustomResourceDefinition{}
 
-	err := c.Get(ctx, types.NamespacedName{Name: "resourcesummaries.lib.projectsveltos.io"}, clusterCRD)
+	err := c.Get(ctx, types.NamespacedName{Name: resourceSummaryCRDName}, clusterCRD)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, nil

@@ -50,7 +50,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"env": "production",
+					testEnvLabelKey: testProductionValue,
 				},
 			},
 		}
@@ -63,7 +63,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"env": "production",
+							testEnvLabelKey: testProductionValue,
 						},
 					},
 				},
@@ -78,7 +78,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"env": "qa",
+							testEnvLabelKey: testQAValue,
 						},
 					},
 				},
@@ -138,7 +138,7 @@ var _ = Describe("ClusterProfileReconciler map functions", func() {
 		matchingClusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
 			LabelSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"env": "qa",
+					testEnvLabelKey: testQAValue,
 				},
 			},
 		}

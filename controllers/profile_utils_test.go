@@ -124,21 +124,21 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
 		Expect(controllers.IsProfilePaused(profileScope)).To(BeFalse())
 
 		clusterProfile.Annotations = map[string]string{
-			configv1beta1.ProfilePausedAnnotation: "true",
+			configv1beta1.ProfilePausedAnnotation: testTrueValue,
 		}
 
 		profileScope, err = scope.NewProfileScope(scope.ProfileScopeParams{
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -161,7 +161,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -364,7 +364,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -449,7 +449,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -521,7 +521,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -590,7 +590,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -653,7 +653,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -709,7 +709,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -800,7 +800,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -841,7 +841,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -878,7 +878,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -951,7 +951,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -988,7 +988,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1029,7 +1029,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1073,7 +1073,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1163,7 +1163,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        &profile,
-			ControllerName: "profile",
+			ControllerName: testControllerNameProfileShort,
 		})
 		Expect(err).To(BeNil())
 
@@ -1260,7 +1260,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        &profile,
-			ControllerName: "profile",
+			ControllerName: testControllerNameProfileShort,
 		})
 		Expect(err).To(BeNil())
 
@@ -1299,7 +1299,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1322,7 +1322,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1343,7 +1343,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1401,7 +1401,7 @@ var _ = Describe("Profile: Reconciler", func() {
 				Client:         c,
 				Logger:         logger,
 				Profile:        clusterProfile,
-				ControllerName: "clusterprofile",
+				ControllerName: testControllerNameProfile,
 			})
 			Expect(err).To(BeNil())
 			controllers.ReviseUpdatedAndUpdatingClusters(clusterProfileScope)
@@ -1448,7 +1448,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1511,7 +1511,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 
@@ -1559,7 +1559,7 @@ var _ = Describe("Profile: Reconciler", func() {
 			Client:         c,
 			Logger:         logger,
 			Profile:        clusterProfile,
-			ControllerName: "clusterprofile",
+			ControllerName: testControllerNameProfile,
 		})
 		Expect(err).To(BeNil())
 

@@ -74,7 +74,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 				{
 					Target: &libsveltosv1beta1.PatchSelector{
 						Kind: "Namespace",
-						Name: ".*",
+						Name: matchAllPattern,
 					},
 					Patch: `- op: add
   path: /metadata/labels/type
@@ -101,7 +101,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 		Byf("Verifying proper Namespace is created in the workload cluster")
 		Eventually(func() bool {
 			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "flux-system"}, currentNamespace)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: fluxSystemName}, currentNamespace)
 			if err != nil {
 				return false
 			}
@@ -129,7 +129,7 @@ var _ = Describe("Patch with multiple resources in ConfigMap", func() {
 		Byf("Verifying  Namespace is removed in the workload cluster")
 		Eventually(func() bool {
 			currentNamespace := &corev1.Namespace{}
-			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: "flux-system"}, currentNamespace)
+			err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: fluxSystemName}, currentNamespace)
 			if err != nil {
 				return err != nil && apierrors.IsNotFound(err)
 			}

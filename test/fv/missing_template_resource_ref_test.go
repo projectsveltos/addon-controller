@@ -81,8 +81,8 @@ var _ = Describe("Missing TemplateResourceRef", func() {
 				currentClusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 					{
 						Resource: corev1.ObjectReference{
-							Kind:       "Secret",
-							APIVersion: "v1",
+							Kind:       kindSecret,
+							APIVersion: apiVersionV1,
 							Namespace:  secretNsName,
 							Name:       secretName,
 						},

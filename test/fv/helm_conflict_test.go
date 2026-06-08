@@ -72,11 +72,11 @@ var _ = Describe("Helm with conflicts", func() {
 		Eventually(func() error {
 			statefulSet := &appsv1.StatefulSet{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+				types.NamespacedName{Namespace: sparkName, Name: sparkMasterName}, statefulSet)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+			{ReleaseName: sparkName, ChartVersion: sparkVersion, Namespace: sparkName},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
@@ -127,7 +127,7 @@ var _ = Describe("Helm with conflicts", func() {
 			Eventually(func() error {
 				statefulSet := &appsv1.StatefulSet{}
 				return workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+					types.NamespacedName{Namespace: sparkName, Name: sparkMasterName}, statefulSet)
 			}, timeout/2, pollingInterval).Should(BeNil())
 		} else {
 			// Since second ClusterProfile is waiting to manage same helm chart, it should not be ever
@@ -136,12 +136,12 @@ var _ = Describe("Helm with conflicts", func() {
 			Consistently(func() error {
 				statefulSet := &appsv1.StatefulSet{}
 				return workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+					types.NamespacedName{Namespace: sparkName, Name: sparkMasterName}, statefulSet)
 			}, timeout/2, pollingInterval).Should(BeNil())
 		}
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "spark", ChartVersion: sparkVersion, Namespace: "spark"},
+			{ReleaseName: sparkName, ChartVersion: sparkVersion, Namespace: sparkName},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile2.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
@@ -154,7 +154,7 @@ var _ = Describe("Helm with conflicts", func() {
 		Eventually(func() bool {
 			statefulSet := &appsv1.StatefulSet{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "spark", Name: "spark-master"}, statefulSet)
+				types.NamespacedName{Namespace: sparkName, Name: sparkMasterName}, statefulSet)
 			if err == nil {
 				return !statefulSet.DeletionTimestamp.IsZero()
 			}
@@ -171,12 +171,12 @@ func addSparkHelmChart(clusterProfileName, version string) {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfileName}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://charts.bitnami.com/bitnami",
-				RepositoryName:   "bitnami",
+				RepositoryURL:    bitnamiURL,
+				RepositoryName:   bitnamiName,
 				ChartName:        "bitnami/spark",
 				ChartVersion:     version,
-				ReleaseName:      "spark",
-				ReleaseNamespace: "spark",
+				ReleaseName:      sparkName,
+				ReleaseNamespace: sparkName,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}

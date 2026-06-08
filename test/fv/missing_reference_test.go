@@ -135,7 +135,7 @@ var _ = Describe("Missing Reference", func() {
 			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 			policies := []policy{
-				{kind: "Namespace", name: namespaceName, namespace: "", group: ""},
+				{kind: kindNamespace, name: namespaceName, namespace: "", group: ""},
 			}
 			verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

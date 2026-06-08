@@ -86,12 +86,12 @@ metadata:
 
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-					RepositoryName:   "prometheus-community",
-					ChartName:        "prometheus-community/prometheus",
-					ChartVersion:     "25.24.0",
-					ReleaseName:      "prometheus",
-					ReleaseNamespace: "prometheus",
+					RepositoryURL:    prometheusCommunityURL,
+					RepositoryName:   prometheusCommunityName,
+					ChartName:        prometheusChartName,
+					ChartVersion:     prometheusVersion2524,
+					ReleaseName:      prometheusRelease,
+					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					ValuesFrom: []configv1beta1.ValueFrom{
 						{
@@ -130,7 +130,7 @@ metadata:
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "prometheus", ChartVersion: "25.24.0", Namespace: "prometheus"},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2524, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -138,7 +138,7 @@ metadata:
 			nil, charts)
 
 		policies := []policy{
-			{kind: "Namespace", name: resourceNamespace, namespace: "", group: ""},
+			{kind: kindNamespace, name: resourceNamespace, namespace: "", group: ""},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

@@ -56,30 +56,30 @@ var _ = Describe("Helm", Serial, func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kyverno.github.io/kyverno/",
-					RepositoryName:   "kyverno",
-					ChartName:        "kyverno/kyverno",
-					ChartVersion:     "v3.5.2",
-					ReleaseName:      "kyverno-latest",
-					ReleaseNamespace: "kyverno",
+					RepositoryURL:    kyvernoRepoURL,
+					RepositoryName:   kyvernoNamespace,
+					ChartName:        kyvernoChartName,
+					ChartVersion:     kyvernoVersion352,
+					ReleaseName:      kyvernoLatestRelease,
+					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
-					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-					RepositoryName:   "prometheus-community",
-					ChartName:        "prometheus-community/prometheus",
-					ChartVersion:     "27.39.0",
-					ReleaseName:      "prometheus",
-					ReleaseNamespace: "prometheus",
+					RepositoryURL:    prometheusCommunityURL,
+					RepositoryName:   prometheusCommunityName,
+					ChartName:        prometheusChartName,
+					ChartVersion:     prometheusVersion2739,
+					ReleaseName:      prometheusRelease,
+					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
 					RepositoryURL:    "https://grafana.github.io/helm-charts",
-					RepositoryName:   "grafana",
-					ChartName:        "grafana/grafana",
-					ChartVersion:     "10.0.0",
-					ReleaseName:      "grafana",
-					ReleaseNamespace: "grafana",
+					RepositoryName:   grafanaRepoName,
+					ChartName:        grafanaChartName,
+					ChartVersion:     grafanaVersion1000,
+					ReleaseName:      grafanaRepoName,
+					ReleaseNamespace: grafanaRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 			}
@@ -106,16 +106,16 @@ var _ = Describe("Helm", Serial, func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-admission-controller"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.2", Namespace: "kyverno"},
-			{ReleaseName: "grafana", ChartVersion: "10.0.0", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "27.39.0", Namespace: "prometheus"},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion352S, Namespace: kyvernoNamespace},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -133,12 +133,12 @@ var _ = Describe("Helm", Serial, func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "https://kyverno.github.io/kyverno/",
-				RepositoryName:   "kyverno",
-				ChartName:        "kyverno/kyverno",
-				ChartVersion:     "v3.5.1",
-				ReleaseName:      "kyverno-latest",
-				ReleaseNamespace: "kyverno",
+				RepositoryURL:    kyvernoRepoURL,
+				RepositoryName:   kyvernoNamespace,
+				ChartName:        kyvernoChartName,
+				ChartVersion:     kyvernoVersion351,
+				ReleaseName:      kyvernoLatestRelease,
+				ReleaseNamespace: kyvernoNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -190,8 +190,8 @@ var _ = Describe("Helm", Serial, func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "grafana", ChartVersion: "10.0.0", Namespace: "grafana"},
-			{ReleaseName: "prometheus", ChartVersion: "27.39.0", Namespace: "prometheus"},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -199,7 +199,7 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "kyverno-latest", ChartVersion: "3.5.1", Namespace: "kyverno"},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: "3.5.1", Namespace: kyvernoNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
@@ -213,7 +213,7 @@ var _ = Describe("Helm", Serial, func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "kyverno", Name: "kyverno-latest"}, depl)
+				types.NamespacedName{Namespace: kyvernoNamespace, Name: kyvernoLatestRelease}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

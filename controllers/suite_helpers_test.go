@@ -246,7 +246,7 @@ func prepareForDeployment(clusterProfile *configv1beta1.ClusterProfile, //nolint
 			Name:      clusterSummary.Spec.ClusterName + kubeconfigPostfix,
 		},
 		Data: map[string][]byte{
-			"value": testEnv.Kubeconfig,
+			testValueKey: testEnv.Kubeconfig,
 		},
 	}
 

@@ -63,7 +63,7 @@ var _ = Describe("Template instantiation", func() {
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					testDCLabelKey: testEngValue,
 				},
 			},
 			Spec: clusterv1.ClusterSpec{
@@ -135,7 +135,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Deployment": u,
+			testKindDeployment: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -172,7 +172,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Deployment": u,
+			testKindDeployment: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -252,7 +252,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Deployment": u,
+			testKindDeployment: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -293,7 +293,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"ConfigMap": u,
+			testKindConfigMap: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -334,7 +334,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Deployment": u,
+			testKindDeployment: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -390,7 +390,7 @@ var _ = Describe("Template instantiation", func() {
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Deployment": u,
+			testKindDeployment: u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -455,7 +455,7 @@ var _ = Describe("Template instantiation", func() {
 				Name:      randomString(),
 			},
 			Data: map[string][]byte{
-				"password": []byte(pwd),
+				testPasswordKey: []byte(pwd),
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -472,7 +472,7 @@ valuesTemplate: |
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Secret": &u,
+			testKindSecret: &u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())
@@ -508,7 +508,7 @@ valuesTemplate: |
 				Name:      randomString(),
 			},
 			Data: map[string][]byte{
-				"password": []byte(pwd),
+				testPasswordKey: []byte(pwd),
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -525,7 +525,7 @@ valuesTemplate: |
 		u.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Secret": &u,
+			testKindSecret: &u,
 		}
 
 		logger := textlogger.NewLogger(textlogger.NewConfig())

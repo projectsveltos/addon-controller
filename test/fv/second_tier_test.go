@@ -264,8 +264,8 @@ var _ = Describe("PolicyRef Tier", func() {
 		verifyFeatureStatusIsProvisioned(clusterSummary.Namespace, clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
-			{kind: "ServiceAccount", name: saName, namespace: saNamespace, group: ""},
-			{kind: "ServiceAccount", name: saName, namespace: newSaNamespace, group: ""},
+			{kind: kindServiceAccount, name: saName, namespace: saNamespace, group: ""},
+			{kind: kindServiceAccount, name: saName, namespace: newSaNamespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

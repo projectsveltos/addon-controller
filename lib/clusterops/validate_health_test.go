@@ -232,7 +232,7 @@ var _ = Describe("Metric health checks", func() {
 
 		It("extracts value from single-element vector", func() {
 			data := clusterops.PrometheusData{
-				ResultType: "vector",
+				ResultType: testResultTypeVector,
 				Result:     json.RawMessage(`[{"metric":{"job":"app"},"value":[1234567890.123,"2.0"]}]`),
 			}
 			v, err := clusterops.ExtractScalar(data)
@@ -242,7 +242,7 @@ var _ = Describe("Metric health checks", func() {
 
 		It("returns error for empty vector", func() {
 			data := clusterops.PrometheusData{
-				ResultType: "vector",
+				ResultType: testResultTypeVector,
 				Result:     json.RawMessage(`[]`),
 			}
 			_, err := clusterops.ExtractScalar(data)
@@ -251,7 +251,7 @@ var _ = Describe("Metric health checks", func() {
 
 		It("returns error for multi-element vector", func() {
 			data := clusterops.PrometheusData{
-				ResultType: "vector",
+				ResultType: testResultTypeVector,
 				Result: json.RawMessage(
 					`[{"metric":{},"value":[1,"1"]},{"metric":{},"value":[2,"2"]}]`),
 			}
@@ -280,14 +280,14 @@ end`
 
 		It("evaluates metrics-only check as healthy", func() {
 			healthy, _, err := clusterops.IsHealthy(nil, errorRateScript,
-				map[string]float64{"errorRate": 0.01}, logger)
+				map[string]float64{testErrorRateKey: 0.01}, logger)
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeTrue())
 		})
 
 		It("evaluates metrics-only check as unhealthy when threshold exceeded", func() {
 			healthy, msg, err := clusterops.IsHealthy(nil, errorRateScript,
-				map[string]float64{"errorRate": 0.10}, logger)
+				map[string]float64{testErrorRateKey: 0.10}, logger)
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeFalse())
 			Expect(msg).NotTo(BeEmpty())

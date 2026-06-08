@@ -222,8 +222,8 @@ target:
 			}
 			currentClusterProfile.Spec.PatchesFrom = []configv1beta1.ValueFrom{
 				{
-					Namespace: "{{ .Cluster.metadata.namespace}}",
-					Name:      "{{ .Cluster.metadata.name}}-patches",
+					Namespace: clusterNamespaceTrimTemplate,
+					Name:      patchesCMNameTemplate,
 					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				},
 			}
@@ -247,13 +247,13 @@ target:
 		Eventually(func() error {
 			currentDeployment := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+				types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 				currentDeployment)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		currentDeployment := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+			types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 			currentDeployment)).To(Succeed())
 
 		Byf("Verifying Deployment %s/nginx-deployment has label %s:%s", resourceNamespace, key, value)
@@ -270,7 +270,7 @@ target:
 
 		currentService := &corev1.Service{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-service"},
+			types.NamespacedName{Namespace: resourceNamespace, Name: nginxServiceName},
 			currentService)).To(Succeed())
 
 		Byf("Verifying Service %s/nginx-service has label %s:%s", resourceNamespace, key, value)
@@ -298,7 +298,7 @@ target:
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+				types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 				currentDeployment)
 			if err != nil {
 				return false
@@ -311,7 +311,7 @@ target:
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+			types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 			currentDeployment)).To(Succeed())
 
 		Byf("Verifying Deployment %s/nginx-deployment has label %s:%s", resourceNamespace, key, value)
@@ -327,7 +327,7 @@ target:
 		Expect(currentDeployment.Spec.Template.Spec.Tolerations[0].Key).To(Equal(tolerationKey))
 
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-service"},
+			types.NamespacedName{Namespace: resourceNamespace, Name: nginxServiceName},
 			currentService)).To(Succeed())
 
 		Byf("Verifying Service %s/nginx-service has label %s:%s", resourceNamespace, key, value)
@@ -361,12 +361,12 @@ target:
 			}
 			currentClusterProfile.Spec.PatchesFrom = []configv1beta1.ValueFrom{
 				{
-					Namespace: "{{ .Cluster.metadata.namespace}}",
-					Name:      "{{ .Cluster.metadata.name}}-patches",
+					Namespace: clusterNamespaceTrimTemplate,
+					Name:      patchesCMNameTemplate,
 					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				},
 				{
-					Namespace: "{{ .Cluster.metadata.namespace}}",
+					Namespace: clusterNamespaceTrimTemplate,
 					Name:      "{{ .Cluster.metadata.name}}-jsonpatch",
 					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 				},
@@ -379,7 +379,7 @@ target:
 		Eventually(func() bool {
 			currentDeployment := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+				types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 				currentDeployment)
 			if err != nil {
 				return false
@@ -392,7 +392,7 @@ target:
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: resourceNamespace, Name: "nginx-deployment"},
+			types.NamespacedName{Namespace: resourceNamespace, Name: nginxDeploymentName},
 			currentDeployment)).To(Succeed())
 
 		Byf("Verifying Deployment %s/nginx-deployment has label %s:%s", resourceNamespace, key, value)

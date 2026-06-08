@@ -104,7 +104,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 				Name:      sveltosClusterPaused.Name + sveltosKubeconfigPostfix,
 			},
 			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
+				testValueKey: testEnv.Kubeconfig,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -116,7 +116,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 				Name:      sveltosClusterNotReady.Name + sveltosKubeconfigPostfix,
 			},
 			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
+				testValueKey: testEnv.Kubeconfig,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -128,7 +128,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 				Name:      capiClusterPaused.Name + kubeconfigPostfix,
 			},
 			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
+				testValueKey: testEnv.Kubeconfig,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -156,10 +156,10 @@ var _ = Describe("Drift Detection Upgrade", func() {
 	It("isDriftDetectionManagerDeployedInCluster returns true when drift-detection-manager deployment exists", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "drift-detection-manager",
+				Name:      testDriftDetectionManagerName,
 				Namespace: sveltosNamespace,
 				Labels: map[string]string{
-					"control-plane": "drift-detection-manager",
+					testControlPlaneLabel: testDriftDetectionManagerName,
 				},
 			},
 		}
@@ -173,7 +173,7 @@ var _ = Describe("Drift Detection Upgrade", func() {
 				Name:      "some-other-deployment",
 				Namespace: sveltosNamespace,
 				Labels: map[string]string{
-					"control-plane": "drift-detection-manager",
+					testControlPlaneLabel: testDriftDetectionManagerName,
 				},
 			},
 		}
@@ -184,10 +184,10 @@ var _ = Describe("Drift Detection Upgrade", func() {
 	It("isDriftDetectionManagerDeployedInCluster returns false when deployment is in wrong namespace", func() {
 		depl := &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "drift-detection-manager",
-				Namespace: "default",
+				Name:      testDriftDetectionManagerName,
+				Namespace: defaultNamespace,
 				Labels: map[string]string{
-					"control-plane": "drift-detection-manager",
+					testControlPlaneLabel: testDriftDetectionManagerName,
 				},
 			},
 		}

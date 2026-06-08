@@ -55,7 +55,7 @@ var _ = Describe("HandlersResource", func() {
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					testDCLabelKey: testEngValue,
 				},
 			},
 		}
@@ -219,7 +219,7 @@ var _ = Describe("HandlersResource", func() {
 			{
 				FeatureID: libsveltosv1beta1.FeatureResources,
 				DeployedGroupVersionKind: []string{
-					"ClusterRole.v1.rbac.authorization.k8s.io",
+					testClusterRoleKindV1,
 					"Role.v1.rbac.authorization.k8s.io",
 				},
 			},
@@ -323,8 +323,8 @@ var _ = Describe("Hash methods", func() {
 				Name: "clusterrole1",
 			},
 			Rules: []rbacv1.PolicyRule{
-				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
+				{Verbs: []string{testCreateVerb, testGetVerb}, APIGroups: []string{testCertManagerGroup}, Resources: []string{testCertificateRequestsResource}},
+				{Verbs: []string{testCreateVerb, testDeleteVerb}, APIGroups: []string{""}, Resources: []string{testNamespacesResource, testDeploymentsResource}},
 			},
 		}
 
@@ -374,15 +374,13 @@ var _ = Describe("Hash methods", func() {
 							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 						{
-							Namespace: "default", Name: "non-existing",
+							Namespace: defaultNamespace, Name: "non-existing",
 							Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
 					},
 					Patches: []libsveltosv1beta1.Patch{
 						{
-							Patch: `- op: add
-  path: /metadata/labels/environment
-  value: production`,
+							Patch: testEnvLabelPatch,
 						},
 					},
 					Tier: 100,
@@ -405,7 +403,7 @@ var _ = Describe("Hash methods", func() {
 			Client:         testEnv,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 

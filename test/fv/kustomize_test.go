@@ -48,7 +48,7 @@ var _ = Describe("Kustomize with GitRepository", func() {
 
 	It("Deploy Kustomize resources with Flux", Serial, Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching mgmt Cluster")
-		gitRepositoryNamespace := "flux2"
+		gitRepositoryNamespace := flux2Name
 		mgmtClusterProfile := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namePrefix + randomString(),
@@ -89,10 +89,10 @@ installCRDs: true`
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
 					RepositoryURL:    "https://fluxcd-community.github.io/helm-charts",
-					RepositoryName:   "flux2",
+					RepositoryName:   flux2Name,
 					ChartName:        "flux2/flux2",
 					ChartVersion:     "2.18.2",
-					ReleaseName:      "flux2",
+					ReleaseName:      flux2Name,
 					ReleaseNamespace: gitRepositoryNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Values:           fluxValues,
@@ -120,7 +120,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			deployment := &appsv1.Deployment{}
 			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: sveltosNamespace, Name: "addon-controller"},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: addonDeplName},
 				deployment)
 			return err == nil && deployment.Status.AvailableReplicas == 1
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -129,7 +129,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			deployment := &appsv1.Deployment{}
 			err := k8sClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "projectsveltos", Name: "addon-controller-shard1"},
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "addon-controller-shard1"},
 				deployment)
 			if err != nil {
 				return apierrors.IsNotFound(err)
@@ -244,7 +244,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeServiceName}, currentService)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -260,7 +260,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeMapName}, currentConfigMap)
 			return err == nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -269,20 +269,20 @@ installCRDs: true`
 
 		currentConfigMap := &corev1.ConfigMap{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: kustomizeMapName}, currentConfigMap)).To(Succeed())
 
 		currentService := &corev1.Service{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)).To(Succeed())
+			types.NamespacedName{Namespace: targetNamespace, Name: kustomizeServiceName}, currentService)).To(Succeed())
 
 		currentDeployment := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: targetNamespace, Name: deploymentName}, currentDeployment)).To(Succeed())
 
 		policies := []policy{
-			{kind: "Service", name: currentService.Name, namespace: targetNamespace, group: ""},
-			{kind: "ConfigMap", name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
-			{kind: "Deployment", name: currentDeployment.Name, namespace: targetNamespace, group: "apps"},
+			{kind: kindService, name: currentService.Name, namespace: targetNamespace, group: ""},
+			{kind: kindConfigMap, name: currentConfigMap.Name, namespace: targetNamespace, group: ""},
+			{kind: kindDeployment, name: currentDeployment.Name, namespace: targetNamespace, group: appsGroupName},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, managedClusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureKustomize,
@@ -316,7 +316,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			currentService := &corev1.Service{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-service"}, currentService)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeServiceName}, currentService)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -334,7 +334,7 @@ installCRDs: true`
 		Eventually(func() bool {
 			currentConfigMap := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: targetNamespace, Name: "the-map"}, currentConfigMap)
+				types.NamespacedName{Namespace: targetNamespace, Name: kustomizeMapName}, currentConfigMap)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

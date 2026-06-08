@@ -63,7 +63,7 @@ var _ = Describe("KustomizeRefs", func() {
 				Name:      upstreamClusterNamePrefix + randomString(),
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					testDCLabelKey: testEngValue,
 				},
 			},
 		}
@@ -170,7 +170,7 @@ var _ = Describe("KustomizeRefs", func() {
 				DeployedGroupVersionKind: []string{
 					"ServiceAccount.v1.",
 					"ConfigMaps.v1.",
-					"ClusterRole.v1.rbac.authorization.k8s.io",
+					testClusterRoleKindV1,
 				},
 			},
 		}
@@ -266,8 +266,8 @@ var _ = Describe("Hash methods", func() {
 				Name:      randomString(),
 			},
 			Data: map[string]string{
-				"cluster-name": "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
-				"region":       "west",
+				testClusterNameKey: "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
+				testRegionKey:      "west",
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
@@ -278,8 +278,8 @@ var _ = Describe("Hash methods", func() {
 			Name:      randomString(),
 		},
 			Data: map[string][]byte{
-				"tag":     []byte("a-tag"),
-				"version": []byte("a-version"),
+				"tag":          []byte("a-tag"),
+				testVersionKey: []byte("a-version"),
 			},
 			Type: libsveltosv1beta1.ClusterProfileSecretType,
 		}
@@ -287,7 +287,7 @@ var _ = Describe("Hash methods", func() {
 		Expect(waitForObject(context.TODO(), testEnv, secret)).To(Succeed())
 
 		kustomizationRef := configv1beta1.KustomizationRef{
-			Namespace: "default",
+			Namespace: defaultNamespace,
 			Name:      "kustomization",
 			Kind:      sourcev1.GitRepositoryKind,
 			ValuesFrom: []configv1beta1.ValueFrom{
@@ -380,7 +380,7 @@ var _ = Describe("Hash methods", func() {
 				Namespace: clusterSummary.Spec.ClusterNamespace,
 				Name:      clusterSummary.Spec.ClusterName,
 				Labels: map[string]string{
-					"region": region,
+					testRegionKey: region,
 				},
 			},
 			Spec: clusterv1.ClusterSpec{
@@ -405,12 +405,12 @@ var _ = Describe("Hash methods", func() {
 		uCluster.SetUnstructuredContent(content)
 
 		mgmtResources := map[string]*unstructured.Unstructured{
-			"Cluster": &uCluster,
+			clusterKind: &uCluster,
 		}
 
 		values := map[string]string{
-			`region`:  `{{ index .Cluster.metadata.labels "region" }}`,
-			`version`: `{{ .Cluster.spec.topology.version }}`,
+			testRegionKey:  testRegionLabelTemplate,
+			testVersionKey: `{{ .Cluster.spec.topology.version }}`,
 			`cidrs`: `{{ range $cidr := .Cluster.spec.clusterNetwork.pods.cidrBlocks }}
             - cidr: {{ $cidr }}
               encapsulation: VXLAN
@@ -426,11 +426,11 @@ var _ = Describe("Hash methods", func() {
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, mgmtResources),
 			values, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
-		v, ok := result["region"]
+		v, ok := result[testRegionKey]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(region))
 
-		v, ok = result["version"]
+		v, ok = result[testVersionKey]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(k8sVersion))
 

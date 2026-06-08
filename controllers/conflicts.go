@@ -70,7 +70,7 @@ func requeueClusterSummary(ctx context.Context, featureID libsveltosv1beta1.Feat
 		Client:         c,
 		Logger:         logger,
 		ClusterSummary: clusterSummary,
-		ControllerName: "clustersummary",
+		ControllerName: controllerNameClusterSummary,
 	})
 
 	if err != nil {

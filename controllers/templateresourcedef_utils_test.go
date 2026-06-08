@@ -130,7 +130,7 @@ var _ = Describe("TemplateResourceDef utils ", func() {
 	It("GetTemplateResourceNamespace returns the correct namespace (uses Cluster)", func() {
 		ref := &configv1beta1.TemplateResourceRef{
 			Resource: corev1.ObjectReference{
-				Name: "{{ .Cluster.metadata.namespace }}-{{ .Cluster.metadata.name }}",
+				Name: testClusterFullNameTemplate,
 			},
 			Identifier: randomString(),
 		}
@@ -287,8 +287,8 @@ var _ = Describe("collectTemplateResourceRefs", func() {
 		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					Kind:       "ConfigMap",
-					APIVersion: "v1",
+					Kind:       testKindConfigMap,
+					APIVersion: testV1APIVersion,
 					Namespace:  nsName,
 					Name:       "does-not-exist-" + randomString(),
 				},
@@ -309,8 +309,8 @@ var _ = Describe("collectTemplateResourceRefs", func() {
 		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					Kind:       "ConfigMap",
-					APIVersion: "v1",
+					Kind:       testKindConfigMap,
+					APIVersion: testV1APIVersion,
 					Namespace:  nsName,
 					Name:       "does-not-exist-" + randomString(),
 				},
@@ -330,7 +330,7 @@ var _ = Describe("collectTemplateResourceRefs", func() {
 				Namespace: nsName,
 				Name:      randomString(),
 			},
-			Data: map[string]string{"key": "value"},
+			Data: map[string]string{"key": testValueKey},
 		}
 		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
@@ -339,8 +339,8 @@ var _ = Describe("collectTemplateResourceRefs", func() {
 		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					Kind:       "ConfigMap",
-					APIVersion: "v1",
+					Kind:       testKindConfigMap,
+					APIVersion: testV1APIVersion,
 					Namespace:  nsName,
 					Name:       cm.Name,
 				},
@@ -358,51 +358,51 @@ var _ = Describe("collectTemplateResourceRefs", func() {
 var _ = Describe("extractWatchedFields", func() {
 	It("returns only the listed top-level field", func() {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{
-			"spec":   map[string]interface{}{"replicas": int64(3)},
-			"status": map[string]interface{}{"readyReplicas": int64(3)},
+			testSpecKey:     map[string]interface{}{testReplicasKey: int64(3)},
+			testStatusField: map[string]interface{}{testReadyReplicasKey: int64(3)},
 		}}
 
-		result := controllers.ExtractWatchedFields(u, []string{"status"})
+		result := controllers.ExtractWatchedFields(u, []string{testStatusField})
 
-		_, found, err := unstructured.NestedMap(result.Object, "status")
+		_, found, err := unstructured.NestedMap(result.Object, testStatusField)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 
-		_, found, err = unstructured.NestedMap(result.Object, "spec")
+		_, found, err = unstructured.NestedMap(result.Object, testSpecKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeFalse())
 	})
 
 	It("extracts a specific nested field, excluding sibling fields", func() {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{
-			"status": map[string]interface{}{
-				"readyReplicas": int64(2),
-				"conditions":    []interface{}{"cond1", "cond2"},
+			testStatusField: map[string]interface{}{
+				testReadyReplicasKey: int64(2),
+				"conditions":         []interface{}{"cond1", "cond2"},
 			},
 		}}
 
-		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas"})
+		result := controllers.ExtractWatchedFields(u, []string{testStatusReadyReplicas})
 
-		val, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		val, found, err := unstructured.NestedInt64(result.Object, testStatusField, testReadyReplicasKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 		Expect(val).To(Equal(int64(2)))
 
-		_, found, err = unstructured.NestedSlice(result.Object, "status", "conditions")
+		_, found, err = unstructured.NestedSlice(result.Object, testStatusField, "conditions")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeFalse())
 	})
 
 	It("handles multiple fields across different sections", func() {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{
-			"metadata": map[string]interface{}{"labels": map[string]interface{}{"env": "prod"}},
-			"spec":     map[string]interface{}{"replicas": int64(3)},
-			"status":   map[string]interface{}{"readyReplicas": int64(3)},
+			"metadata":      map[string]interface{}{"labels": map[string]interface{}{testEnvLabelKey: "prod"}},
+			testSpecKey:     map[string]interface{}{testReplicasKey: int64(3)},
+			testStatusField: map[string]interface{}{testReadyReplicasKey: int64(3)},
 		}}
 
-		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas", "metadata.labels"})
+		result := controllers.ExtractWatchedFields(u, []string{testStatusReadyReplicas, "metadata.labels"})
 
-		_, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		_, found, err := unstructured.NestedInt64(result.Object, testStatusField, testReadyReplicasKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 
@@ -410,33 +410,33 @@ var _ = Describe("extractWatchedFields", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 
-		_, found, err = unstructured.NestedMap(result.Object, "spec")
+		_, found, err = unstructured.NestedMap(result.Object, testSpecKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeFalse())
 	})
 
 	It("returns an empty object when all paths are missing", func() {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{
-			"status": map[string]interface{}{"readyReplicas": int64(3)},
+			testStatusField: map[string]interface{}{testReadyReplicasKey: int64(3)},
 		}}
 
-		result := controllers.ExtractWatchedFields(u, []string{"status.nonExistent"})
+		result := controllers.ExtractWatchedFields(u, []string{testStatusNonExistent})
 		Expect(result.Object).To(BeEmpty())
 	})
 
 	It("includes existing paths and silently skips missing ones", func() {
 		u := &unstructured.Unstructured{Object: map[string]interface{}{
-			"status": map[string]interface{}{"readyReplicas": int64(3)},
+			testStatusField: map[string]interface{}{testReadyReplicasKey: int64(3)},
 		}}
 
-		result := controllers.ExtractWatchedFields(u, []string{"status.readyReplicas", "status.nonExistent"})
+		result := controllers.ExtractWatchedFields(u, []string{testStatusReadyReplicas, testStatusNonExistent})
 
-		val, found, err := unstructured.NestedInt64(result.Object, "status", "readyReplicas")
+		val, found, err := unstructured.NestedInt64(result.Object, testStatusField, testReadyReplicasKey)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(found).To(BeTrue())
 		Expect(val).To(Equal(int64(3)))
 
-		_, found, _ = unstructured.NestedFieldNoCopy(result.Object, "status", "nonExistent")
+		_, found, _ = unstructured.NestedFieldNoCopy(result.Object, testStatusField, "nonExistent")
 		Expect(found).To(BeFalse())
 	})
 })

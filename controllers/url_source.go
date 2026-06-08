@@ -133,7 +133,7 @@ func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 	if ref.IsTemplate {
 		syntheticSource.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationValueOk,
 		}
 	}
 

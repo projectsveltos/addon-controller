@@ -53,8 +53,6 @@ var _ = Describe("HandlersHelm", func() {
 	var clusterProfile *configv1beta1.ClusterProfile
 	var clusterSummary *configv1beta1.ClusterSummary
 
-	const defaultNamespace = "default"
-
 	BeforeEach(func() {
 		clusterNamespace := randomString()
 
@@ -81,7 +79,7 @@ var _ = Describe("HandlersHelm", func() {
 					{
 						Kind:       configv1beta1.ClusterProfileKind,
 						Name:       clusterProfile.Name,
-						APIVersion: "config.projectsveltos.io/v1beta1",
+						APIVersion: testConfigAPIVersion,
 						UID:        types.UID(randomString()),
 					},
 				},
@@ -97,10 +95,10 @@ var _ = Describe("HandlersHelm", func() {
 	It("shouldInstall returns false when requested version does not match installed version", func() {
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v2.5.0",
+			ChartVersion: testChartVersion250,
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
@@ -110,10 +108,10 @@ var _ = Describe("HandlersHelm", func() {
 		func() {
 			currentRelease := &controllers.ReleaseInfo{
 				Status:       releasecommon.StatusDeployed.String(),
-				ChartVersion: "v2.5.3",
+				ChartVersion: testChartVersion253,
 			}
 			requestChart := &configv1beta1.HelmChart{
-				ChartVersion:    "v2.5.3",
+				ChartVersion:    testChartVersion253,
 				HelmChartAction: configv1beta1.HelmChartActionInstall,
 			}
 			Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
@@ -121,7 +119,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldInstall returns true when there is no current installed version", func() {
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldInstall(nil, requestChart)).To(BeTrue())
@@ -129,7 +127,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldInstall returns false action is uninstall", func() {
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionUninstall,
 		}
 		Expect(controllers.ShouldInstall(nil, requestChart)).To(BeFalse())
@@ -137,7 +135,7 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("shouldUninstall returns false when there is no current release installed", func() {
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionUninstall,
 		}
 		Expect(controllers.ShouldUninstall(nil, requestChart)).To(BeFalse())
@@ -146,10 +144,10 @@ var _ = Describe("HandlersHelm", func() {
 	It("shouldUninstall returns false when action is not Uninstall", func() {
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v2.5.3",
+			ChartVersion: testChartVersion253,
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldUninstall(currentRelease, requestChart)).To(BeFalse())
@@ -158,10 +156,10 @@ var _ = Describe("HandlersHelm", func() {
 	It("shouldUpgrade returns true when installed release is different than requested release", func() {
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v2.5.0",
+			ChartVersion: testChartVersion250,
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v2.5.3",
+			ChartVersion:    testChartVersion253,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
@@ -171,21 +169,21 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("desiredValuesAreSubset returns true when desired is a subset of full values", func() {
 		full := map[string]interface{}{
-			"replicaCount": 2,
-			"image": map[string]interface{}{
-				"repository": "nginx",
-				"tag":        "1.21",
-				"pullPolicy": "IfNotPresent",
+			testReplicaCountKey: 2,
+			testImageKey: map[string]interface{}{
+				testRepositoryKey: testNginxRepo,
+				testTagKey:        "1.21",
+				"pullPolicy":      "IfNotPresent",
 			},
-			"service": map[string]interface{}{
-				"port": 80,
+			testServiceKey: map[string]interface{}{
+				testPortKey: 80,
 			},
 		}
 		// Desired only sets a subset — tag and pullPolicy come from chart defaults.
 		desired := map[string]interface{}{
-			"replicaCount": 2,
-			"image": map[string]interface{}{
-				"repository": "nginx",
+			testReplicaCountKey: 2,
+			testImageKey: map[string]interface{}{
+				testRepositoryKey: testNginxRepo,
 			},
 		}
 		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeTrue())
@@ -193,32 +191,32 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("desiredValuesAreSubset returns false when a desired value differs from full", func() {
 		full := map[string]interface{}{
-			"replicaCount": 2,
+			testReplicaCountKey: 2,
 		}
 		desired := map[string]interface{}{
-			"replicaCount": 3,
+			testReplicaCountKey: 3,
 		}
 		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
 	})
 
 	It("desiredValuesAreSubset returns false when a desired key is absent from full", func() {
 		full := map[string]interface{}{
-			"replicaCount": 2,
+			testReplicaCountKey: 2,
 		}
 		desired := map[string]interface{}{
-			"replicaCount": 2,
-			"extraKey":     "value",
+			testReplicaCountKey: 2,
+			"extraKey":          testValueKey,
 		}
 		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
 	})
 
 	It("desiredValuesAreSubset returns false when desired value is a map but full value is a scalar", func() {
 		full := map[string]interface{}{
-			"image": "nginx:latest", // scalar, not a map
+			testImageKey: testNginxLatestImage, // scalar, not a map
 		}
 		desired := map[string]interface{}{
-			"image": map[string]interface{}{
-				"repository": "nginx",
+			testImageKey: map[string]interface{}{
+				testRepositoryKey: testNginxRepo,
 			},
 		}
 		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
@@ -226,12 +224,12 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("desiredValuesAreSubset returns false when desired value is a scalar but full value is a map", func() {
 		full := map[string]interface{}{
-			"image": map[string]interface{}{
-				"repository": "nginx",
+			testImageKey: map[string]interface{}{
+				testRepositoryKey: testNginxRepo,
 			},
 		}
 		desired := map[string]interface{}{
-			"image": "nginx:latest", // scalar, not a map
+			testImageKey: testNginxLatestImage, // scalar, not a map
 		}
 		Expect(controllers.DesiredValuesAreSubset(desired, full)).To(BeFalse())
 	})
@@ -257,12 +255,12 @@ var _ = Describe("HandlersHelm", func() {
 		// Sveltos desires no values (empty), which is a subset of anything.
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
+			ChartVersion: testChartVersion100,
 			Values:       map[string]interface{}{},
-			FullValues:   map[string]interface{}{"replicaCount": 1, "service": map[string]interface{}{"port": 80}},
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1, testServiceKey: map[string]interface{}{testPortKey: 80}},
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v1.0.0",
+			ChartVersion:    testChartVersion100,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
@@ -289,11 +287,11 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
-			FullValues:   map[string]interface{}{"replicaCount": 1},
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v1.0.0",
+			ChartVersion:    testChartVersion100,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 			Values:          "replicaCount: 3\n", // desired differs from live
 		}
@@ -319,7 +317,7 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
+			ChartVersion: testChartVersion100,
 			FullValues:   map[string]interface{}{},
 		}
 		requestChart := &configv1beta1.HelmChart{
@@ -355,11 +353,11 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
-			FullValues:   map[string]interface{}{"replicaCount": 1},
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v1.0.0",
+			ChartVersion:    testChartVersion100,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
@@ -387,8 +385,8 @@ var _ = Describe("HandlersHelm", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
 			{
-				ReleaseName:      "nginx-latest",
-				ReleaseNamespace: "nginx",
+				ReleaseName:      testReleaseNameNginxLatest,
+				ReleaseNamespace: testNginxRepo,
 				ValuesHash:       []byte("previously-stored-hash"),
 				Status:           configv1beta1.HelmChartStatusManaging,
 			},
@@ -396,13 +394,13 @@ var _ = Describe("HandlersHelm", func() {
 
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
-			FullValues:   map[string]interface{}{"replicaCount": 1},
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ReleaseName:      "nginx-latest",
-			ReleaseNamespace: "nginx",
-			ChartVersion:     "v1.0.0",
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			ChartVersion:     testChartVersion100,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
@@ -435,7 +433,7 @@ var _ = Describe("HandlersHelm", func() {
   path: /metadata/annotations/projectsveltos.io~1managed
   value: "true"`,
 				Target: &libsveltosv1beta1.PatchSelector{
-					Kind: "Deployment",
+					Kind: testKindDeployment,
 				},
 			},
 		}
@@ -444,11 +442,11 @@ var _ = Describe("HandlersHelm", func() {
 		// first-reconciliation skip would fire if there were no patches.
 		currentRelease := &controllers.ReleaseInfo{
 			Status:       releasecommon.StatusDeployed.String(),
-			ChartVersion: "v1.0.0",
-			FullValues:   map[string]interface{}{"replicaCount": 1},
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
 		requestChart := &configv1beta1.HelmChart{
-			ChartVersion:    "v1.0.0",
+			ChartVersion:    testChartVersion100,
 			HelmChartAction: configv1beta1.HelmChartActionInstall,
 		}
 
@@ -463,14 +461,14 @@ var _ = Describe("HandlersHelm", func() {
 			RepositoryName:   "projectcalico",
 			ChartName:        "projectcalico/tigera-operator",
 			ChartVersion:     "v3.24.1",
-			ReleaseName:      "calico",
-			ReleaseNamespace: "calico",
+			ReleaseName:      testReleaseNameCalico,
+			ReleaseNamespace: testReleaseNameCalico,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
 		kyvernoSummary := configv1beta1.HelmChartSummary{
-			ReleaseName:      "kyverno",
-			ReleaseNamespace: "kyverno",
+			ReleaseName:      testReleaseNameKyverno,
+			ReleaseNamespace: testReleaseNameKyverno,
 			Status:           configv1beta1.HelmChartStatusManaging,
 		}
 
@@ -584,18 +582,18 @@ var _ = Describe("HandlersHelm", func() {
 
 	It("UpdateStatusForNonReferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
 		contourChart := &configv1beta1.HelmChart{
-			RepositoryURL:    "https://charts.bitnami.com/bitnami",
+			RepositoryURL:    testRepoURLBitnami,
 			RepositoryName:   "bitnami/contour",
-			ChartName:        "bitnami/contour",
-			ChartVersion:     "21.1.4",
-			ReleaseName:      "contour-latest",
+			ChartName:        testChartNameBitnamiContour,
+			ChartVersion:     testChartVersion2114,
+			ReleaseName:      testReleaseNameContour,
 			ReleaseNamespace: "contour",
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
 		kyvernoSummary := configv1beta1.HelmChartSummary{
-			ReleaseName:      "kyverno",
-			ReleaseNamespace: "kyverno",
+			ReleaseName:      testReleaseNameKyverno,
+			ReleaseNamespace: testReleaseNameKyverno,
 			Status:           configv1beta1.HelmChartStatusManaging,
 		}
 
@@ -688,8 +686,8 @@ var _ = Describe("HandlersHelm", func() {
 		chartDeployed := []configv1beta1.Chart{
 			{
 				RepoURL:      "https://charts.bitnami.com/bitnami",
-				ReleaseName:  "contour-latest",
-				ChartVersion: "21.1.4",
+				ReleaseName:  testReleaseNameContour,
+				ChartVersion: testChartVersion2114,
 				Namespace:    "projectcontour",
 			},
 		}
@@ -749,15 +747,15 @@ var _ = Describe("HandlersHelm", func() {
 		chartsDeployed := []configv1beta1.Chart{
 			{
 				RepoURL:      "https://prometheus-community.github.io/helm-charts",
-				ReleaseName:  "prometheus",
-				Namespace:    "prometheus",
+				ReleaseName:  testReleaseNamePrometheus,
+				Namespace:    testReleaseNamePrometheus,
 				ChartVersion: "26.0.0",
 				AppVersion:   "v3.0.0",
 			},
 			{
 				RepoURL:      "https://grafana-community.github.io/helm-charts",
-				ReleaseName:  "grafana",
-				Namespace:    "grafana",
+				ReleaseName:  testReleaseNameGrafana,
+				Namespace:    testReleaseNameGrafana,
 				ChartVersion: "11.3.6",
 				AppVersion:   "12.4.2",
 			},
@@ -1031,7 +1029,7 @@ var _ = Describe("HandlersHelm", func() {
 			{
 				Kind:       configv1beta1.ClusterProfileKind,
 				Name:       clusterProfile.Name,
-				APIVersion: "config.projectsveltos.io/v1beta1",
+				APIVersion: testConfigAPIVersion,
 				UID:        clusterProfile.UID,
 			},
 		}
@@ -1102,11 +1100,11 @@ var _ = Describe("Hash methods", func() {
 	It("HelmHash returns hash considering all referenced helm charts", func() {
 		kyvernoChart := configv1beta1.HelmChart{
 			RepositoryURL:    "https://kyverno.github.io/kyverno/",
-			RepositoryName:   "kyverno",
+			RepositoryName:   testReleaseNameKyverno,
 			ChartName:        "kyverno/kyverno",
 			ChartVersion:     "v3.0.1",
 			ReleaseName:      "kyverno-latest",
-			ReleaseNamespace: "kyverno",
+			ReleaseNamespace: testReleaseNameKyverno,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
@@ -1115,8 +1113,8 @@ var _ = Describe("Hash methods", func() {
 			RepositoryName:   "nginx-stable",
 			ChartName:        "nginx-stable/nginx-ingress",
 			ChartVersion:     "0.17.1",
-			ReleaseName:      "nginx-latest",
-			ReleaseNamespace: "nginx",
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
 		}
 
@@ -1154,9 +1152,7 @@ var _ = Describe("Hash methods", func() {
 					},
 					Patches: []libsveltosv1beta1.Patch{
 						{
-							Patch: `- op: add
-  path: /metadata/labels/environment
-  value: production`,
+							Patch: testEnvLabelPatch,
 						},
 					},
 					Tier: 100,
@@ -1170,7 +1166,7 @@ var _ = Describe("Hash methods", func() {
 			Client:         testEnv,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -1224,7 +1220,7 @@ var _ = Describe("Hash methods", func() {
 				Namespace: namespace,
 				Name:      randomString(),
 				Annotations: map[string]string{
-					"projectsveltos.io/template": "ok",
+					libsveltosv1beta1.PolicyTemplateAnnotation: testOkValue,
 				},
 			},
 			Data: map[string]string{
@@ -1334,7 +1330,7 @@ resources:
 				Namespace: namespace,
 				Name:      randomString(),
 				Annotations: map[string]string{
-					"projectsveltos.io/template": "ok",
+					libsveltosv1beta1.PolicyTemplateAnnotation: testOkValue,
 				},
 			},
 			Data: map[string]string{
@@ -1455,7 +1451,7 @@ resources:
 					{
 						Kind:       configv1beta1.ClusterProfileKind,
 						Name:       randomString(),
-						APIVersion: "config.projectsveltos.io/v1beta1",
+						APIVersion: testConfigAPIVersion,
 						UID:        types.UID(randomString()),
 					},
 				},
@@ -1529,7 +1525,7 @@ resources:
 				Namespace: ns.Name,
 			},
 			Data: map[string]string{
-				"value": readyToUse,
+				testValueKey: readyToUse,
 			},
 		}
 
@@ -1538,11 +1534,11 @@ resources:
 				Name:      randomString(),
 				Namespace: ns.Name,
 				Annotations: map[string]string{
-					"projectsveltos.io/template": "ok",
+					libsveltosv1beta1.PolicyTemplateAnnotation: testOkValue,
 				},
 			},
 			Data: map[string]string{
-				"value": toInstantiate,
+				testValueKey: toInstantiate,
 			},
 		}
 
@@ -1610,7 +1606,7 @@ resources:
 		cached := &configv1beta1.HelmChart{
 			ReleaseName:      chart.ReleaseName,
 			ReleaseNamespace: chart.ReleaseNamespace,
-			ChartVersion:     "1.19.0",
+			ChartVersion:     testChartVersion119,
 		}
 		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
 
@@ -1628,7 +1624,7 @@ resources:
 		cached := &configv1beta1.HelmChart{
 			ReleaseName:      chart.ReleaseName,
 			ReleaseNamespace: chart.ReleaseNamespace,
-			ChartVersion:     "1.19.0",
+			ChartVersion:     testChartVersion119,
 		}
 		manager.RegisterVersionForChart(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cached)
 
@@ -1885,7 +1881,7 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterName,
 				Namespace: clusterNamespace,
-				Labels:    map[string]string{"env": "production"},
+				Labels:    map[string]string{testEnvLabelKey: testProductionValue},
 			},
 		}
 
@@ -1917,7 +1913,7 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{"env": "staging"},
+						MatchLabels: map[string]string{testEnvLabelKey: "staging"},
 					},
 				},
 				HelmCharts: []configv1beta1.HelmChart{
@@ -1958,7 +1954,7 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{"env": "production"},
+						MatchLabels: map[string]string{testEnvLabelKey: testProductionValue},
 					},
 				},
 				HelmCharts: []configv1beta1.HelmChart{
@@ -1986,7 +1982,7 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 			Spec: configv1beta1.Spec{
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
-						MatchLabels: map[string]string{"env": "production"},
+						MatchLabels: map[string]string{testEnvLabelKey: testProductionValue},
 					},
 				},
 				HelmCharts: []configv1beta1.HelmChart{

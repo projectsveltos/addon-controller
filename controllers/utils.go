@@ -58,6 +58,15 @@ import (
 const (
 	nameSeparator = "--"
 	clusterKind   = "Cluster"
+
+	applyPatchFieldManager              = "application/apply-patch"
+	resourceSummaryCRDName              = "resourcesummaries.lib.projectsveltos.io"
+	driftDetectionManagerDeploymentName = "drift-detection-manager"
+	coreAPIVersion                      = "v1"
+	controllerNameClusterSummary        = "clustersummary"
+	appsGroupName                       = "apps"
+	stringTrue                          = "true"
+	annotationValueOk                   = "ok"
 )
 
 func InitScheme() (*runtime.Scheme, error) {

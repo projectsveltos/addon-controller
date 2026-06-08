@@ -225,7 +225,7 @@ var _ = Describe("HandlersUtils", func() {
 			Expect(role.Labels[k]).To(Equal(clusterSummary.Name))
 		}
 
-		role.Labels = map[string]string{"reader": "ok"}
+		role.Labels = map[string]string{"reader": testOkValue}
 		deployer.AddLabel(role, clusterops.ClusterSummaryLabelName, clusterSummary.Name)
 		Expect(role.Labels).ToNot(BeNil())
 		Expect(len(role.Labels)).To(Equal(2))
@@ -308,11 +308,11 @@ var _ = Describe("HandlersUtils", func() {
 		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
-					Kind:    "Deployment",
-					Group:   "apps",
-					Version: "v1",
+					Kind:    testKindDeployment,
+					Group:   testAppsGroup,
+					Version: testV1APIVersion,
 				},
-				Paths: []string{"/spec/replicas"},
+				Paths: []string{testSpecReplicasPath},
 			},
 		}
 
@@ -378,11 +378,11 @@ var _ = Describe("HandlersUtils", func() {
 		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
-					Kind:    "Deployment",
-					Group:   "apps",
-					Version: "v1",
+					Kind:    testKindDeployment,
+					Group:   testAppsGroup,
+					Version: testV1APIVersion,
 				},
-				Paths: []string{"/spec/replicas"},
+				Paths: []string{testSpecReplicasPath},
 			},
 		}
 
@@ -445,11 +445,11 @@ var _ = Describe("HandlersUtils", func() {
 		clusterSummary.Spec.ClusterProfileSpec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 			{
 				Target: &libsveltosv1beta1.PatchSelector{
-					Kind:    "Deployment",
-					Group:   "apps",
-					Version: "v1",
+					Kind:    testKindDeployment,
+					Group:   testAppsGroup,
+					Version: testV1APIVersion,
 				},
-				Paths: []string{"/spec/replicas"},
+				Paths: []string{testSpecReplicasPath},
 			},
 		}
 
@@ -482,7 +482,7 @@ var _ = Describe("HandlersUtils", func() {
 		isDriftDetection = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// New deploy will not override replicas
 		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
-			u, []string{"status"}, textlogger.NewLogger(textlogger.NewConfig()))
+			u, []string{testStatusField}, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
 		Eventually(func() bool {
@@ -560,7 +560,7 @@ var _ = Describe("HandlersUtils", func() {
 		// as created (if the ClusterProfile were to be changed from DryRun, both services would be
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
+			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: services},
 			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -592,7 +592,7 @@ var _ = Describe("HandlersUtils", func() {
 		// the secret referenced by ClusterProfile, both obejcts will be reported as no action
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, map[string]string{"service": services},
+			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: services},
 			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -630,7 +630,7 @@ var _ = Describe("HandlersUtils", func() {
 		// in the secret referenced by ClusterProfile, both services will be reported as updated
 		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client, secret, map[string]string{"service": newContent},
+			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: newContent},
 			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -641,7 +641,7 @@ var _ = Describe("HandlersUtils", func() {
 		// and that is the one referenced by ClusterSummary. DeployContent will report conflicts in this case.
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
-			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{"service": services},
+			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{testServiceKey: services},
 			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -746,7 +746,7 @@ var _ = Describe("HandlersUtils", func() {
 				{
 					FeatureID: libsveltosv1beta1.FeatureResources,
 					DeployedGroupVersionKind: []string{
-						"ClusterRole.v1.rbac.authorization.k8s.io",
+						testClusterRoleKindV1,
 					},
 				},
 			}
@@ -773,7 +773,7 @@ var _ = Describe("HandlersUtils", func() {
 		})
 		clusterRole.SetOwnerReferences([]metav1.OwnerReference{
 			{Kind: configv1beta1.ClusterProfileKind, Name: clusterProfile.Name,
-				UID: clusterProfile.UID, APIVersion: "config.projectsveltos.io/v1beta1"},
+				UID: clusterProfile.UID, APIVersion: testConfigAPIVersion},
 		})
 		Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
 		Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
@@ -847,7 +847,7 @@ var _ = Describe("HandlersUtils", func() {
 		clusterRole2 := &rbacv1.ClusterRole{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      clusterRoleName2,
-				Namespace: "default",
+				Namespace: defaultNamespace,
 				Labels: map[string]string{
 					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
 				},
@@ -871,7 +871,7 @@ var _ = Describe("HandlersUtils", func() {
 			{
 				FeatureID: libsveltosv1beta1.FeatureResources,
 				DeployedGroupVersionKind: []string{
-					"ClusterRole.v1.rbac.authorization.k8s.io",
+					testClusterRoleKindV1,
 				},
 			},
 		}
@@ -1018,7 +1018,6 @@ var _ = Describe("HandlersUtils", func() {
 	It("adjustNamespace adjusts namespace for both namespaced and cluster wide resources", func() {
 		logger := textlogger.NewLogger(textlogger.NewConfig())
 
-		const defaultNamespace = "default"
 		clusterName := randomString()
 
 		cluster := &clusterv1.Cluster{
@@ -1036,7 +1035,7 @@ var _ = Describe("HandlersUtils", func() {
 				Name:      clusterName + kubeconfigPostfix,
 			},
 			Data: map[string][]byte{
-				"value": testEnv.Kubeconfig,
+				testValueKey: testEnv.Kubeconfig,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), secret)).To(Succeed())
@@ -1059,7 +1058,7 @@ metadata:
 			libsveltosv1beta1.ClusterTypeCapi, false,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeNil())
 		// For namespaced resources if namespace is not set, namespace gets set to default
-		Expect(u.GetNamespace()).To(Equal("default"))
+		Expect(u.GetNamespace()).To(Equal(defaultNamespace))
 
 		clusterIssuer := `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -1261,7 +1260,7 @@ status:
 		configMap := createConfigMapWithPolicy(namespace, randomString(), fmt.Sprintf(servicePatch,
 			serviceName, namespace, key, value, key, value))
 		configMap.Annotations = map[string]string{
-			"projectsveltos.io/subresources": "status"}
+			"projectsveltos.io/subresources": testStatusField}
 
 		reference := &controllers.ReferencedObject{Tier: defaultTier, SkipNamespaceCreation: false}
 		_, err := controllers.DeployContentOfConfigMap(context.TODO(), false, testEnv.Config, testEnv.Client,
@@ -1351,7 +1350,7 @@ status:
 			templateResourceRef := configv1beta1.TemplateResourceRef{
 				Resource: corev1.ObjectReference{
 					APIVersion: "apps/v1",
-					Kind:       "Deployment",
+					Kind:       testKindDeployment,
 					Namespace:  namespace,
 					Name:       name,
 				},
@@ -1380,8 +1379,8 @@ status:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				"watched":   "value1",
-				"unwatched": "value2",
+				testWatchedKey: testValue1,
+				"unwatched":    testValue2,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
@@ -1390,13 +1389,13 @@ status:
 		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
+					APIVersion: testV1APIVersion,
+					Kind:       testKindConfigMap,
 					Namespace:  namespace,
 					Name:       cm.Name,
 				},
 				Identifier:  randomString(),
-				WatchFields: []string{"data.watched"},
+				WatchFields: []string{testDataWatchedField},
 			},
 		}
 
@@ -1425,7 +1424,7 @@ status:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				"watched": "value1",
+				testWatchedKey: testValue1,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
@@ -1434,13 +1433,13 @@ status:
 		clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 			{
 				Resource: corev1.ObjectReference{
-					APIVersion: "v1",
-					Kind:       "ConfigMap",
+					APIVersion: testV1APIVersion,
+					Kind:       testKindConfigMap,
 					Namespace:  namespace,
 					Name:       cm.Name,
 				},
 				Identifier:  randomString(),
-				WatchFields: []string{"data.watched"},
+				WatchFields: []string{testDataWatchedField},
 			},
 		}
 
@@ -1453,7 +1452,7 @@ status:
 				types.NamespacedName{Namespace: namespace, Name: cm.Name}, cm); err != nil {
 				return err
 			}
-			cm.Data["watched"] = randomString()
+			cm.Data[testWatchedKey] = randomString()
 			return testEnv.Client.Update(context.TODO(), cm)
 		})).To(Succeed())
 
@@ -1469,16 +1468,16 @@ status:
 				Namespace: namespace,
 			},
 			Data: map[string]string{
-				"watched": "value1",
-				"other":   "value2",
+				testWatchedKey: testValue1,
+				"other":        testValue2,
 			},
 		}
 		Expect(testEnv.Create(context.TODO(), cm)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cm)).To(Succeed())
 
 		ref := corev1.ObjectReference{
-			APIVersion: "v1",
-			Kind:       "ConfigMap",
+			APIVersion: testV1APIVersion,
+			Kind:       testKindConfigMap,
 			Namespace:  namespace,
 			Name:       cm.Name,
 		}
@@ -1488,7 +1487,7 @@ status:
 			{
 				Resource:            ref,
 				Identifier:          randomString(),
-				WatchFields:         []string{"data.watched"},
+				WatchFields:         []string{testDataWatchedField},
 				IgnoreStatusChanges: true,
 			},
 		}

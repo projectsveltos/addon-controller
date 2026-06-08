@@ -73,12 +73,12 @@ var _ = Describe("Helm with conflicts", func() {
 			currentClusterProfile.Spec.ContinueOnConflict = true
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "oci://ghcr.io/k0rdent/catalog/charts",
-					RepositoryName:   "ingress-nginx",
-					ChartName:        "ingress-nginx",
+					RepositoryURL:    k0rdentCatalogURL,
+					RepositoryName:   ingressNginxName,
+					ChartName:        ingressNginxName,
 					ChartVersion:     "4.13.0",
-					ReleaseName:      "nginx",
-					ReleaseNamespace: "nginx",
+					ReleaseName:      nginxNamespace,
+					ReleaseNamespace: nginxNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						InstallOptions: configv1beta1.HelmInstallOptions{
@@ -96,12 +96,12 @@ var _ = Describe("Helm with conflicts", func() {
       registry: this.does.not.exist.com`,
 				},
 				{
-					RepositoryURL:    "oci://ghcr.io/k0rdent/catalog/charts",
-					RepositoryName:   "postgres-operator",
-					ChartName:        "postgres-operator",
+					RepositoryURL:    k0rdentCatalogURL,
+					RepositoryName:   postgresOperatorName,
+					ChartName:        postgresOperatorName,
 					ChartVersion:     "1.15.1",
-					ReleaseName:      "postgres-operator",
-					ReleaseNamespace: "postgres-operator",
+					ReleaseName:      postgresOperatorName,
+					ReleaseNamespace: postgresOperatorName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					RegistryCredentialsConfig: &configv1beta1.RegistryCredentialsConfig{
 						PlainHTTP: true,

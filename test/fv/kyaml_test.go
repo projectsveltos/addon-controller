@@ -36,7 +36,7 @@ import (
 const (
 	serviceKYAML = `{
   apiVersion: "v1",
-  kind: "Service",
+  kind: Service,
   metadata: {
     name: "%s",
 	namespace: "%s",
@@ -139,7 +139,7 @@ var _ = Describe("Deploy Kyaml resources", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
 
 		policies := []policy{
-			{kind: "Service", name: name, namespace: namespace, group: ""},
+			{kind: kindService, name: name, namespace: namespace, group: ""},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,

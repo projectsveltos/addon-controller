@@ -51,13 +51,13 @@ metadata:
 		By("Grant addon-controller permission to create/delete ServiceAccount in the management cluster")
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			clusterRole := &rbacv1.ClusterRole{}
-			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: "addon-controller-role-extra"},
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: addonControllerRoleExtra},
 				clusterRole)).To(Succeed())
 			clusterRole.Rules = append(clusterRole.Rules,
 				rbacv1.PolicyRule{
 					Verbs:     []string{"*"},
 					APIGroups: []string{""},
-					Resources: []string{"serviceaccounts"},
+					Resources: []string{serviceAccountsResource},
 				})
 			return k8sClient.Update(context.TODO(), clusterRole)
 		})

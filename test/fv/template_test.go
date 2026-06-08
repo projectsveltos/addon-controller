@@ -63,7 +63,7 @@ var _ = Describe("Template", func() {
 		Byf("Add configMap containing a template policy. Policy has annotation to indicate it is a template")
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(), templatePolicy)
 		configMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+			libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 
@@ -101,7 +101,7 @@ var _ = Describe("Template", func() {
 		Eventually(func() bool {
 			cm := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: defaultNamespace, Name: "template"}, cm)
+				types.NamespacedName{Namespace: defaultNamespace, Name: templateCMName}, cm)
 			return err == nil &&
 				strings.Contains(cm.Data["info"], currentCluster.Spec.ClusterNetwork.Pods.CIDRBlocks[0])
 		}, timeout, pollingInterval).Should(BeTrue())
@@ -123,7 +123,7 @@ var _ = Describe("Template", func() {
 		Eventually(func() bool {
 			cm := &corev1.ConfigMap{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: defaultNamespace, Name: "template"}, cm)
+				types.NamespacedName{Namespace: defaultNamespace, Name: templateCMName}, cm)
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())

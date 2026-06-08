@@ -342,7 +342,7 @@ var _ = Describe("ClusterProfileReconciler: requeue methods", func() {
 				ClusterSelector: libsveltosv1beta1.Selector{
 					LabelSelector: metav1.LabelSelector{
 						MatchLabels: map[string]string{
-							"env": "production",
+							testEnvLabelKey: testProductionValue,
 						},
 					},
 				},

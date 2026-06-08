@@ -130,9 +130,9 @@ end`
 							Name:      "job-completion-check",
 							FeatureID: libsveltosv1beta1.FeatureResources,
 							Namespace: configMapNs,
-							Group:     "batch",
-							Version:   "v1",
-							Kind:      "Job",
+							Group:     batchGroupName,
+							Version:   apiVersionV1,
+							Kind:      kindJob,
 							Script:    luaEvaluateJobCompleted,
 						},
 					},
@@ -141,10 +141,10 @@ end`
 		}
 
 		stage2 := configv1beta1.Stage{
-			Name: "production",
+			Name: productionValue,
 			ClusterSelector: libsveltosv1beta1.Selector{
 				LabelSelector: metav1.LabelSelector{
-					MatchLabels: map[string]string{"env": "production"},
+					MatchLabels: map[string]string{key: productionValue},
 				},
 			},
 		}
@@ -159,12 +159,12 @@ end`
 					Tier: 90,
 					HelmCharts: []configv1beta1.HelmChart{
 						{
-							RepositoryURL:    "https://charts.bitnami.com/bitnami",
-							RepositoryName:   "bitnami",
+							RepositoryURL:    bitnamiURL,
+							RepositoryName:   bitnamiName,
 							ChartName:        "bitnami/contour",
 							ChartVersion:     "21.1.4",
-							ReleaseName:      "contour",
-							ReleaseNamespace: "contour",
+							ReleaseName:      contourRelease,
+							ReleaseNamespace: contourRelease,
 							Values:           contourValues,
 						},
 					},
@@ -185,7 +185,7 @@ end`
 
 		listOptions := []client.ListOption{
 			client.MatchingLabels{
-				"config.projectsveltos.io/promotionname": clusterPromotion.Name,
+				promotionNameAnnotation: clusterPromotion.Name,
 			},
 		}
 		Byf("Verify ClusterProfile for stage %s is created", stage1.Name)
@@ -234,8 +234,8 @@ end`
 		Eventually(func() bool {
 			listOptions := []client.ListOption{
 				client.MatchingLabels{
-					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
-					"config.projectsveltos.io/promotion-verification": "true",
+					promotionNameAnnotation:  clusterPromotion.Name,
+					promotionVerifAnnotation: annotationTrueValue,
 				},
 			}
 			clusterProfileList := &configv1beta1.ClusterProfileList{}
@@ -258,8 +258,8 @@ end`
 		Eventually(func() bool {
 			listOptions := []client.ListOption{
 				client.MatchingLabels{
-					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
-					"config.projectsveltos.io/promotion-verification": "true",
+					promotionNameAnnotation:  clusterPromotion.Name,
+					promotionVerifAnnotation: annotationTrueValue,
 				},
 			}
 			clusterProfileList := &configv1beta1.ClusterProfileList{}
@@ -301,8 +301,8 @@ end`
 		Eventually(func() bool {
 			listOptions := []client.ListOption{
 				client.MatchingLabels{
-					"config.projectsveltos.io/promotionname":          clusterPromotion.Name,
-					"config.projectsveltos.io/promotion-verification": "true",
+					promotionNameAnnotation:  clusterPromotion.Name,
+					promotionVerifAnnotation: annotationTrueValue,
 				},
 			}
 			clusterProfileList := &configv1beta1.ClusterProfileList{}

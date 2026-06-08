@@ -177,7 +177,7 @@ var _ = Describe("ProfileScope/ClusterProfileScope", func() {
 		clusterProfile.Spec.ClusterSelector = libsveltosv1beta1.Selector{
 			LabelSelector: metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"zone": "east",
+					testZoneKey: testZoneEastValue,
 				},
 			},
 		}

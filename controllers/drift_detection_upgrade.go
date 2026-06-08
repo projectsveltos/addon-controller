@@ -310,7 +310,7 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 func isDriftDetectionManagerDeployedInCluster(ctx context.Context, c client.Client) (bool, error) {
 	deployment := &appsv1.Deployment{}
 	// A test in pkg/drift-detection makes sure this name is correct
-	err := c.Get(ctx, types.NamespacedName{Namespace: getSveltosNamespace(), Name: "drift-detection-manager"}, deployment)
+	err := c.Get(ctx, types.NamespacedName{Namespace: getSveltosNamespace(), Name: driftDetectionManagerDeploymentName}, deployment)
 
 	if err != nil {
 		if apierrors.IsNotFound(err) {

@@ -59,12 +59,12 @@ var _ = Describe("HelmOptions", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-					RepositoryName:   "external-dns",
-					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.20.0",
-					ReleaseName:      "external-dns",
-					ReleaseNamespace: "external-dns",
+					RepositoryURL:    externalDNSURL,
+					RepositoryName:   externalDNSRepoName,
+					ChartName:        externalDNSChartName,
+					ChartVersion:     externalDNSVersion,
+					ReleaseName:      externalDNSRepoName,
+					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
@@ -95,18 +95,18 @@ var _ = Describe("HelmOptions", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)
+				types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying external-dns deployment image")
 		depl := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)).To(Succeed())
+			types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)).To(Succeed())
 		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
 		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.20.0"))
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "external-dns", ChartVersion: "1.20.0", Namespace: "external-dns"},
+			{ReleaseName: externalDNSRepoName, ChartVersion: externalDNSVersion, Namespace: externalDNSRepoName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -120,12 +120,12 @@ var _ = Describe("HelmOptions", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-					RepositoryName:   "external-dns",
-					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.17.0",
-					ReleaseName:      "external-dns",
-					ReleaseNamespace: "external-dns",
+					RepositoryURL:    externalDNSURL,
+					RepositoryName:   externalDNSRepoName,
+					ChartName:        externalDNSChartName,
+					ChartVersion:     externalDNSVersion1170,
+					ReleaseName:      externalDNSRepoName,
+					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
@@ -152,7 +152,7 @@ var _ = Describe("HelmOptions", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)
+				types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)
 			if err != nil {
 				return false
 			}
@@ -169,12 +169,12 @@ var _ = Describe("HelmOptions", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://kubernetes-sigs.github.io/external-dns/",
-					RepositoryName:   "external-dns",
-					ChartName:        "external-dns/external-dns",
-					ChartVersion:     "1.17.0",
-					ReleaseName:      "external-dns",
-					ReleaseNamespace: "external-dns",
+					RepositoryURL:    externalDNSURL,
+					RepositoryName:   externalDNSRepoName,
+					ChartName:        externalDNSChartName,
+					ChartVersion:     externalDNSVersion1170,
+					ReleaseName:      externalDNSRepoName,
+					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionUninstall,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
@@ -194,7 +194,7 @@ var _ = Describe("HelmOptions", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "external-dns", Name: "external-dns"}, depl)
+				types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 

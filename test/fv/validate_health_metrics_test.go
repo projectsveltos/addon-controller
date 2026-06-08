@@ -110,9 +110,9 @@ var _ = Describe("ValidateHealth metric-based checks", func() {
 			cpPrometheus.Spec.SyncMode = configv1beta1.SyncModeContinuous
 			cpPrometheus.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "https://prometheus-community.github.io/helm-charts",
-					RepositoryName:   "prometheus-community",
-					ChartName:        "prometheus-community/prometheus",
+					RepositoryURL:    prometheusCommunityURL,
+					RepositoryName:   prometheusCommunityName,
+					ChartName:        prometheusChartName,
 					ChartVersion:     "25.27.0",
 					ReleaseName:      prometheusRelease,
 					ReleaseNamespace: monitoringNs,
@@ -124,9 +124,9 @@ var _ = Describe("ValidateHealth metric-based checks", func() {
 				{
 					Name:      "prometheus-server-ready",
 					FeatureID: libsveltosv1beta1.FeatureHelm,
-					Group:     "apps",
-					Version:   "v1",
-					Kind:      "Deployment",
+					Group:     appsGroupName,
+					Version:   apiVersionV1,
+					Kind:      kindDeployment,
 					Namespace: monitoringNs,
 					Script:    luaDeploymentHealthScript,
 				},

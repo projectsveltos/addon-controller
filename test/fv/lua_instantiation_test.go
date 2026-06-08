@@ -61,7 +61,7 @@ var _ = Describe("ConfigMap with Lua", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: namePrefix + randomString(),
 				Labels: map[string]string{
-					"env": envKey,
+					key: envKey,
 				},
 			},
 		}
@@ -84,7 +84,7 @@ var _ = Describe("ConfigMap with Lua", func() {
 		Byf("Create a configMap with a Lua code (with annotation projectsveltos.io/lua)")
 		configMap := createConfigMapWithPolicy(ns.Name, namePrefix+randomString(), luaCode)
 		configMap.Annotations = map[string]string{
-			libsveltosv1beta1.PolicyLuaAnnotation: "ok",
+			libsveltosv1beta1.PolicyLuaAnnotation: annotationOkValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
 		currentConfigMap := &corev1.ConfigMap{}
@@ -100,11 +100,11 @@ var _ = Describe("ConfigMap with Lua", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.TemplateResourceRefs = []configv1beta1.TemplateResourceRef{
 				{
-					Identifier: "Namespace", // this is used in luaCode. Must match
+					Identifier: kindNamespace, // this is used in luaCode. Must match
 					Resource: corev1.ObjectReference{
 						Kind:       ns.Kind,
 						Name:       ns.Name,
-						APIVersion: "v1",
+						APIVersion: apiVersionV1,
 					},
 				},
 			}

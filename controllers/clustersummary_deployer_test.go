@@ -273,8 +273,8 @@ var _ = Describe("ClustersummaryDeployer", func() {
 				Name: randomString(),
 			},
 			Rules: []rbacv1.PolicyRule{
-				{Verbs: []string{"create", "get"}, APIGroups: []string{"cert-manager.io"}, Resources: []string{"certificaterequests"}},
-				{Verbs: []string{"create", "delete"}, APIGroups: []string{""}, Resources: []string{"namespaces", "deployments"}},
+				{Verbs: []string{testCreateVerb, testGetVerb}, APIGroups: []string{testCertManagerGroup}, Resources: []string{testCertificateRequestsResource}},
+				{Verbs: []string{testCreateVerb, testDeleteVerb}, APIGroups: []string{""}, Resources: []string{testNamespacesResource, testDeploymentsResource}},
 			},
 		}
 		Expect(addTypeInformationToObject(scheme, clusterRole)).To(Succeed())
@@ -641,7 +641,7 @@ func getClusterSummaryScope(c client.Client, logger logr.Logger,
 		Logger:         logger,
 		Profile:        clusterProfile,
 		ClusterSummary: clusterSummary,
-		ControllerName: "clustersummary",
+		ControllerName: testControllerNameSummary,
 	})
 	Expect(err).To(BeNil())
 	return clusterSummaryScope

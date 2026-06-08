@@ -56,12 +56,12 @@ var _ = Describe("Helm", func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
-					RepositoryName:   "oci-vault",
-					ChartName:        "vault",
-					ChartVersion:     "1.6.0",
-					ReleaseName:      "vault",
-					ReleaseNamespace: "vault",
+					RepositoryURL:    ociVaultURL,
+					RepositoryName:   ociVaultRepoName,
+					ChartName:        vaultChartName,
+					ChartVersion:     vaultVersion160,
+					ReleaseName:      vaultChartName,
+					ReleaseNamespace: vaultChartName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 			}
@@ -86,14 +86,14 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "vault", Name: "vault-injector"}, depl)
+				types.NamespacedName{Namespace: vaultChartName, Name: vaultInjectorName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "vault", ChartVersion: "1.6.0", Namespace: "vault"},
+			{ReleaseName: vaultChartName, ChartVersion: vaultVersion160, Namespace: vaultChartName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -104,12 +104,12 @@ var _ = Describe("Helm", func() {
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    "oci://registry-1.docker.io/bitnamicharts",
-				RepositoryName:   "oci-vault",
-				ChartName:        "vault",
-				ChartVersion:     "1.5.0",
-				ReleaseName:      "vault",
-				ReleaseNamespace: "vault",
+				RepositoryURL:    ociVaultURL,
+				RepositoryName:   ociVaultRepoName,
+				ChartName:        vaultChartName,
+				ChartVersion:     vaultVersion150,
+				ReleaseName:      vaultChartName,
+				ReleaseNamespace: vaultChartName,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -123,14 +123,14 @@ var _ = Describe("Helm", func() {
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "vault", Name: "vault-injector"}, depl)
+				types.NamespacedName{Namespace: vaultChartName, Name: vaultInjectorName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: "vault", ChartVersion: "1.5.0", Namespace: "vault"},
+			{ReleaseName: vaultChartName, ChartVersion: vaultVersion150, Namespace: vaultChartName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -143,7 +143,7 @@ var _ = Describe("Helm", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "vault", Name: "vault-injector"}, depl)
+				types.NamespacedName{Namespace: vaultChartName, Name: vaultInjectorName}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

@@ -60,8 +60,10 @@ var (
 )
 
 const (
-	contentTypeJSON = "application/json"
-	domain          = "http://telemetry.projectsveltos.io/"
+	contentTypeJSON      = "application/json"
+	domain               = "http://telemetry.projectsveltos.io/"
+	libSveltosGroup      = "lib.projectsveltos.io"
+	libSveltosAPIVersion = "v1beta1"
 
 	providerEKS = "eks"
 	providerGKE = "gke"
@@ -237,8 +239,8 @@ func (m *instance) collectEventData(ctx context.Context) (eventTriggers, cluster
 
 	// Count EventTriggers
 	eventTriggerGVR := schema.GroupVersionResource{
-		Group:    "lib.projectsveltos.io",
-		Version:  "v1beta1",
+		Group:    libSveltosGroup,
+		Version:  libSveltosAPIVersion,
 		Resource: "eventtriggers",
 	}
 
@@ -251,8 +253,8 @@ func (m *instance) collectEventData(ctx context.Context) (eventTriggers, cluster
 
 	// Count ClusterHealthChecks
 	chcGVR := schema.GroupVersionResource{
-		Group:    "lib.projectsveltos.io",
-		Version:  "v1beta1",
+		Group:    libSveltosGroup,
+		Version:  libSveltosAPIVersion,
 		Resource: "clusterhealthchecks",
 	}
 

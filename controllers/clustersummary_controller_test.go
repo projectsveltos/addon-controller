@@ -66,7 +66,7 @@ var _ = Describe("ClustersummaryController", func() {
 				Name:      clusterName,
 				Namespace: namespace,
 				Labels: map[string]string{
-					"dc": "eng",
+					testDCLabelKey: testEngValue,
 				},
 			},
 			Status: clusterv1.ClusterStatus{
@@ -177,7 +177,7 @@ var _ = Describe("ClustersummaryController", func() {
 
 	It("isPaused returns false when Cluster does not exist", func() {
 		clusterSummary.Annotations = map[string]string{
-			"cluster.x-k8s.io/paused": "ok",
+			"cluster.x-k8s.io/paused": testOkValue,
 		}
 
 		initObjects := []client.Object{
@@ -214,7 +214,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -250,7 +250,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -319,7 +319,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -370,7 +370,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -453,7 +453,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -515,7 +515,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -557,7 +557,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -643,7 +643,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -701,7 +701,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -764,7 +764,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -825,7 +825,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -896,7 +896,7 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(set.Len()).To(Equal(5))
 
 		Expect(set.Items()).To(ContainElement(corev1.ObjectReference{
-			APIVersion: "v1",
+			APIVersion: testV1APIVersion,
 			Kind:       string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 			Namespace:  referencedResourceNamespace,
 			Name:       cmName,
@@ -954,7 +954,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -1058,7 +1058,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -1120,7 +1120,7 @@ var _ = Describe("ClustersummaryController", func() {
 			Client:         c,
 			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
 			ClusterSummary: clusterSummary,
-			ControllerName: "clustersummary",
+			ControllerName: testControllerNameSummary,
 		})
 		Expect(err).To(BeNil())
 
@@ -1396,13 +1396,13 @@ var _ = Describe("ClusterSummaryReconciler: requeue methods", func() {
 					PatchesFrom: []configv1beta1.ValueFrom{
 						{
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-							Namespace: "{{ .Cluster.metadata.name }}",
-							Name:      "{{ .Cluster.metadata.name }}-patch",
+							Namespace: testClusterNameTemplate,
+							Name:      testClusterNamePatchTemplate,
 						},
 						{
 							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
-							Namespace: "{{ .Cluster.metadata.name }}",
-							Name:      "{{ .Cluster.metadata.name }}-patch",
+							Namespace: testClusterNameTemplate,
+							Name:      testClusterNamePatchTemplate,
 						},
 					},
 				},

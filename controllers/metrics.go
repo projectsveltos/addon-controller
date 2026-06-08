@@ -27,12 +27,22 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+const (
+	metricProgramResourcesName  = "program_resources_time_seconds"
+	metricProgramResourcesHelp  = "Program Resources on a workload cluster duration distribution"
+	metricProgramChartsName     = "program_charts_time_seconds"
+	metricClusterNameLabel      = "cluster_name"
+	metricClusterNamespaceLabel = "cluster_namespace"
+	metricClusterTypeLabel      = "cluster_type"
+	metricFeatureLabel          = "feature"
+)
+
 var (
 	programResourceDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: getSveltosNamespace(),
-			Name:      "program_resources_time_seconds",
-			Help:      "Program Resources on a workload cluster duration distribution",
+			Name:      metricProgramResourcesName,
+			Help:      metricProgramResourcesHelp,
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
 		},
 	)
@@ -40,7 +50,7 @@ var (
 	programChartDurationHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: getSveltosNamespace(),
-			Name:      "program_charts_time_seconds",
+			Name:      metricProgramChartsName,
 			Help:      "Program Helm charts on a workload cluster duration distribution",
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
 		},
@@ -52,7 +62,7 @@ var (
 			Name:      "reconcile_operations_total",
 			Help:      "Total number of reconcile operations for Helm, Resources, and Kustomization",
 		},
-		[]string{"cluster_type", "cluster_namespace", "cluster_name", "feature"},
+		[]string{metricClusterTypeLabel, metricClusterNamespaceLabel, metricClusterNameLabel, metricFeatureLabel},
 	)
 
 	driftCounter = prometheus.NewCounterVec(
@@ -61,7 +71,7 @@ var (
 			Name:      "total_drifts",
 			Help:      "Total number of drifts for a given cluster indexed via type, namespace/name and feature id",
 		},
-		[]string{"cluster_type", "cluster_namespace", "cluster_name", "feature"},
+		[]string{metricClusterTypeLabel, metricClusterNamespaceLabel, metricClusterNameLabel, metricFeatureLabel},
 	)
 )
 
@@ -78,8 +88,8 @@ func newResourceHistogram(clusterNamespace, clusterName string, clusterType libs
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
-			Name:      "program_resources_time_seconds",
-			Help:      "Program Resources on a workload cluster duration distribution",
+			Name:      metricProgramResourcesName,
+			Help:      metricProgramResourcesHelp,
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
 		},
 	)
@@ -110,7 +120,7 @@ func newChartHistogram(clusterNamespace, clusterName string, clusterType libsvel
 	histogram := prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Namespace: clusterInfo,
-			Name:      "program_charts_time_seconds",
+			Name:      metricProgramChartsName,
 			Help:      "Program Helm Charts on a workload cluster duration distribution",
 			Buckets:   []float64{0.5, 1, 1.5, 2, 3, 5, 10, 30, 60, 90, 120},
 		},
@@ -170,10 +180,10 @@ func programDeployMetrics(elapsed time.Duration, clusterNamespace, clusterName, 
 
 func trackReconciliation(clusterNamespace, clusterName, featureID string, clusterType libsveltosv1beta1.ClusterType, logger logr.Logger) {
 	reconciliationCounter.With(prometheus.Labels{
-		"cluster_type":      string(clusterType),
-		"cluster_namespace": clusterNamespace,
-		"cluster_name":      clusterName,
-		"feature":           featureID,
+		metricClusterTypeLabel:      string(clusterType),
+		metricClusterNamespaceLabel: clusterNamespace,
+		metricClusterNameLabel:      clusterName,
+		metricFeatureLabel:          featureID,
 	}).Inc()
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking reconciliation for %s %s/%s %s",
@@ -182,10 +192,10 @@ func trackReconciliation(clusterNamespace, clusterName, featureID string, cluste
 
 func trackDrifts(clusterNamespace, clusterName, featureID, clusterType string, logger logr.Logger) {
 	driftCounter.With(prometheus.Labels{
-		"cluster_type":      clusterType,
-		"cluster_namespace": clusterNamespace,
-		"cluster_name":      clusterName,
-		"feature":           featureID,
+		metricClusterTypeLabel:      clusterType,
+		metricClusterNamespaceLabel: clusterNamespace,
+		metricClusterNameLabel:      clusterName,
+		metricFeatureLabel:          featureID,
 	}).Inc()
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking drifts for %s %s/%s %s",

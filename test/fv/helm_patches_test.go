@@ -59,9 +59,9 @@ var _ = Describe("Helm with patches", func() {
 					RepositoryURL:    "https://argoproj.github.io/argo-helm",
 					RepositoryName:   "argo",
 					ChartName:        "argo/argo-cd",
-					ChartVersion:     "3.35.4",
-					ReleaseName:      "argocd",
-					ReleaseNamespace: "argocd",
+					ChartVersion:     argocdChartVersion,
+					ReleaseName:      argocdName,
+					ReleaseNamespace: argocdName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 			}
@@ -69,9 +69,9 @@ var _ = Describe("Helm with patches", func() {
 			currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 				{
 					Target: &libsveltosv1beta1.PatchSelector{
-						Kind:    "Deployment",
-						Group:   "apps",
-						Version: "v1",
+						Kind:    kindDeployment,
+						Group:   appsGroupName,
+						Version: apiVersionV1,
 					},
 					Patch: `- op: add
   path: /metadata/annotations/test
@@ -98,7 +98,7 @@ var _ = Describe("Helm with patches", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "argocd", Name: "argocd-server"}, depl)
+				types.NamespacedName{Namespace: argocdName, Name: argocdServerName}, depl)
 			if err != nil {
 				return false
 			}
@@ -109,7 +109,7 @@ var _ = Describe("Helm with patches", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: "argocd", ChartVersion: "3.35.4", Namespace: "argocd"},
+			{ReleaseName: argocdName, ChartVersion: argocdChartVersion, Namespace: argocdName},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -124,9 +124,9 @@ var _ = Describe("Helm with patches", func() {
 			currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 				{
 					Target: &libsveltosv1beta1.PatchSelector{
-						Kind:    "Deployment",
-						Group:   "apps",
-						Version: "v1",
+						Kind:    kindDeployment,
+						Group:   appsGroupName,
+						Version: apiVersionV1,
 					},
 					Patch: `- op: add
   path: /metadata/annotations/test2
@@ -149,7 +149,7 @@ var _ = Describe("Helm with patches", func() {
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: "argocd", Name: "argocd-server"}, depl)
+				types.NamespacedName{Namespace: argocdName, Name: argocdServerName}, depl)
 			if err != nil {
 				return false
 			}

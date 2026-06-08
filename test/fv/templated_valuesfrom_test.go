@@ -77,7 +77,7 @@ var _ = Describe("Helm", func() {
 			authMethodConfigMap := createConfigMapWithPolicy(namespace, fmt.Sprintf("%s-vso-ns-values", kindWorkloadCluster.GetName()),
 				authMethod)
 			authMethodConfigMap.Annotations = map[string]string{
-				libsveltosv1beta1.PolicyTemplateAnnotation: "ok",
+				libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 			}
 			Expect(k8sClient.Create(context.TODO(), authMethodConfigMap)).To(Succeed())
 
@@ -91,8 +91,8 @@ var _ = Describe("Helm", func() {
 					Resource: corev1.ObjectReference{
 						Kind:       kindWorkloadCluster.GetKind(),
 						APIVersion: kindWorkloadCluster.GetAPIVersion(),
-						Name:       "{{ .Cluster.metadata.name }}",
-						Namespace:  "{{ .Cluster.metadata.namespace }}",
+						Name:       clusterNameTemplate,
+						Namespace:  clusterNamespaceTemplate,
 					},
 					IgnoreStatusChanges: true,
 				},

@@ -37,7 +37,7 @@ var _ = Describe("Paused Profile", func() {
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
 		clusterProfile.Annotations = map[string]string{
-			configv1beta1.ProfilePausedAnnotation: "true",
+			configv1beta1.ProfilePausedAnnotation: annotationTrueValue,
 		}
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 

@@ -1102,7 +1102,7 @@ metadata:
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(serviceTemplate))
 
-		v, ok = result["file2.txt"]
+		v, ok = result[filepath.Join(subdir, "file2.txt")]
 		Expect(ok).To(BeTrue())
 		Expect(v).To(Equal(deplTemplate))
 	})

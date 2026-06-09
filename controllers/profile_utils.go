@@ -19,13 +19,14 @@ package controllers
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/dariubs/percent"
-	"github.com/gdexlab/go-render/render"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -1066,14 +1067,31 @@ func cleanClusterReports(ctx context.Context, c client.Client, profileScope *sco
 	return nil
 }
 
-// getProfileSpecHash returns hash of current clusterProfile/Profile Spec
+// getProfileSpecHash returns hash of current clusterProfile/Profile Spec.
+// All slice fields are sorted before marshaling so the hash is stable
+// regardless of the order in which items appear in the original spec.
 func getProfileSpecHash(profileScope *scope.ProfileScope) []byte {
 	h := sha256.New()
-	var config string
 
-	config += render.AsCode(profileScope.GetSpec())
+	specCopy := *profileScope.GetSpec()
+	specCopy.HelmCharts = getSortedHelmCharts(specCopy.HelmCharts)
+	specCopy.PolicyRefs = getSortedPolicyRefs(specCopy.PolicyRefs)
+	specCopy.KustomizationRefs = getSortedKustomizationRefs(specCopy.KustomizationRefs)
+	specCopy.TemplateResourceRefs = getSortedTemplateResourceRefs(specCopy.TemplateResourceRefs)
+	specCopy.ValidateHealths = getSortedValidateHealths(specCopy.ValidateHealths)
+	specCopy.PreDeployChecks = getSortedValidateHealths(specCopy.PreDeployChecks)
+	specCopy.PreDeleteChecks = getSortedValidateHealths(specCopy.PreDeleteChecks)
+	specCopy.PostDeleteChecks = getSortedValidateHealths(specCopy.PostDeleteChecks)
+	specCopy.Patches = getSortedPatches(specCopy.Patches)
+	specCopy.PatchesFrom = getSortedValueFroms(specCopy.PatchesFrom)
+	specCopy.DriftExclusions = getSortedDriftExclusions(specCopy.DriftExclusions)
+	specCopy.DependsOn = make([]string, len(specCopy.DependsOn))
+	copy(specCopy.DependsOn, profileScope.GetSpec().DependsOn)
+	sort.Strings(specCopy.DependsOn)
 
-	h.Write([]byte(config))
+	if data, err := json.Marshal(specCopy); err == nil {
+		h.Write(data)
+	}
 	return h.Sum(nil)
 }
 

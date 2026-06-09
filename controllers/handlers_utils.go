@@ -207,7 +207,7 @@ func readFiles(dir string) (map[string]string, error) {
 				return err
 			}
 
-			files[d.Name()] = string(content)
+			files[rel] = string(content)
 		}
 		return nil
 	})

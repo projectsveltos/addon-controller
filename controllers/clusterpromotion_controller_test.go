@@ -66,8 +66,8 @@ var _ = Describe("ClusterPromotionController", func() {
 			sourceField := profileSpecType.Field(i)
 
 			// Those fields are only present in ClusterProfile.Spec
-			if sourceField.Name == ClusterSelectorField || sourceField.Name == "ClusterRefs" ||
-				sourceField.Name == "SetRefs" {
+			if sourceField.Name == ClusterSelectorField || sourceField.Name == clusterRefsField ||
+				sourceField.Name == setRefsField {
 
 				_, found := clusterPromotionProfileSpecField.FieldByName(sourceField.Name)
 				if found {

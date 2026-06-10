@@ -138,31 +138,59 @@ func getSortedPatches(patches []libsveltosv1beta1.Patch) []libsveltosv1beta1.Pat
 	return sortedPatches
 }
 
-type SortedDriftExclusions []libsveltosv1beta1.DriftExclusion
-
-func (a SortedDriftExclusions) Len() int      { return len(a) }
-func (a SortedDriftExclusions) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortedDriftExclusions) Less(i, j int) bool {
-	pathsI := make([]string, len(a[i].Paths))
-	copy(pathsI, a[i].Paths)
-	sort.Strings(pathsI)
-
-	pathsJ := make([]string, len(a[j].Paths))
-	copy(pathsJ, a[j].Paths)
-	sort.Strings(pathsJ)
-
-	strI := strings.Join(pathsI, "|")
-	strJ := strings.Join(pathsJ, "|")
-
-	return strI < strJ
+// driftExclusionEntry pairs a DriftExclusion with its pre-computed sort key
+// so the sort comparator can reference the slice being sorted.
+type driftExclusionEntry struct {
+	item libsveltosv1beta1.DriftExclusion
+	key  string
 }
 
 func getSortedDriftExclusions(driftExclusions []libsveltosv1beta1.DriftExclusion) []libsveltosv1beta1.DriftExclusion {
-	sortedDriftExclusions := make([]libsveltosv1beta1.DriftExclusion, len(driftExclusions))
-	copy(sortedDriftExclusions, driftExclusions)
+	// Pre-compute a stable sort key for each element once. The key encodes
+	// sorted Paths (so path order doesn't matter) plus Target fields as a
+	// tiebreaker (so entries with identical paths sort deterministically).
+	entries := make([]driftExclusionEntry, len(driftExclusions))
+	for i := range driftExclusions {
+		p := make([]string, len(driftExclusions[i].Paths))
+		copy(p, driftExclusions[i].Paths)
+		sort.Strings(p)
+		key := strings.Join(p, "\x00")
+		if t := driftExclusions[i].Target; t != nil {
+			key += "\x01" + t.Group + "\x00" + t.Version + "\x00" + t.Kind + "\x00" + t.Namespace + "\x00" + t.Name
+		}
+		entries[i] = driftExclusionEntry{item: driftExclusions[i], key: key}
+	}
 
-	sort.Sort(SortedDriftExclusions(sortedDriftExclusions))
-	return sortedDriftExclusions
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].key < entries[j].key
+	})
+
+	sorted := make([]libsveltosv1beta1.DriftExclusion, len(entries))
+	for i := range entries {
+		sorted[i] = entries[i].item
+	}
+	return sorted
+}
+
+type SortedValueFroms []configv1beta1.ValueFrom
+
+func (a SortedValueFroms) Len() int      { return len(a) }
+func (a SortedValueFroms) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a SortedValueFroms) Less(i, j int) bool {
+	if a[i].Kind != a[j].Kind {
+		return a[i].Kind < a[j].Kind
+	}
+	if a[i].Namespace != a[j].Namespace {
+		return a[i].Namespace < a[j].Namespace
+	}
+	return a[i].Name < a[j].Name
+}
+
+func getSortedValueFroms(valueFroms []configv1beta1.ValueFrom) []configv1beta1.ValueFrom {
+	sorted := make([]configv1beta1.ValueFrom, len(valueFroms))
+	copy(sorted, valueFroms)
+	sort.Sort(SortedValueFroms(sorted))
+	return sorted
 }
 
 func getSortedKeys(m interface{}) []string {

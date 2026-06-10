@@ -32,7 +32,7 @@ endif
 
 OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
-K8S_LATEST_VER ?= $(shell curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= v1.11.0
 
@@ -146,7 +146,7 @@ $(CLUSTERCTL): $(TOOLS_DIR)/go.mod ## Build clusterctl binary
 	chmod +x $@
 
 $(KUBECTL):
-	curl -L https://storage.googleapis.com/kubernetes-release/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
+	curl -L https://dl.k8s.io/release/$(K8S_LATEST_VER)/bin/$(OS)/$(ARCH)/kubectl -o $@
 	chmod +x $@
 
 .PHONY: tools

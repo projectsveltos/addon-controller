@@ -794,6 +794,9 @@ func isClusterProfileProcessed(ctx context.Context, c client.Client,
 	if cp.Name == ownerName || len(cp.Spec.HelmCharts) == 0 {
 		return true, nil
 	}
+	if cp.DeletionTimestamp != nil && !cp.DeletionTimestamp.IsZero() {
+		return true, nil
+	}
 	if hasDeletionTimestamp && cp.CreationTimestamp.After(deletionTime) {
 		return true, nil
 	}
@@ -820,6 +823,9 @@ func isProfileProcessed(ctx context.Context, c client.Client,
 	logger logr.Logger) (bool, error) {
 
 	if p.Name == ownerName || len(p.Spec.HelmCharts) == 0 {
+		return true, nil
+	}
+	if p.DeletionTimestamp != nil && !p.DeletionTimestamp.IsZero() {
 		return true, nil
 	}
 	if hasDeletionTimestamp && p.CreationTimestamp.After(deletionTime) {

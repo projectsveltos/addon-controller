@@ -2026,4 +2026,39 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 		Expect(err).To(BeNil())
 		Expect(processed).To(BeTrue())
 	})
+
+	It("returns true when a matching ClusterProfile is being deleted and its ClusterSummary is gone", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		// cpB matches the cluster and has HelmCharts, but is being deleted — its
+		// ClusterSummary was already cleaned up as part of the deletion flow.
+		now := metav1.Now()
+		cpB := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              randomString(),
+				DeletionTimestamp: &now,
+				Finalizers:        []string{"test-finalizer"},
+			},
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{testEnvLabelKey: testProductionValue},
+					},
+				},
+				HelmCharts: []configv1beta1.HelmChart{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString(),
+						RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString()},
+				},
+			},
+		}
+
+		// no ClusterSummary for cpB — it was already deleted during profile cleanup
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(cluster, cpB).Build()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
 })

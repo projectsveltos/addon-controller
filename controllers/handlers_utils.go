@@ -1668,28 +1668,6 @@ func getReloaderClient(ctx context.Context, clusterNamespace, clusterName string
 		clusterNamespace, clusterName, "", "", clusterType, logger)
 }
 
-func getFileWithKubeconfig(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
-	logger logr.Logger) (fileName string, closer func(), err error) {
-
-	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	logger = logger.WithValues("cluster", fmt.Sprintf("%s/%s",
-		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
-	logger = logger.WithValues("clusterSummary", clusterSummary.Name)
-	logger = logger.WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
-
-	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterSummary.Spec.ClusterNamespace,
-		clusterSummary.Spec.ClusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
-	if err != nil {
-		return "", nil, err
-	}
-
-	fileName, closer, err = clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
-	if err != nil {
-		return "", nil, err
-	}
-	return fileName, closer, nil
-}
-
 func prepareBundleSettersWithResourceInfo(referenceKind, referenceNamespace, referenceName string,
 	tier int32, skipNamespaceCreation bool) []pullmode.BundleOption {
 

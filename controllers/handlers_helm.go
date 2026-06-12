@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"dario.cat/mergo"
@@ -94,7 +95,8 @@ import (
 )
 
 var (
-	storage = repo.File{}
+	storage   = repo.File{}
+	storageMu sync.Mutex
 )
 
 const (
@@ -153,12 +155,16 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 
 	var kubeconfig string
 	if !isPullMode {
-		var closer func()
-		kubeconfig, closer, err = getFileWithKubeconfig(ctx, c, clusterSummary, logger)
-		if err != nil {
-			return err
+		adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
+		remoteRestConfig, restErr := clustercache.GetManager().GetKubernetesRestConfig(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+		if restErr != nil {
+			return restErr
 		}
-		defer closer()
+		if remoteRestConfig != nil {
+			ctx = withRestConfig(ctx, remoteRestConfig)
+		}
 	} else {
 		// If SveltosCluster is in pull mode, discard all previous staged resources. Those will be regenerated now.
 		err = pullmode.DiscardStagedResourcesForDeployment(ctx, getManagementClusterClient(), clusterNamespace,
@@ -353,17 +359,15 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 		return undeployHelmChartsInPullMode(ctx, c, clusterSummary, mgmtResources, logger)
 	}
 
-	kubeconfigContent, err := clusterproxy.GetSecretData(ctx, c, clusterNamespace, clusterName,
-		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
+	remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, c,
+		clusterNamespace, clusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
-
-	kubeconfig, closer, err := clusterproxy.CreateKubeconfig(logger, kubeconfigContent)
-	if err != nil {
-		return err
+	var kubeconfig string
+	if remoteRestConfig != nil {
+		ctx = withRestConfig(ctx, remoteRestConfig)
 	}
-	defer closer()
 
 	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
 	if err != nil {
@@ -969,7 +973,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 					plainHTTP:     getPlainHTTP(instantiatedChart),
 				}
 
-				currentRelease, err := getReleaseInfo(instantiatedChart.ReleaseName, instantiatedChart.ReleaseNamespace,
+				currentRelease, err := getReleaseInfo(ctx, instantiatedChart.ReleaseName, instantiatedChart.ReleaseNamespace,
 					kubeconfig, registryOptions, getEnableClientCacheValue(instantiatedChart.Options))
 				if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 					return nil, err
@@ -1737,7 +1741,7 @@ func deployHelmChart(ctx context.Context, dCtx *deploymentContext,
 	kubeconfig string, registryOptions *registryClientOptions, logger logr.Logger,
 ) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
 
-	currentRelease, err := getReleaseInfo(instantiatedChart.ReleaseName,
+	currentRelease, err := getReleaseInfo(ctx, instantiatedChart.ReleaseName,
 		instantiatedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(instantiatedChart.Options))
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
@@ -1786,7 +1790,7 @@ func deployHelmChart(ctx context.Context, dCtx *deploymentContext,
 	if deployed && getRunTestsValue(instantiatedChart.Options) &&
 		dCtx.clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
 
-		err = runHelmTests(instantiatedChart, kubeconfig, registryOptions, logger)
+		err = runHelmTests(ctx, instantiatedChart, kubeconfig, registryOptions, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1799,7 +1803,7 @@ func deployHelmChart(ctx context.Context, dCtx *deploymentContext,
 		}
 	}
 
-	currentRelease, err = getReleaseInfo(instantiatedChart.ReleaseName, instantiatedChart.ReleaseNamespace,
+	currentRelease, err = getReleaseInfo(ctx, instantiatedChart.ReleaseName, instantiatedChart.ReleaseNamespace,
 		kubeconfig, registryOptions, getEnableClientCacheValue(instantiatedChart.Options))
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 		return nil, nil, err
@@ -1823,7 +1827,11 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 
 	chartRepo.CachePath = settings.RepositoryCache
 
-	if storage.Has(entry.Name) {
+	storageMu.Lock()
+	has := storage.Has(entry.Name)
+	storageMu.Unlock()
+
+	if has {
 		logger.V(logs.LogDebug).Info("repository name already exists")
 		return nil
 	}
@@ -1838,10 +1846,11 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 		}
 	}
 
+	storageMu.Lock()
 	storage.Update(entry)
 	const permissions = 0o644
-
 	err = storage.WriteFile(settings.RepositoryConfig, permissions)
+	storageMu.Unlock()
 	if err != nil {
 		return err
 	}
@@ -2069,7 +2078,7 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 		enableClientCache = getEnableClientCacheValue(helmChart.Options)
 	}
 
-	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, registryOptions, enableClientCache)
+	actionConfig, err := actionConfigInit(ctx, releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 	if err != nil {
 		return err
 	}
@@ -2125,7 +2134,7 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
 	logger.V(logs.LogDebug).Info("upgrading release")
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
+	actionConfig, err := actionConfigInit(ctx, requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return nil, err
@@ -2192,7 +2201,7 @@ func handleUpgradeError(ctx context.Context, err error, clusterSummary *configv1
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade: %v", err))
 
-	currentRelease, getErr := getCurrentRelease(requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
+	currentRelease, getErr := getCurrentRelease(ctx, requestedChart.ReleaseName, requestedChart.ReleaseNamespace,
 		kubeconfig, registryOptions, getEnableClientCacheValue(requestedChart.Options))
 	if getErr == nil {
 		status := currentRelease.Info.Status
@@ -2331,9 +2340,13 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 
 	logger.V(logs.LogDebug).Info("upgrade crds")
 
-	destConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return err
+	destConfig := restConfigFromContext(ctx)
+	if destConfig == nil {
+		var err error
+		destConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	dr, err := k8s_utils.GetDynamicResourceInterface(destConfig,
@@ -2452,20 +2465,26 @@ func newRegistryClientWithTLS(certFile, keyFile, caFile string, insecureSkipTLSv
 	return registryClient, nil
 }
 
-func actionConfigInit(namespace, kubeconfig string, registryOptions *registryClientOptions,
+func actionConfigInit(ctx context.Context, namespace, kubeconfig string, registryOptions *registryClientOptions,
 	enableClientCache bool) (*action.Configuration, error) {
 
 	actionConfig := new(action.Configuration)
 
-	configFlags := genericclioptions.NewConfigFlags(false)
-	configFlags.KubeConfig = &kubeconfig
-	configFlags.Namespace = &namespace
-	insecure := registryOptions.skipTLSVerify
-	configFlags.Insecure = &insecure
-	timeout := "5m"
-	configFlags.Timeout = &timeout
+	var restGetter genericclioptions.RESTClientGetter
+	if restCfg := restConfigFromContext(ctx); restCfg != nil {
+		restGetter = &restConfigGetter{config: restCfg, namespace: namespace}
+	} else {
+		configFlags := genericclioptions.NewConfigFlags(false)
+		configFlags.KubeConfig = &kubeconfig
+		configFlags.Namespace = &namespace
+		insecure := registryOptions.skipTLSVerify
+		configFlags.Insecure = &insecure
+		timeout := "5m"
+		configFlags.Timeout = &timeout
+		restGetter = configFlags
+	}
 
-	err := actionConfig.Init(configFlags, namespace, "secret")
+	err := actionConfig.Init(restGetter, namespace, "secret")
 	if err != nil {
 		return nil, err
 	}
@@ -2488,10 +2507,10 @@ func isChartInstallable(ch chartbase.Charter) bool {
 	return !ac.IsLibraryChart()
 }
 
-func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
-	enableClientCache bool) (*releasev1.Release, error) {
+func getCurrentRelease(ctx context.Context, releaseName, releaseNamespace, kubeconfig string,
+	registryOptions *registryClientOptions, enableClientCache bool) (*releasev1.Release, error) {
 
-	actionConfig, err := actionConfigInit(releaseNamespace, kubeconfig, registryOptions, enableClientCache)
+	actionConfig, err := actionConfigInit(ctx, releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 
 	if err != nil {
 		return nil, err
@@ -2512,10 +2531,10 @@ func getCurrentRelease(releaseName, releaseNamespace, kubeconfig string, registr
 	return rel, nil
 }
 
-func getReleaseInfo(releaseName, releaseNamespace, kubeconfig string, registryOptions *registryClientOptions,
-	enableClientCache bool) (*releaseInfo, error) {
+func getReleaseInfo(ctx context.Context, releaseName, releaseNamespace, kubeconfig string,
+	registryOptions *registryClientOptions, enableClientCache bool) (*releaseInfo, error) {
 
-	currentRelease, err := getCurrentRelease(releaseName, releaseNamespace, kubeconfig, registryOptions, enableClientCache)
+	currentRelease, err := getCurrentRelease(ctx, releaseName, releaseNamespace, kubeconfig, registryOptions, enableClientCache)
 	if err != nil {
 		return nil, err
 	}
@@ -2557,7 +2576,7 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	requestedChart *configv1beta1.HelmChart, kubeconfig string, registryOptions *registryClientOptions,
 	logger logr.Logger) error {
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions, true)
+	actionConfig, err := actionConfigInit(ctx, requestedChart.ReleaseNamespace, kubeconfig, registryOptions, true)
 	if err != nil {
 		return err
 	}
@@ -2914,7 +2933,7 @@ func undeployStaleReleases(ctx context.Context, c client.Client, clusterSummary 
 	reports := make([]configv1beta1.ReleaseReport, 0)
 
 	for i := range staleReleases {
-		_, err := getReleaseInfo(staleReleases[i].Name,
+		_, err := getReleaseInfo(ctx, staleReleases[i].Name,
 			staleReleases[i].Namespace, kubeconfig, &registryClientOptions{}, false)
 		if err != nil {
 			if errors.Is(err, driver.ErrReleaseNotFound) {
@@ -3373,7 +3392,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 				plainHTTP:     getPlainHTTP(instantiatedChart),
 			}
 
-			actionConfig, err := actionConfigInit(instantiatedChart.ReleaseNamespace, kubeconfig, registryOptions,
+			actionConfig, err := actionConfigInit(ctx, instantiatedChart.ReleaseNamespace, kubeconfig, registryOptions,
 				getEnableClientCacheValue(instantiatedChart.Options))
 			if credentialsPath != "" {
 				os.Remove(credentialsPath)
@@ -4121,14 +4140,14 @@ func getRunTestsValue(options *configv1beta1.HelmOptions) bool {
 // runHelmTests executes helm test hooks for the given release using action.ReleaseTesting.
 // It is called after a successful install or upgrade when RunTests is enabled in HelmOptions.
 // Any test failure is returned as an error, blocking the deployment lifecycle.
-func runHelmTests(requestedChart *configv1beta1.HelmChart, kubeconfig string,
+func runHelmTests(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
 	registryOptions *registryClientOptions, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("running helm tests",
 		"release", requestedChart.ReleaseName,
 		"namespace", requestedChart.ReleaseNamespace)
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
+	actionConfig, err := actionConfigInit(ctx, requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return err
@@ -4184,7 +4203,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 	registryOptions *registryClientOptions, patches []libsveltosv1beta1.Patch, templateOnly bool, logger logr.Logger,
 ) (*action.Install, error) {
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
+	actionConfig, err := actionConfigInit(ctx, requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return nil, err
@@ -4324,7 +4343,7 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 		return nil
 	}
 
-	actionConfig, err := actionConfigInit(requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
+	actionConfig, err := actionConfigInit(ctx, requestedChart.ReleaseNamespace, kubeconfig, registryOptions,
 		getEnableClientCacheValue(requestedChart.Options))
 	if err != nil {
 		return err
@@ -5411,12 +5430,16 @@ func removeCachedData(settings *cli.EnvSettings, name, repoURL string, registryO
 
 	chartRepo.CachePath = settings.RepositoryCache
 
-	if !storage.Has(entry.Name) {
+	storageMu.Lock()
+	found := storage.Has(entry.Name)
+	if found {
+		storage.Remove(entry.Name)
+	}
+	storageMu.Unlock()
+
+	if !found {
 		return
 	}
-
-	// Remove from in-memory storage first
-	storage.Remove(entry.Name)
 
 	logger.V(logs.LogDebug).Info("repository name already exists")
 

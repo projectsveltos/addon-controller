@@ -1838,11 +1838,22 @@ func repoAddOrUpdate(settings *cli.EnvSettings, name, repoURL string, registryOp
 
 	if !registry.IsOCI(entry.URL) {
 		logger.V(logs.LogInfo).Info("non OCI. Download index file.")
-		_, err = chartRepo.DownloadIndexFile()
-		if err != nil {
-			logger.V(logs.LogDebug).Info(
-				fmt.Sprintf("Failed to download repository index: %v", err))
-			return err
+		type downloadResult struct{ err error }
+		done := make(chan downloadResult, 1)
+		go func() {
+			_, e := chartRepo.DownloadIndexFile()
+			done <- downloadResult{e}
+		}()
+		const indexDownloadTimeout = 90 * time.Second
+		select {
+		case r := <-done:
+			if r.err != nil {
+				logger.V(logs.LogDebug).Info(
+					fmt.Sprintf("Failed to download repository index: %v", r.err))
+				return r.err
+			}
+		case <-time.After(indexDownloadTimeout):
+			return fmt.Errorf("timed out downloading index for repository %s", repoURL)
 		}
 	}
 

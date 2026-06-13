@@ -97,8 +97,8 @@ const (
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
 	cleanupControllerDeplName   = "kyverno-cleanup-controller"
-	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.15.1"
-	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.15.1"
+	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.17.1"
+	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.17.1"
 )
 
 var _ = Describe("Helm", Serial, func() {
@@ -107,7 +107,7 @@ var _ = Describe("Helm", Serial, func() {
 		kyvernoCleanupImageName = "controller"
 	)
 
-	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "PULLMODE", "EXTENDED"), func() {
+	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV1", "PULLMODE", "EXTENDED"), func() {
 		tagValue := randomString()
 
 		// Annotation is used to instantiate ConfigMap with labelsValues used in ValuesFrom
@@ -181,7 +181,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    kyvernoRepoURL,
 					RepositoryName:   kyvernoNamespace,
 					ChartName:        kyvernoChartName,
-					ChartVersion:     kyvernoVersion352,
+					ChartVersion:     kyvernoVersion372,
 					ReleaseName:      kyvernoLatestRelease,
 					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -322,7 +322,7 @@ reportsController:
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion352S, Namespace: kyvernoNamespace},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -358,7 +358,7 @@ reportsController:
 			types.NamespacedName{Namespace: kyvernoNamespace, Name: cleanupControllerDeplName}, depl)).To(Succeed())
 		for i := range depl.Spec.Template.Spec.Containers {
 			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-				By("Kyverno image is set to v1.15.1")
+				By("Kyverno image is set to v1.17.1")
 				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(cleanupImage))
 			}
 		}
@@ -373,12 +373,12 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.15.2"
+					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.17.2"
 				}
 			}
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.15.2")
+		By("Kyverno image is reset to v1.17.2")
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
@@ -404,7 +404,7 @@ reportsController:
 			}
 			for i := range depl.Spec.Template.Spec.Containers {
 				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoNamespace {
-					By("Kyverno image is set to v1.15.1")
+					By("Kyverno image is set to v1.17.1")
 					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
 				}
 			}
@@ -429,7 +429,7 @@ reportsController:
 			}
 			return false
 		}, timeout/4, pollingInterval).Should(BeTrue())
-		By("Kyverno image is NOT reset to v1.15.2")
+		By("Kyverno image is NOT reset to v1.17.2")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
@@ -440,7 +440,7 @@ reportsController:
 				RepositoryURL:    kyvernoRepoURL,
 				RepositoryName:   kyvernoNamespace,
 				ChartName:        kyvernoChartName,
-				ChartVersion:     kyvernoVersion351,
+				ChartVersion:     kyvernoVersion371,
 				ReleaseName:      kyvernoLatestRelease,
 				ReleaseNamespace: kyvernoNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

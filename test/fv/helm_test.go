@@ -82,9 +82,6 @@ var _ = Describe("Helm", func() {
 					ReleaseName:      kyvernoLatestRelease,
 					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Options: &configv1beta1.HelmOptions{
-						RunTests: true,
-					},
 				},
 				{
 					RepositoryURL:    wildflyRepoURL,

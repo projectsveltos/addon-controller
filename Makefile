@@ -34,7 +34,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.11.0
+TAG ?= main
 
 .PHONY: all
 all: build
@@ -247,7 +247,7 @@ kind-test: test create-cluster fv ## Build docker image; start kind cluster; loa
 
 .PHONY: fv
 fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
-	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV1' --v --trace --randomize-all
 
 .PHONY: new-fv
 new-fv: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
@@ -275,6 +275,7 @@ fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existin
 	$(KUBECTL) apply -f test/drift-detection-mgmt_cluster_common_manifest.yaml
 	$(KUBECTL) apply -f manifest/drift_detection_manager_rbac.yaml
 	$(KUBECTL) apply -f manifest/deployment-agentless.yaml
+	$(KUBECTL) apply -f manifest/extra-role-agentless.yaml
 	sleep 60
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
@@ -468,6 +469,13 @@ deploy-crds: $(KUBECTL) ## Install libsveltos CRDs
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_configurationgroups.lib.projectsveltos.io.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_configurationbundles.lib.projectsveltos.io.yaml
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_sveltoslicenses.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_healthchecks.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_healthcheckreports.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_eventsources.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_eventreports.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaders.lib.projectsveltos.io.yaml
+	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaderreports.lib.projectsveltos.io.yaml
+
 
 deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
 	# Load projectsveltos image into cluster

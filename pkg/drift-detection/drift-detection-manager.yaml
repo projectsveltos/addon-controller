@@ -128,7 +128,7 @@ spec:
         - --cluster-type=
         - --current-cluster=managed-cluster
         - --run-mode=do-not-send-updates
-        - --version=v1.11.0
+        - --version=main
         command:
         - /manager
         env:
@@ -144,7 +144,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:3fc2ea2b3814de27923d90c4a6b68e05afddd6e84b344d8b8d6866cb6815965d
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:1d7b6de20fd97634a21cc27d087fa58266fa5e2dc78a113e87cd911a7c7a9f69
         livenessProbe:
           failureThreshold: 3
           httpGet:

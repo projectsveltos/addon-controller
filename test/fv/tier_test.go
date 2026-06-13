@@ -59,7 +59,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    kyvernoRepoURL,
 					RepositoryName:   kyvernoNamespace,
 					ChartName:        kyvernoChartName,
-					ChartVersion:     kyvernoVersion352,
+					ChartVersion:     kyvernoVersion372,
 					ReleaseName:      kyvernoLatestRelease,
 					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -113,7 +113,7 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion352S, Namespace: kyvernoNamespace},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
 			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
 		}
@@ -136,7 +136,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    kyvernoRepoURL,
 				RepositoryName:   kyvernoNamespace,
 				ChartName:        kyvernoChartName,
-				ChartVersion:     kyvernoVersion351,
+				ChartVersion:     kyvernoVersion371,
 				ReleaseName:      kyvernoLatestRelease,
 				ReleaseNamespace: kyvernoNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -199,7 +199,7 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: "3.5.1", Namespace: kyvernoNamespace},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion371S, Namespace: kyvernoNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,

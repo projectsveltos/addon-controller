@@ -137,7 +137,8 @@ func deployReloaderInstance(ctx context.Context, reloaderClient client.Client,
 	return reloaderClient.Update(ctx, reloader)
 }
 
-func getReloaderName(profileName string, feature libsveltosv1beta1.FeatureID) string {
+// GetReloaderName returns the name used for a Reloader instance created for a given profile and feature.
+func GetReloaderName(profileName string, feature libsveltosv1beta1.FeatureID) string {
 	return fmt.Sprintf("%s--%s", profileName, strings.ToLower(string(feature)))
 }
 
@@ -146,7 +147,7 @@ func getReloader(profileName string, feature libsveltosv1beta1.FeatureID,
 
 	return &libsveltosv1beta1.Reloader{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        getReloaderName(profileName, feature),
+			Name:        GetReloaderName(profileName, feature),
 			Labels:      getReloaderLabels(profileName, feature),
 			Annotations: getReloaderAnnotations(),
 		},

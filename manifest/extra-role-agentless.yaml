@@ -1,0 +1,34 @@
+# In agentless mode sveltos-agent runs in the management cluster, one instance per
+# managed cluster. To tell each agent which Reloader instances apply to its cluster,
+# addon-controller writes a per-cluster ConfigMap in the cluster's namespace
+# (clusterNamespace). That namespace varies across clusters, so a cluster-scoped
+# rule is required instead of a namespace-scoped Role.
+#
+# This ClusterRole and ClusterRoleBinding must be applied when deploying Sveltos
+# in agentless mode. They are not part of the default installation because the
+# write permission on ConfigMaps cluster-wide is not needed in standard
+# (non-agentless) deployments.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: addon-controller-role-agentless
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: addon-controller-rolebinding-agentless
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: addon-controller-role-agentless
+subjects:
+- kind: ServiceAccount
+  name: addon-controller
+  namespace: projectsveltos

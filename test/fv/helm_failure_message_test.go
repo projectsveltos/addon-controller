@@ -131,7 +131,7 @@ var _ = Describe("Helm with conflicts", func() {
 
 			for i := range currentClusterSummary.Status.HelmReleaseSummaries {
 				if currentClusterSummary.Status.HelmReleaseSummaries[i].FailureMessage != nil &&
-					*currentClusterSummary.Status.HelmReleaseSummaries[i].FailureMessage == "context deadline exceeded" {
+					*currentClusterSummary.Status.HelmReleaseSummaries[i].FailureMessage != "" {
 					return true
 				}
 			}

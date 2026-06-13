@@ -20,9 +20,10 @@ const (
 	// Kyverno chart details
 	kyvernoRepoURL       = "https://kyverno.github.io/kyverno/"
 	kyvernoChartName     = "kyverno/kyverno"
-	kyvernoVersion352    = "v3.5.2"
-	kyvernoVersion352S   = "3.5.2"
-	kyvernoVersion351    = "v3.5.1"
+	kyvernoVersion372    = "v3.7.2"
+	kyvernoVersion372S   = "3.7.2"
+	kyvernoVersion371    = "v3.7.1"
+	kyvernoVersion371S   = "3.7.1"
 	kyvernoLatestRelease = "kyverno-latest"
 
 	// Prometheus community chart details

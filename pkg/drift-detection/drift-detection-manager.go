@@ -162,7 +162,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:1d7b6de20fd97634a21cc27d087fa58266fa5e2dc78a113e87cd911a7c7a9f69
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:e37a6fa9d9afb1bf7176334467637336a75690a39549586c4820c429d75eed2c
         livenessProbe:
           failureThreshold: 3
           httpGet:

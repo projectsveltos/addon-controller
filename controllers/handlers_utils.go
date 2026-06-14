@@ -57,6 +57,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/mgmtagent"
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	"github.com/projectsveltos/libsveltos/lib/pullmode"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
@@ -1646,8 +1647,90 @@ func updateReloaderWithDeployedResources(ctx context.Context, clusterSummary *co
 		return err
 	}
 
-	return clusterops.UpdateReloaderWithDeployedResources(ctx, reloaderClient, profileRef, feature, resources,
-		removeReloader, logger)
+	if err := clusterops.UpdateReloaderWithDeployedResources(ctx, reloaderClient, profileRef, feature, resources,
+		removeReloader, logger); err != nil {
+		return err
+	}
+
+	if getAgentInMgmtCluster() {
+		reloaderName := clusterops.GetReloaderName(profileRef.Name, feature)
+		if removeReloader {
+			return removeReloaderFromConfigMap(ctx, getManagementClusterClient(),
+				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				clusterSummary.Spec.ClusterType, reloaderName, logger)
+		}
+		return addReloaderToConfigMap(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, reloaderName, logger)
+	}
+
+	return nil
+}
+
+// addReloaderToConfigMap records the given Reloader instance in the per-cluster ConfigMap so that
+// sveltos-agent running in the management cluster knows which Reloaders apply to this cluster.
+func addReloaderToConfigMap(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, reloaderName string, logger logr.Logger) error {
+
+	configMapName := mgmtagent.GetConfigMapName(clusterName, clusterType)
+	key := mgmtagent.GetKeyForReloader(reloaderName)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentConfigMap := &corev1.ConfigMap{}
+		err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: configMapName}, currentConfigMap)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				currentConfigMap = &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: clusterNamespace,
+						Name:      configMapName,
+					},
+					Data: map[string]string{
+						key: reloaderName,
+					},
+				}
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("creating entry %s in ConfigMap %s/%s",
+					key, clusterNamespace, configMapName))
+				return c.Create(ctx, currentConfigMap)
+			}
+			return err
+		}
+
+		if currentConfigMap.Data == nil {
+			currentConfigMap.Data = map[string]string{}
+		}
+		currentConfigMap.Data[key] = reloaderName
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("updating entry %s in ConfigMap %s/%s",
+			key, clusterNamespace, configMapName))
+		return c.Update(ctx, currentConfigMap)
+	})
+}
+
+// removeReloaderFromConfigMap removes the given Reloader instance entry from the per-cluster ConfigMap.
+func removeReloaderFromConfigMap(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, reloaderName string, logger logr.Logger) error {
+
+	configMapName := mgmtagent.GetConfigMapName(clusterName, clusterType)
+	key := mgmtagent.GetKeyForReloader(reloaderName)
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentConfigMap := &corev1.ConfigMap{}
+		err := c.Get(ctx, types.NamespacedName{Namespace: clusterNamespace, Name: configMapName}, currentConfigMap)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+
+		if _, ok := currentConfigMap.Data[key]; !ok {
+			return nil
+		}
+		delete(currentConfigMap.Data, key)
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("removing entry %s from ConfigMap %s/%s",
+			key, clusterNamespace, configMapName))
+		return c.Update(ctx, currentConfigMap)
+	})
 }
 
 // Reloader instances reside in the same cluster as the sveltos-agent component.

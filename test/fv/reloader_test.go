@@ -32,6 +32,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/mgmtagent"
 )
 
 const (
@@ -157,6 +158,27 @@ var _ = Describe("Reloader", func() {
 					Name:      deploymentName,
 				},
 			))
+
+			reloaderName := getReloaderName(clusterProfile.Name)
+			reloaderKey := mgmtagent.GetKeyForReloader(reloaderName)
+			configMapName := mgmtagent.GetConfigMapName(kindWorkloadCluster.GetName(),
+				libsveltosv1beta1.ClusterType(getClusterType()))
+
+			Byf("Verifying per-cluster ConfigMap %s/%s contains Reloader entry %s",
+				kindWorkloadCluster.GetNamespace(), configMapName, reloaderKey)
+			Eventually(func() bool {
+				perClusterCM := &corev1.ConfigMap{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{
+						Namespace: kindWorkloadCluster.GetNamespace(),
+						Name:      configMapName,
+					}, perClusterCM)
+				if err != nil {
+					return false
+				}
+				v, ok := perClusterCM.Data[reloaderKey]
+				return ok && v == reloaderName
+			}, timeout, pollingInterval).Should(BeTrue())
 		} else {
 			Byf("Verifying Reloader is present in the managed cluster")
 			currentReloader := &libsveltosv1beta1.Reloader{}
@@ -184,6 +206,30 @@ var _ = Describe("Reloader", func() {
 					types.NamespacedName{Name: getReloaderName(clusterProfile.Name)},
 					currentReloader)
 				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			reloaderName := getReloaderName(clusterProfile.Name)
+			reloaderKey := mgmtagent.GetKeyForReloader(reloaderName)
+			configMapName := mgmtagent.GetConfigMapName(kindWorkloadCluster.GetName(),
+				libsveltosv1beta1.ClusterType(getClusterType()))
+
+			Byf("Verifying per-cluster ConfigMap %s/%s no longer contains Reloader entry %s",
+				kindWorkloadCluster.GetNamespace(), configMapName, reloaderKey)
+			Eventually(func() bool {
+				perClusterCM := &corev1.ConfigMap{}
+				err = k8sClient.Get(context.TODO(),
+					types.NamespacedName{
+						Namespace: kindWorkloadCluster.GetNamespace(),
+						Name:      configMapName,
+					}, perClusterCM)
+				if apierrors.IsNotFound(err) {
+					return true
+				}
+				if err != nil {
+					return false
+				}
+				_, ok := perClusterCM.Data[reloaderKey]
+				return !ok
 			}, timeout, pollingInterval).Should(BeTrue())
 		} else {
 			Byf("Verifying Reloader is removed from the workload cluster")

@@ -82,9 +82,6 @@ var _ = Describe("Helm", func() {
 					ReleaseName:      kyvernoLatestRelease,
 					ReleaseNamespace: kyvernoNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Options: &configv1beta1.HelmOptions{
-						RunTests: true,
-					},
 				},
 				{
 					RepositoryURL:    wildflyRepoURL,
@@ -152,7 +149,7 @@ var _ = Describe("Helm", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: "3.7.1", Namespace: kyvernoNamespace},
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion371S, Namespace: kyvernoNamespace},
 			{ReleaseName: wildflyName, ChartVersion: wildflyVersion, Namespace: wildflyName},
 		}
 

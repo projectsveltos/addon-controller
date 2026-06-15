@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,6 +45,7 @@ import (
 	libsveltostelemetry "github.com/projectsveltos/libsveltos/lib/telemetry"
 )
 
+//+kubebuilder:rbac:groups="",resources=nodes,verbs=get;list
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=eventtriggers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=lib.projectsveltos.io,resources=clusterhealthchecks,verbs=get;list;watch
 
@@ -283,13 +285,18 @@ func (m *instance) collectManagementClusterInfo(ctx context.Context) (provider, 
 		}
 	}
 
-	var nodes corev1.NodeList
-	if err := m.List(ctx, &nodes); err != nil {
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to create kubernetes client: %v", err))
+		return
+	}
+	nodeList, err := clientset.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list nodes: %v", err))
 		return
 	}
-	nodeCount = len(nodes.Items)
-	provider = detectClusterProvider(nodes.Items)
+	nodeCount = len(nodeList.Items)
+	provider = detectClusterProvider(nodeList.Items)
 	return
 }
 

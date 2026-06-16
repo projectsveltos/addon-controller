@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -39,7 +40,7 @@ var _ = Describe("Helm", Serial, func() {
 
 	It("Use tier to solve conflicts", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
-		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+		clusterProfile := getClusterProfile(namePrefix+"first-", map[string]string{key: value})
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
@@ -123,13 +124,13 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		Byf("Creating another ClusterProfile matching the cluster")
-		newClusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+		newClusterProfile := getClusterProfile(namePrefix+"second-", map[string]string{key: value})
 		newClusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
 		Expect(k8sClient.Create(context.TODO(), newClusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(newClusterProfile)
 
-		Byf("configuring the new clusterProfile to deploy Kyverno")
+		Byf("Configuring the new clusterProfile to deploy Kyverno")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
@@ -148,6 +149,14 @@ var _ = Describe("Helm", Serial, func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
+		// Creation of a second clusterProfile (with higher tier) does not affect first profile with better tier
+		Byf("Verifying (first profile) ClusterSummary %s status is still set to Deployed for Helm feature", clusterSummary.Name)
+		const five = 5
+		for range five {
+			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+			time.Sleep(five * time.Second)
+		}
+
 		Byf("Verifying new ClusterSummary reports a conflict")
 		Eventually(func() bool {
 			currentClusterSummary := &configv1beta1.ClusterSummary{}
@@ -161,6 +170,13 @@ var _ = Describe("Helm", Serial, func() {
 			}
 			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusConflict
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Creation of a second clusterProfile (with higher tier) does not affect first profile with better tier
+		Byf("Verifying (first profile) ClusterSummary %s status is still set to Deployed for Helm feature", clusterSummary.Name)
+		for range five {
+			verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+			time.Sleep(five * time.Second)
+		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
@@ -204,6 +220,42 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
 			newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
+			nil, charts)
+
+		Byf("Changing ClusterProfile %s tier to 100 (above profile1 tier 90); profile1 should reclaim kyverno", newClusterProfile.Name)
+		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		currentClusterProfile.Spec.Tier = 100
+		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
+
+		verifyClusterSummary(clusterops.ClusterProfileLabelName,
+			currentClusterProfile.Name, &currentClusterProfile.Spec,
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+		Byf("Verifying ClusterProfile %s ClusterSummary reports conflict for kyverno", newClusterProfile.Name)
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err = k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: newClusterSummary.Namespace, Name: newClusterSummary.Name}, currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			if len(currentClusterSummary.Status.HelmReleaseSummaries) != 1 {
+				return false
+			}
+			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusConflict
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Byf("Verifying ClusterSummary %s is Provisioned for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
+		charts = []configv1beta1.Chart{
+			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
+		}
+
+		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
 		deleteClusterProfile(clusterProfile)

@@ -254,10 +254,10 @@ github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 h1:n6/
 github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00/go.mod h1:Pm3mSP3c5uWn86xMLZ5Sa7JB9GsEZySvHYXCTK4E9q4=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/onsi/ginkgo/v2 v2.30.0 h1:zxM/9XneXFIy64j6/wAmBIX4zRC7Hu6U8XFNZvDnCQc=
-github.com/onsi/ginkgo/v2 v2.30.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
-github.com/onsi/gomega v1.41.0 h1:OwKp4pXNgVxf6sCplzYo794OFNuoL2q2SBMU5NSWOjA=
-github.com/onsi/gomega v1.41.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
+github.com/onsi/ginkgo/v2 v2.31.0 h1:GtuJos5DFUV9EerYJo8RhYxosYNGvOdDE5haKq6Grfs=
+github.com/onsi/ginkgo/v2 v2.31.0/go.mod h1:+aXOY+vzZ5mu2iI2HpTZUPmM//oQfsNFX6gU9kNcA44=
+github.com/onsi/gomega v1.42.0 h1:CJby8u36xb7v34W78F8WKvqTQP7PCMIPB78IVDB73l4=
+github.com/onsi/gomega v1.42.0/go.mod h1:M/Uqpu/8qTjtzCLUA2zJHX9Iilrau25x1PdoSRbWh5A=
 github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c h1:dTJQx6HDrRNmA3p5JlfVYw81R3g2RfWdG0+ZBaJeqcc=
 github.com/opencontainers/go-digest v1.0.1-0.20260423074420-acc66fb5367c/go.mod h1:RqnyioA3pIEZMkSbOIcrw32YSgETfn/VrLuEikEdPNU=
 github.com/opencontainers/go-digest/blake3 v0.0.0-20250116041648-1e56c6daea3b h1:nAiL9bmUK4IzFrKoVMRykv0iYGdoit5vpbPaVCZ+fI4=

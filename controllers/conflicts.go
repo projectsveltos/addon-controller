@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
@@ -30,10 +31,8 @@ import (
 )
 
 // Requeue a ClusterSummary for reconciliation. This method resets status causing reconciliation to happen
-func requeueClusterSummary(ctx context.Context, featureID libsveltosv1beta1.FeatureID,
+func requeueClusterSummary(ctx context.Context, c client.Client, featureID libsveltosv1beta1.FeatureID,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
-
-	c := getManagementClusterClient()
 
 	// TODO: change deployer to have an initialize method and a GetDeployer
 	// At this point deployer has been already initialized, so the argurment of GetClient are not important

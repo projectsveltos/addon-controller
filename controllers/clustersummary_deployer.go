@@ -284,6 +284,50 @@ func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clus
 	return false, deployerError
 }
 
+// handlePullModeProvisioned handles the Provisioned state for a feature in pull mode.
+// For Helm it also checks whether any registered challenger now has higher priority and, if so,
+// transfers chartManager ownership and triggers one more redeploy so this profile drops the
+// yielded charts.
+func (r *ClusterSummaryReconciler) handlePullModeProvisioned(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, f feature, currentHash []byte, logger logr.Logger) error {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	if f.id == libsveltosv1beta1.FeatureHelm {
+		requeued, err := requeueLowerTierChallengersForProfile(ctx, r.Client, clusterSummary, logger)
+		if err != nil {
+			return err
+		}
+		if requeued {
+			// chartManager ownership has been transferred to the winning challengers.
+			// Return a plain error to trigger one more redeploy: on that cycle
+			// canManage returns false for the yielded charts (challengers are now at
+			// position 0), so this profile redeploys without them and reaches Provisioned.
+			_ = pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+			return fmt.Errorf("helm charts yielded to lower-tier profiles; redeploying without yielded charts")
+		}
+	}
+
+	cluster, _ := clusterproxy.GetCluster(ctx, getManagementClusterClient(),
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
+	r.eventRecorder.Eventf(clusterSummary, cluster, corev1.EventTypeNormal, "Sveltos",
+		configv1beta1.ClusterSummaryKind, message)
+	r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeProvisionedStatus(), currentHash, nil, logger)
+	clusterSummaryScope.SetFailureMessage(f.id, nil)
+	now := metav1.NewTime(time.Now())
+	clusterSummaryScope.SetLastAppliedTime(f.id, &now)
+	return pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+}
+
+func pullmodeProvisionedStatus() *libsveltosv1beta1.FeatureStatus {
+	s := libsveltosv1beta1.FeatureStatusProvisioned
+	return &s
+}
+
 func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, f feature, isConfigSame bool, currentHash []byte,
 	logger logr.Logger) error {
@@ -319,18 +363,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 
 		switch *pullmodeStatus {
 		case libsveltosv1beta1.FeatureStatusProvisioned:
-			cluster, _ := clusterproxy.GetCluster(ctx, getManagementClusterClient(),
-				clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
-			message := fmt.Sprintf("Feature: %s deployed to cluster %s %s/%s", f.id,
-				clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName)
-			r.eventRecorder.Eventf(clusterSummary, cluster, corev1.EventTypeNormal, "Sveltos",
-				configv1beta1.ClusterSummaryKind, message)
-			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
-			clusterSummaryScope.SetFailureMessage(f.id, nil)
-			now := metav1.NewTime(time.Now())
-			clusterSummaryScope.SetLastAppliedTime(f.id, &now)
-			return pullmode.TerminateDeploymentTracking(ctx, r.Client, clusterSummary.Spec.ClusterNamespace,
-				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
+			return r.handlePullModeProvisioned(ctx, clusterSummaryScope, f, currentHash, logger)
 		case libsveltosv1beta1.FeatureStatusProvisioning:
 			r.updateFeatureStatus(clusterSummaryScope, f.id, pullmodeStatus, currentHash, nil, logger)
 			if isProcessingMismatch {

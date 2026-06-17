@@ -585,7 +585,7 @@ func requeueAllOldOwners(ctx context.Context, resourceInfo *deployer.ResourceInf
 			return err
 		}
 
-		err = requeueClusterSummary(ctx, featureID, ownerClusterSummary, logger)
+		err = requeueClusterSummary(ctx, c, featureID, ownerClusterSummary, logger)
 		if err != nil {
 			return err
 		}

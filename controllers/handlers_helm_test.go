@@ -2062,3 +2062,196 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 		Expect(processed).To(BeTrue())
 	})
 })
+
+var _ = Describe("requeueLowerTierChallengers", func() {
+	It("requeues a challenger whose tier is now lower than the current manager's tier", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		releaseName := randomString()
+		releaseNamespace := randomString()
+
+		chart := configv1beta1.HelmChart{
+			ReleaseName:      releaseName,
+			ReleaseNamespace: releaseNamespace,
+			RepositoryURL:    randomString(),
+			ChartName:        randomString(),
+			ChartVersion:     randomString(),
+		}
+
+		// manager is the current chart owner; its tier was raised above the challenger's.
+		manager := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					Tier:       2147483447,
+					HelmCharts: []configv1beta1.HelmChart{chart},
+				},
+			},
+		}
+
+		// challenger has a lower tier (higher priority) but is stuck in FailedNonRetriable.
+		challenger := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					Tier:       2147463647,
+					HelmCharts: []configv1beta1.HelmChart{chart},
+				},
+			},
+			Status: configv1beta1.ClusterSummaryStatus{
+				FeatureSummaries: []configv1beta1.FeatureSummary{
+					{
+						FeatureID: libsveltosv1beta1.FeatureHelm,
+						Status:    libsveltosv1beta1.FeatureStatusFailedNonRetriable,
+					},
+				},
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+					{
+						ReleaseName:      releaseName,
+						ReleaseNamespace: releaseNamespace,
+						Status:           configv1beta1.HelmChartStatusConflict,
+					},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithStatusSubresource(challenger).WithObjects(manager, challenger).Build()
+
+		mgr, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		// Register both: manager at position 0 (wins), challenger at position 1.
+		mgr.RegisterClusterSummaryForCharts(manager)
+		mgr.RegisterClusterSummaryForCharts(challenger)
+		defer func() {
+			manager.Spec.ClusterProfileSpec.HelmCharts = nil
+			mgr.RemoveStaleRegistrations(manager)
+			challenger.Spec.ClusterProfileSpec.HelmCharts = nil
+			mgr.RemoveStaleRegistrations(challenger)
+		}()
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		var requeued bool
+		requeued, err = controllers.RequeueLowerTierChallengers(context.TODO(), c, manager, &chart, false, logger)
+		Expect(err).To(BeNil())
+		Expect(requeued).To(BeTrue())
+
+		// The challenger should have been requeued: its Helm feature status reset to Provisioning.
+		requeuedCS := &configv1beta1.ClusterSummary{}
+		err = c.Get(context.TODO(), types.NamespacedName{Namespace: clusterNamespace, Name: challenger.Name}, requeuedCS)
+		Expect(err).To(BeNil())
+		var helmFS *configv1beta1.FeatureSummary
+		for i := range requeuedCS.Status.FeatureSummaries {
+			if requeuedCS.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+				helmFS = &requeuedCS.Status.FeatureSummaries[i]
+				break
+			}
+		}
+		Expect(helmFS).NotTo(BeNil())
+		Expect(helmFS.Status).To(Equal(libsveltosv1beta1.FeatureStatusProvisioning))
+	})
+
+	It("does not requeue a challenger whose tier is higher than the current manager's tier", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		chart := configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			RepositoryURL:    randomString(),
+			ChartName:        randomString(),
+			ChartVersion:     randomString(),
+		}
+
+		// manager has lower tier (higher priority) — correctly owns the chart.
+		manager := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					Tier:       100,
+					HelmCharts: []configv1beta1.HelmChart{chart},
+				},
+			},
+		}
+
+		// challenger has a higher tier (lower priority) — it should NOT be requeued.
+		challenger := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterNamespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					Tier:       2147463647,
+					HelmCharts: []configv1beta1.HelmChart{chart},
+				},
+			},
+			Status: configv1beta1.ClusterSummaryStatus{
+				FeatureSummaries: []configv1beta1.FeatureSummary{
+					{
+						FeatureID: libsveltosv1beta1.FeatureHelm,
+						Status:    libsveltosv1beta1.FeatureStatusFailedNonRetriable,
+					},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(manager, challenger).Build()
+
+		mgr, err := chartmanager.GetChartManagerInstance(context.TODO(), c)
+		Expect(err).To(BeNil())
+		mgr.RegisterClusterSummaryForCharts(manager)
+		mgr.RegisterClusterSummaryForCharts(challenger)
+		defer func() {
+			manager.Spec.ClusterProfileSpec.HelmCharts = nil
+			mgr.RemoveStaleRegistrations(manager)
+			challenger.Spec.ClusterProfileSpec.HelmCharts = nil
+			mgr.RemoveStaleRegistrations(challenger)
+		}()
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		var requeued bool
+		requeued, err = controllers.RequeueLowerTierChallengers(context.TODO(), c, manager, &chart, false, logger)
+		Expect(err).To(BeNil())
+		Expect(requeued).To(BeFalse())
+
+		// challenger status must be unchanged (still FailedNonRetriable).
+		unchanged := &configv1beta1.ClusterSummary{}
+		err = c.Get(context.TODO(), types.NamespacedName{Namespace: clusterNamespace, Name: challenger.Name}, unchanged)
+		Expect(err).To(BeNil())
+		var helmFS *configv1beta1.FeatureSummary
+		for i := range unchanged.Status.FeatureSummaries {
+			if unchanged.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+				helmFS = &unchanged.Status.FeatureSummaries[i]
+				break
+			}
+		}
+		Expect(helmFS).NotTo(BeNil())
+		Expect(helmFS.Status).To(Equal(libsveltosv1beta1.FeatureStatusFailedNonRetriable))
+	})
+})

@@ -140,6 +140,7 @@ var (
 	InstantiateResourceWithSubstituteValues = instantiateResourceWithSubstituteValues
 
 	GetHelmActionInPullMode                  = getHelmActionInPullMode
+	RequeueLowerTierChallengers              = requeueLowerTierChallengers
 	HelmHash                                 = helmHash
 	ShouldInstall                            = shouldInstall
 	ShouldUninstall                          = shouldUninstall

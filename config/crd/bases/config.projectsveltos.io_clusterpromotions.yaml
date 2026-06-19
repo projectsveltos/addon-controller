@@ -382,6 +382,30 @@ spec:
                                 Default to false
                               type: boolean
                           type: object
+                        provenanceVerification:
+                          description: |-
+                            ProvenanceVerification configures Helm GPG .prov file verification for HTTP chart repositories.
+                            Ignored for OCI and Flux-sourced charts.
+                          properties:
+                            keyringSecretRef:
+                              description: |-
+                                KeyringSecretRef references a Secret in the management cluster containing the GPG keyring.
+                                The Secret must have a key named "keyring.gpg".
+                                If Namespace is omitted, the cluster's namespace is used.
+                              properties:
+                                name:
+                                  description: name is unique within a namespace to
+                                    reference a secret resource.
+                                  type: string
+                                namespace:
+                                  description: namespace defines the space within
+                                    which the secret name must be unique.
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          required:
+                          - keyringSecretRef
+                          type: object
                         registryCredentialsConfig:
                           description: |-
                             RegistryCredentialsConfig is an optional configuration for credentials,
@@ -476,6 +500,62 @@ spec:
                             located in the 'charts/projectsveltos' directory of that repository.
                           minLength: 1
                           type: string
+                        signatureVerification:
+                          description: |-
+                            SignatureVerification configures Cosign-based signature verification for OCI Helm charts.
+                            Ignored when RepositoryURL does not start with "oci://".
+                          properties:
+                            matchOIDCIdentity:
+                              description: |-
+                                MatchOIDCIdentity lists OIDC identity matchers for keyless verification.
+                                At least one matcher must be satisfied. Required when Provider is Keyless.
+                              items:
+                                description: OIDCIdentityMatcher specifies the expected
+                                  OIDC issuer and subject for keyless Cosign verification.
+                                properties:
+                                  issuer:
+                                    description: Issuer is the OIDC issuer URL or
+                                      regex.
+                                    minLength: 1
+                                    type: string
+                                  subject:
+                                    description: Subject is the OIDC subject or regex,
+                                      typically the workload identity or GitHub Actions
+                                      workflow URL.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - issuer
+                                - subject
+                                type: object
+                              type: array
+                            provider:
+                              description: Provider specifies how to obtain the verification
+                                key or certificate.
+                              enum:
+                              - PublicKey
+                              - Keyless
+                              type: string
+                            secretRef:
+                              description: |-
+                                SecretRef references a Secret in the management cluster containing the Cosign public key.
+                                The Secret must have a key named "cosign.pub" holding a PEM-encoded public key.
+                                Required when Provider is PublicKey.
+                                If Namespace is omitted, the cluster's namespace is used.
+                              properties:
+                                name:
+                                  description: name is unique within a namespace to
+                                    reference a secret resource.
+                                  type: string
+                                namespace:
+                                  description: namespace defines the space within
+                                    which the secret name must be unique.
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          required:
+                          - provider
+                          type: object
                         values:
                           description: |-
                             Values field allows to define configuration for the Helm release.

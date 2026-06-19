@@ -1955,6 +1955,12 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		chartName = filepath.Join(tmpDir, chartName)
 	}
 
+	if needsCosignVerification(requestedChart) {
+		if verifyErr := verifyCosignSignature(ctx, requestedChart, chartName, clusterSummary.Namespace, logger); verifyErr != nil {
+			return nil, verifyErr
+		}
+	}
+
 	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName,
 		"credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
@@ -1970,6 +1976,18 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get helm install client: %v", err))
 		return nil, err
+	}
+
+	if needsProvenanceVerification(requestedChart) {
+		keyringPath, keyErr := createFileWithKeyring(ctx, clusterSummary, requestedChart)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		if keyringPath != "" {
+			defer os.Remove(keyringPath)
+			installClient.Verify = true
+			installClient.Keyring = keyringPath
+		}
 	}
 
 	chartRequested, err := locateLoadAndValidateChart(chartName, settings, requestedChart, registryOptions,
@@ -2162,6 +2180,40 @@ func uninstallRelease(ctx context.Context, clusterSummary *configv1beta1.Cluster
 
 // upgradeRelease upgrades helm release in managed cluster.
 // No action in DryRun mode.
+// locateLoadAndPrepareCRDs locates the chart, loads it, resolves its version, prepares
+// dependencies, and upgrades any bundled CRDs before the main Helm release upgrade runs.
+func locateLoadAndPrepareCRDs(ctx context.Context, upgradeClient *action.Upgrade,
+	requestedChart *configv1beta1.HelmChart, chartName string, settings *cli.EnvSettings,
+	registryOptions *registryClientOptions, kubeconfig string, logger logr.Logger) (chartbase.Charter, error) {
+
+	cp, err := locateChartWithCacheRetry(upgradeClient.LocateChart, chartName, settings,
+		requestedChart, registryOptions, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	chartRequested, err := chartloader.Load(cp)
+	if err != nil {
+		return nil, err
+	}
+
+	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
+
+	chartRequested, err = prepareChartAndDependencies(chartRequested, requestedChart, chartName,
+		settings, registryOptions, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	crds := getCRDObjects(chartRequested)
+	if err = upgradeCRDs(ctx, requestedChart, kubeconfig, crds, logger); err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to upgrade crds: %v", err))
+		return nil, err
+	}
+
+	return chartRequested, nil
+}
+
 func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	settings *cli.EnvSettings, requestedChart *configv1beta1.HelmChart,
 	kubeconfig string, registryOptions *registryClientOptions, values map[string]interface{},
@@ -2188,6 +2240,12 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		chartName = filepath.Join(tmpDir, chartName)
 	}
 
+	if needsCosignVerification(requestedChart) {
+		if verifyErr := verifyCosignSignature(ctx, requestedChart, chartName, clusterSummary.Namespace, logger); verifyErr != nil {
+			return nil, verifyErr
+		}
+	}
+
 	logger = logger.WithValues("repositoryURL", repoURL, "chart", chartName,
 		"credentials", registryOptions.credentialsPath, "ca",
 		registryOptions.caPath, "insecure", registryOptions.skipTLSVerify)
@@ -2210,30 +2268,21 @@ func upgradeRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	upgradeClient := getHelmUpgradeClient(requestedChart, actionConfig, registryOptions, patches)
 
-	cp, err := locateChartWithCacheRetry(upgradeClient.LocateChart, chartName, settings,
-		requestedChart, registryOptions, logger)
-	if err != nil {
-		return nil, err
+	if needsProvenanceVerification(requestedChart) {
+		keyringPath, keyErr := createFileWithKeyring(ctx, clusterSummary, requestedChart)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		if keyringPath != "" {
+			defer os.Remove(keyringPath)
+			upgradeClient.Verify = true
+			upgradeClient.Keyring = keyringPath
+		}
 	}
 
-	chartRequested, err := chartloader.Load(cp)
+	chartRequested, err := locateLoadAndPrepareCRDs(ctx, upgradeClient, requestedChart, chartName,
+		settings, registryOptions, kubeconfig, logger)
 	if err != nil {
-		return nil, err
-	}
-
-	requestedChart.ChartVersion = getChartVersion(requestedChart, chartRequested)
-
-	chartRequested, err = prepareChartAndDependencies(chartRequested, requestedChart, chartName,
-		settings, registryOptions, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	crds := getCRDObjects(chartRequested)
-
-	err = upgradeCRDs(ctx, requestedChart, kubeconfig, crds, logger)
-	if err != nil {
-		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to upgrade crds: %v", err))
 		return nil, err
 	}
 

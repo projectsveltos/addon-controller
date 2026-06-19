@@ -159,6 +159,33 @@ const (
 	clusterNamespaceTrimTemplate = "{{ .Cluster.metadata.namespace}}"
 	patchesCMNameTemplate        = "{{ .Cluster.metadata.name}}-patches"
 
+	// cert-manager GPG keyring for provenance verification (downloaded from
+	// https://cert-manager.io/public-keys/cert-manager-keyring-2021-09-20-1020CF3C033D4F35BAE1C19E1226061C665DF13E.gpg)
+	certManagerKeyringBase64 = "mQINBGFUc7EBEACxlkppohGM6nNuJZggMo7KvL1cYGoB+97WI4aa3lU7WOmM2gSx" +
+		"5PrN7CjMd9ZMzuizFrLLZaM3wb5BXf0yVPdXGj3X/fWD5lyrwpy/Eb6IHwZFoP2k" +
+		"2AuaCGiu/55gOI9gw7/5+GwsibIblYSg9y0x4IEPu6Zn8Da33pT0NDFUOpBtMeWw" +
+		"2W52ejWnXCyBGd9QzdAd7E2WMO8mDkVwMyh0KlUulE29vDSVslV/JsniyInmj8yZ" +
+		"fPLRAImnD7Iwiq+oxzyqAonXKigm25NUXi3j+W4/4Qb+hUiJJYIV5Eyph1sndH4I" +
+		"mL7gs3u8U1hAzVD83A4HnZG15pHvCeqZwHOpJgrfYwzzF08JDm2KhbCc9NFs9m7O" +
+		"xmxGYmwoE70lSsFh0Oe1lfXFjmDhA1K5/GJCAmAlJTsThUYy9qATMHUnO86voD+o" +
+		"0UI7VnomwDePDdwktXWtId/Gp9JcEAJMsN/ps49ZEgtErJ1MkDq4so0qajX+cWbe" +
+		"O93m0co6PLhUBAsn9XH3AGwACItr7Tq966c7PcAn2w2HfAunbVEvXW71O44pEGKk" +
+		"T9NiwFinyOkjJY9cNJX4lwP9NmqhPzLRnpLR1qZ9Saym4r0NNAUvZyul5qolIb1E" +
+		"D4649kvEYPUgxRFOw8kHuReE+2Zx56KsGfCxVxEccOK1W3yg7/Hha6zVzQARAQAB" +
+		"tERjZXJ0LW1hbmFnZXIgTWFpbnRhaW5lcnMgPGNlcnQtbWFuYWdlci1tYWludGFp" +
+		"bmVyc0Bnb29nbGVncm91cHMuY29tPokCIgQTAQoAFgUCYVRzsQkQEiYGHGZd8T4C" +
+		"GwICGQEAAIFdD/9F5/hLLE09A96gTT7EXMZQk6OpNw83u8pUVdHF8qSwGIbSLvOZ" +
+		"5C4wdM/NP6APNwZCOBn8SoW9wG/4NU286lN8KfhOOqEBJA2SqIifanRTvFPWqNr8" +
+		"iEi5zWkKGAIaR+m13PKQddYL2DDdxN0W2aw8ddN/GZIBA7iiGvphJVOp/3NiskqZ" +
+		"j15PT9Elb4O5kSJoqItjwSbOBtZXYb1G6wkui1rXoZGJG20xYdt9Yze8IpRPtuXr" +
+		"LR/8zff0xDJ3HNDi8LhWvPW4Vzt5tNpO7zBdskSTlOACWmBz9RZcFVddtPG5Zp7m" +
+		"1Yv4I6Oewl1/yQDAfzR1i1GkSjHFHS6CSHl3qYUcXIHxhTog01LbTE95vvbT0mKA" +
+		"wpdM/WKsgGBYZMVyINbsDVKZmh+wYNQ4KBhEyL5FfGkGJ4uUx9SHnN3NrLBn7PkW" +
+		"ox8ciYD0wIxHe+kS8J8KgnTdl5myfIxI2BmTFcaRxEYv31mvi8lW9cxwjxbdcgIw" +
+		"kZjC8/aT2EM+U5T+OAGL+CZauzPN4al3oPDQBdGYKMFyiSVNSyHXuI7CCbY9Hw+" +
+		"mo9A9Z6pHaisykC0PbErd+2DqaD8eyvwg8y0YJcpoCK0b3Vhia/zk9haL5t7lxvz" +
+		"+QpjFTiz4Qke377RFHJGGAhMNZ7+WkmlzB9qksxLdiQGn8vYyZCQTf6WNHw=="
+
 	// Misc
 	addonDeplName            = "addon-controller"
 	addonControllerRoleExtra = "addon-controller-role-extra"

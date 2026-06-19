@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"encoding/base64"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 
@@ -57,14 +59,26 @@ data:
       replicas: 2`
 )
 
-var _ = Describe("Feature", Serial, func() {
+var _ = Describe("HelmSourceIntegrity", Serial, func() {
 	const namePrefix = "helm-error-"
 
-	It("An error in helm values does not remove helm chart", Label("FV", "PULLMODE"), func() {
+	It("An error in helm values does not remove helm chart deployed with GPG provenance verification", Label("FV", "PULLMODE"), func() {
 		Byf("Create a configMap with valid helm values")
 		configMap, err := k8s_utils.GetUnstructured([]byte(certManagerValues))
 		Expect(err).To(BeNil())
 		Expect(k8sClient.Create(context.TODO(), configMap)).To(Succeed())
+
+		Byf("Create Secret with cert-manager GPG keyring in namespace %s", kindWorkloadCluster.GetNamespace())
+		keyringData, err := base64.StdEncoding.DecodeString(certManagerKeyringBase64)
+		Expect(err).To(BeNil())
+		keyringSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cert-manager-keyring",
+				Namespace: kindWorkloadCluster.GetNamespace(),
+			},
+			Data: map[string][]byte{"keyring.gpg": keyringData},
+		}
+		Expect(k8sClient.Create(context.TODO(), keyringSecret)).To(Succeed())
 
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
@@ -101,6 +115,9 @@ var _ = Describe("Feature", Serial, func() {
 							Name:      configMap.GetName(),
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
 						},
+					},
+					ProvenanceVerification: &configv1beta1.ProvenanceVerification{
+						KeyringSecretRef: corev1.SecretReference{Name: keyringSecret.Name},
 					},
 				},
 			}
@@ -196,5 +213,7 @@ var _ = Describe("Feature", Serial, func() {
 			types.NamespacedName{Namespace: configMap.GetNamespace(), Name: configMap.GetName()},
 			currentConfigMap)).To(Succeed())
 		Expect(k8sClient.Delete(context.TODO(), currentConfigMap))
+
+		Expect(k8sClient.Delete(context.TODO(), keyringSecret)).To(Succeed())
 	})
 })

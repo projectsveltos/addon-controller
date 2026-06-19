@@ -96,7 +96,7 @@ spec:
   - repositoryURL:    https://kyverno.github.io/kyverno/
     repositoryName:   kyverno
     chartName:        kyverno/kyverno
-    chartVersion:     v3.0.1
+    chartVersion:     v3.8.1
     releaseName:      kyverno-latest
     releaseNamespace: kyverno
     helmChartAction:  Install

@@ -455,6 +455,67 @@ type HelmChart struct {
 	// including information to connect to private registries.
 	// +optional
 	RegistryCredentialsConfig *RegistryCredentialsConfig `json:"registryCredentialsConfig,omitempty"`
+
+	// SignatureVerification configures Cosign-based signature verification for OCI Helm charts.
+	// Ignored when RepositoryURL does not start with "oci://".
+	// +optional
+	SignatureVerification *CosignVerification `json:"signatureVerification,omitempty"`
+
+	// ProvenanceVerification configures Helm GPG .prov file verification for HTTP chart repositories.
+	// Ignored for OCI and Flux-sourced charts.
+	// +optional
+	ProvenanceVerification *ProvenanceVerification `json:"provenanceVerification,omitempty"`
+}
+
+// CosignProvider is the method used to verify a Cosign signature.
+// +kubebuilder:validation:Enum=PublicKey;Keyless
+type CosignProvider string
+
+const (
+	// CosignProviderPublicKey verifies the signature against a static PEM-encoded public key.
+	CosignProviderPublicKey CosignProvider = "PublicKey"
+
+	// CosignProviderKeyless verifies the signature using the Sigstore transparency log
+	// and a Fulcio-issued OIDC certificate.
+	CosignProviderKeyless CosignProvider = "Keyless"
+)
+
+// OIDCIdentityMatcher specifies the expected OIDC issuer and subject for keyless Cosign verification.
+type OIDCIdentityMatcher struct {
+	// Issuer is the OIDC issuer URL or regex.
+	// +kubebuilder:validation:MinLength=1
+	Issuer string `json:"issuer"`
+
+	// Subject is the OIDC subject or regex, typically the workload identity or GitHub Actions workflow URL.
+	// +kubebuilder:validation:MinLength=1
+	Subject string `json:"subject"`
+}
+
+// CosignVerification configures Cosign-based signature verification for an OCI Helm chart.
+type CosignVerification struct {
+	// Provider specifies how to obtain the verification key or certificate.
+	// +kubebuilder:validation:Enum=PublicKey;Keyless
+	Provider CosignProvider `json:"provider"`
+
+	// SecretRef references a Secret in the management cluster containing the Cosign public key.
+	// The Secret must have a key named "cosign.pub" holding a PEM-encoded public key.
+	// Required when Provider is PublicKey.
+	// If Namespace is omitted, the cluster's namespace is used.
+	// +optional
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+
+	// MatchOIDCIdentity lists OIDC identity matchers for keyless verification.
+	// At least one matcher must be satisfied. Required when Provider is Keyless.
+	// +optional
+	MatchOIDCIdentity []OIDCIdentityMatcher `json:"matchOIDCIdentity,omitempty"`
+}
+
+// ProvenanceVerification configures Helm GPG .prov file verification for HTTP chart repositories.
+type ProvenanceVerification struct {
+	// KeyringSecretRef references a Secret in the management cluster containing the GPG keyring.
+	// The Secret must have a key named "keyring.gpg".
+	// If Namespace is omitted, the cluster's namespace is used.
+	KeyringSecretRef corev1.SecretReference `json:"keyringSecretRef"`
 }
 
 type KustomizationRef struct {

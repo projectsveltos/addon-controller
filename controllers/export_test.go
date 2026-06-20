@@ -250,6 +250,13 @@ var (
 	GetSortedKeys = getSortedKeys
 )
 
+var (
+	NeedsCosignVerification     = needsCosignVerification
+	NeedsProvenanceVerification = needsProvenanceVerification
+	LoadCosignPublicKey         = loadCosignPublicKey
+	CreateFileWithKeyring       = createFileWithKeyring
+)
+
 type (
 	ReferencedObject = referencedObject
 )

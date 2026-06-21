@@ -104,6 +104,7 @@ const (
 	defaultMaxHistory          = 2
 	defaultDeletionPropagation = "background"
 	defaultChartVersion        = "0.1.0"
+	conditionStatusTrue        = "True"
 )
 
 type registryClientOptions struct {
@@ -2406,11 +2407,11 @@ func prepareChartAndDependencies(
 }
 
 func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *common.File,
-	logger logr.Logger) (int, error) {
+	logger logr.Logger) ([]string, error) {
 
 	crds, err := deployer.GetUnstructured(chartFile.Data, logger)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	forceConflict := true
@@ -2419,23 +2420,84 @@ func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartF
 		Force:        &forceConflict,
 	}
 
-	upgradedCRDs := 0
+	var appliedCRDs []string
 
 	for i := range crds {
 		crdData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, crds[i])
 		if err != nil {
-			return upgradedCRDs, err
+			return appliedCRDs, err
 		}
 
 		_, err = dr.Patch(ctx, crds[i].GetName(), types.ApplyPatchType, crdData, options)
 		if err != nil {
-			return upgradedCRDs, err
+			return appliedCRDs, err
 		}
 
-		upgradedCRDs += 1
+		appliedCRDs = append(appliedCRDs, crds[i].GetName())
 	}
 
-	return upgradedCRDs, nil
+	return appliedCRDs, nil
+}
+
+// isCRDEstablished returns true when the CRD has both Established and NamesAccepted conditions set to True.
+func isCRDEstablished(obj *unstructured.Unstructured) bool {
+	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if err != nil || !found {
+		return false
+	}
+	established := false
+	namesAccepted := false
+	for _, c := range conditions {
+		cond, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		condType, _, _ := unstructured.NestedString(cond, "type")
+		condStatus, _, _ := unstructured.NestedString(cond, "status")
+		switch condType {
+		case "Established":
+			established = condStatus == conditionStatusTrue
+		case "NamesAccepted":
+			namesAccepted = condStatus == conditionStatusTrue
+		}
+	}
+	return established && namesAccepted
+}
+
+// waitForCRDsEstablished polls each named CRD until Established=True and NamesAccepted=True,
+// returning immediately for CRDs that are already established (no-op upgrades pay no delay).
+func waitForCRDsEstablished(ctx context.Context, dr dynamic.ResourceInterface, crdNames []string,
+	logger logr.Logger) error {
+
+	const pollInterval = 2 * time.Second
+
+	pending := make(map[string]struct{}, len(crdNames))
+	for _, name := range crdNames {
+		pending[name] = struct{}{}
+	}
+
+	for len(pending) > 0 {
+		for name := range pending {
+			obj, err := dr.Get(ctx, name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			if isCRDEstablished(obj) {
+				delete(pending, name)
+			} else {
+				logger.V(logs.LogDebug).Info(fmt.Sprintf("CRD %s not established yet", name))
+			}
+		}
+		if len(pending) == 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(pollInterval):
+		}
+	}
+	return nil
 }
 
 // upgradeCRDs upgrades CRDs
@@ -2463,22 +2525,22 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 		return err
 	}
 
-	upgradedCRDs := 0
+	var appliedCRDs []string
 
 	for _, obj := range crds {
-		tmpUpgradedCRDs, err := upgradeCRDsInFile(ctx, dr, obj.File, logger)
+		names, err := upgradeCRDsInFile(ctx, dr, obj.File, logger)
 		if err != nil {
 			return err
 		}
-
-		upgradedCRDs += tmpUpgradedCRDs
+		appliedCRDs = append(appliedCRDs, names...)
 	}
 
-	if upgradedCRDs > 0 {
-		const waitForCRDs = 30
-		time.Sleep(waitForCRDs * time.Second)
+	if len(appliedCRDs) > 0 {
+		if err := waitForCRDsEstablished(ctx, dr, appliedCRDs, logger); err != nil {
+			return err
+		}
 	}
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs upgraded: %d", upgradedCRDs))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs upgraded: %d", len(appliedCRDs)))
 	return nil
 }
 

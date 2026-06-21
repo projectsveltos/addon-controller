@@ -33,6 +33,7 @@ import (
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
@@ -2253,5 +2254,61 @@ var _ = Describe("requeueLowerTierChallengers", func() {
 		}
 		Expect(helmFS).NotTo(BeNil())
 		Expect(helmFS.Status).To(Equal(libsveltosv1beta1.FeatureStatusFailedNonRetriable))
+	})
+})
+
+var _ = Describe("IsCRDEstablished", func() {
+	makeCondition := func(condType, status string) map[string]interface{} {
+		return map[string]interface{}{"type": condType, "status": status}
+	}
+
+	makeCRD := func(conditions []map[string]interface{}) *unstructured.Unstructured {
+		raw := []interface{}{}
+		for _, c := range conditions {
+			raw = append(raw, c)
+		}
+		obj := &unstructured.Unstructured{}
+		obj.SetName("test-crd")
+		if len(raw) > 0 {
+			_ = unstructured.SetNestedSlice(obj.Object, raw, "status", "conditions")
+		}
+		return obj
+	}
+
+	It("returns false when status conditions are absent", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetName("no-status")
+		Expect(controllers.IsCRDEstablished(obj)).To(BeFalse())
+	})
+
+	It("returns false when only Established is True", func() {
+		obj := makeCRD([]map[string]interface{}{
+			makeCondition("Established", "True"),
+			makeCondition("NamesAccepted", "False"),
+		})
+		Expect(controllers.IsCRDEstablished(obj)).To(BeFalse())
+	})
+
+	It("returns false when only NamesAccepted is True", func() {
+		obj := makeCRD([]map[string]interface{}{
+			makeCondition("Established", "False"),
+			makeCondition("NamesAccepted", "True"),
+		})
+		Expect(controllers.IsCRDEstablished(obj)).To(BeFalse())
+	})
+
+	It("returns true when both Established and NamesAccepted are True", func() {
+		obj := makeCRD([]map[string]interface{}{
+			makeCondition("Established", "True"),
+			makeCondition("NamesAccepted", "True"),
+		})
+		Expect(controllers.IsCRDEstablished(obj)).To(BeTrue())
+	})
+
+	It("returns false when neither condition is present", func() {
+		obj := makeCRD([]map[string]interface{}{
+			makeCondition("SomeOther", "True"),
+		})
+		Expect(controllers.IsCRDEstablished(obj)).To(BeFalse())
 	})
 })

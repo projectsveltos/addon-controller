@@ -257,6 +257,10 @@ var (
 	CreateFileWithKeyring       = createFileWithKeyring
 )
 
+var (
+	IsCRDEstablished = isCRDEstablished
+)
+
 type (
 	ReferencedObject = referencedObject
 )

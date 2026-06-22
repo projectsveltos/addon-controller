@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/pkg/errors"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -710,4 +711,41 @@ func setLabelOnCluster(labelKey, labelValue string) {
 		return k8sClient.Update(context.TODO(), currentCluster)
 	})
 	Expect(err).To(BeNil())
+}
+
+func verifyDriftDetectionManagerDeployment(workloadClient client.Client) {
+	if isAgentLessMode() {
+		Byf("Verifying drift detection manager deployment is created in the management cluster")
+		Eventually(func() bool {
+			listOptions := []client.ListOption{
+				client.MatchingLabels(
+					map[string]string{
+						clusterNameKey:      kindWorkloadCluster.GetName(),
+						"cluster-namespace": kindWorkloadCluster.GetNamespace(),
+					},
+				),
+			}
+
+			depls := &appsv1.DeploymentList{}
+			err := k8sClient.List(context.TODO(), depls, listOptions...)
+			if err != nil {
+				return false
+			}
+			if len(depls.Items) != 1 {
+				return false
+			}
+			return *depls.Items[0].Spec.Replicas == depls.Items[0].Status.ReadyReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+	} else {
+		Byf("Verifying drift detection manager deployment is created in the workload cluster")
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err := workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl)
+			if err != nil {
+				return false
+			}
+			return *depl.Spec.Replicas == depl.Status.ReadyReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+	}
 }

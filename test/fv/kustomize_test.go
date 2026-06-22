@@ -288,6 +288,8 @@ installCRDs: true`
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureKustomize,
 			policies, nil)
 
+		verifyDriftDetectionManagerDeployment(workloadClient)
+
 		Byf("Deleting deployment")
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: targetNamespace, Name: deploymentName}, currentDeployment)).To(Succeed())

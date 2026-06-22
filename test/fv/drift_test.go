@@ -283,40 +283,7 @@ reportsController:
 		verifyHelmValues(workloadClient, kyvernoNamespace, cleanupControllerDeplName,
 			livenessPeriodSecond, readinessPeriodSecond)
 
-		if isAgentLessMode() {
-			Byf("Verifying drift detection manager deployment is created in the management cluster")
-			Eventually(func() bool {
-				listOptions := []client.ListOption{
-					client.MatchingLabels(
-						map[string]string{
-							clusterNameKey:      kindWorkloadCluster.GetName(),
-							"cluster-namespace": kindWorkloadCluster.GetNamespace(),
-						},
-					),
-				}
-
-				depls := &appsv1.DeploymentList{}
-				err = k8sClient.List(context.TODO(), depls, listOptions...)
-				if err != nil {
-					return false
-				}
-				if len(depls.Items) != 1 {
-					return false
-				}
-				return *depls.Items[0].Spec.Replicas == depls.Items[0].Status.ReadyReplicas
-			}, timeout, pollingInterval).Should(BeTrue())
-		} else {
-			Byf("Verifying drift detection manager deployment is created in the workload cluster")
-			Eventually(func() bool {
-				depl := &appsv1.Deployment{}
-				err = workloadClient.Get(context.TODO(),
-					types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl)
-				if err != nil {
-					return false
-				}
-				return *depl.Spec.Replicas == depl.Status.ReadyReplicas
-			}, timeout, pollingInterval).Should(BeTrue())
-		}
+		verifyDriftDetectionManagerDeployment(workloadClient)
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
@@ -328,6 +295,8 @@ reportsController:
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
+
+		verifyDriftDetectionManagerDeployment(workloadClient)
 
 		if isAgentLessMode() {
 			verifyResourceSummary(k8sClient, clusterSummary)

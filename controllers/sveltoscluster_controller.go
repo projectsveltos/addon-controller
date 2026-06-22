@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 )
 
 // SveltosClusterReconciler reconciles a SveltosCluster object
@@ -55,6 +56,7 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if !sveltosCluster.DeletionTimestamp.IsZero() || !sveltosCluster.Spec.PullMode {
+		clusterproxy.EvictWorkloadIdentityCache(sveltosCluster.Namespace, sveltosCluster.Name)
 		licenseManagerInstance.RemoveCluster(req.Namespace, req.Name)
 	} else {
 		licenseManagerInstance.AddCluster(sveltosCluster)

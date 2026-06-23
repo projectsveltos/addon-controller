@@ -55,8 +55,11 @@ func (r *SveltosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return reconcile.Result{}, fmt.Errorf("failed to fetch SveltosCluster %s: %w", req.NamespacedName, err)
 	}
 
-	if !sveltosCluster.DeletionTimestamp.IsZero() || !sveltosCluster.Spec.PullMode {
+	if !sveltosCluster.DeletionTimestamp.IsZero() {
 		clusterproxy.EvictWorkloadIdentityCache(sveltosCluster.Namespace, sveltosCluster.Name)
+	}
+
+	if !sveltosCluster.DeletionTimestamp.IsZero() || !sveltosCluster.Spec.PullMode {
 		licenseManagerInstance.RemoveCluster(req.Namespace, req.Name)
 	} else {
 		licenseManagerInstance.AddCluster(sveltosCluster)

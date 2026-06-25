@@ -16,8 +16,8 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.21.7
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/onsi/ginkgo/v2 v2.31.0
-	github.com/onsi/gomega v1.42.0
+	github.com/onsi/ginkgo/v2 v2.32.0
+	github.com/onsi/gomega v1.42.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v1.11.2-0.20260622062629-79f5f1f526c0
 	github.com/prometheus/client_golang v1.23.2
@@ -36,7 +36,7 @@ require (
 	k8s.io/component-base v0.36.2
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260617174310-a95e086a2553
-	sigs.k8s.io/cluster-api v1.13.2
+	sigs.k8s.io/cluster-api v1.13.3
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/kustomize/kyaml v0.21.1

@@ -208,6 +208,12 @@ var _ = Describe("SourceIntegrity", func() {
 			}
 			Expect(testEnv.Client.Create(context.Background(), secret)).To(Succeed())
 
+			Eventually(func() error {
+				return testEnv.Client.Get(context.Background(),
+					types.NamespacedName{Namespace: namespace, Name: secretName},
+					&corev1.Secret{})
+			}, timeout, pollingInterval).Should(Succeed())
+
 			chart := &configv1beta1.HelmChart{
 				ProvenanceVerification: &configv1beta1.ProvenanceVerification{
 					KeyringSecretRef: corev1.SecretReference{Name: secretName},

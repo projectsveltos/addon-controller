@@ -301,6 +301,11 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 
 	for i := range profile.Spec.PolicyRefs {
 		profile.Spec.PolicyRefs[i].Namespace = profile.Namespace
+		if profile.Spec.PolicyRefs[i].RemoteURL != nil &&
+			profile.Spec.PolicyRefs[i].RemoteURL.SecretRef != nil {
+
+			profile.Spec.PolicyRefs[i].RemoteURL.SecretRef.Namespace = profile.Namespace
+		}
 	}
 
 	for i := range profile.Spec.KustomizationRefs {

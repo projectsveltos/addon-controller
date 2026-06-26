@@ -78,7 +78,7 @@ type referencedObject struct {
 	// URL and related fields are set only for URL-based PolicyRefs (Kind == urlSourceKind).
 	URL        string
 	IsTemplate bool
-	SecretRef  *corev1.LocalObjectReference
+	SecretRef  *corev1.SecretReference
 }
 
 func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {

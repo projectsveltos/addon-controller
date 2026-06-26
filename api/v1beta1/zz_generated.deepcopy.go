@@ -1337,7 +1337,7 @@ func (in *RemoteURL) DeepCopyInto(out *RemoteURL) {
 	}
 	if in.SecretRef != nil {
 		in, out := &in.SecretRef, &out.SecretRef
-		*out = new(corev1.LocalObjectReference)
+		*out = new(corev1.SecretReference)
 		**out = **in
 	}
 }

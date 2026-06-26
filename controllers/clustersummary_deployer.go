@@ -101,6 +101,8 @@ func (r *ClusterSummaryReconciler) deployFeature(ctx context.Context, clusterSum
 	if err != nil {
 		var nrErr *configv1beta1.NonRetriableError
 		if !errors.As(err, &nrErr) && !apierrors.IsNotFound(err) {
+			failedStatus := libsveltosv1beta1.FeatureStatusFailed
+			r.updateFeatureStatus(clusterSummaryScope, f.id, &failedStatus, nil, err, logger)
 			return err
 		}
 	}

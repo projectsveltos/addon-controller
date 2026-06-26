@@ -1133,46 +1133,51 @@ spec:
                           type: string
                         remoteURL:
                           description: |-
-                            RemoteURL configures fetching content from an HTTP/HTTPS endpoint.
+                            RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
                             When set, Kind/Name/Namespace must be omitted.
                           properties:
                             interval:
                               description: |-
-                                Interval defines how often Sveltos re-fetches the URL to detect changes.
+                                Interval defines how often Sveltos re-fetches the source to detect changes.
                                 Defaults to 5 minutes.
                               type: string
                             secretRef:
                               description: |-
                                 SecretRef references a Secret in the management cluster containing optional
-                                credentials for fetching the URL. Supported Secret keys:
+                                credentials for fetching the source. Both Name and Namespace must be set,
+                                allowing the Secret to live in any namespace (e.g. projectsveltos) so that
+                                a single Secret can be shared across clusters without replication.
+                                Supported Secret keys:
                                   "token"              — Bearer token (Authorization: Bearer <token>)
-                                  "username"+"password" — HTTP Basic Auth
+                                  "username"+"password" — HTTP Basic Auth or OCI registry basic auth
                                   "caFile"             — PEM-encoded CA certificate for TLS verification
                               properties:
                                 name:
-                                  default: ""
-                                  description: |-
-                                    Name of the referent.
-                                    This field is effectively required, but due to backwards compatibility is
-                                    allowed to be empty. Instances of this type with an empty value here are
-                                    almost certainly wrong.
-                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  description: name is unique within a namespace to
+                                    reference a secret resource.
+                                  type: string
+                                namespace:
+                                  description: namespace defines the space within
+                                    which the secret name must be unique.
                                   type: string
                               type: object
                               x-kubernetes-map-type: atomic
                             template:
                               description: |-
-                                Template indicates that the content served at URL is a Go template that
+                                Template indicates that the fetched content is a Go template that
                                 must be instantiated using cluster fields and templateResourceRefs values
                                 before deployment. Equivalent to the projectsveltos.io/template annotation
                                 on a ConfigMap or Secret.
                               type: boolean
                             url:
                               description: |-
-                                URL is an HTTP/HTTPS endpoint serving raw YAML/JSON/KYAML content.
+                                URL is the remote source serving raw YAML/JSON content.
                                 Sveltos fetches the content on every reconciliation and redeploys if the
                                 content hash has changed.
-                              pattern: ^https?://
+                                Supported schemes:
+                                  "http://" or "https://" — HTTP/HTTPS endpoint returning raw YAML/JSON
+                                  "oci://"                — OCI registry artifact containing YAML manifests
+                              pattern: ^(https?|oci)://
                               type: string
                           required:
                           - url

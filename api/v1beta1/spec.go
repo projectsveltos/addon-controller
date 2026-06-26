@@ -746,34 +746,41 @@ type PolicyRef struct {
 	// +optional
 	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
 
-	// RemoteURL configures fetching content from an HTTP/HTTPS endpoint.
+	// RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
 	// When set, Kind/Name/Namespace must be omitted.
 	// +optional
 	RemoteURL *RemoteURL `json:"remoteURL,omitempty"`
 }
 
-// RemoteURL groups all fields related to fetching policy content from an HTTP/HTTPS endpoint.
+// RemoteURL groups all fields related to fetching policy content from a remote source.
+// Supports HTTP/HTTPS endpoints and OCI registries.
 type RemoteURL struct {
-	// URL is an HTTP/HTTPS endpoint serving raw YAML/JSON/KYAML content.
+	// URL is the remote source serving raw YAML/JSON content.
 	// Sveltos fetches the content on every reconciliation and redeploys if the
 	// content hash has changed.
-	// +kubebuilder:validation:Pattern=`^https?://`
+	// Supported schemes:
+	//   "http://" or "https://" — HTTP/HTTPS endpoint returning raw YAML/JSON
+	//   "oci://"                — OCI registry artifact containing YAML manifests
+	// +kubebuilder:validation:Pattern=`^(https?|oci)://`
 	URL string `json:"url"`
 
-	// Interval defines how often Sveltos re-fetches the URL to detect changes.
+	// Interval defines how often Sveltos re-fetches the source to detect changes.
 	// Defaults to 5 minutes.
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty"`
 
 	// SecretRef references a Secret in the management cluster containing optional
-	// credentials for fetching the URL. Supported Secret keys:
+	// credentials for fetching the source. Both Name and Namespace must be set,
+	// allowing the Secret to live in any namespace (e.g. projectsveltos) so that
+	// a single Secret can be shared across clusters without replication.
+	// Supported Secret keys:
 	//   "token"              — Bearer token (Authorization: Bearer <token>)
-	//   "username"+"password" — HTTP Basic Auth
+	//   "username"+"password" — HTTP Basic Auth or OCI registry basic auth
 	//   "caFile"             — PEM-encoded CA certificate for TLS verification
 	// +optional
-	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
 
-	// Template indicates that the content served at URL is a Go template that
+	// Template indicates that the fetched content is a Go template that
 	// must be instantiated using cluster fields and templateResourceRefs values
 	// before deployment. Equivalent to the projectsveltos.io/template annotation
 	// on a ConfigMap or Secret.

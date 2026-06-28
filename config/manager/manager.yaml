@@ -42,6 +42,8 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
       - env:
         - name: IS_INITIALIZATION

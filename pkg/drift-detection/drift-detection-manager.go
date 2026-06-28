@@ -162,7 +162,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:e37a6fa9d9afb1bf7176334467637336a75690a39549586c4820c429d75eed2c
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:dfdf852bcbab5ce11a07ec64ec9a4175f8a4cd6359a3ffd9d0a4727efa9533ce
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -201,6 +201,8 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: drift-detection-manager
       terminationGracePeriodSeconds: 10
 `)

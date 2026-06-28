@@ -10605,6 +10605,8 @@ spec:
             type: RuntimeDefault
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       serviceAccountName: addon-controller
       terminationGracePeriodSeconds: 10
       volumes:

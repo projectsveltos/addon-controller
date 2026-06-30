@@ -716,7 +716,7 @@ func setLabelOnCluster(labelKey, labelValue string) {
 func verifyDriftDetectionManagerDeployment(workloadClient client.Client) {
 	if isAgentLessMode() {
 		Byf("Verifying drift detection manager deployment is created in the management cluster")
-		Eventually(func() bool {
+		Eventually(func() error {
 			listOptions := []client.ListOption{
 				client.MatchingLabels(
 					map[string]string{
@@ -727,25 +727,32 @@ func verifyDriftDetectionManagerDeployment(workloadClient client.Client) {
 			}
 
 			depls := &appsv1.DeploymentList{}
-			err := k8sClient.List(context.TODO(), depls, listOptions...)
-			if err != nil {
-				return false
+			if err := k8sClient.List(context.TODO(), depls, listOptions...); err != nil {
+				return err
 			}
 			if len(depls.Items) != 1 {
-				return false
+				return fmt.Errorf("expected 1 deployment, got %d", len(depls.Items))
 			}
-			return *depls.Items[0].Spec.Replicas == depls.Items[0].Status.ReadyReplicas
-		}, timeout, pollingInterval).Should(BeTrue())
+			d := &depls.Items[0]
+			if *d.Spec.Replicas != d.Status.ReadyReplicas {
+				return fmt.Errorf("not ready: spec=%d ready=%d status=%#v",
+					*d.Spec.Replicas, d.Status.ReadyReplicas, d.Status)
+			}
+			return nil
+		}, timeout, pollingInterval).Should(Succeed())
 	} else {
 		Byf("Verifying drift detection manager deployment is created in the workload cluster")
-		Eventually(func() bool {
+		Eventually(func() error {
 			depl := &appsv1.Deployment{}
-			err := workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl)
-			if err != nil {
-				return false
+			if err := workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl); err != nil {
+				return err
 			}
-			return *depl.Spec.Replicas == depl.Status.ReadyReplicas
-		}, timeout, pollingInterval).Should(BeTrue())
+			if *depl.Spec.Replicas != depl.Status.ReadyReplicas {
+				return fmt.Errorf("not ready: spec=%d ready=%d status=%#v",
+					*depl.Spec.Replicas, depl.Status.ReadyReplicas, depl.Status)
+			}
+			return nil
+		}, timeout, pollingInterval).Should(Succeed())
 	}
 }

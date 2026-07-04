@@ -446,16 +446,27 @@ func cleanClusterConfigurationOwnerReferences(ctx context.Context, c client.Clie
 		Kind:  profile.GetObjectKind().GroupVersionKind().Kind,
 	}
 
-	if !util.IsOwnedByObject(clusterConfiguration, profile, targetGK) {
-		return nil
-	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentClusterConfiguration, err := getClusterConfiguration(ctx, c,
+			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
 
-	clusterConfiguration.OwnerReferences = util.RemoveOwnerRef(clusterConfiguration.OwnerReferences, ownerRef)
-	if len(clusterConfiguration.OwnerReferences) == 0 {
-		return c.Delete(ctx, clusterConfiguration)
-	} else {
-		return c.Update(ctx, clusterConfiguration)
-	}
+		if !util.IsOwnedByObject(currentClusterConfiguration, profile, targetGK) {
+			return nil
+		}
+
+		currentClusterConfiguration.OwnerReferences = util.RemoveOwnerRef(currentClusterConfiguration.OwnerReferences, ownerRef)
+		if len(currentClusterConfiguration.OwnerReferences) == 0 {
+			return c.Delete(ctx, currentClusterConfiguration)
+		} else {
+			return c.Update(ctx, currentClusterConfiguration)
+		}
+	})
 }
 
 func cleanClusterConfigurationProfileResources(ctx context.Context, c client.Client, profile client.Object,

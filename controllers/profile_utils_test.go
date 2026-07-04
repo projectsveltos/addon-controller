@@ -351,6 +351,110 @@ var _ = Describe("Profile: Reconciler", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
+	It("CleanClusterConfiguration succeeds when ClusterConfiguration was concurrently modified", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, ns)).To(Succeed())
+
+		clusterConfiguration := &configv1beta1.ClusterConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: matchingCluster.Namespace,
+				Name:      controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi),
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), clusterConfiguration)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterConfiguration)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, clusterProfile)).To(Succeed())
+
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+
+		// staleClusterConfiguration mimics the copy a reconciler goroutine would have listed
+		// before another goroutine (managing a different ClusterProfile matching the same
+		// cluster) concurrently updates the same object.
+		staleClusterConfiguration := &configv1beta1.ClusterConfiguration{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
+			staleClusterConfiguration)).To(Succeed())
+
+		staleClusterConfiguration.OwnerReferences = []metav1.OwnerReference{
+			{
+				Kind:       currentClusterProfile.Kind,
+				Name:       currentClusterProfile.Name,
+				APIVersion: currentClusterProfile.APIVersion,
+				UID:        currentClusterProfile.UID,
+			},
+			{ // Add a second fake Owner, so that when removing ClusterProfile as owner,
+				// ClusterConfiguration is not deleted
+				Kind:       currentClusterProfile.Kind,
+				Name:       randomString(),
+				APIVersion: currentClusterProfile.APIVersion,
+				UID:        types.UID(randomString()),
+			},
+		}
+		Expect(testEnv.Update(context.TODO(), staleClusterConfiguration)).To(Succeed())
+
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
+				},
+				staleClusterConfiguration)
+			if err != nil {
+				return false
+			}
+			return len(staleClusterConfiguration.OwnerReferences) == 2
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Simulate a second, concurrent writer bumping the object's ResourceVersion
+		// (e.g. another ClusterProfile's reconcile updating the same ClusterConfiguration)
+		// without staleClusterConfiguration's in-memory copy being refreshed.
+		concurrentWriterCopy := &configv1beta1.ClusterConfiguration{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{
+				Namespace: clusterConfiguration.Namespace,
+				Name:      clusterConfiguration.Name,
+			},
+			concurrentWriterCopy)).To(Succeed())
+		if concurrentWriterCopy.Labels == nil {
+			concurrentWriterCopy.Labels = map[string]string{}
+		}
+		concurrentWriterCopy.Labels[randomString()] = randomString()
+		Expect(testEnv.Update(context.TODO(), concurrentWriterCopy)).To(Succeed())
+
+		Expect(staleClusterConfiguration.ResourceVersion).ToNot(Equal(concurrentWriterCopy.ResourceVersion))
+
+		// CleanClusterConfiguration is called with the stale copy. Before the fix, the
+		// Update/Delete call inside cleanClusterConfigurationOwnerReferences used this stale
+		// object directly and failed with a conflict error. It must now succeed by refetching
+		// the current version internally and retrying.
+		Expect(controllers.CleanClusterConfiguration(context.TODO(), testEnv, currentClusterProfile,
+			staleClusterConfiguration)).To(Succeed())
+
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{
+					Namespace: clusterConfiguration.Namespace,
+					Name:      clusterConfiguration.Name,
+				},
+				staleClusterConfiguration)
+			if err != nil {
+				return false
+			}
+			return len(staleClusterConfiguration.OwnerReferences) == 1
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
 	It("CreateClusterSummary creates ClusterSummary with proper fields", func() {
 		initObjects := []client.Object{
 			clusterProfile,

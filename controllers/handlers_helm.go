@@ -4077,6 +4077,14 @@ func getWaitHelmValue(options *configv1beta1.HelmOptions) bool {
 	return false
 }
 
+func getPostRenderStrategyValue(options *configv1beta1.HelmOptions) configv1beta1.PostRenderStrategy {
+	if options != nil {
+		return options.PostRenderStrategy
+	}
+
+	return ""
+}
+
 func getWaitForJobsHelmValue(options *configv1beta1.HelmOptions) bool {
 	if options != nil {
 		return options.WaitForJobs
@@ -4412,6 +4420,7 @@ func getHelmInstallClient(ctx context.Context, requestedChart *configv1beta1.Hel
 
 	if len(patches) > 0 {
 		installClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
+		installClient.PostRenderStrategy = action.PostRenderStrategy(getPostRenderStrategyValue(requestedChart.Options))
 	}
 
 	if templateOnly {
@@ -4474,6 +4483,7 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 
 	if len(patches) > 0 {
 		upgradeClient.PostRenderer = &patcher.CustomPatchPostRenderer{Patches: patches}
+		upgradeClient.PostRenderStrategy = action.PostRenderStrategy(getPostRenderStrategyValue(requestedChart.Options))
 	}
 
 	return upgradeClient

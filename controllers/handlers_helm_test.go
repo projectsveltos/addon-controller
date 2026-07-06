@@ -30,6 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"helm.sh/helm/v4/pkg/action"
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2310,5 +2311,42 @@ var _ = Describe("IsCRDEstablished", func() {
 			makeCondition("SomeOther", "True"),
 		})
 		Expect(controllers.IsCRDEstablished(obj)).To(BeFalse())
+	})
+})
+
+var _ = Describe("getHelmUpgradeClient PostRenderStrategy", func() {
+	It("sets PostRenderer and PostRenderStrategy when patches are present", func() {
+		requestedChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Options: &configv1beta1.HelmOptions{
+				PostRenderStrategy: configv1beta1.PostRenderStrategySeparate,
+			},
+		}
+		patches := []libsveltosv1beta1.Patch{
+			{Patch: randomString()},
+		}
+
+		upgradeClient := controllers.GetHelmUpgradeClient(requestedChart, &action.Configuration{},
+			&controllers.RegistryClientOptions{}, patches)
+
+		Expect(upgradeClient.PostRenderer).ToNot(BeNil())
+		Expect(upgradeClient.PostRenderStrategy).To(Equal(action.PostRenderStrategySeparate))
+	})
+
+	It("leaves PostRenderer and PostRenderStrategy unset when no patches are present", func() {
+		requestedChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Options: &configv1beta1.HelmOptions{
+				PostRenderStrategy: configv1beta1.PostRenderStrategySeparate,
+			},
+		}
+
+		upgradeClient := controllers.GetHelmUpgradeClient(requestedChart, &action.Configuration{},
+			&controllers.RegistryClientOptions{}, nil)
+
+		Expect(upgradeClient.PostRenderer).To(BeNil())
+		Expect(upgradeClient.PostRenderStrategy).To(Equal(action.PostRenderStrategyCombined))
 	})
 })

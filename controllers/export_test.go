@@ -258,11 +258,13 @@ var (
 )
 
 var (
-	IsCRDEstablished = isCRDEstablished
+	IsCRDEstablished     = isCRDEstablished
+	GetHelmUpgradeClient = getHelmUpgradeClient
 )
 
 type (
-	ReferencedObject = referencedObject
+	ReferencedObject      = referencedObject
+	RegistryClientOptions = registryClientOptions
 )
 
 // NewDeploymentContext constructs a deploymentContext for use in tests.

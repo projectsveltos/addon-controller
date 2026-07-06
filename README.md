@@ -1,5 +1,6 @@
 [![CI](https://github.com/projectsveltos/addon-controller/actions/workflows/main.yaml/badge.svg)](https://github.com/projectsveltos/addon-controller/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/projectsveltos/addon-controller)](https://goreportcard.com/report/github.com/projectsveltos/addon-controller)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/projectsveltos/addon-controller/badge)](https://scorecard.dev/viewer/?uri=github.com/projectsveltos/addon-controller)
+[![CodeQL](https://github.com/projectsveltos/addon-controller/actions/workflows/codeql.yaml/badge.svg)](https://github.com/projectsveltos/addon-controller/actions/workflows/codeql.yaml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/projectsveltos/addon-controller.svg)](https://store.docker.com/community/images/projectsveltos/addon-controller)
 [![Release](https://img.shields.io/github/v/release/projectsveltos/addon-controller)](https://github.com/projectsveltos/addon-controller/releases)
 [![License](https://img.shields.io/badge/license-Apache-blue.svg)](LICENSE)

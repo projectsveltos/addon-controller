@@ -698,9 +698,10 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 
 	defer os.RemoveAll(tmpDir)
 
-	// Path can be expressed as a template and instantiate using Cluster fields.
+	// Path can be expressed as a template and instantiate using Cluster fields and
+	// TemplateResourceRefs-collected resources.
 	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		dCtx.clusterSummary, dCtx.clusterSummary.GetName(), kustomizationRef.Path, dCtx.clusterObjects, nil, logger)
+		dCtx.clusterSummary, dCtx.clusterSummary.GetName(), kustomizationRef.Path, dCtx.clusterObjects, dCtx.mgmtResources, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -711,7 +712,7 @@ func deployKustomizeRef(ctx context.Context, c client.Client, remoteRestConfig *
 	var instantiatedComponents []string
 	for _, comp := range kustomizationRef.Components {
 		instantiatedComp, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-			dCtx.clusterSummary, dCtx.clusterSummary.GetName(), comp, dCtx.clusterObjects, nil, logger)
+			dCtx.clusterSummary, dCtx.clusterSummary.GetName(), comp, dCtx.clusterObjects, dCtx.mgmtResources, logger)
 		if err != nil {
 			return nil, nil, err
 		}

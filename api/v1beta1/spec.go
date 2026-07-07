@@ -151,6 +151,27 @@ const (
 	HelmChartActionUninstall = HelmChartAction("Uninstall")
 )
 
+// PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+// are applied as a post-renderer during this HelmChart's install/upgrade.
+// +kubebuilder:validation:Enum:=combined;separate;nohooks
+type PostRenderStrategy string
+
+const (
+	// PostRenderStrategyCombined sends hooks and regular templates together as a single
+	// stream to the post-renderer. This is Helm's own default.
+	PostRenderStrategyCombined = PostRenderStrategy("combined")
+
+	// PostRenderStrategySeparate sends hooks and regular templates to the post-renderer
+	// in independent invocations. Use this to avoid duplicate-resource errors from
+	// post-renderers that de-duplicate by resource identity, such as Patches, when the
+	// same resource appears in both a hook and a regular template.
+	PostRenderStrategySeparate = PostRenderStrategy("separate")
+
+	// PostRenderStrategyNoHooks sends only regular templates to the post-renderer and
+	// leaves hooks untouched. This matches Helm 3's behavior.
+	PostRenderStrategyNoHooks = PostRenderStrategy("nohooks")
+)
+
 type HelmOptions struct {
 	// SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
 	// By default, CRDs are installed if not already present.
@@ -232,6 +253,13 @@ type HelmOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	RunTests bool `json:"runTests,omitempty"`
+
+	// PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+	// are applied as a post-renderer during this chart's install/upgrade. Only relevant
+	// when Patches or PatchesFrom is set on the Spec; ignored otherwise. Defaults to
+	// Helm's own default (combined) when unset.
+	// +optional
+	PostRenderStrategy PostRenderStrategy `json:"postRenderStrategy,omitempty"`
 
 	// HelmInstallOptions are options specific to helm install
 	// +optional

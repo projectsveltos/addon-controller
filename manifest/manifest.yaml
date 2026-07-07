@@ -648,6 +648,17 @@ spec:
                           description: PassCredentialsAll is the flag to pass credentials
                             to all domains
                           type: boolean
+                        postRenderStrategy:
+                          description: |-
+                            PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+                            are applied as a post-renderer during this chart's install/upgrade. Only relevant
+                            when Patches or PatchesFrom is set on the Spec; ignored otherwise. Defaults to
+                            Helm's own default (combined) when unset.
+                          enum:
+                          - combined
+                          - separate
+                          - nohooks
+                          type: string
                         runTests:
                           default: false
                           description: |-
@@ -2825,6 +2836,17 @@ spec:
                               description: PassCredentialsAll is the flag to pass
                                 credentials to all domains
                               type: boolean
+                            postRenderStrategy:
+                              description: |-
+                                PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+                                are applied as a post-renderer during this chart's install/upgrade. Only relevant
+                                when Patches or PatchesFrom is set on the Spec; ignored otherwise. Defaults to
+                                Helm's own default (combined) when unset.
+                              enum:
+                              - combined
+                              - separate
+                              - nohooks
+                              type: string
                             runTests:
                               default: false
                               description: |-
@@ -6016,6 +6038,17 @@ spec:
                               description: PassCredentialsAll is the flag to pass
                                 credentials to all domains
                               type: boolean
+                            postRenderStrategy:
+                              description: |-
+                                PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+                                are applied as a post-renderer during this chart's install/upgrade. Only relevant
+                                when Patches or PatchesFrom is set on the Spec; ignored otherwise. Defaults to
+                                Helm's own default (combined) when unset.
+                              enum:
+                              - combined
+                              - separate
+                              - nohooks
+                              type: string
                             runTests:
                               default: false
                               description: |-
@@ -8228,6 +8261,17 @@ spec:
                           description: PassCredentialsAll is the flag to pass credentials
                             to all domains
                           type: boolean
+                        postRenderStrategy:
+                          description: |-
+                            PostRenderStrategy controls whether Helm hooks are included when Patches/PatchesFrom
+                            are applied as a post-renderer during this chart's install/upgrade. Only relevant
+                            when Patches or PatchesFrom is set on the Spec; ignored otherwise. Defaults to
+                            Helm's own default (combined) when unset.
+                          enum:
+                          - combined
+                          - separate
+                          - nohooks
+                          type: string
                         runTests:
                           default: false
                           description: |-

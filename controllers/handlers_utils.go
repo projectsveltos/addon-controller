@@ -145,9 +145,10 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 
 	defer os.RemoveAll(tmpDir)
 
-	// Path can be expressed as a template and instantiate using Cluster fields.
+	// Path can be expressed as a template and instantiate using Cluster fields and
+	// TemplateResourceRefs-collected resources.
 	instantiatedPath, err := instantiateTemplateValues(ctx, getManagementClusterConfig(), getManagementClusterClient(),
-		dCtx.clusterSummary, dCtx.clusterSummary.GetName(), path, dCtx.clusterObjects, nil, logger)
+		dCtx.clusterSummary, dCtx.clusterSummary.GetName(), path, dCtx.clusterObjects, dCtx.mgmtResources, logger)
 	if err != nil {
 		return nil, err
 	}

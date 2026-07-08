@@ -570,13 +570,15 @@ type KustomizationRef struct {
 	// Defaults to 'None', which translates to the root path of the SourceRef.
 	// These values can be static or leverage Go templates for dynamic customization.
 	// When expressed as templates, the values are filled in using information from
-	// resources within the management cluster before deployment (Cluster)
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	Path string `json:"path,omitempty"`
 
 	// Components is a list of paths to Kustomize components. These paths are relative to the
 	// `Path` field and are included in the Kustomize build to provide reusable configuration logic.
-	// The paths can be static or leverage Go templates for dynamic customization.
+	// These values can be static or leverage Go templates for dynamic customization.
+	// When expressed as templates, the values are filled in using information from
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	Components []string `json:"components,omitempty"`
 
@@ -736,6 +738,9 @@ type PolicyRef struct {
 	// Path to the directory containing the YAML files.
 	// Defaults to 'None', which translates to the root path of the SourceRef.
 	// Used only for GitRepository;OCIRepository;Bucket
+	// This value can be static or leverage Go templates for dynamic customization.
+	// When expressed as a template, it is filled in using information from
+	// resources within the management cluster before deployment (Cluster and TemplateResourceRefs)
 	// +optional
 	Path string `json:"path,omitempty"`
 

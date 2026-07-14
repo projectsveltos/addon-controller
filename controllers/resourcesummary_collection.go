@@ -524,6 +524,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 		}
 
 		l := logger.WithValues("clusterSummary", clusterSummary.Name)
+		profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, l)
 		for i := range clusterSummary.Status.FeatureSummaries {
 			switch clusterSummary.Status.FeatureSummaries[i].FeatureID {
 			case libsveltosv1beta1.FeatureHelm:
@@ -532,7 +533,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), logger)
+						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
 			case libsveltosv1beta1.FeatureResources:
 				if rs.Status.ResourcesChanged {
@@ -540,7 +541,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), logger)
+						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
 			case libsveltosv1beta1.FeatureKustomize:
 				if rs.Status.KustomizeResourcesChanged {
@@ -548,7 +549,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), logger)
+						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
 			}
 		}

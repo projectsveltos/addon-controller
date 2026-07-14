@@ -887,17 +887,34 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 	logger.V(logs.LogDebug).Info("updating clustersummary status")
 	now := metav1.NewTime(time.Now())
 
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
+
 	switch *status {
 	case libsveltosv1beta1.FeatureStatusProvisioned:
 		failed := false
 		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusProvisioned, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
 		clusterSummaryScope.SetLastAppliedTime(featureID, &now)
+		trackReconcileOutcome(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, true, profileKind, profileNamespace, profileName, logger)
+		trackConsecutiveFailures(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, r.getConsecutiveFailures(clusterSummaryScope, featureID),
+			profileKind, profileNamespace, profileName, logger)
+		trackLastSuccess(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, now.Time, profileKind, profileNamespace, profileName, logger)
 	case libsveltosv1beta1.FeatureStatusRemoved:
 		failed := false
 		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusRemoved, hash, &failed)
 		clusterSummaryScope.SetFailureMessage(featureID, nil)
 		clusterSummaryScope.SetLastAppliedTime(featureID, &now)
+		trackReconcileOutcome(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, true, profileKind, profileNamespace, profileName, logger)
+		trackConsecutiveFailures(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, r.getConsecutiveFailures(clusterSummaryScope, featureID),
+			profileKind, profileNamespace, profileName, logger)
+		trackLastSuccess(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, now.Time, profileKind, profileNamespace, profileName, logger)
 	case libsveltosv1beta1.FeatureStatusProvisioning:
 		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusProvisioning, hash, nil)
 	case libsveltosv1beta1.FeatureStatusAgentRemoving:
@@ -912,6 +929,11 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 			clusterSummaryScope.SetFailureMessage(featureID, &err)
 		}
 		clusterSummaryScope.SetLastAppliedTime(featureID, &now)
+		trackReconcileOutcome(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, false, profileKind, profileNamespace, profileName, logger)
+		trackConsecutiveFailures(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			string(featureID), clusterSummary.Spec.ClusterType, r.getConsecutiveFailures(clusterSummaryScope, featureID),
+			profileKind, profileNamespace, profileName, logger)
 	}
 }
 

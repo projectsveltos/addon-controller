@@ -196,7 +196,10 @@ func (r *ClusterProfileReconciler) reconcileNormal(
 	depClusters := depManager.GetClusterDeployments(profileRef)
 	matchingCluster = append(matchingCluster, depClusters...)
 
-	profileScope.SetMatchingClusterRefs(removeDuplicates(matchingCluster))
+	matchingClusters := removeDuplicates(matchingCluster)
+	profileScope.SetMatchingClusterRefs(matchingClusters)
+	trackMatchingClusters(configv1beta1.ClusterProfileKind, "", profileScope.Profile.GetName(),
+		len(matchingClusters), logger)
 
 	r.updateMaps(profileScope)
 

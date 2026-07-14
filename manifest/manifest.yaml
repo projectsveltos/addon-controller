@@ -10505,6 +10505,34 @@ metadata:
   name: addon-controller-role-extra
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: addon-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: addon-proxy-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: addon-controller-rolebinding-extra
@@ -10544,6 +10572,19 @@ subjects:
   name: addon-controller
   namespace: projectsveltos
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: addon-proxy-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: addon-proxy-role
+subjects:
+- kind: ServiceAccount
+  name: addon-controller
+  namespace: projectsveltos
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -10560,6 +10601,22 @@ spec:
   selector:
     control-plane: addon-controller
   type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    control-plane: addon-controller
+  name: addon-controller-metrics-service
+  namespace: projectsveltos
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  selector:
+    control-plane: addon-controller
 ---
 apiVersion: apps/v1
 kind: Deployment

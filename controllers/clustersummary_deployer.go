@@ -512,12 +512,12 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 			return fmt.Errorf("feature is still being removed")
 		}
 
-		// Failure to undeploy because of missing permission is ignored.
+		// Failure to undeploy because of missing permission is not treated as terminal: this Forbidden
+		// error also covers admission webhooks denying the delete, so the reason is still surfaced via
+		// FailureMessage even though the feature keeps retrying.
 		if apierrors.IsForbidden(result.Err) {
 			logger.V(logs.LogInfo).Info("undeploying failing because of missing permission.")
-			tmpStatus := libsveltosv1beta1.FeatureStatusRemoving
-			status = &tmpStatus
-			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
+			r.markUndeployFailureRetriable(clusterSummaryScope, f.id, result.Err, logger)
 			return nil
 		}
 
@@ -535,14 +535,12 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 
 		var nonRetriableError *configv1beta1.NonRetriableError
 		if errors.As(result.Err, &nonRetriableError) {
-			removing := libsveltosv1beta1.FeatureStatusRemoving
-			r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, result.Err, logger)
+			r.markUndeployFailureRetriable(clusterSummaryScope, f.id, result.Err, logger)
 			return result.Err
 		}
 		var templateError *configv1beta1.TemplateInstantiationError
 		if errors.As(result.Err, &templateError) {
-			removing := libsveltosv1beta1.FeatureStatusRemoving
-			r.updateFeatureStatus(clusterSummaryScope, f.id, &removing, nil, result.Err, logger)
+			r.markUndeployFailureRetriable(clusterSummaryScope, f.id, result.Err, logger)
 			return result.Err
 		}
 
@@ -585,6 +583,17 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 	}
 
 	return fmt.Errorf("cleanup request is queued")
+}
+
+// markUndeployFailureRetriable sets the feature status back to Removing (undeploy will be retried)
+// while still recording failureErr as the FailureMessage, so the reason is not silently dropped.
+func (r *ClusterSummaryReconciler) markUndeployFailureRetriable(clusterSummaryScope *scope.ClusterSummaryScope,
+	featureID libsveltosv1beta1.FeatureID, failureErr error, logger logr.Logger) {
+
+	removing := libsveltosv1beta1.FeatureStatusRemoving
+	r.updateFeatureStatus(clusterSummaryScope, featureID, &removing, nil, failureErr, logger)
+	errorMsg := failureErr.Error()
+	clusterSummaryScope.SetFailureMessage(featureID, &errorMsg)
 }
 
 func cleanPreviousActiveTracking(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, f feature,

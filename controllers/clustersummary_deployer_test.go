@@ -27,7 +27,9 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -527,6 +529,58 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true)
 		Expect(dep.IsKeyInProgress(key)).To(BeTrue())
+	})
+
+	It("undeployFeature sets FailureMessage when undeploy fails with a Forbidden error", func() {
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{
+				Namespace: randomString(),
+				Name:      randomString(),
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+			},
+		}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusRemoving},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterProfile,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+
+		// An admission webhook denying the delete request surfaces to the client as a Forbidden
+		// error, same as a genuine RBAC permission error. Verify the underlying message is not lost.
+		webhookDenialErr := apierrors.NewForbidden(schema.GroupResource{Group: "network.kmetal.io", Resource: "eipclaims"},
+			"external", fmt.Errorf("admission webhook \"veipclaim.kb.io\" denied the request: cannot delete EipClaim"))
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		dep.StoreResult(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, true,
+			webhookDenialErr)
+
+		reconciler := getClusterSummaryReconciler(c, dep)
+
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
+
+		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		var featureSummary *configv1beta1.FeatureSummary
+		for i := range clusterSummaryScope.ClusterSummary.Status.FeatureSummaries {
+			fs := &clusterSummaryScope.ClusterSummary.Status.FeatureSummaries[i]
+			if fs.FeatureID == libsveltosv1beta1.FeatureResources {
+				featureSummary = fs
+			}
+		}
+		Expect(featureSummary).ToNot(BeNil())
+		Expect(featureSummary.Status).To(Equal(libsveltosv1beta1.FeatureStatusRemoving))
+		Expect(featureSummary.FailureMessage).ToNot(BeNil())
+		Expect(*featureSummary.FailureMessage).To(Equal(webhookDenialErr.Error()))
 	})
 
 	//nolint: dupl // better readibility of test

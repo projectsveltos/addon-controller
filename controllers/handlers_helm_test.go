@@ -2350,3 +2350,39 @@ var _ = Describe("getHelmUpgradeClient PostRenderStrategy", func() {
 		Expect(upgradeClient.PostRenderStrategy).To(Equal(action.PostRenderStrategyCombined))
 	})
 })
+
+var _ = Describe("getHelmUpgradeClient Force", func() {
+	It("disables server-side apply and force conflicts when force is set", func() {
+		requestedChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Options: &configv1beta1.HelmOptions{
+				UpgradeOptions: configv1beta1.HelmUpgradeOptions{
+					Force: true,
+				},
+			},
+		}
+
+		upgradeClient := controllers.GetHelmUpgradeClient(requestedChart, &action.Configuration{},
+			&controllers.RegistryClientOptions{}, nil)
+
+		Expect(upgradeClient.ForceReplace).To(BeTrue())
+		Expect(upgradeClient.ServerSideApply).To(Equal("false"))
+		Expect(upgradeClient.ForceConflicts).To(BeFalse())
+	})
+
+	It("defaults to server-side apply with force conflicts when force is not set", func() {
+		requestedChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Options:          &configv1beta1.HelmOptions{},
+		}
+
+		upgradeClient := controllers.GetHelmUpgradeClient(requestedChart, &action.Configuration{},
+			&controllers.RegistryClientOptions{}, nil)
+
+		Expect(upgradeClient.ForceReplace).To(BeFalse())
+		Expect(upgradeClient.ServerSideApply).To(Equal("true"))
+		Expect(upgradeClient.ForceConflicts).To(BeTrue())
+	})
+})

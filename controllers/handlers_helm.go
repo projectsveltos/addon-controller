@@ -4574,8 +4574,8 @@ func addExtraMetadata(ctx context.Context, requestedChart *configv1beta1.HelmCha
 
 		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
-		_, err = deployer.UpdateResource(ctx, dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
-			r, []string{}, logger)
+		_, err = deployer.UpdateResource(ctx, dr, isDriftDetection, isDryRun, getForceValue(requestedChart.Options),
+			clusterSummary.Spec.ClusterProfileSpec.DriftExclusions, r, []string{}, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to update resource %s %s/%s: %v",
 				r.GetKind(), r.GetNamespace(), r.GetName(), err))

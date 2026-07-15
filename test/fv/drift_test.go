@@ -43,74 +43,50 @@ const (
 )
 
 var (
-	labelsValues = `customLabels:
+	// podAnnotationsValuesTemplate is applied (via ValuesFrom) only to podinfoIgnoredRelease.
+	// It exercises the same "Values templated from Cluster annotation" mechanism the drift
+	// test relied on, retargeted from a chart-wide customLabels key (kyverno-specific) to
+	// podinfo's podAnnotations key, which lands on the pod template's annotations.
+	podAnnotationsValuesTemplate = `podAnnotations:
   %s: "{{ .Cluster.metadata.annotations.cluster }}"`
 
-	cleanupControllerValues = `cleanupController:
-  livenessProbe:
-    httpGet:
-      path: /health/liveness
-      port: 9443
-      scheme: HTTPS
-    initialDelaySeconds: 16
+	// probesValuesTemplate is shared (via ValuesFrom) by both podinfo releases.
+	probesValuesTemplate = `probes:
+  liveness:
     periodSeconds: %d
-    timeoutSeconds: 5
-    failureThreshold: 2
-    successThreshold: 1
-
-  readinessProbe:
-    httpGet:
-      path: /health/readiness
-      port: 9443
-      scheme: HTTPS
-    initialDelaySeconds: 6
-    periodSeconds: %d
-    timeoutSeconds: 5
-    failureThreshold: 6
-    successThreshold: 1`
-
-	admissionControllerValues = `admissionController:
-  livenessProbe:
-    httpGet:
-      path: /health/liveness
-      port: 9443
-      scheme: HTTPS
-    initialDelaySeconds: 16
-    periodSeconds: %d
-    timeoutSeconds: 5
-    failureThreshold: 2
-    successThreshold: 1
-
-  readinessProbe:
-    httpGet:
-      path: /health/readiness
-      port: 9443
-      scheme: HTTPS
-    initialDelaySeconds: 6
-    periodSeconds: %d
-    timeoutSeconds: 5
-    failureThreshold: 6
-    successThreshold: 1`
+  readiness:
+    periodSeconds: %d`
 )
 
 const (
-	kyvernoNamespace            = "kyverno"
-	admissionControllerDeplName = "kyverno-admission-controller"
-	cleanupControllerDeplName   = "kyverno-cleanup-controller"
-	cleanupImage                = "reg.kyverno.io/kyverno/cleanup-controller:v1.17.1"
-	admissionImage              = "reg.kyverno.io/kyverno/kyverno:v1.17.1"
+	podinfoDriftNamespace    = "podinfo-drift"
+	podinfoDriftRepoURL      = "https://stefanprodan.github.io/podinfo"
+	podinfoDriftRepoName     = "podinfo"
+	podinfoDriftChartName    = "podinfo/podinfo"
+	podinfoDriftChartVersion = "6.14.0"
+	podinfoDriftImageRepo    = "docker.io/stefanprodan/podinfo"
+	podinfoBaselineTag       = "6.13.0"
+
+	// podinfoIgnoredRelease plays the role the admission-controller Deployment used to:
+	// fully ignored for configuration drift via a projectsveltos.io/driftDetectionIgnore patch.
+	podinfoIgnoredRelease  = "podinfo-ignored"
+	podinfoIgnoredDriftTag = "6.7.1"
+
+	// podinfoExcludedRelease plays the role the cleanup-controller Deployment used to:
+	// only /spec/replicas is excluded from drift detection, everything else is not.
+	podinfoExcludedRelease  = "podinfo-excluded"
+	podinfoExcludedDriftTag = "6.7.0"
 )
 
-var _ = Describe("Helm", Serial, func() {
+var _ = Describe("Helm", func() {
 	const (
-		namePrefix              = "drift-"
-		kyvernoCleanupImageName = "controller"
+		namePrefix = "drift-"
 	)
 
 	It("React to configuration drift and verifies Values/ValuesFrom", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		tagValue := randomString()
 
-		// Annotation is used to instantiate ConfigMap with labelsValues used in ValuesFrom
+		// Annotation is used to instantiate ConfigMap with podAnnotationsValuesTemplate used in ValuesFrom
 		Byf("Add annotation %s: %s on cluster %s/%s",
 			clusterKey, tagValue, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		setAnnotationOnCluster(clusterKey, tagValue)
@@ -149,71 +125,76 @@ var _ = Describe("Helm", Serial, func() {
 		}
 		Expect(k8sClient.Create(context.TODO(), ns))
 
-		Byf("Creating ConfigMap to hold cleanup controller values")
-		cleanupControllerConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
-			fmt.Sprintf(cleanupControllerValues, livenessPeriodSecond, readinessPeriodSecond))
-		Expect(k8sClient.Create(context.TODO(), cleanupControllerConfigMap)).To(Succeed())
+		Byf("Creating ConfigMap to hold probes values (shared by both podinfo releases)")
+		probesConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(probesValuesTemplate, livenessPeriodSecond, readinessPeriodSecond))
+		Expect(k8sClient.Create(context.TODO(), probesConfigMap)).To(Succeed())
 
-		Byf("Creating ConfigMap to hold admission controller values")
-		admissionControllerConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
-			fmt.Sprintf(admissionControllerValues, livenessPeriodSecond, readinessPeriodSecond))
-		Expect(k8sClient.Create(context.TODO(), admissionControllerConfigMap)).To(Succeed())
-
-		Byf("Creating ConfigMap to hold labels controller values (with template annotation)")
-		labelsConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
-			fmt.Sprintf(labelsValues, clusterKey))
-		labelsConfigMap.Annotations = map[string]string{
+		Byf("Creating ConfigMap to hold podAnnotations values (with template annotation)")
+		podAnnotationsConfigMap := createConfigMapWithPolicy(configMapNamespace, randomString(),
+			fmt.Sprintf(podAnnotationsValuesTemplate, clusterKey))
+		podAnnotationsConfigMap.Annotations = map[string]string{
 			libsveltosv1beta1.PolicyTemplateAnnotation: annotationOkValue,
 		}
-		Expect(k8sClient.Create(context.TODO(), labelsConfigMap)).To(Succeed())
+		Expect(k8sClient.Create(context.TODO(), podAnnotationsConfigMap)).To(Succeed())
 
 		Byf("Update ClusterProfile %s to deploy helm charts", clusterProfile.Name)
-		By("use driftExclusion to ignore cleanup controller spec/replicas changes")
-		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation")
+		By("use driftExclusion to ignore podinfo-excluded's spec/replicas changes")
+		By("Use patches to add projectsveltos.io/driftDetectionIgnore annotation to podinfo-ignored")
 
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
+
+		baselineImageValues := fmt.Sprintf(`replicaCount: 1
+image:
+  repository: %s
+  tag: %s`, podinfoDriftImageRepo, podinfoBaselineTag)
 
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    kyvernoRepoURL,
-					RepositoryName:   kyvernoNamespace,
-					ChartName:        kyvernoChartName,
-					ChartVersion:     kyvernoVersion372,
-					ReleaseName:      kyvernoLatestRelease,
-					ReleaseNamespace: kyvernoNamespace,
+					RepositoryURL:    podinfoDriftRepoURL,
+					RepositoryName:   podinfoDriftRepoName,
+					ChartName:        podinfoDriftChartName,
+					ChartVersion:     podinfoDriftChartVersion,
+					ReleaseName:      podinfoIgnoredRelease,
+					ReleaseNamespace: podinfoDriftNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Values: `admissionController:
-  replicas: 1
-backgroundController:
-  replicas: 1
-cleanupController:
-  replicas: 1
-reportsController:
-  replicas: 1`,
+					Values:           baselineImageValues,
 					ValuesFrom: []configv1beta1.ValueFrom{
 						{
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-							Namespace: labelsConfigMap.Namespace,
-							Name:      labelsConfigMap.Name,
+							Namespace: podAnnotationsConfigMap.Namespace,
+							Name:      podAnnotationsConfigMap.Name,
 						},
 						{
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-							Namespace: cleanupControllerConfigMap.Namespace,
-							Name:      cleanupControllerConfigMap.Name,
+							Namespace: probesConfigMap.Namespace,
+							Name:      probesConfigMap.Name,
 						},
+					},
+				},
+				{
+					RepositoryURL:    podinfoDriftRepoURL,
+					RepositoryName:   podinfoDriftRepoName,
+					ChartName:        podinfoDriftChartName,
+					ChartVersion:     podinfoDriftChartVersion,
+					ReleaseName:      podinfoExcludedRelease,
+					ReleaseNamespace: podinfoDriftNamespace,
+					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values:           baselineImageValues,
+					ValuesFrom: []configv1beta1.ValueFrom{
 						{
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-							Namespace: admissionControllerConfigMap.Namespace,
-							Name:      admissionControllerConfigMap.Name,
+							Namespace: probesConfigMap.Namespace,
+							Name:      probesConfigMap.Name,
 						},
 					},
 				},
 			}
 
-			By("use driftExclusion to ignore cleanup controller spec/replicas changes")
+			By("use driftExclusion to ignore podinfo-excluded's spec/replicas changes")
 			currentClusterProfile.Spec.DriftExclusions = []libsveltosv1beta1.DriftExclusion{
 				{
 					Paths: []string{"/spec/replicas"},
@@ -221,8 +202,8 @@ reportsController:
 						Kind:      kindDeployment,
 						Group:     appsGroupName,
 						Version:   apiVersionV1,
-						Namespace: kyvernoNamespace,
-						Name:      cleanupControllerDeplName,
+						Namespace: podinfoDriftNamespace,
+						Name:      podinfoExcludedRelease,
 					},
 				},
 			}
@@ -236,8 +217,8 @@ reportsController:
 						Group:     appsGroupName,
 						Version:   apiVersionV1,
 						Kind:      kindDeployment,
-						Namespace: kyvernoNamespace,
-						Name:      admissionControllerDeplName,
+						Namespace: podinfoDriftNamespace,
+						Name:      podinfoIgnoredRelease,
 					},
 				},
 			}
@@ -262,25 +243,25 @@ reportsController:
 		Expect(workloadClient).ToNot(BeNil())
 
 		expectedReplicas := int32(1)
-		Byf("Verifying Kyverno deployment %s/%s is created in the workload cluster (with label %s/%s and replicas %d)",
-			kyvernoNamespace, admissionControllerDeplName, clusterKey, tagValue, expectedReplicas)
+		Byf("Verifying podinfo deployment %s/%s is created in the workload cluster (with annotation %s/%s and replicas %d)",
+			podinfoDriftNamespace, podinfoIgnoredRelease, clusterKey, tagValue, expectedReplicas)
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
 			if err != nil {
 				return false
 			}
-			if !isDeplLabelCorrect(depl.Labels, clusterKey, tagValue) {
+			if !hasAnnotation(depl.Spec.Template.Annotations, clusterKey, tagValue) {
 				return false
 			}
 			return depl.Spec.Replicas != nil && *depl.Spec.Replicas == expectedReplicas
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying helm values")
-		verifyHelmValues(workloadClient, kyvernoNamespace, admissionControllerDeplName,
+		verifyHelmValues(workloadClient, podinfoDriftNamespace, podinfoIgnoredRelease,
 			livenessPeriodSecond, readinessPeriodSecond)
-		verifyHelmValues(workloadClient, kyvernoNamespace, cleanupControllerDeplName,
+		verifyHelmValues(workloadClient, podinfoDriftNamespace, podinfoExcludedRelease,
 			livenessPeriodSecond, readinessPeriodSecond)
 
 		verifyDriftDetectionManagerDeployment(workloadClient)
@@ -289,7 +270,8 @@ reportsController:
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
+			{ReleaseName: podinfoIgnoredRelease, ChartVersion: podinfoDriftChartVersion, Namespace: podinfoDriftNamespace},
+			{ReleaseName: podinfoExcludedRelease, ChartVersion: podinfoDriftChartVersion, Namespace: podinfoDriftNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -309,145 +291,88 @@ reportsController:
 		const sleepTime = 30
 		time.Sleep(sleepTime * time.Second)
 
-		// Change Kyverno image
+		// Change podinfo-excluded's image (this Deployment only has /spec/replicas excluded,
+		// so Sveltos is expected to revert this)
 		depl := &appsv1.Deployment{}
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kyvernoNamespace, Name: cleanupControllerDeplName}, depl)).To(Succeed())
-		imageChanged := false
-		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-				imageChanged = true
-				depl.Spec.Template.Spec.Containers[i].Image = cleanupImage
-			}
-		}
-		Expect(imageChanged).To(BeTrue())
+			types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, depl)).To(Succeed())
+		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
+		depl.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoExcludedDriftTag)
 		Expect(workloadClient.Update(context.TODO(), depl)).To(Succeed())
 
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kyvernoNamespace, Name: cleanupControllerDeplName}, depl)).To(Succeed())
-		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-				By("Kyverno image is set to v1.17.1")
-				Expect(depl.Spec.Template.Spec.Containers[i].Image).To(Equal(cleanupImage))
-			}
-		}
+			types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, depl)).To(Succeed())
+		By("podinfo-excluded image is set to the drift tag")
+		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(Equal(fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoExcludedDriftTag)))
 
 		Byf("Verifying Sveltos reacts to drift configuration change")
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: cleanupControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, depl)
 			if err != nil {
 				return false
 			}
-			for i := range depl.Spec.Template.Spec.Containers {
-				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoCleanupImageName {
-					return depl.Spec.Template.Spec.Containers[i].Image == "reg.kyverno.io/kyverno/cleanup-controller:v1.17.2"
-				}
-			}
-			return false
+			return depl.Spec.Template.Spec.Containers[0].Image == fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoBaselineTag)
 		}, timeout, pollingInterval).Should(BeTrue())
-		By("Kyverno image is reset to v1.17.2")
+		By("podinfo-excluded image is reset to the baseline tag")
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		// Change Kyverno image for admission controller
+		// Change podinfo-ignored's image (this Deployment has the driftDetectionIgnore
+		// annotation, so Sveltos is expected to leave this alone)
 		Expect(workloadClient.Get(context.TODO(),
-			types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)).To(Succeed())
-		imageChanged = false
-		for i := range depl.Spec.Template.Spec.Containers {
-			if depl.Spec.Template.Spec.Containers[i].Name == kyvernoNamespace {
-				imageChanged = true
-				depl.Spec.Template.Spec.Containers[i].Image = admissionImage
-			}
-		}
-		Expect(imageChanged).To(BeTrue())
+			types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)).To(Succeed())
+		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
+		depl.Spec.Template.Spec.Containers[0].Image = fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoIgnoredDriftTag)
 		Expect(workloadClient.Update(context.TODO(), depl)).To(Succeed())
 
 		Eventually(func() bool {
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
 			if err != nil {
 				return false
 			}
-			for i := range depl.Spec.Template.Spec.Containers {
-				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoNamespace {
-					By("Kyverno image is set to v1.17.1")
-					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
-				}
-			}
-			return false
+			By("podinfo-ignored image is set to the drift tag")
+			return depl.Spec.Template.Spec.Containers[0].Image == fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoIgnoredDriftTag)
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		Byf("Verifying Sveltos does not reacts to drift configuration change as admission controller has ignore annotation")
+		Byf("Verifying Sveltos does not reacts to drift configuration change as podinfo-ignored has ignore annotation")
 		Consistently(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
 			if err != nil {
 				return false
 			}
-			for i := range depl.Spec.Template.Spec.Containers {
-				if depl.Spec.Template.Spec.Containers[i].Name == kyvernoNamespace {
-					return depl.Spec.Template.Spec.Containers[i].Image == admissionImage
-				}
-			}
-			return false
+			return depl.Spec.Template.Spec.Containers[0].Image == fmt.Sprintf("%s:%s", podinfoDriftImageRepo, podinfoIgnoredDriftTag)
 		}, timeout/4, pollingInterval).Should(BeTrue())
-		By("Kyverno image is NOT reset to v1.17.2")
+		By("podinfo-ignored image is NOT reset to the baseline tag")
 
 		By("Change values section")
 		Expect(k8sClient.Get(context.TODO(),
 			types.NamespacedName{Name: clusterProfile.Name},
 			currentClusterProfile)).To(Succeed())
-		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-			{
-				RepositoryURL:    kyvernoRepoURL,
-				RepositoryName:   kyvernoNamespace,
-				ChartName:        kyvernoChartName,
-				ChartVersion:     kyvernoVersion371,
-				ReleaseName:      kyvernoLatestRelease,
-				ReleaseNamespace: kyvernoNamespace,
-				HelmChartAction:  configv1beta1.HelmChartActionInstall,
-				Values: `admissionController:
-  replicas: 3
-backgroundController:
-  replicas: 1
-cleanupController:
-  replicas: 1
-reportsController:
-  replicas: 1`,
-				ValuesFrom: []configv1beta1.ValueFrom{
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: labelsConfigMap.Namespace,
-						Name:      labelsConfigMap.Name,
-					},
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: cleanupControllerConfigMap.Namespace,
-						Name:      cleanupControllerConfigMap.Name,
-					},
-					{
-						Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-						Namespace: admissionControllerConfigMap.Namespace,
-						Name:      admissionControllerConfigMap.Name,
-					},
-				},
-			},
+		for i := range currentClusterProfile.Spec.HelmCharts {
+			if currentClusterProfile.Spec.HelmCharts[i].ReleaseName == podinfoIgnoredRelease {
+				currentClusterProfile.Spec.HelmCharts[i].Values = fmt.Sprintf(`replicaCount: 3
+image:
+  repository: %s
+  tag: %s`, podinfoDriftImageRepo, podinfoBaselineTag)
+			}
 		}
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
-		Byf("Verifying Kyverno deployment is updated in the workload cluster")
+		Byf("Verifying podinfo-ignored deployment is updated in the workload cluster")
 		Eventually(func() bool {
 			expectedReplicas := int32(3)
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
 			if err != nil {
 				return false
 			}
@@ -465,25 +390,31 @@ reportsController:
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
-		Byf("Verifying Kyverno deployment %s/%s is update in the workload cluster with label %s:%s",
-			kyvernoNamespace, admissionControllerDeplName, clusterKey, tagValue)
+		Byf("Verifying podinfo-ignored deployment %s/%s is updated in the workload cluster with annotation %s:%s",
+			podinfoDriftNamespace, podinfoIgnoredRelease, clusterKey, tagValue)
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
 			if err != nil {
 				return false
 			}
-			return isDeplLabelCorrect(depl.Labels, clusterKey, tagValue)
+			return hasAnnotation(depl.Spec.Template.Annotations, clusterKey, tagValue)
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		deleteClusterProfile(clusterProfile)
 
-		Byf("Verifying Kyverno deployment is removed from workload cluster")
+		Byf("Verifying podinfo deployments are removed from workload cluster")
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: kyvernoLatestRelease}, depl)
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoIgnoredRelease}, depl)
+			return apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 
@@ -532,11 +463,11 @@ func verifyHelmValues(workloadClient client.Client, deploymentNamespace, deploym
 	Expect(depl.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(livenessPeriodSecond))
 }
 
-func isDeplLabelCorrect(lbls map[string]string, key, value string) bool {
-	if lbls == nil {
+func hasAnnotation(annotations map[string]string, key, value string) bool {
+	if annotations == nil {
 		return false
 	}
-	v := lbls[key]
+	v := annotations[key]
 
 	return v == value
 }
@@ -595,18 +526,18 @@ func verifyResourceSummary(c client.Client, clusterSummary *configv1beta1.Cluste
 
 	Expect(currentResourceSummary).ToNot(BeNil())
 
-	verifyAdmissionControllerDeployment(c, currentResourceSummary, kindDeployment)
+	verifyIgnoredResourceSummary(c, currentResourceSummary, kindDeployment)
 
 	verifySpecReplicas(currentResourceSummary, kindDeployment)
 }
 
-func verifyAdmissionControllerDeployment(c client.Client,
+func verifyIgnoredResourceSummary(c client.Client,
 	currentResourceSummary *libsveltosv1beta1.ResourceSummary, deploymentKind string) {
 
-	// Patches has been configured to ignore admission controller for configuration
+	// Patches has been configured to ignore podinfo-ignored for configuration
 	// drift (by adding annotation projectsveltos.io/driftDetectionIgnore)
 	Byf("Verify deployment %s/%s is marked to be ignored for configuration drift",
-		kyvernoNamespace, admissionControllerDeplName)
+		podinfoDriftNamespace, podinfoIgnoredRelease)
 	Eventually(func() bool {
 		resourceSummaries := &libsveltosv1beta1.ResourceSummaryList{}
 		err := c.List(context.TODO(), resourceSummaries)
@@ -624,8 +555,8 @@ func verifyAdmissionControllerDeployment(c client.Client,
 		for i := range currentResourceSummary.Spec.ChartResources {
 			for j := range currentResourceSummary.Spec.ChartResources[i].Resources {
 				r := &currentResourceSummary.Spec.ChartResources[i].Resources[j]
-				if r.Kind == deploymentKind && r.Namespace == kyvernoNamespace &&
-					r.Name == admissionControllerDeplName {
+				if r.Kind == deploymentKind && r.Namespace == podinfoDriftNamespace &&
+					r.Name == podinfoIgnoredRelease {
 
 					ignore = r.IgnoreForConfigurationDrift
 					found = true
@@ -640,8 +571,8 @@ func verifyAdmissionControllerDeployment(c client.Client,
 	for i := range currentResourceSummary.Spec.ChartResources {
 		for j := range currentResourceSummary.Spec.ChartResources[i].Resources {
 			r := &currentResourceSummary.Spec.ChartResources[i].Resources[j]
-			if r.Kind == deploymentKind && r.Namespace == kyvernoNamespace &&
-				r.Name == admissionControllerDeplName {
+			if r.Kind == deploymentKind && r.Namespace == podinfoDriftNamespace &&
+				r.Name == podinfoIgnoredRelease {
 
 				continue
 			} else {
@@ -655,13 +586,13 @@ func verifySpecReplicas(currentResourceSummary *libsveltosv1beta1.ResourceSummar
 	deploymentKind string) {
 
 	found := false
-	// DriftExclusion has been configured to ignore cleanup controller spec/replicas
+	// DriftExclusion has been configured to ignore podinfo-excluded's spec/replicas
 	Byf("Verify deployment %s/%s spec/replicas is marked to be ignored for configuration drift",
-		kyvernoNamespace, cleanupControllerDeplName)
+		podinfoDriftNamespace, podinfoExcludedRelease)
 	for i := range currentResourceSummary.Spec.Patches {
 		p := &currentResourceSummary.Spec.Patches[i]
-		if p.Target.Kind == deploymentKind && p.Target.Namespace == kyvernoNamespace &&
-			p.Target.Name == cleanupControllerDeplName {
+		if p.Target.Kind == deploymentKind && p.Target.Namespace == podinfoDriftNamespace &&
+			p.Target.Name == podinfoExcludedRelease {
 
 			Expect(p.Patch).To(ContainSubstring("/spec/replicas"))
 			found = true

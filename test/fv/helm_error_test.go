@@ -59,7 +59,7 @@ data:
       replicas: 2`
 )
 
-var _ = Describe("HelmSourceIntegrity", Serial, func() {
+var _ = Describe("HelmSourceIntegrity", func() {
 	const namePrefix = "helm-error-"
 
 	It("An error in helm values does not remove helm chart deployed with GPG provenance verification", Label("FV", "PULLMODE"), func() {

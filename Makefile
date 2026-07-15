@@ -34,7 +34,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.12.0
+TAG ?= main
 
 .PHONY: all
 all: build
@@ -216,7 +216,7 @@ WORKLOAD_CLUSTER_NAME ?= clusterapi-workload
 TMP_FILE ?= test/pullmode-kubeconfig_data.tmp
 TIMEOUT ?= 10m
 WORKLOAD_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
-NUM_NODES ?= 6
+NUM_NODES ?= 8
 
 .PHONY: quickstart
 quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos

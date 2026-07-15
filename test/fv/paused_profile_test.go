@@ -49,7 +49,7 @@ var _ = Describe("Paused Profile", func() {
 				types.NamespacedName{Name: clusterProfile.Name},
 				currentclusterProfile)
 			return err == nil && len(currentclusterProfile.Status.MatchingClusterRefs) == 0
-		}, timeout, pollingInterval).Should(BeTrue())
+		}, timeout/2, pollingInterval).Should(BeTrue())
 
 		By("Remove the paused annotation from the ClusterProfile")
 		currentclusterProfile := &configv1beta1.ClusterProfile{}

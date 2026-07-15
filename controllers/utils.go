@@ -66,6 +66,7 @@ const (
 	controllerNameClusterSummary        = "clustersummary"
 	appsGroupName                       = "apps"
 	stringTrue                          = "true"
+	stringFalse                         = "false"
 	annotationValueOk                   = "ok"
 )
 

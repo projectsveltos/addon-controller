@@ -4463,7 +4463,8 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.ResetValues = getResetValues(requestedChart.Options)
 	upgradeClient.ReuseValues = getReuseValues(requestedChart.Options)
 	upgradeClient.ResetThenReuseValues = getResetThenReuseValues(requestedChart.Options)
-	upgradeClient.ForceReplace = getForceValue(requestedChart.Options)
+	force := getForceValue(requestedChart.Options)
+	upgradeClient.ForceReplace = force
 	upgradeClient.Labels = getLabelsValue(requestedChart.Options)
 	upgradeClient.Description = getDescriptionValue(requestedChart.Options)
 	upgradeClient.MaxHistory = getMaxHistoryValue(requestedChart.Options)
@@ -4474,8 +4475,15 @@ func getHelmUpgradeClient(requestedChart *configv1beta1.HelmChart, actionConfig 
 	upgradeClient.CaFile = registryOptions.caPath
 	upgradeClient.PassCredentialsAll = getPassCredentialsToAllValue(requestedChart.Options)
 	upgradeClient.TakeOwnership = getTakeOwnershipHelmValue(requestedChart.Options, true)
-	upgradeClient.ServerSideApply = stringTrue
-	upgradeClient.ForceConflicts = true
+	if force {
+		// ForceReplace (delete+recreate) is rejected by the Helm SDK when combined
+		// with server-side apply or ForceConflicts; disable both in that case.
+		upgradeClient.ServerSideApply = stringFalse
+		upgradeClient.ForceConflicts = false
+	} else {
+		upgradeClient.ServerSideApply = stringTrue
+		upgradeClient.ForceConflicts = true
+	}
 
 	if actionConfig.RegistryClient != nil {
 		upgradeClient.SetRegistryClient(actionConfig.RegistryClient)

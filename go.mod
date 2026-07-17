@@ -20,7 +20,7 @@ require (
 	github.com/onsi/gomega v1.42.1
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pkg/errors v0.9.1
-	github.com/projectsveltos/libsveltos v1.12.0
+	github.com/projectsveltos/libsveltos v1.12.1-0.20260715200227-148c08381bed
 	github.com/prometheus/client_golang v1.23.2
 	github.com/robfig/cron v1.2.0
 	github.com/sigstore/cosign/v3 v3.1.1

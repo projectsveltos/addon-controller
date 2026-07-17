@@ -18,13 +18,19 @@ package fv_test
 
 const (
 	// Kyverno chart details
-	kyvernoRepoURL       = "https://kyverno.github.io/kyverno/"
-	kyvernoChartName     = "kyverno/kyverno"
-	kyvernoVersion372    = "v3.7.2"
-	kyvernoVersion372S   = "3.7.2"
-	kyvernoVersion371    = "v3.7.1"
-	kyvernoVersion371S   = "3.7.1"
-	kyvernoLatestRelease = "kyverno-latest"
+	kyvernoRepoURL              = "https://kyverno.github.io/kyverno/"
+	kyvernoChartName            = "kyverno/kyverno"
+	kyvernoNamespace            = "kyverno"
+	admissionControllerDeplName = "kyverno-admission-controller"
+	kyvernoVersion382           = "v3.8.2"
+	kyvernoVersion382S          = "3.8.2"
+	kyvernoVersion381           = "v3.8.1"
+	kyvernoVersion381S          = "3.8.1"
+	kyvernoVersion372           = "v3.7.2"
+	kyvernoVersion372S          = "3.7.2"
+	kyvernoVersion371           = "v3.7.1"
+	kyvernoVersion371S          = "3.7.1"
+	kyvernoLatestRelease        = "kyverno-latest"
 
 	// Prometheus community chart details
 	prometheusCommunityURL  = "https://prometheus-community.github.io/helm-charts"

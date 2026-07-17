@@ -660,6 +660,14 @@ type KustomizationRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
+
+	// Force indicates whether Sveltos should delete and recreate a resource defined in this
+	// KustomizationRef when an update is rejected with an error that only a delete+recreate
+	// can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+	// By default, such errors are surfaced instead of recreating the resource.
+	// +kubebuilder:default:=false
+	// +optional
+	Force bool `json:"force,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching
@@ -778,6 +786,14 @@ type PolicyRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	SkipNamespaceCreation bool `json:"skipNamespaceCreation,omitempty"`
+
+	// Force indicates whether Sveltos should delete and recreate a resource defined in this
+	// PolicyRef when an update is rejected with an error that only a delete+recreate can
+	// resolve (eg an invalid combination of fields, or a field enforced as immutable).
+	// By default, such errors are surfaced instead of recreating the resource.
+	// +kubebuilder:default:=false
+	// +optional
+	Force bool `json:"force,omitempty"`
 
 	// RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
 	// When set, Kind/Name/Namespace must be omitted.

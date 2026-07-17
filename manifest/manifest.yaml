@@ -1076,6 +1076,14 @@ spec:
                       - Local
                       - Remote
                       type: string
+                    force:
+                      default: false
+                      description: |-
+                        Force indicates whether Sveltos should delete and recreate a resource defined in this
+                        KustomizationRef when an update is rejected with an error that only a delete+recreate
+                        can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                        By default, such errors are surfaced instead of recreating the resource.
+                      type: boolean
                     kind:
                       description: |-
                         Kind of the resource. Supported kinds are:
@@ -1373,6 +1381,14 @@ spec:
                       - Local
                       - Remote
                       type: string
+                    force:
+                      default: false
+                      description: |-
+                        Force indicates whether Sveltos should delete and recreate a resource defined in this
+                        PolicyRef when an update is rejected with an error that only a delete+recreate can
+                        resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                        By default, such errors are surfaced instead of recreating the resource.
+                      type: boolean
                     kind:
                       description: |-
                         Kind of the resource. Supported kinds are:
@@ -3271,6 +3287,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            KustomizationRef when an update is rejected with an error that only a delete+recreate
+                            can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:
@@ -3568,6 +3592,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            PolicyRef when an update is rejected with an error that only a delete+recreate can
+                            resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:
@@ -4785,6 +4817,14 @@ spec:
                                     - Local
                                     - Remote
                                     type: string
+                                  force:
+                                    default: false
+                                    description: |-
+                                      Force indicates whether Sveltos should delete and recreate a resource defined in this
+                                      PolicyRef when an update is rejected with an error that only a delete+recreate can
+                                      resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                                      By default, such errors are surfaced instead of recreating the resource.
+                                    type: boolean
                                   kind:
                                     description: |-
                                       Kind of the resource. Supported kinds are:
@@ -5147,6 +5187,14 @@ spec:
                                     - Local
                                     - Remote
                                     type: string
+                                  force:
+                                    default: false
+                                    description: |-
+                                      Force indicates whether Sveltos should delete and recreate a resource defined in this
+                                      PolicyRef when an update is rejected with an error that only a delete+recreate can
+                                      resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                                      By default, such errors are surfaced instead of recreating the resource.
+                                    type: boolean
                                   kind:
                                     description: |-
                                       Kind of the resource. Supported kinds are:
@@ -6484,6 +6532,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            KustomizationRef when an update is rejected with an error that only a delete+recreate
+                            can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:
@@ -6781,6 +6837,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            PolicyRef when an update is rejected with an error that only a delete+recreate can
+                            resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:
@@ -8710,6 +8774,14 @@ spec:
                       - Local
                       - Remote
                       type: string
+                    force:
+                      default: false
+                      description: |-
+                        Force indicates whether Sveltos should delete and recreate a resource defined in this
+                        KustomizationRef when an update is rejected with an error that only a delete+recreate
+                        can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                        By default, such errors are surfaced instead of recreating the resource.
+                      type: boolean
                     kind:
                       description: |-
                         Kind of the resource. Supported kinds are:
@@ -9007,6 +9079,14 @@ spec:
                       - Local
                       - Remote
                       type: string
+                    force:
+                      default: false
+                      description: |-
+                        Force indicates whether Sveltos should delete and recreate a resource defined in this
+                        PolicyRef when an update is rejected with an error that only a delete+recreate can
+                        resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                        By default, such errors are surfaced instead of recreating the resource.
+                      type: boolean
                     kind:
                       description: |-
                         Kind of the resource. Supported kinds are:
@@ -10646,7 +10726,7 @@ spec:
         - --shard-key=
         - --capi-onboard-annotation=
         - --v=5
-        - --version=v1.12.0
+        - --version=main
         - --agent-in-mgmt-cluster=false
         command:
         - /manager
@@ -10663,7 +10743,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/addon-controller:v1.12.0
+        image: docker.io/projectsveltos/addon-controller:main
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -10721,7 +10801,7 @@ spec:
               fieldPath: metadata.namespace
         - name: IS_INITIALIZATION
           value: "true"
-        image: docker.io/projectsveltos/addon-controller:v1.12.0
+        image: docker.io/projectsveltos/addon-controller:main
         name: initialization
         securityContext:
           allowPrivilegeEscalation: false

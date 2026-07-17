@@ -806,6 +806,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            KustomizationRef when an update is rejected with an error that only a delete+recreate
+                            can resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:
@@ -1103,6 +1111,14 @@ spec:
                           - Local
                           - Remote
                           type: string
+                        force:
+                          default: false
+                          description: |-
+                            Force indicates whether Sveltos should delete and recreate a resource defined in this
+                            PolicyRef when an update is rejected with an error that only a delete+recreate can
+                            resolve (eg an invalid combination of fields, or a field enforced as immutable).
+                            By default, such errors are surfaced instead of recreating the resource.
+                          type: boolean
                         kind:
                           description: |-
                             Kind of the resource. Supported kinds are:

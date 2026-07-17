@@ -48,6 +48,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 const (
@@ -292,7 +293,7 @@ var _ = Describe("HandlersUtils", func() {
 		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// following will successfully create deployment
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -336,7 +337,7 @@ var _ = Describe("HandlersUtils", func() {
 		isDryRun = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		isDriftDetection = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// New deploy will not override replicas
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -361,7 +362,7 @@ var _ = Describe("HandlersUtils", func() {
 
 		isDryRun := false
 		isDriftDetection := true
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -405,7 +406,7 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		// New deploy will override labels
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -429,7 +430,7 @@ var _ = Describe("HandlersUtils", func() {
 		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		isDriftDetection := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// following will successfully create deployment
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, nil, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -481,7 +482,7 @@ var _ = Describe("HandlersUtils", func() {
 		isDryRun = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
 		isDriftDetection = clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection
 		// New deploy will not override replicas
-		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
+		_, err = deployer.UpdateResource(context.TODO(), dr, isDriftDetection, isDryRun, false, clusterSummary.Spec.ClusterProfileSpec.DriftExclusions,
 			u, []string{testStatusField}, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -561,7 +562,7 @@ var _ = Describe("HandlersUtils", func() {
 		// created)
 		resourceReports, err := controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: services},
-			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
@@ -593,7 +594,7 @@ var _ = Describe("HandlersUtils", func() {
 		// ( if the ClusterProfile were to be changed from DryRun, nothing would happen).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: services},
-			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
@@ -631,7 +632,7 @@ var _ = Describe("HandlersUtils", func() {
 		// (if the ClusterProfile were to be changed from DryRun, both service would be updated).
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, secret, map[string]string{testServiceKey: newContent},
-			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
@@ -642,7 +643,7 @@ var _ = Describe("HandlersUtils", func() {
 		tmpSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()}}
 		resourceReports, err = controllers.DeployContent(context.TODO(), false,
 			testEnv.Config, testEnv.Client, tmpSecret, map[string]string{testServiceKey: services},
-			defaultTier, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
@@ -1507,6 +1508,68 @@ status:
 
 		// WatchFields produces a different (more restrictive) hash than IgnoreStatusChanges alone
 		Expect(hashWithWatchFields).ToNot(Equal(hashIgnoreStatus))
+	})
+})
+
+var _ = Describe("collectReferencedObjects", func() {
+	It("copies Force from PolicyRef onto the referencedObject for every supported Kind", func() {
+		references := []configv1beta1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(), Name: randomString(),
+				DeploymentType: configv1beta1.DeploymentTypeRemote,
+				Force:          true,
+			},
+			{
+				Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
+				Namespace: randomString(), Name: randomString(),
+				DeploymentType: configv1beta1.DeploymentTypeRemote,
+				Force:          false,
+			},
+		}
+
+		_, remote := controllers.CollectReferencedObjects(references)
+		Expect(len(remote)).To(Equal(2))
+		Expect(remote[0].Force).To(BeTrue())
+		Expect(remote[1].Force).To(BeFalse())
+	})
+
+	It("copies Force from a RemoteURL PolicyRef onto the referencedObject", func() {
+		references := []configv1beta1.PolicyRef{
+			{
+				RemoteURL: &configv1beta1.RemoteURL{
+					URL: "https://example.com/manifest.yaml",
+				},
+				DeploymentType: configv1beta1.DeploymentTypeRemote,
+				Force:          true,
+			},
+		}
+
+		_, remote := controllers.CollectReferencedObjects(references)
+		Expect(len(remote)).To(Equal(1))
+		Expect(remote[0].Force).To(BeTrue())
+	})
+})
+
+var _ = Describe("prepareBundleSettersWithResourceInfo", func() {
+	It("threads force onto the ConfigurationBundle options", func() {
+		kind := randomString()
+		namespace := randomString()
+		name := randomString()
+		var tier int32 = 100
+
+		setters := controllers.PrepareBundleSettersWithResourceInfo(kind, namespace, name, tier, true, true)
+		Expect(len(setters)).To(Equal(1))
+
+		bundleOptions := &pullmode.BundleOptions{}
+		setters[0](bundleOptions)
+
+		Expect(bundleOptions.ReferencedObjectKind).To(Equal(kind))
+		Expect(bundleOptions.ReferencedObjectNamespace).To(Equal(namespace))
+		Expect(bundleOptions.ReferencedObjectName).To(Equal(name))
+		Expect(bundleOptions.ReferencedTier).To(Equal(tier))
+		Expect(bundleOptions.SkipNamespaceCreation).To(BeTrue())
+		Expect(bundleOptions.Force).To(BeTrue())
 	})
 })
 

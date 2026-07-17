@@ -332,7 +332,7 @@ func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destCo
 	l.V(logs.LogDebug).Info("deploying URL content")
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, syntheticSource,
-		data, ref.Tier, ref.SkipNamespaceCreation, dCtx, l)
+		data, ref.Tier, ref.SkipNamespaceCreation, ref.Force, dCtx, l)
 }
 
 // minURLInterval returns the shortest polling interval across all URL-based PolicyRefs,

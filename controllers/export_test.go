@@ -107,16 +107,18 @@ var (
 	GenericDeploy           = genericDeploy
 	GenericUndeploy         = genericUndeploy
 
-	GetEntryKey                  = getEntryKey
-	DeployContentOfConfigMap     = deployContentOfConfigMap
-	DeployContentOfSecret        = deployContentOfSecret
-	DeployContent                = deployContent
-	GetClusterSummaryAdmin       = getClusterSummaryAdmin
-	CollectContent               = collectContent
-	UndeployStaleResources       = undeployStaleResources
-	GetDeployedGroupVersionKinds = getDeployedGroupVersionKinds
-	GetSecret                    = getSecret
-	ReadFiles                    = readFiles
+	GetEntryKey                          = getEntryKey
+	DeployContentOfConfigMap             = deployContentOfConfigMap
+	DeployContentOfSecret                = deployContentOfSecret
+	DeployContent                        = deployContent
+	GetClusterSummaryAdmin               = getClusterSummaryAdmin
+	CollectContent                       = collectContent
+	CollectReferencedObjects             = collectReferencedObjects
+	PrepareBundleSettersWithResourceInfo = prepareBundleSettersWithResourceInfo
+	UndeployStaleResources               = undeployStaleResources
+	GetDeployedGroupVersionKinds         = getDeployedGroupVersionKinds
+	GetSecret                            = getSecret
+	ReadFiles                            = readFiles
 
 	AddExtraLabels      = addExtraLabels
 	AddExtraAnnotations = addExtraAnnotations

@@ -36,6 +36,23 @@ import (
 var _ = Describe("Helm", Serial, func() {
 	const (
 		namePrefix = "tier-"
+
+		// kro is used here (instead of kyverno, used by other Helm FV tests) because its chart has
+		// no hooks: kyverno's post-upgrade hook made this test flaky, timing out whenever a hook's
+		// API call to the workload cluster hit a transient connection drop, since recovering from
+		// that costs a full extra reconcile+upgrade cycle on top of the fixed FV timeout.
+		kroRepoURL        = "oci://registry.k8s.io/kro/charts"
+		kroRepoName       = "kro-repo"
+		kroChartName      = "kro"
+		kroNamespace      = "kro-system"
+		kroReleaseName    = "kro"
+		kroDeploymentName = "kro"
+		// kro's chart is pulled from OCI using the bare tag ("0.9.2"), but Sveltos reports the
+		// version recorded in the chart's own Chart.yaml ("v0.9.2") in ClusterConfiguration.
+		kroVersion092         = "0.9.2"
+		kroVersion092Reported = "v0.9.2"
+		kroVersion091         = "0.9.1"
+		kroVersion091Reported = "v0.9.1"
 	)
 
 	It("Use tier to solve conflicts", Label("FV", "PULLMODE", "EXTENDED"), func() {
@@ -57,12 +74,12 @@ var _ = Describe("Helm", Serial, func() {
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
-					RepositoryURL:    kyvernoRepoURL,
-					RepositoryName:   kyvernoNamespace,
-					ChartName:        kyvernoChartName,
-					ChartVersion:     kyvernoVersion372,
-					ReleaseName:      kyvernoLatestRelease,
-					ReleaseNamespace: kyvernoNamespace,
+					RepositoryURL:    kroRepoURL,
+					RepositoryName:   kroRepoName,
+					ChartName:        kroChartName,
+					ChartVersion:     kroVersion092,
+					ReleaseName:      kroReleaseName,
+					ReleaseNamespace: kroNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
 				},
 				{
@@ -103,18 +120,18 @@ var _ = Describe("Helm", Serial, func() {
 		Expect(err).To(BeNil())
 		Expect(workloadClient).ToNot(BeNil())
 
-		Byf("Verifying kyverno deployment is created in the workload cluster")
+		Byf("Verifying kro deployment is created in the workload cluster")
 		Eventually(func() error {
 			depl := &appsv1.Deployment{}
 			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: admissionControllerDeplName}, depl)
+				types.NamespacedName{Namespace: kroNamespace, Name: kroDeploymentName}, depl)
 		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion092Reported, Namespace: kroNamespace},
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
 			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
 		}
@@ -130,16 +147,16 @@ var _ = Describe("Helm", Serial, func() {
 
 		verifyClusterProfileMatches(newClusterProfile)
 
-		Byf("Configuring the new clusterProfile to deploy Kyverno")
+		Byf("Configuring the new clusterProfile to deploy kro")
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 			{
-				RepositoryURL:    kyvernoRepoURL,
-				RepositoryName:   kyvernoNamespace,
-				ChartName:        kyvernoChartName,
-				ChartVersion:     kyvernoVersion371,
-				ReleaseName:      kyvernoLatestRelease,
-				ReleaseNamespace: kyvernoNamespace,
+				RepositoryURL:    kroRepoURL,
+				RepositoryName:   kroRepoName,
+				ChartName:        kroChartName,
+				ChartVersion:     kroVersion091,
+				ReleaseName:      kroReleaseName,
+				ReleaseNamespace: kroNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
 			},
 		}
@@ -205,6 +222,9 @@ var _ = Describe("Helm", Serial, func() {
 			return currentClusterSummary.Status.HelmReleaseSummaries[0].Status == configv1beta1.HelmChartStatusManaging
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", newClusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), newClusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
 		charts = []configv1beta1.Chart{
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
 			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
@@ -215,14 +235,14 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion371S, Namespace: kyvernoNamespace},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion091Reported, Namespace: kroNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
 			newClusterSummary.Spec.ClusterNamespace, newClusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
-		Byf("Changing ClusterProfile %s tier to 100 (above profile1 tier 90); profile1 should reclaim kyverno", newClusterProfile.Name)
+		Byf("Changing ClusterProfile %s tier to 100 (above profile1 tier 90); profile1 should reclaim kro", newClusterProfile.Name)
 		Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: newClusterProfile.Name}, currentClusterProfile)).To(Succeed())
 		currentClusterProfile.Spec.Tier = 100
 		Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
@@ -231,7 +251,7 @@ var _ = Describe("Helm", Serial, func() {
 			currentClusterProfile.Name, &currentClusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
-		Byf("Verifying ClusterProfile %s ClusterSummary reports conflict for kyverno", newClusterProfile.Name)
+		Byf("Verifying ClusterProfile %s ClusterSummary reports conflict for kro", newClusterProfile.Name)
 		Eventually(func() bool {
 			currentClusterSummary := &configv1beta1.ClusterSummary{}
 			err = k8sClient.Get(context.TODO(),
@@ -249,7 +269,7 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: kyvernoLatestRelease, ChartVersion: kyvernoVersion372S, Namespace: kyvernoNamespace},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion092Reported, Namespace: kroNamespace},
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
 			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
 		}
@@ -258,14 +278,14 @@ var _ = Describe("Helm", Serial, func() {
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
 
-		deleteClusterProfile(clusterProfile)
 		deleteClusterProfile(newClusterProfile)
+		deleteClusterProfile(clusterProfile)
 
-		Byf("Verifying kyverno deployment is removed from workload cluster")
+		Byf("Verifying kro deployment is removed from workload cluster")
 		Eventually(func() bool {
 			depl := &appsv1.Deployment{}
 			err = workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: kyvernoNamespace, Name: kyvernoLatestRelease}, depl)
+				types.NamespacedName{Namespace: kroNamespace, Name: kroDeploymentName}, depl)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})

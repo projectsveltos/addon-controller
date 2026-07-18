@@ -34,6 +34,7 @@ import (
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clustercache"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -241,6 +242,9 @@ func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clus
 	f feature, currentHash []byte, logger logr.Logger) (bool, error) {
 
 	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	clustercache.GetManager().InvalidateOnAuthError(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType, deployerError)
 
 	// Check if error is a NonRetriableError type
 	var nonRetriableError *configv1beta1.NonRetriableError
@@ -511,6 +515,9 @@ func (r *ClusterSummaryReconciler) processUndeployResult(ctx context.Context, cl
 			r.updateFeatureStatus(clusterSummaryScope, f.id, status, nil, result.Err, logger)
 			return fmt.Errorf("feature is still being removed")
 		}
+
+		clustercache.GetManager().InvalidateOnAuthError(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, result.Err)
 
 		// Failure to undeploy because of missing permission is not treated as terminal: this Forbidden
 		// error also covers admission webhooks denying the delete, so the reason is still surfaced via

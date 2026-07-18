@@ -414,6 +414,10 @@ func kustomizationHash(ctx context.Context, c client.Client, clusterSummary *con
 func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
 	kustomizationRef *configv1beta1.KustomizationRef, logger logr.Logger) ([]byte, error) {
 
+	if kustomizationRef.RemoteURL != nil {
+		return getHashFromRemoteKustomizeURL(ctx, kustomizationRef.RemoteURL, clusterSummary, logger)
+	}
+
 	var result string
 	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c, clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, kustomizationRef.Namespace, clusterSummary.Spec.ClusterType)
@@ -472,6 +476,27 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 	}
 
 	return []byte(result), nil
+}
+
+// getHashFromRemoteKustomizeURL fetches the content referenced by a KustomizationRef's
+// RemoteURL and returns a hash covering it. It reuses fetchContent (rather than
+// fetchContentToDir) since only a byte stream that changes when the content changes is
+// needed here; the directory structure is only relevant when the content is actually
+// extracted for a kustomize build.
+func getHashFromRemoteKustomizeURL(ctx context.Context, remoteURL *configv1beta1.RemoteKustomizeURL,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) ([]byte, error) {
+
+	body, err := fetchContent(ctx, remoteURL.URL, remoteURL.SecretRef,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch remote Kustomize URL %s for hashing: %v",
+			remoteURL.URL, err))
+		return nil, err
+	}
+
+	hash := sha256.Sum256(body)
+	return []byte(hex.EncodeToString(hash[:])), nil
 }
 
 // instantiateKustomizeSubstituteValues gets all substitute values for a KustomizationRef and
@@ -788,7 +813,9 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 	kustomizationRef *configv1beta1.KustomizationRef, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
-	if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
+	if kustomizationRef.RemoteURL != nil {
+		return prepareFileSystemWithRemoteURL(ctx, kustomizationRef, clusterSummary, logger)
+	} else if kustomizationRef.Kind == string(libsveltosv1beta1.ConfigMapReferencedResourceKind) {
 		return prepareFileSystemWithConfigMap(ctx, c, kustomizationRef, clusterSummary, logger)
 	} else if kustomizationRef.Kind == string(libsveltosv1beta1.SecretReferencedResourceKind) {
 		return prepareFileSystemWithSecret(ctx, c, kustomizationRef, clusterSummary, logger)
@@ -817,6 +844,30 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 
 	s := source.(sourcev1.Source)
 	return prepareFileSystemWithFluxSource(s, logger)
+}
+
+// prepareFileSystemWithRemoteURL fetches the Kustomize directory content referenced by
+// kustomizationRef.RemoteURL and extracts it to a temporary directory, preserving the
+// archive's directory structure so kustomize build can resolve relative file references.
+func prepareFileSystemWithRemoteURL(ctx context.Context, kustomizationRef *configv1beta1.KustomizationRef,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (string, error) {
+
+	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s-%s",
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+	if err != nil {
+		return "", fmt.Errorf("tmp dir error: %w", err)
+	}
+
+	err = fetchContentToDir(ctx, kustomizationRef.RemoteURL.URL, kustomizationRef.RemoteURL.SecretRef,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType,
+		tmpDir, logger)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		return "", err
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("fetched remote Kustomize content from %s", kustomizationRef.RemoteURL.URL))
+	return tmpDir, nil
 }
 
 func prepareFileSystemWithConfigMap(ctx context.Context, c client.Client,

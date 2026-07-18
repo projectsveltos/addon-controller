@@ -616,12 +616,19 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
 	}
 
-	// If any PolicyRef uses a URL source, schedule a periodic re-fetch so that
-	// remote content changes are detected even without a Kubernetes watch event.
+	// If any PolicyRef or KustomizationRef uses a URL source, schedule a periodic
+	// re-fetch so that remote content changes are detected even without a Kubernetes
+	// watch event.
 	// We deliberately do NOT call setNextReconcileTime here: the interval is a
 	// polling floor, not a cooldown — external events should still trigger
 	// immediate reconciliation.
-	if interval := minURLInterval(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs); interval > 0 {
+	policyRefInterval := minURLInterval(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.PolicyRefs)
+	kustomizeRefInterval := minKustomizeURLInterval(clusterSummaryScope.ClusterSummary.Spec.ClusterProfileSpec.KustomizationRefs)
+	interval := policyRefInterval
+	if interval == 0 || (kustomizeRefInterval > 0 && kustomizeRefInterval < interval) {
+		interval = kustomizeRefInterval
+	}
+	if interval > 0 {
 		r.setNextReconcileTime(clusterSummaryScope, interval)
 		return reconcile.Result{RequeueAfter: interval}, nil
 	}

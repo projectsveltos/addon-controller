@@ -546,24 +546,30 @@ type ProvenanceVerification struct {
 	KeyringSecretRef corev1.SecretReference `json:"keyringSecretRef"`
 }
 
+// +kubebuilder:validation:XValidation:rule="has(self.remoteURL) != has(self.kind)",message="either remoteURL or kind must be set, but not both"
 type KustomizationRef struct {
 	// Namespace of the referenced resource.
 	// For ClusterProfile namespace can be left empty. In such a case, namespace will
 	// be implicit set to cluster's namespace.
 	// For Profile namespace must be left empty. The Profile namespace will be used.
 	// Namespace can be expressed as a template and instantiate using any cluster field.
-	Namespace string `json:"namespace"`
+	// Not used when RemoteURL is set.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 
 	// Name of the referenced resource.
 	// Name can be expressed as a template and instantiate using any cluster field.
-	// +kubebuilder:validation:MinLength=1
-	Name string `json:"name"`
+	// Required when RemoteURL is not set.
+	// +optional
+	Name string `json:"name,omitempty"`
 
 	// Kind of the resource. Supported kinds are:
 	// - flux GitRepository;OCIRepository;Bucket
 	// - ConfigMap/Secret
+	// Required when RemoteURL is not set.
 	// +kubebuilder:validation:Enum=GitRepository;OCIRepository;Bucket;ConfigMap;Secret
-	Kind string `json:"kind"`
+	// +optional
+	Kind string `json:"kind,omitempty"`
 
 	// Path to the directory containing the kustomization.yaml file, or the
 	// set of plain YAMLs a kustomization.yaml should be generated for.
@@ -668,6 +674,47 @@ type KustomizationRef struct {
 	// +kubebuilder:default:=false
 	// +optional
 	Force bool `json:"force,omitempty"`
+
+	// RemoteURL configures fetching the Kustomize directory content from an HTTP/HTTPS
+	// endpoint or an OCI registry, without requiring a Flux GitRepository/OCIRepository/Bucket
+	// or a ConfigMap/Secret.
+	// When set, Kind/Name/Namespace must be omitted.
+	// +optional
+	RemoteURL *RemoteKustomizeURL `json:"remoteURL,omitempty"`
+}
+
+// RemoteKustomizeURL groups all fields related to fetching a Kustomize directory from a
+// remote source. Unlike PolicyRef's RemoteURL, which serves a single raw YAML/JSON document,
+// the content here must preserve a directory tree, since kustomize build resolves files
+// referenced by relative path (bases, resources, patches, generator files, and so on).
+// Supports HTTP/HTTPS endpoints and OCI registries.
+type RemoteKustomizeURL struct {
+	// URL is the remote source serving the Kustomize directory content.
+	// Sveltos fetches the content on every reconciliation and redeploys if the
+	// content hash has changed.
+	// Supported schemes:
+	//   "http://" or "https://" — HTTP/HTTPS endpoint serving a gzipped tarball
+	//                             (.tar.gz) of the Kustomize directory
+	//   "oci://"                — OCI registry artifact whose layers are extracted
+	//                             the same way, preserving the directory tree
+	// +kubebuilder:validation:Pattern=`^(https?|oci)://`
+	URL string `json:"url"`
+
+	// Interval defines how often Sveltos re-fetches the source to detect changes.
+	// Defaults to 5 minutes.
+	// +optional
+	Interval *metav1.Duration `json:"interval,omitempty"`
+
+	// SecretRef references a Secret in the management cluster containing optional
+	// credentials for fetching the source. Both Name and Namespace must be set,
+	// allowing the Secret to live in any namespace (e.g. projectsveltos) so that
+	// a single Secret can be shared across clusters without replication.
+	// Supported Secret keys:
+	//   "token"              — Bearer token (Authorization: Bearer <token>)
+	//   "username"+"password" — HTTP Basic Auth or OCI registry basic auth
+	//   "caFile"             — PEM-encoded CA certificate for TLS verification
+	// +optional
+	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching

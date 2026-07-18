@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -157,6 +158,33 @@ func fetchOCI(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]byte, error) {
 
+	layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	for _, raw := range layers {
+		content, err := extractYAMLFromLayer(raw, rawURL, logger)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(content)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// pullOCIArtifactLayers connects to the OCI registry referenced by rawURL (scheme "oci://")
+// and returns the raw bytes of every layer in the artifact's manifest, in order.
+// Supported Secret keys: "token" (pre-obtained bearer token), "username"+"password" (basic auth
+// exchanged for a registry token), "caFile" (PEM CA for TLS verification).
+// The secretRef Name and Namespace support Go templating against the target cluster.
+// When Namespace is empty it defaults to clusterNamespace.
+func pullOCIArtifactLayers(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) ([][]byte, error) {
+
 	ref := strings.TrimPrefix(rawURL, "oci://")
 
 	repo, err := orasremote.NewRepository(ref)
@@ -232,7 +260,7 @@ func fetchOCI(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 		return nil, fmt.Errorf("failed to parse OCI manifest %s: %w", rawURL, err)
 	}
 
-	var buf bytes.Buffer
+	layers := make([][]byte, 0, len(manifest.Layers))
 	for _, layer := range manifest.Layers {
 		rc, err := repo.Fetch(ctx, layer)
 		if err != nil {
@@ -243,14 +271,10 @@ func fetchOCI(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 		if err != nil {
 			return nil, fmt.Errorf("failed to read OCI layer from %s: %w", rawURL, err)
 		}
-		content, err := extractYAMLFromLayer(raw, rawURL, logger)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(content)
+		layers = append(layers, raw)
 	}
 
-	return buf.Bytes(), nil
+	return layers, nil
 }
 
 // extractYAMLFromLayer extracts YAML/JSON manifest bytes from a single OCI layer.
@@ -353,4 +377,68 @@ func minURLInterval(refs []configv1beta1.PolicyRef) time.Duration {
 		}
 	}
 	return result
+}
+
+// minKustomizeURLInterval returns the shortest polling interval across all URL-based
+// KustomizationRefs, using defaultURLInterval for any entry that does not specify an
+// explicit interval. Returns 0 if no URL-based KustomizationRefs are present.
+func minKustomizeURLInterval(refs []configv1beta1.KustomizationRef) time.Duration {
+	result := time.Duration(0)
+	for i := range refs {
+		if refs[i].RemoteURL == nil {
+			continue
+		}
+		interval := defaultURLInterval
+		if refs[i].RemoteURL.Interval != nil && refs[i].RemoteURL.Interval.Duration > 0 {
+			interval = refs[i].RemoteURL.Interval.Duration
+		}
+		if result == 0 || interval < result {
+			result = interval
+		}
+	}
+	return result
+}
+
+// fetchContentToDir retrieves a Kustomize directory tree from a remote source and
+// extracts it into destDir, preserving the relative paths of every file so that
+// kustomize build can resolve files referenced by relative path (bases, resources,
+// patches, generator files, and so on).
+// It dispatches on the URL scheme: "oci://" routes to fetchOCIToDir; everything else
+// is fetched via fetchURL and treated as a gzipped tarball (.tar.gz).
+func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	destDir string, logger logr.Logger) error {
+
+	if strings.HasPrefix(rawURL, "oci://") {
+		layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
+			return err
+		}
+		for i, raw := range layers {
+			if err := extractTarGzBytes(raw, destDir, i); err != nil {
+				return fmt.Errorf("failed to extract OCI layer from %s: %w", rawURL, err)
+			}
+		}
+		return nil
+	}
+
+	body, err := fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return err
+	}
+	return extractTarGzBytes(body, destDir, 0)
+}
+
+// extractTarGzBytes writes a gzipped tarball's raw bytes to a temporary file inside
+// destDir and extracts it in place using extractTarGz, preserving the archive's
+// directory structure. index disambiguates the temp file name when extracting
+// multiple archives (e.g. multiple OCI layers) into the same destDir.
+func extractTarGzBytes(raw []byte, destDir string, index int) error {
+	filePath := filepath.Join(destDir, fmt.Sprintf("remote-%d.tar.gz", index))
+	if err := os.WriteFile(filePath, raw, permission0600); err != nil {
+		return fmt.Errorf("failed to write archive to %s: %w", filePath, err)
+	}
+	defer os.Remove(filePath)
+
+	return extractTarGz(filePath, destDir)
 }

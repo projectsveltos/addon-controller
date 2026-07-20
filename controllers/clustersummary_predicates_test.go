@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
@@ -336,5 +337,69 @@ var _ = Describe("ClusterProfile Predicates: FluxSourcePredicates", func() {
 		result := sourcePredicate.Update(event.TypedUpdateEvent[*sourcev1.GitRepository]{
 			ObjectNew: gitRepository, ObjectOld: oldGitRepository})
 		Expect(result).To(BeFalse())
+	})
+})
+
+var _ = Describe("Clustersummary Predicates: ClusterSummaryPredicate", func() {
+	var logger logr.Logger
+	var clusterSummary *configv1beta1.ClusterSummary
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig())
+		clusterSummary = &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+					{
+						ReleaseName:      randomString(),
+						ReleaseNamespace: randomString(),
+						Status:           configv1beta1.HelmChartStatusManaging,
+						ChartName:        randomString(),
+						RepositoryName:   randomString(),
+						RepoURL:          testRepoURLBitnami,
+						ChartVersion:     testChartVersion100,
+					},
+				},
+			},
+		}
+	})
+
+	It("Update returns false when only LatestVersion/LatestPatchVersion/LastCheckedTime change", func() {
+		clusterSummaryPredicate := controllers.ClusterSummaryPredicate{Logger: logger}
+
+		oldClusterSummary := clusterSummary.DeepCopy()
+
+		newLatest := "1.1.0"
+		lastChecked := metav1.Now()
+		clusterSummary.Status.HelmReleaseSummaries[0].LatestVersion = &newLatest
+		clusterSummary.Status.HelmReleaseSummaries[0].LastCheckedTime = &lastChecked
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result := clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
+
+	It("Update returns true when FeatureSummaries change", func() {
+		clusterSummaryPredicate := controllers.ClusterSummaryPredicate{Logger: logger}
+
+		oldClusterSummary := clusterSummary.DeepCopy()
+
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result := clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeTrue())
 	})
 })

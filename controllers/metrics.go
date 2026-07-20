@@ -44,6 +44,10 @@ const (
 	metricProfileNamespaceLabel = "profile_namespace"
 	metricProfileNameLabel      = "profile_name"
 
+	metricChartNameLabel        = "chart_name"
+	metricReleaseNamespaceLabel = "release_namespace"
+	metricReleaseNameLabel      = "release_name"
+
 	statusSuccess = "success"
 	statusFailure = "failure"
 )
@@ -145,13 +149,57 @@ var (
 		[]string{metricClusterTypeLabel, metricClusterNamespaceLabel, metricClusterNameLabel, metricFeatureLabel,
 			metricProfileKindLabel, metricProfileNamespaceLabel, metricProfileNameLabel},
 	)
+
+	// outdatedHelmChartGauge is 1 when a ClusterSummary's managed HelmChart release is behind
+	// the latest version published upstream. Reset() once per checkOutdatedHelmCharts pass and
+	// re-Set(1) only for entries found outdated that pass, so stale series (charts that became
+	// up to date, or are no longer referenced) don't linger. Version strings are deliberately
+	// not labels here (high cardinality/churn) — they live only on HelmChartSummary.
+	outdatedHelmChartGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: metricNamespace,
+			Name:      "outdated_helm_chart",
+			Help:      "1 if a ClusterSummary's managed HelmChart release is behind the latest published upstream version",
+		},
+		[]string{metricProfileKindLabel, metricProfileNamespaceLabel, metricProfileNameLabel,
+			metricClusterTypeLabel, metricClusterNamespaceLabel, metricClusterNameLabel,
+			metricChartNameLabel, metricReleaseNamespaceLabel, metricReleaseNameLabel},
+	)
+
+	// outdatedHelmChartCheckLastRunTimestampGauge records when checkOutdatedHelmCharts last
+	// completed a full pass, regardless of whether any chart was found outdated. Unlike
+	// outdatedHelmChartGauge (which describes chart state), this describes the checker's own
+	// health: if it stops advancing, the checker is stuck or has stopped running, which is
+	// indistinguishable from "everything is up to date" by looking at outdatedHelmChartGauge
+	// alone.
+	outdatedHelmChartCheckLastRunTimestampGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: metricNamespace,
+			Name:      "outdated_helm_chart_check_last_run_timestamp_seconds",
+			Help:      "Unix timestamp of the last completed pass of the periodic outdated-Helm-chart checker",
+		},
+	)
+
+	// outdatedHelmChartCheckFailuresCounter counts chart keys skipped in a
+	// checkOutdatedHelmCharts pass because their upstream repository/registry could not be
+	// queried (unreachable, auth failure, timeout, chart not found, etc). Not labeled by chart:
+	// this is meant as a coarse "is the checker healthy" signal, not a per-chart diagnostic —
+	// per-chart failures are logged instead.
+	outdatedHelmChartCheckFailuresCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: metricNamespace,
+			Name:      "outdated_helm_chart_check_failures_total",
+			Help:      "Total number of chart keys skipped by the outdated-Helm-chart checker due to a fetch failure or timeout",
+		},
+	)
 )
 
 //nolint:gochecknoinits // forced pattern, can't workaround
 func init() {
 	// Register custom metrics with the global prometheus registry
 	metrics.Registry.MustRegister(reconcileDurationHistogram, reconciliationCounter, reconcileOutcomeCounter,
-		driftCounter, matchingClustersGauge, reconcileConsecutiveFailuresGauge, reconcileLastSuccessTimestampGauge)
+		driftCounter, matchingClustersGauge, reconcileConsecutiveFailuresGauge, reconcileLastSuccessTimestampGauge,
+		outdatedHelmChartGauge, outdatedHelmChartCheckLastRunTimestampGauge, outdatedHelmChartCheckFailuresCounter)
 }
 
 func programDuration(elapsed time.Duration, clusterNamespace, clusterName, featureID string,
@@ -279,6 +327,63 @@ func trackConsecutiveFailures(clusterNamespace, clusterName, featureID string, c
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking consecutive failures for %s %s/%s %s: %d",
 		clusterType, clusterNamespace, clusterName, featureID, consecutiveFailures))
+}
+
+// trackOutdatedHelmChart records that a ClusterSummary's managed HelmChart release currently
+// has a newer version published upstream than its deployed ChartVersion. Only called when an
+// outdated version was actually found. Pairs with clearOutdatedHelmChart, which
+// checkOutdatedHelmCharts calls instead of resetting the whole gauge, so a chart's exposed
+// state only ever changes when the real answer changes (see reconcileOutdatedHelmChartMetric).
+func trackOutdatedHelmChart(profileKind, profileNamespace, profileName, clusterType, clusterNamespace, clusterName,
+	chartName, releaseNamespace, releaseName string, logger logr.Logger) {
+
+	outdatedHelmChartGauge.With(prometheus.Labels{
+		metricProfileKindLabel:      profileKind,
+		metricProfileNamespaceLabel: profileNamespace,
+		metricProfileNameLabel:      profileName,
+		metricClusterTypeLabel:      clusterType,
+		metricClusterNamespaceLabel: clusterNamespace,
+		metricClusterNameLabel:      clusterName,
+		metricChartNameLabel:        chartName,
+		metricReleaseNamespaceLabel: releaseNamespace,
+		metricReleaseNameLabel:      releaseName,
+	}).Set(1)
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("tracking outdated helm chart %s (release %s/%s)",
+		chartName, releaseNamespace, releaseName))
+}
+
+// clearOutdatedHelmChart removes the gauge series for a chart confirmed, this pass, to no
+// longer be outdated (or no longer referenced). Deletes the series rather than Set(0), matching
+// outdatedHelmChartGauge's "absent means not outdated" convention.
+func clearOutdatedHelmChart(profileKind, profileNamespace, profileName, clusterType, clusterNamespace, clusterName,
+	chartName, releaseNamespace, releaseName string) {
+
+	outdatedHelmChartGauge.Delete(prometheus.Labels{
+		metricProfileKindLabel:      profileKind,
+		metricProfileNamespaceLabel: profileNamespace,
+		metricProfileNameLabel:      profileName,
+		metricClusterTypeLabel:      clusterType,
+		metricClusterNamespaceLabel: clusterNamespace,
+		metricClusterNameLabel:      clusterName,
+		metricChartNameLabel:        chartName,
+		metricReleaseNamespaceLabel: releaseNamespace,
+		metricReleaseNameLabel:      releaseName,
+	})
+}
+
+// trackHelmChartCheckCompleted records that a checkOutdatedHelmCharts pass just finished,
+// regardless of whether any individual chart fetch failed. Call once per pass.
+func trackHelmChartCheckCompleted(logger logr.Logger) {
+	outdatedHelmChartCheckLastRunTimestampGauge.Set(float64(time.Now().Unix()))
+
+	logger.V(logs.LogVerbose).Info("recorded completed outdated helm chart check pass")
+}
+
+// recordHelmChartCheckFailure increments the coarse checker-health failure counter. Call once
+// per chart key skipped due to a fetch failure or timeout, not once per affected ClusterSummary.
+func recordHelmChartCheckFailure() {
+	outdatedHelmChartCheckFailuresCounter.Inc()
 }
 
 // trackLastSuccess records the timestamp of the most recent successful (Provisioned/Removed) terminal

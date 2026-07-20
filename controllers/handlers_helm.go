@@ -1325,7 +1325,7 @@ func deploySingleChart(ctx context.Context, c client.Client, dCtx *deploymentCon
 		return nil, err
 	}
 
-	valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, dCtx, logger)
+	valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, currentRelease, dCtx, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -4656,7 +4656,7 @@ func getHelmChartValuesHash(ctx context.Context, c client.Client, instantiatedCh
 }
 
 func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1beta1.HelmChart,
-	dCtx *deploymentContext, logger logr.Logger) ([]byte, error) {
+	currentRelease *releaseInfo, dCtx *deploymentContext, logger logr.Logger) ([]byte, error) {
 
 	c := getManagementClusterClient()
 
@@ -4679,6 +4679,7 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
 				rs.ValuesHash = helmChartValuesHash
+				setResolvedHelmChartIdentity(ctx, c, dCtx.clusterSummary, rs, requestedChart, currentRelease, logger)
 			}
 		}
 
@@ -4686,6 +4687,87 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 	})
 
 	return helmChartValuesHash, err
+}
+
+// setResolvedHelmChartIdentity records, on rs, the fully resolved (post-template) chart
+// identity and credentials used to produce this release, plus the actually deployed chart
+// version. This lets a periodic, unrelated checker (see helmchart_outdated_check.go) compare
+// against the upstream repository/registry without ever having to resolve Go templates
+// itself. Never set for Flux-source-backed charts, since Sveltos ignores ChartVersion and
+// leaves version resolution to Flux in that case.
+func setResolvedHelmChartIdentity(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	rs *configv1beta1.HelmChartSummary, requestedChart *configv1beta1.HelmChart, currentRelease *releaseInfo,
+	logger logr.Logger) {
+
+	if isReferencingFluxSource(requestedChart) {
+		return
+	}
+
+	previousChartName := rs.ChartName
+	previousChartVersion := rs.ChartVersion
+
+	rs.ChartName = requestedChart.ChartName
+	rs.RepositoryName = requestedChart.RepositoryName
+	rs.RepoURL = requestedChart.RepositoryURL
+
+	if currentRelease != nil {
+		rs.ChartVersion = currentRelease.ChartVersion
+	}
+
+	if rs.ChartVersion != previousChartVersion {
+		clearStaleOutdatedVersionInfo(clusterSummary, rs, previousChartName, logger)
+	}
+
+	rs.CredentialsSecretRef = nil
+	if requestedChart.RegistryCredentialsConfig != nil && requestedChart.RegistryCredentialsConfig.CredentialsSecretRef != nil {
+		// CredentialsSecretRef.Namespace may still be empty here (meaning "implicit cluster
+		// namespace", resolved on demand wherever this is used for a deploy, e.g.
+		// createRegistryClientOptions). Resolve it to a concrete namespace now, while
+		// clusterSummary is in scope, so a later, cluster-agnostic checker never needs to
+		// repeat this resolution.
+		secretRef := requestedChart.RegistryCredentialsConfig.CredentialsSecretRef
+		resolvedNamespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, c,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			secretRef.Namespace, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to resolve credentials secret namespace: %v", err))
+		} else {
+			rs.CredentialsSecretRef = &corev1.SecretReference{
+				Namespace: resolvedNamespace,
+				Name:      secretRef.Name,
+			}
+		}
+	}
+}
+
+// clearStaleOutdatedVersionInfo nils out rs's LatestVersion/LatestPatchVersion/LastCheckedTime
+// and, if they were set, deletes the matching outdatedHelmChartGauge series. Called whenever a
+// deploy changes ChartVersion: the periodic checker (helmchart_outdated_check.go) only
+// re-evaluates a chart on its own interval, so without this a chart just upgraded to what was
+// previously flagged as the latest version would keep reading as outdated - in both status and
+// the metric - until the next pass.
+func clearStaleOutdatedVersionInfo(clusterSummary *configv1beta1.ClusterSummary, rs *configv1beta1.HelmChartSummary,
+	previousChartName string, logger logr.Logger) {
+
+	if rs.LatestVersion != nil || rs.LatestPatchVersion != nil {
+		profileOwnerRef, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(
+				fmt.Sprintf("failed to get profile owner reference while clearing stale outdated-version info: %v", err))
+		} else {
+			profileNamespace := ""
+			if profileOwnerRef.Kind == configv1beta1.ProfileKind {
+				profileNamespace = clusterSummary.Namespace
+			}
+			clearOutdatedHelmChart(profileOwnerRef.Kind, profileNamespace, profileOwnerRef.Name,
+				string(clusterSummary.Spec.ClusterType), clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+				previousChartName, rs.ReleaseNamespace, rs.ReleaseName)
+		}
+	}
+
+	rs.LatestVersion = nil
+	rs.LatestPatchVersion = nil
+	rs.LastCheckedTime = nil
 }
 
 func getHelmChartPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,

@@ -8086,14 +8086,55 @@ spec:
                   directly managed by ClusterProfile.
                 items:
                   properties:
+                    chartName:
+                      description: |-
+                        ChartName, RepositoryName, RepoURL, and ChartVersion mirror the fully resolved
+                        (post-template) HelmChart entry that produced this release, captured at deploy time.
+                        Never set for Flux-source-backed charts (Flux owns version resolution there).
+                      type: string
+                    chartVersion:
+                      type: string
                     conflictMessage:
                       description: |-
                         Status indicates whether ClusterSummary can manage the helm
                         chart or there is a conflict
                       type: string
+                    credentialsSecretRef:
+                      description: |-
+                        CredentialsSecretRef is the resolved secret reference (if any) used to authenticate
+                        against RepoURL, captured at deploy time. Only the reference is stored, never secret
+                        contents.
+                      properties:
+                        name:
+                          description: name is unique within a namespace to reference
+                            a secret resource.
+                          type: string
+                        namespace:
+                          description: namespace defines the space within which the
+                            secret name must be unique.
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
                     failureMessage:
                       description: FailureMessage provides the specific error from
                         the Helm engine for this release
+                      type: string
+                    lastCheckedTime:
+                      description: LastCheckedTime is when LatestVersion/LatestPatchVersion
+                        were last evaluated.
+                      format: date-time
+                      type: string
+                    latestPatchVersion:
+                      description: |-
+                        LatestPatchVersion is the highest published version sharing ChartVersion's
+                        major.minor, if greater than ChartVersion. Distinguishes "a same-minor patch bump is
+                        available" from "a newer minor/major line exists" (LatestVersion).
+                      type: string
+                    latestVersion:
+                      description: |-
+                        LatestVersion is the highest version currently published upstream for this chart, if
+                        greater than ChartVersion. Populated by a periodic background check, independent of
+                        the reconcile loop. Detection only: Sveltos never mutates ChartVersion based on this.
                       type: string
                     patchesHash:
                       description: PatchesHash represents of a unique value for the
@@ -8108,6 +8149,10 @@ spec:
                       description: ReleaseNamespace is the namespace release will
                         be installed
                       minLength: 1
+                      type: string
+                    repoURL:
+                      type: string
+                    repositoryName:
                       type: string
                     status:
                       description: |-

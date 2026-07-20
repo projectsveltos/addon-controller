@@ -75,33 +75,34 @@ import (
 )
 
 var (
-	setupLog                = ctrl.Log.WithName("setup")
-	diagnosticsAddress      string
-	insecureDiagnostics     bool
-	shardKey                string
-	workers                 int
-	concurrentReconciles    int
-	agentInMgmtCluster      bool
-	reportMode              controllers.ReportMode
-	tmpReportMode           int
-	restConfigQPS           float32
-	restConfigBurst         int
-	webhookPort             int
-	syncPeriod              time.Duration
-	conflictRetryTime       time.Duration
-	healthErrorRetryTime    time.Duration
-	version                 string
-	healthAddr              string
-	profilerAddress         string
-	driftDetectionConfigMap string
-	luaConfigMap            string
-	capiOnboardAnnotation   string
-	disableCaching          bool
-	disableTelemetry        bool
-	autoDeployDependencies  bool
-	registry                string
-	luaCallStackSize        int
-	luaRegistrySize         int
+	setupLog                     = ctrl.Log.WithName("setup")
+	diagnosticsAddress           string
+	insecureDiagnostics          bool
+	shardKey                     string
+	workers                      int
+	concurrentReconciles         int
+	agentInMgmtCluster           bool
+	reportMode                   controllers.ReportMode
+	tmpReportMode                int
+	restConfigQPS                float32
+	restConfigBurst              int
+	webhookPort                  int
+	syncPeriod                   time.Duration
+	conflictRetryTime            time.Duration
+	healthErrorRetryTime         time.Duration
+	version                      string
+	healthAddr                   string
+	profilerAddress              string
+	driftDetectionConfigMap      string
+	luaConfigMap                 string
+	capiOnboardAnnotation        string
+	disableCaching               bool
+	disableTelemetry             bool
+	autoDeployDependencies       bool
+	registry                     string
+	luaCallStackSize             int
+	luaRegistrySize              int
+	helmChartUpdateCheckInterval time.Duration
 )
 
 const (
@@ -296,6 +297,10 @@ func initFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&healthErrorRetryTime, "health-error-retry-time", defaultHealthErrorRetryTime*time.Second,
 		fmt.Sprintf("The minimum interval at which health check failures are retried. Default: %d seconds",
 			defaultHealthErrorRetryTime))
+
+	fs.DurationVar(&helmChartUpdateCheckInterval, "helm-chart-update-check-interval", time.Hour,
+		"Interval at which Sveltos checks whether newer versions of deployed Helm charts have been "+
+			"published upstream (HTTP repositories and OCI registries). Set to 0 to disable.")
 
 	// AutoDeployDependencies enables automatic deployment of prerequisite profiles.
 	//
@@ -670,6 +675,15 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
 			os.Exit(1)
+		}
+
+		// Needs a fleet-wide view of every ClusterSummary to dedup chart keys correctly, so
+		// this only ever runs on the default (unsharded) deployment, same as the reconcilers
+		// started above. Running it per-shard would give no benefit (chart-key dedup is
+		// inherently fleet-wide) and would reintroduce cross-shard inconsistency.
+		if helmChartUpdateCheckInterval > 0 {
+			go controllers.RunHelmChartUpdateChecker(ctx, mgr.GetClient(), helmChartUpdateCheckInterval,
+				ctrl.Log.WithName("helm-chart-update-checker"))
 		}
 	}
 

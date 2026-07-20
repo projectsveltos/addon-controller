@@ -129,6 +129,43 @@ type HelmChartSummary struct {
 	// +optional
 	// FailureMessage provides the specific error from the Helm engine for this release
 	FailureMessage *string `json:"failureMessage,omitempty"`
+
+	// ChartName, RepositoryName, RepoURL, and ChartVersion mirror the fully resolved
+	// (post-template) HelmChart entry that produced this release, captured at deploy time.
+	// Never set for Flux-source-backed charts (Flux owns version resolution there).
+	// +optional
+	ChartName string `json:"chartName,omitempty"`
+
+	// +optional
+	RepositoryName string `json:"repositoryName,omitempty"`
+
+	// +optional
+	RepoURL string `json:"repoURL,omitempty"`
+
+	// +optional
+	ChartVersion string `json:"chartVersion,omitempty"`
+
+	// CredentialsSecretRef is the resolved secret reference (if any) used to authenticate
+	// against RepoURL, captured at deploy time. Only the reference is stored, never secret
+	// contents.
+	// +optional
+	CredentialsSecretRef *corev1.SecretReference `json:"credentialsSecretRef,omitempty"`
+
+	// LatestVersion is the highest version currently published upstream for this chart, if
+	// greater than ChartVersion. Populated by a periodic background check, independent of
+	// the reconcile loop. Detection only: Sveltos never mutates ChartVersion based on this.
+	// +optional
+	LatestVersion *string `json:"latestVersion,omitempty"`
+
+	// LatestPatchVersion is the highest published version sharing ChartVersion's
+	// major.minor, if greater than ChartVersion. Distinguishes "a same-minor patch bump is
+	// available" from "a newer minor/major line exists" (LatestVersion).
+	// +optional
+	LatestPatchVersion *string `json:"latestPatchVersion,omitempty"`
+
+	// LastCheckedTime is when LatestVersion/LatestPatchVersion were last evaluated.
+	// +optional
+	LastCheckedTime *metav1.Time `json:"lastCheckedTime,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

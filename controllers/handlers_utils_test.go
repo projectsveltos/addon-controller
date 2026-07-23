@@ -111,6 +111,26 @@ spec:
         ports:
         - containerPort: 80`
 
+	statefulSetTemplate = `apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  serviceName: %s
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: main
+        image: nginx:latest`
+
 	deplTemplateWithStatus = `apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -566,7 +586,7 @@ var _ = Describe("HandlersUtils", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Create")
-		validateResourceReports(resourceReports, 2, 0, 0, 0)
+		validateResourceReports(resourceReports, 2, 0, 0, 0, 0)
 
 		// Create services in the workload cluster and have their content exactly match
 		// the content contained in the secret referenced by ClusterProfile.
@@ -598,7 +618,7 @@ var _ = Describe("HandlersUtils", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is NoAction")
-		validateResourceReports(resourceReports, 0, 0, 2, 0)
+		validateResourceReports(resourceReports, 0, 0, 2, 0, 0)
 
 		// Update the secret referenced by ClusterProfile by changing the content of the
 		// two services by adding extra label
@@ -636,7 +656,7 @@ var _ = Describe("HandlersUtils", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Update")
-		validateResourceReports(resourceReports, 0, 2, 0, 0)
+		validateResourceReports(resourceReports, 0, 2, 0, 0, 0)
 
 		// Pass a different secret to DeployContent, which means the services are contained in a different Secret
 		// and that is the one referenced by ClusterSummary. DeployContent will report conflicts in this case.
@@ -647,7 +667,7 @@ var _ = Describe("HandlersUtils", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		By("Validating action for all resourceReports is Conflict")
-		validateResourceReports(resourceReports, 0, 0, 0, 2)
+		validateResourceReports(resourceReports, 0, 0, 0, 2, 0)
 		for i := range resourceReports {
 			rr := &resourceReports[i]
 
@@ -656,6 +676,44 @@ var _ = Describe("HandlersUtils", func() {
 				"This resource is currently deployed because of %s %s/%s.",
 				namespace, i, clusterProfile.Name, secret.Kind, secret.Namespace, secret.Name)))
 		}
+	})
+
+	It("deployContent in DryRun mode reports a resource whose dry-run apply is rejected as Error", func() {
+		statefulSetName := randomString()
+		serviceName := randomString()
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
+
+		// Create the StatefulSet directly (outside of Sveltos), so a later DryRun apply attempting to
+		// change its (immutable) selector is rejected by the API server, exactly like a real StatefulSet
+		// spec update Sveltos did not create would be.
+		initialStatefulSet := fmt.Sprintf(statefulSetTemplate, statefulSetName, namespace, serviceName, "original", "original")
+		initialPolicy, err := k8s_utils.GetUnstructured([]byte(initialStatefulSet))
+		Expect(err).To(BeNil())
+		Expect(testEnv.Create(context.TODO(), initialPolicy)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, initialPolicy)).To(Succeed())
+
+		changedStatefulSet := fmt.Sprintf(statefulSetTemplate, statefulSetName, namespace, serviceName, "changed", "changed")
+		secret := createSecretWithPolicy(namespace, randomString(), changedStatefulSet)
+
+		Expect(addTypeInformationToObject(testEnv.Scheme(), secret)).To(Succeed())
+		Expect(addTypeInformationToObject(testEnv.Scheme(), clusterSummary)).To(Succeed())
+
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		resourceReports, err := controllers.DeployContent(context.TODO(), false,
+			testEnv.Config, testEnv.Client, secret, map[string]string{"statefulset": changedStatefulSet},
+			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("Forbidden"))
+
+		By("Validating the failing resource is still reported, with action Error")
+		validateResourceReports(resourceReports, 0, 0, 0, 0, 1)
+		Expect(resourceReports[0].Message).To(ContainSubstring("Forbidden"))
 	})
 
 	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {
@@ -1576,9 +1634,9 @@ var _ = Describe("prepareBundleSettersWithResourceInfo", func() {
 // validateResourceReports validates that number of resourceResources with certain actions
 // match the expected number per action
 func validateResourceReports(resourceReports []libsveltosv1beta1.ResourceReport,
-	created, updated, noAction, conflict int) {
+	created, updated, noAction, conflict, errored int) {
 
-	var foundCreated, foundUpdated, foundNoAction, foundConflict int
+	var foundCreated, foundUpdated, foundNoAction, foundConflict, foundErrored int
 	for i := range resourceReports {
 		rr := &resourceReports[i]
 		if rr.Action == string(libsveltosv1beta1.CreateResourceAction) {
@@ -1589,6 +1647,8 @@ func validateResourceReports(resourceReports []libsveltosv1beta1.ResourceReport,
 			foundNoAction++
 		} else if rr.Action == string(libsveltosv1beta1.ConflictResourceAction) {
 			foundConflict++
+		} else if rr.Action == string(libsveltosv1beta1.ErrorResourceAction) {
+			foundErrored++
 		}
 	}
 
@@ -1596,4 +1656,5 @@ func validateResourceReports(resourceReports []libsveltosv1beta1.ResourceReport,
 	Expect(foundUpdated).To(Equal(updated))
 	Expect(foundNoAction).To(Equal(noAction))
 	Expect(foundConflict).To(Equal(conflict))
+	Expect(foundErrored).To(Equal(errored))
 }

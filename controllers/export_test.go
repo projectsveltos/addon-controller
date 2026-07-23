@@ -124,8 +124,9 @@ var (
 	AddExtraAnnotations = addExtraAnnotations
 	AdjustNamespace     = adjustNamespace
 
-	ResourcesHash   = resourcesHash
-	GetResourceRefs = getResourceRefs
+	ResourcesHash                 = resourcesHash
+	GetResourceRefs               = getResourceRefs
+	PersistResourceReportsOnError = persistResourceReportsOnError
 
 	UndeployKustomizeRefs             = undeployKustomizeRefs
 	KustomizationHash                 = kustomizationHash

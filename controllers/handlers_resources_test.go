@@ -32,6 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -313,6 +315,49 @@ var _ = Describe("HandlersResource", func() {
 			fmt.Sprintf("%s.%s.%s", localReports[0].Resource.Kind, localReports[0].Resource.Version, localReports[0].Resource.Group)))
 		Expect(clusterSummary.Status.DeployedGVKs[0].DeployedGroupVersionKind).To(ContainElement(
 			fmt.Sprintf("%s.%s.%s", remoteReports[0].Resource.Kind, remoteReports[0].Resource.Version, remoteReports[0].Resource.Group)))
+	})
+
+	It("persistResourceReportsOnError still persists ResourceReports on ClusterReport before returning the deploy error", func() {
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeDryRun
+
+		clusterReport := &configv1beta1.ClusterReport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterops.GetClusterReportName(configv1beta1.ClusterProfileKind,
+					clusterProfile.Name, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType),
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+			Spec: configv1beta1.ClusterReportSpec{
+				ClusterNamespace: clusterSummary.Spec.ClusterNamespace,
+				ClusterName:      clusterSummary.Spec.ClusterName,
+			},
+		}
+
+		initObjects := []client.Object{clusterSummary, clusterReport}
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		remoteReports := []libsveltosv1beta1.ResourceReport{
+			{
+				Action:   string(libsveltosv1beta1.CreateResourceAction),
+				Resource: libsveltosv1beta1.Resource{Name: randomString(), Kind: randomString()},
+			},
+			{
+				Action:   string(libsveltosv1beta1.ErrorResourceAction),
+				Message:  "StatefulSet.apps is invalid: spec: Forbidden: updates to statefulset spec for fields other than allowed ones are forbidden",
+				Resource: libsveltosv1beta1.Resource{Name: randomString(), Kind: "StatefulSet"},
+			},
+		}
+		deployErr := fmt.Errorf("deploying resource StatefulSet %s/%s failed", namespace, randomString())
+
+		err := controllers.PersistResourceReportsOnError(context.TODO(), c, clusterSummary, false, remoteReports,
+			libsveltosv1beta1.FeatureResources, deployErr)
+		Expect(err).To(Equal(deployErr))
+
+		currentClusterReport := &configv1beta1.ClusterReport{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Name: clusterReport.Name, Namespace: clusterReport.Namespace}, currentClusterReport)).To(Succeed())
+		Expect(currentClusterReport.Status.ResourceReports).To(HaveLen(2))
+		Expect(currentClusterReport.Status.ResourceReports).To(ContainElement(remoteReports[1]))
 	})
 })
 

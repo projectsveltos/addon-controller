@@ -524,6 +524,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("failed to deploy resource %s %s/%s",
 				policy.GetKind(), policy.GetNamespace(), policy.GetName()))
+			reports = recordResourceApplyError(reports, clusterSummary.Spec.ClusterProfileSpec.SyncMode, resource, err)
 			if clusterSummary.Spec.ClusterProfileSpec.ContinueOnError {
 				errorMsg += fmt.Sprintf("%s: %v", errorPrefix, err)
 				continue
@@ -534,6 +535,17 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 
 	return reports, deployer.HandleDeployUnstructuredErrors(conflictErrorMsg, errorMsg,
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun)
+}
+
+// recordResourceApplyError appends a ResourceReport documenting a resource's apply failure when in DryRun
+// mode, so the failure surfaces in ClusterReport instead of the resource silently missing from it.
+func recordResourceApplyError(reports []libsveltosv1beta1.ResourceReport, syncMode configv1beta1.SyncMode,
+	resource *libsveltosv1beta1.Resource, err error) []libsveltosv1beta1.ResourceReport {
+
+	if syncMode != configv1beta1.SyncModeDryRun {
+		return reports
+	}
+	return append(reports, *deployer.GenerateErrorResourceReport(resource, err))
 }
 
 // requeueAllOldOwners gets the list of all ClusterProfile/Profile instances currently owning the resource in the

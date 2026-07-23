@@ -160,7 +160,8 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	// If a deployment error happened, do not try to clean stale resources. Because of the error potentially
 	// all resources might be considered stale at this time.
 	if deployError != nil {
-		return deployError
+		return persistResourceReportsOnError(ctx, c, clusterSummary, isPullMode, remoteResourceReports,
+			featureHandler.id, deployError)
 	}
 
 	// Agent in the managed cluster will take care of this for SveltosClusters in pull mode. We still need to
@@ -695,6 +696,19 @@ func getInstantiatedPolicyRefInfo(ctx context.Context, c client.Client, clusterS
 
 func getResourceRefs(clusterSummary *configv1beta1.ClusterSummary) []configv1beta1.PolicyRef {
 	return clusterSummary.Spec.ClusterProfileSpec.PolicyRefs
+}
+
+// persistResourceReportsOnError still writes whatever ResourceReports were generated before returning
+// deployError, so DryRun's ClusterReport isn't left unpopulated just because one resource failed to apply.
+func persistResourceReportsOnError(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	isPullMode bool, remoteResourceReports []libsveltosv1beta1.ResourceReport, featureID libsveltosv1beta1.FeatureID,
+	deployError error) error {
+
+	if reportErr := updateClusterReportWithResourceReports(ctx, c, clusterSummary, isPullMode, remoteResourceReports,
+		featureID); reportErr != nil {
+		return reportErr
+	}
+	return deployError
 }
 
 // updateClusterReportWithResourceReports updates ClusterReport Status with ResourceReports.

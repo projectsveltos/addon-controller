@@ -1324,16 +1324,40 @@ func (r *ClusterPromotionReconciler) verifyStageEligibility(ctx context.Context,
 		logger.V(logs.LogDebug).Info(result.Message)
 	}
 
+	return grantsClusterPromotionEligibility(&result, promotionScope.ClusterPromotion.Name, logger), nil
+}
+
+// grantsClusterPromotionEligibility decides, from an already-verified license result, whether
+// this ClusterPromotion instance is eligible to run. Split out of verifyStageEligibility so the
+// decision can be unit tested against synthetic results without needing a real signed license.
+func grantsClusterPromotionEligibility(result *license.LicenseVerificationResult,
+	clusterPromotionName string, logger logr.Logger) bool {
+
 	if result.IsValid || result.IsInGracePeriod {
-		return true, nil
+		if result.Payload == nil {
+			logger.V(logs.LogInfo).Info("An Enterprise or EnterprisePlus License is required")
+			return false
+		}
+
+		if !result.Payload.HasFeature(license.FeaturePromotion) {
+			// Features, when explicitly set, is an allowlist.
+			logger.V(logs.LogInfo).Info("License does not include the Promotion feature")
+			return false
+		}
+
+		if result.Payload.Plan != license.PlanEnterprisePlus && result.Payload.Plan != license.PlanEnterprise {
+			logger.V(logs.LogInfo).Info("An Enterprise or EnterprisePlus License is required")
+			return false
+		}
+
+		return true
 	}
 
 	licenseManagerInstance := GetLicenseManager()
 
 	// Without license, 2 clusterPromotions instances are still free
 	const maxFreeStages = 2
-	return licenseManagerInstance.IsClusterPromotionInTopX("", promotionScope.ClusterPromotion.Name,
-		maxFreeStages), nil
+	return licenseManagerInstance.IsClusterPromotionInTopX("", clusterPromotionName, maxFreeStages)
 }
 
 func (r *ClusterPromotionReconciler) updateStatusWithMissingLicenseError(

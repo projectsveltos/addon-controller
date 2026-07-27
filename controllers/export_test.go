@@ -40,6 +40,8 @@ var (
 	ReviseUpdatedAndUpdatingClusters      = reviseUpdatedAndUpdatingClusters
 	GetUpdatedAndUpdatingClusters         = getUpdatedAndUpdatingClusters
 	ReviseUpdatingClusterList             = reviseUpdatingClusterList
+	GrantsPullModeEligibility             = grantsPullModeEligibility
+	GrantsClusterPromotionEligibility     = grantsClusterPromotionEligibility
 )
 
 var (

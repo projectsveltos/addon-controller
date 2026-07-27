@@ -1957,28 +1957,49 @@ func (r *ClusterSummaryReconciler) verifyPullModeEligibility(ctx context.Context
 	}
 
 	result := license.VerifyLicenseSecret(ctx, r.Client, getSveltosNamespace(), publicKey, logger)
-	maxClusters := 0
-	if result.Payload != nil {
-		maxClusters = result.Payload.MaxClusters
-	}
 	if result.Message != "" {
 		logger.V(logs.LogDebug).Info(result.Message)
 	}
 
+	return grantsPullModeEligibility(&result, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, logger), nil
+}
+
+// grantsPullModeEligibility decides, from an already-verified license result, whether this
+// specific cluster is eligible for pull mode. Split out of verifyPullModeEligibility so the
+// decision can be unit tested against synthetic results without needing a real signed license.
+func grantsPullModeEligibility(result *license.LicenseVerificationResult,
+	clusterNamespace, clusterName string, logger logr.Logger) bool {
+
 	licenseManagerInstance := GetLicenseManager()
 
 	if result.IsValid || result.IsInGracePeriod {
-		if maxClusters == 0 {
-			// Customer can have unlimited number of clusters in pull mode
-			return true, nil
+		if result.Payload == nil {
+			logger.V(logs.LogInfo).Info("An Enterprise or EnterprisePlus License is required")
+			return false
 		}
-		// License is valid only for maxClusters in pull mode
-		return licenseManagerInstance.IsClusterInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxClusters), nil
+
+		if !result.Payload.HasFeature(license.FeaturePullMode) {
+			// Features, when explicitly set, is an allowlist.
+			logger.V(logs.LogInfo).Info("License does not include the PullMode feature")
+			return false
+		}
+
+		if result.Payload.Plan != license.PlanEnterprisePlus && result.Payload.Plan != license.PlanEnterprise {
+			logger.V(logs.LogInfo).Info("An Enterprise or EnterprisePlus License is required")
+			return false
+		}
+
+		if result.Payload.MaxClusters == 0 {
+			// Customer can have unlimited number of clusters in pull mode
+			return true
+		}
+		// License is valid only for MaxClusters in pull mode
+		return licenseManagerInstance.IsClusterInTopX(clusterNamespace, clusterName, result.Payload.MaxClusters)
 	}
 
 	// Without license, 2 clusters in pull mode are still managed for free
 	const maxFreeClusters = 2
-	return licenseManagerInstance.IsClusterInTopX(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, maxFreeClusters), nil
+	return licenseManagerInstance.IsClusterInTopX(clusterNamespace, clusterName, maxFreeClusters)
 }
 
 func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(

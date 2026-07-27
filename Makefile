@@ -34,7 +34,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= v1.13.0
 
 .PHONY: all
 all: build
@@ -529,7 +529,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
 	go generate
-	docker build --load --build-arg BUILDOS=linux --build-arg TARGETARCH=amd64 -t $(CONTROLLER_IMG):$(TAG) .
+	docker build --load --build-arg BUILDOS=linux --build-arg TARGETARCH=amd64 --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG):$(TAG) .
 	MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(MAKE) set-manifest-pull-policy
 
@@ -539,8 +539,8 @@ docker-push: ## Push docker image with the manager.
 
 .PHONY: docker-buildx
 docker-buildx: ## docker build for multiple arch and push to docker hub
-	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(CONTROLLER_IMG):$(TAG) .
-	docker buildx build --push --platform linux/amd64,linux/arm64 -t $(CONTROLLER_IMG)-git:$(TAG) -f Dockerfile_WithGit .
+	docker buildx build --push --platform linux/amd64,linux/arm64 --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG):$(TAG) .
+	docker buildx build --push --platform linux/amd64,linux/arm64 --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG)-git:$(TAG) -f Dockerfile_WithGit .
 
 .PHONY: load-image
 load-image: docker-build $(KIND)

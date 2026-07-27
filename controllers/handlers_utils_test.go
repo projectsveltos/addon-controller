@@ -1018,6 +1018,244 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
+	It(`undeployStaleResources scopes deletion to resources annotated for this ClusterSummary, even when isMgmtCluster is false`, func() {
+		// This reproduces the scenario of a self-managed SveltosCluster: this ClusterSummary's
+		// "remote" cluster is physically the same cluster other ClusterSummaries deploy Local
+		// resources into. The remote-cluster cleanup pass (isMgmtCluster=false) must still only
+		// ever touch resources this exact ClusterSummary created, identified via the
+		// clustersummary annotation, and must leave other ClusterSummaries' resources alone.
+		ownClusterRoleName := randomString()
+		ownClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: ownClusterRoleName,
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					controllers.ClusterSummaryAnnotation:  controllers.GetClusterSummaryAnnotationValue(clusterSummary),
+				},
+			},
+		}
+
+		otherClusterRoleName := randomString()
+		otherClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: otherClusterRoleName,
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					// Deployed (Local) by a different ClusterSummary for a different managed cluster.
+					controllers.ClusterSummaryAnnotation: randomString(),
+				},
+			},
+		}
+
+		// Simulates a resource deployed by an older addon-controller version, before the
+		// clustersummary annotation was set on every deploy. It must still be detected as
+		// stale and removed by this same ClusterSummary; otherwise upgrading would leave such
+		// resources undeletable forever.
+		legacyClusterRoleName := randomString()
+		legacyClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: legacyClusterRoleName,
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+				},
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), ownClusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, ownClusterRole)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), otherClusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, otherClusterRole)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), legacyClusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, legacyClusterRole)).To(Succeed())
+
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
+
+		addOwnerReference(context.TODO(), testEnv.Client, ownClusterRole, currentClusterProfile)
+		addOwnerReference(context.TODO(), testEnv.Client, otherClusterRole, currentClusterProfile)
+		addOwnerReference(context.TODO(), testEnv.Client, legacyClusterRole, currentClusterProfile)
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				DeployedGroupVersionKind: []string{
+					testClusterRoleKindV1,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+
+		// None of the ClusterRoles is in currentPolicies (nil), so all are candidates for
+		// deletion were it not for the clustersummary-annotation scoping.
+		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		// Own resource is no longer referenced: it must be removed.
+		Eventually(func() bool {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: ownClusterRoleName}, currentClusterRole)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Legacy (pre-annotation) resource is no longer referenced either: it must still be
+		// detected as stale and removed.
+		Eventually(func() bool {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: legacyClusterRoleName}, currentClusterRole)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Other ClusterSummary's resource must never be touched.
+		Consistently(func() error {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			return testEnv.Get(context.TODO(), types.NamespacedName{Name: otherClusterRoleName}, currentClusterRole)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
+	It(`undeployStaleResources does not remove resources deployed by the other deployment type of the same ClusterSummary`, func() {
+		// Further self-managed SveltosCluster scenario: this time both resources were deployed
+		// by the SAME ClusterSummary, one via deploymentType Local and one via deploymentType
+		// Remote. Because it is the same ClusterSummary, the clustersummary annotation alone
+		// cannot tell the two apart once the remote cluster is physically the management
+		// cluster. The deploymenttype annotation must protect the Local resource from the
+		// Remote cleanup pass, and the Remote resource from the Local cleanup pass.
+		localClusterRoleName := randomString()
+		localClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: localClusterRoleName,
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					controllers.ClusterSummaryAnnotation:  controllers.GetClusterSummaryAnnotationValue(clusterSummary),
+					controllers.DeploymentTypeAnnotation:  string(configv1beta1.DeploymentTypeLocal),
+				},
+			},
+		}
+
+		remoteClusterRoleName := randomString()
+		remoteClusterRole := &rbacv1.ClusterRole{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: remoteClusterRoleName,
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+					controllers.ClusterSummaryAnnotation:  controllers.GetClusterSummaryAnnotationValue(clusterSummary),
+					controllers.DeploymentTypeAnnotation:  string(configv1beta1.DeploymentTypeRemote),
+				},
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), localClusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, localClusterRole)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), remoteClusterRole)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, remoteClusterRole)).To(Succeed())
+
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
+
+		addOwnerReference(context.TODO(), testEnv.Client, localClusterRole, currentClusterProfile)
+		addOwnerReference(context.TODO(), testEnv.Client, remoteClusterRole, currentClusterProfile)
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				DeployedGroupVersionKind: []string{
+					testClusterRoleKindV1,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+
+		// Neither ClusterRole is in currentPolicies (nil), so both are candidates for deletion
+		// were it not for the deploymenttype-annotation scoping.
+
+		// isMgmtCluster=false simulates the Remote cleanup pass: it must remove the
+		// Remote-deployed resource, but leave the Local-deployed one alone.
+		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		Eventually(func() bool {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: remoteClusterRoleName}, currentClusterRole)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Consistently(func() error {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			return testEnv.Get(context.TODO(), types.NamespacedName{Name: localClusterRoleName}, currentClusterRole)
+		}, timeout, pollingInterval).Should(BeNil())
+
+		// isMgmtCluster=true simulates the Local cleanup pass: it must now remove the
+		// Local-deployed resource.
+		_, err = controllers.UndeployStaleResources(context.TODO(), true, testEnv.Config, testEnv.Client,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		Eventually(func() bool {
+			currentClusterRole := &rbacv1.ClusterRole{}
+			err = testEnv.Get(context.TODO(), types.NamespacedName{Name: localClusterRoleName}, currentClusterRole)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
 	It("addExtraLabels adds extra labels on unstructured", func() {
 		u := &unstructured.Unstructured{}
 		extraLabels := map[string]string{

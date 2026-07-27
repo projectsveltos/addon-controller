@@ -65,6 +65,7 @@ import (
 
 const (
 	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
+	deploymentTypeAnnotation = "projectsveltos.io/deploymenttype"
 	subresourcesAnnotation   = "projectsveltos.io/subresources"
 	pathAnnotation           = "path"
 )
@@ -390,6 +391,29 @@ func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	return referencedUnstructured, nil
 }
 
+// addStaleResourceScopingAnnotations annotates policy with the information stale-resource
+// cleanup needs to scope its scan to resources this exact ClusterSummary/deploymentType pair
+// deployed, rather than to everything present in the cluster.
+//
+// Just setting (Cluster)Profile as OwnerReference is not enough: a SveltosCluster can be
+// self-managed (its remote client/config resolve back to the management cluster), in which
+// case the "clean the management cluster" and "clean the remote cluster" passes end up
+// scanning the same physical cluster. Without these annotations, each pass would consider the
+// other's just-deployed resources stale, since neither pass's desired-state set includes what
+// the other pass deployed.
+func addStaleResourceScopingAnnotations(policy *unstructured.Unstructured, deployingToMgmtCluster bool,
+	clusterSummary *configv1beta1.ClusterSummary) {
+
+	value := getClusterSummaryAnnotationValue(clusterSummary)
+	deployer.AddAnnotation(policy, clusterSummaryAnnotation, value)
+
+	deploymentTypeValue := string(configv1beta1.DeploymentTypeRemote)
+	if deployingToMgmtCluster {
+		deploymentTypeValue = string(configv1beta1.DeploymentTypeLocal)
+	}
+	deployer.AddAnnotation(policy, deploymentTypeAnnotation, deploymentTypeValue)
+}
+
 // deployUnstructured deploys referencedUnstructured objects.
 // Returns an error if one occurred. Otherwise it returns a slice containing the name of
 // the policies deployed in the form of kind.group:namespace:name for namespaced policies
@@ -484,15 +508,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 		deployer.AddMetadata(policy, resourceInfo.GetResourceVersion(), profile,
 			clusterSummary.Spec.ClusterProfileSpec.ExtraLabels, clusterSummary.Spec.ClusterProfileSpec.ExtraAnnotations)
 
-		if deployingToMgmtCluster {
-			// When deploying resources in the management cluster, just setting (Cluster)Profile as OwnerReference is
-			// not enough. We also need to track which ClusterSummary is creating the resource. Otherwise while
-			// trying to clean stale resources those objects will be incorrectly removed.
-			// An extra annotation is added here to indicate the clustersummary, so the managed cluster, this
-			// resource was created for
-			value := getClusterSummaryAnnotationValue(clusterSummary)
-			deployer.AddAnnotation(policy, clusterSummaryAnnotation, value)
-		}
+		addStaleResourceScopingAnnotations(policy, deployingToMgmtCluster, clusterSummary)
 
 		if requeue {
 			if clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun {
@@ -1110,14 +1126,42 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 
 		leavePolicies := isLeavePolicies(clusterSummary, logger)
 		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
-		var skipAnnotationKey, skipAnnotationValue string
+		ownClusterSummaryValue := getClusterSummaryAnnotationValue(clusterSummary)
+
+		expectedDeploymentType := string(configv1beta1.DeploymentTypeRemote)
 		if isMgmtCluster {
-			skipAnnotationValue = getClusterSummaryAnnotationValue(clusterSummary)
-			skipAnnotationKey = clusterSummaryAnnotation
+			expectedDeploymentType = string(configv1beta1.DeploymentTypeLocal)
 		}
 
 		for j := range list.Items {
 			r := list.Items[j]
+
+			// Protective signal, same reasoning as the clustersummary annotation check below:
+			// skip a resource here when it is explicitly annotated for the *other* deployment
+			// type (relevant when this ClusterSummary's remote cluster is the self-managed
+			// management cluster: the Local and Remote cleanup passes then scan the same
+			// physical cluster, and each pass's currentPolicies only reflects its own half of
+			// what was just deployed, so without this check each pass would consider the
+			// other's resources stale). A resource missing the annotation predates it being
+			// set on every deploy and must still fall through to the checks below.
+			if v, ok := r.GetAnnotations()[deploymentTypeAnnotation]; ok && v != expectedDeploymentType {
+				continue
+			}
+
+			// Only rely on the clustersummary annotation as a protective signal: skip a
+			// resource here when it is explicitly annotated for a *different* ClusterSummary
+			// (relevant when this ClusterSummary's remote cluster is the self-managed
+			// management cluster, and another ClusterSummary deployed there via
+			// deploymentType: Local). A resource missing the annotation entirely predates it
+			// being set on every deploy, and must still fall through to the normal
+			// canDelete/isResourceOwner checks below, or upgraded ClusterSummaries would never
+			// detect their own pre-existing resources as stale again.
+			var skipAnnotationKey, skipAnnotationValue string
+			if _, ok := r.GetAnnotations()[clusterSummaryAnnotation]; ok {
+				skipAnnotationKey = clusterSummaryAnnotation
+				skipAnnotationValue = ownClusterSummaryValue
+			}
+
 			rr, err := deployer.UndeployStaleResource(ctx, skipAnnotationKey, skipAnnotationValue, localClient,
 				profile, leavePolicies, isDryRun, r, currentPolicies, logger)
 			if err != nil {

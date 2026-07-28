@@ -172,6 +172,10 @@ generate: $(CONTROLLER_GEN) ## Generate code containing DeepCopy, DeepCopyInto, 
 	go generate
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+.PHONY: crds
+crds: manifests ## Generates go code (crds) for lib/crd, embedding config/crd/bases as Go source.
+	cd lib/crd; go generate
+
 .PHONY: fmt
 fmt: $(GOIMPORTS) ## Run go fmt against code.
 	$(GOIMPORTS) -local github.com/projectsveltos -w .

@@ -41,7 +41,6 @@ var (
 	GetUpdatedAndUpdatingClusters         = getUpdatedAndUpdatingClusters
 	ReviseUpdatingClusterList             = reviseUpdatingClusterList
 	GrantsPullModeEligibility             = grantsPullModeEligibility
-	GrantsClusterPromotionEligibility     = grantsClusterPromotionEligibility
 )
 
 var (
@@ -82,22 +81,8 @@ var (
 )
 
 var (
-	GetProfileSpecHash          = (*ClusterPromotionReconciler).getProfileSpecHash
-	GetStagesHash               = (*ClusterPromotionReconciler).getStagesHash
-	ProfileSpecChanged          = (*ClusterPromotionReconciler).profileSpecChanged
-	StagesChanged               = (*ClusterPromotionReconciler).stagesChanged
-	ReconcileStageProfile       = (*ClusterPromotionReconciler).reconcileStageProfile
-	CheckCurrentStageDeployment = (*ClusterPromotionReconciler).checkCurrentStageDeployment
-	GetNextStage                = (*ClusterPromotionReconciler).getNextStage
-	CanAutoAdvance              = (*ClusterPromotionReconciler).canAutoAdvance
-	CanManualAdvance            = (*ClusterPromotionReconciler).canManualAdvance
-	CleanClusterProfiles        = (*ClusterPromotionReconciler).cleanClusterProfiles
-	IsPromotionWindowOpen       = (*ClusterPromotionReconciler).isPromotionWindowOpen
+	CleanClusterProfiles = (*ClusterPromotionReconciler).cleanClusterProfiles
 
-	MainDeploymentClusterProfileName      = mainDeploymentClusterProfileName
-	ResetStageStatuses                    = resetStageStatuses
-	AddStageStatus                        = addStageStatus
-	UpdateStageStatus                     = updateStageStatus
 	GetMainDeploymentClusterProfileLabels = getMainDeploymentClusterProfileLabels
 
 	SetNextReconcileTime = (*ClusterSummaryReconciler).setNextReconcileTime

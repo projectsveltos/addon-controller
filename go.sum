@@ -621,8 +621,6 @@ github.com/onsi/gomega v1.17.0/go.mod h1:HnhC7FXeEQY45zxNK3PPoIUhzk/80Xly9PcubAl
 github.com/onsi/gomega v1.19.0/go.mod h1:LY+I3pBVzYsTBU1AnDwOSxaYi9WoWiqgwooUqq9yPro=
 github.com/onsi/gomega v1.42.1 h1:iN1rCUX+44NZ1Dc97MPoeFYbFR0vh8zxoxMFwKdyZ6I=
 github.com/onsi/gomega v1.42.1/go.mod h1:REff/hsDsodHoKlWsP2mAPhu1+5/6hVYNf9rIEBpeSg=
-github.com/opencontainers/go-digest v1.0.1-0.20260624224211-f7325504ae36 h1:/1PtKk00fYU0P6oweGoMHbjSSNRBex8yQtPspjFZHQM=
-github.com/opencontainers/go-digest v1.0.1-0.20260624224211-f7325504ae36/go.mod h1:RqnyioA3pIEZMkSbOIcrw32YSgETfn/VrLuEikEdPNU=
 github.com/opencontainers/go-digest v1.0.1-0.20260721143128-e5208fdd9cb0 h1:RLWeaWcTZ1ycIvdql2gDDu5k9C1tfKQX3BtuFbZCmYc=
 github.com/opencontainers/go-digest v1.0.1-0.20260721143128-e5208fdd9cb0/go.mod h1:RqnyioA3pIEZMkSbOIcrw32YSgETfn/VrLuEikEdPNU=
 github.com/opencontainers/go-digest/blake3 v0.0.0-20260615172202-b50d36f46dea h1:OedKvkUaI3EfCAmzWaRjdP72olcfvLwTMsq5ztDXLR0=
@@ -654,6 +652,8 @@ github.com/projectsveltos/lua-utils/glua-sprig v0.0.0-20251212200258-2b3cdcb7c0f
 github.com/projectsveltos/lua-utils/glua-sprig v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:esi+znTJzieo7M60Ytx56vJZbWJ8WuJfVyRvOCOWs64=
 github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20251212200258-2b3cdcb7c0f5 h1:ifNj1y4pqhSSDL0B5XfCPTnFy9ZjGTzStuOJu1jE9xs=
 github.com/projectsveltos/lua-utils/glua-strings v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:P/l817Avvelnzyb9YyMmnDYG3OabOyK8KuWF8s35kj0=
+github.com/projectsveltos/sveltos-enterprise v0.0.0-20260728165936-3be605d9a912 h1:o/fB6TrHaJCyqv9odkaDcBVmK/TGPoRfBqb8rtVzqgc=
+github.com/projectsveltos/sveltos-enterprise v0.0.0-20260728165936-3be605d9a912/go.mod h1:dThrx/Isg2w+51UFQCOG3x/idcaPDyjtMKa9wY2OIzM=
 github.com/prometheus/client_golang v1.24.1 h1:JnJkREXzWxUdCuPFpIWZiPispT9xVV59uiuyR2bPlnU=
 github.com/prometheus/client_golang v1.24.1/go.mod h1:F+oSRECHg4sse5ucfYpYDeIv/hu68Zo0uoHKetWnzcE=
 github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4/go.mod h1:xMI15A0UPsDsEKsMN9yxemIoYk6Tm2C1GtYGdfGttqA=

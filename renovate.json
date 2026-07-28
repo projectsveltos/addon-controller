@@ -5,6 +5,7 @@
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
   "ignorePaths": ["**/test/**"],
+  "ignoreDeps": ["github.com/projectsveltos/sveltos-enterprise"],
   "sveltos": {
     "fileMatch": ["^.*\\.yaml$"]
   }

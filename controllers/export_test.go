@@ -106,6 +106,7 @@ var (
 	GetDeployedGroupVersionKinds         = getDeployedGroupVersionKinds
 	GetSecret                            = getSecret
 	ReadFiles                            = readFiles
+	GetClusterSummaryAnnotationValue     = getClusterSummaryAnnotationValue
 
 	AddExtraLabels      = addExtraLabels
 	AddExtraAnnotations = addExtraAnnotations
@@ -180,6 +181,9 @@ const (
 	HelmActionUpgrade   = upgrade
 	HelmActionDowngrade = downgrade
 	HelmActionUninstall = uninstall
+
+	ClusterSummaryAnnotation = clusterSummaryAnnotation
+	DeploymentTypeAnnotation = deploymentTypeAnnotation
 )
 
 var (

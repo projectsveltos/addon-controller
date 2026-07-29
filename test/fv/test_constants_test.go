@@ -137,6 +137,7 @@ const (
 
 	// Kubernetes resource types
 	serviceAccountsResource = "serviceaccounts"
+	configMapsResource      = "configmaps"
 
 	// Kubernetes kinds
 	kindService = "Service"

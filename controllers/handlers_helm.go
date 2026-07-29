@@ -628,7 +628,7 @@ func undeployHelmChartResources(ctx context.Context, c client.Client, clusterSum
 		return err
 	}
 
-	err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureKustomize,
+	err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureHelm,
 		nil, true, logger)
 	if err != nil {
 		return err

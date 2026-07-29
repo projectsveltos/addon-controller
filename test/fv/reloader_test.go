@@ -242,10 +242,128 @@ var _ = Describe("Reloader", func() {
 			}, timeout, pollingInterval).Should(BeTrue())
 		}
 	})
+
+	It("Deploy ClusterProfile with Reloader knob set for a Helm chart, then delete it", Label("FV", "PULLMODE", "EXTENDED"), func() {
+		Byf("Create a ClusterProfile with Reloader knob set matching Cluster %s/%s",
+			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterProfile.Spec.Reloader = true
+		clusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
+			{
+				RepositoryURL:    jetstackURL,
+				RepositoryName:   jetstackName,
+				ChartName:        jetstackCertManagerChart,
+				ChartVersion:     externalDNSVersion1182,
+				ReleaseName:      certManager,
+				ReleaseNamespace: certManager,
+				HelmChartAction:  configv1beta1.HelmChartActionInstall,
+				Values:           crdsEnabledValues,
+			},
+		}
+		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+
+		verifyClusterProfileMatches(clusterProfile)
+
+		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name,
+			&clusterProfile.Spec, kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(),
+			getClusterType())
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
+			libsveltosv1beta1.FeatureHelm)
+
+		reloaderName := getReloaderNameForFeature(clusterProfile.Name, libsveltosv1beta1.FeatureHelm)
+
+		if isAgentLessMode() {
+			Byf("Verifying Reloader %s is present in the management cluster", reloaderName)
+			Eventually(func() error {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				return k8sClient.Get(context.TODO(), types.NamespacedName{Name: reloaderName}, currentReloader)
+			}, timeout, pollingInterval).Should(BeNil())
+
+			reloaderKey := mgmtagent.GetKeyForReloader(reloaderName)
+			configMapName := mgmtagent.GetConfigMapName(kindWorkloadCluster.GetName(),
+				libsveltosv1beta1.ClusterType(getClusterType()))
+
+			Byf("Verifying per-cluster ConfigMap %s/%s contains Reloader entry %s",
+				kindWorkloadCluster.GetNamespace(), configMapName, reloaderKey)
+			Eventually(func() bool {
+				perClusterCM := &corev1.ConfigMap{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{
+						Namespace: kindWorkloadCluster.GetNamespace(),
+						Name:      configMapName,
+					}, perClusterCM)
+				if err != nil {
+					return false
+				}
+				v, ok := perClusterCM.Data[reloaderKey]
+				return ok && v == reloaderName
+			}, timeout, pollingInterval).Should(BeTrue())
+		} else {
+			Byf("Verifying Reloader %s is present in the managed cluster", reloaderName)
+			workloadClient, err := getKindWorkloadClusterKubeconfig()
+			Expect(err).To(BeNil())
+			Expect(workloadClient).ToNot(BeNil())
+			Eventually(func() error {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				return workloadClient.Get(context.TODO(), types.NamespacedName{Name: reloaderName}, currentReloader)
+			}, timeout, pollingInterval).Should(BeNil())
+		}
+
+		deleteClusterProfile(clusterProfile)
+
+		if isAgentLessMode() {
+			Byf("Verifying Reloader %s is removed from the management cluster", reloaderName)
+			Eventually(func() bool {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: reloaderName}, currentReloader)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			reloaderKey := mgmtagent.GetKeyForReloader(reloaderName)
+			configMapName := mgmtagent.GetConfigMapName(kindWorkloadCluster.GetName(),
+				libsveltosv1beta1.ClusterType(getClusterType()))
+
+			Byf("Verifying per-cluster ConfigMap %s/%s no longer contains Reloader entry %s",
+				kindWorkloadCluster.GetNamespace(), configMapName, reloaderKey)
+			Eventually(func() bool {
+				perClusterCM := &corev1.ConfigMap{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{
+						Namespace: kindWorkloadCluster.GetNamespace(),
+						Name:      configMapName,
+					}, perClusterCM)
+				if apierrors.IsNotFound(err) {
+					return true
+				}
+				if err != nil {
+					return false
+				}
+				_, ok := perClusterCM.Data[reloaderKey]
+				return !ok
+			}, timeout, pollingInterval).Should(BeTrue())
+		} else {
+			Byf("Verifying Reloader %s is removed from the workload cluster", reloaderName)
+			workloadClient, err := getKindWorkloadClusterKubeconfig()
+			Expect(err).To(BeNil())
+			Expect(workloadClient).ToNot(BeNil())
+			Eventually(func() bool {
+				currentReloader := &libsveltosv1beta1.Reloader{}
+				err = workloadClient.Get(context.TODO(), types.NamespacedName{Name: reloaderName}, currentReloader)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
+	})
 })
 
-// getReloaderName returns the Reloader's name
+// getReloaderName returns the Reloader's name for the Resources feature
 func getReloaderName(clusterProfileName string) string {
-	feature := libsveltosv1beta1.FeatureResources
+	return getReloaderNameForFeature(clusterProfileName, libsveltosv1beta1.FeatureResources)
+}
+
+// getReloaderNameForFeature returns the Reloader's name for the given feature
+func getReloaderNameForFeature(clusterProfileName string, feature libsveltosv1beta1.FeatureID) string {
 	return fmt.Sprintf("%s--%s", clusterProfileName, strings.ToLower(string(feature)))
 }

@@ -488,10 +488,19 @@ deploy-crds: $(KUBECTL) ## Install libsveltos CRDs
 	$(KUBECTL) apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_reloaderreports.lib.projectsveltos.io.yaml
 
 
+# Overridable so callers who already built, loaded, and patched the manifests for their own
+# image can skip load-image's rebuild - which would otherwise call docker-build's own
+# set-manifest-image and overwrite whatever image patch those callers already set - by
+# passing LOAD_IMAGE_TARGET=noop.
+LOAD_IMAGE_TARGET ?= load-image
+
+.PHONY: noop
+noop: ## Does nothing; see LOAD_IMAGE_TARGET above.
+
 deploy-projectsveltos: $(KUSTOMIZE) $(ENVSUBST) $(KUBECTL)
 	# Load projectsveltos image into cluster
 	@echo 'Load projectsveltos image into cluster'
-	$(MAKE) load-image
+	$(MAKE) $(LOAD_IMAGE_TARGET)
 
 	$(MAKE) deploy-crds
 

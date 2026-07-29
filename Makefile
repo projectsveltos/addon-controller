@@ -34,7 +34,7 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.13.0
+TAG ?= main
 
 # SSH key with read access to the private github.com/projectsveltos/sveltos-enterprise repo,
 # forwarded into the enterprise docker-buildx build (see Dockerfile.enterprise) so it can

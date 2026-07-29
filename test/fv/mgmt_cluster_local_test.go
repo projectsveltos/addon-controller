@@ -110,18 +110,25 @@ var _ = Describe("ClusterProfile matching the management cluster with deployment
 
 			Byf("Update ClusterProfile %s to reference ConfigMap %s/%s with deploymentType Local",
 				clusterProfile.Name, policyConfigMap.Namespace, policyConfigMap.Name)
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				currentClusterProfile := &configv1beta1.ClusterProfile{}
+				Expect(k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+				currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
+					{
+						Kind:           string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+						Namespace:      policyConfigMap.Namespace,
+						Name:           policyConfigMap.Name,
+						DeploymentType: configv1beta1.DeploymentTypeLocal,
+					},
+				}
+				return k8sClient.Update(context.TODO(), currentClusterProfile)
+			})
+			Expect(err).To(BeNil())
+
 			currentClusterProfile := &configv1beta1.ClusterProfile{}
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
-			currentClusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{
-				{
-					Kind:           string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
-					Namespace:      policyConfigMap.Namespace,
-					Name:           policyConfigMap.Name,
-					DeploymentType: configv1beta1.DeploymentTypeLocal,
-				},
-			}
-			Expect(k8sClient.Update(context.TODO(), currentClusterProfile)).To(Succeed())
 
 			clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 				currentClusterProfile.Name, &currentClusterProfile.Spec,

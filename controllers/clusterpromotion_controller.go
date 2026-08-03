@@ -45,10 +45,9 @@ const (
 	maxFreeClusterPromotionStages = 2
 )
 
-// clusterPromotionEnterpriseDeps bundles what the Sveltos Enterprise ClusterPromotion
-// implementation needs. Defined here, not in sveltos-enterprise, so this (open source)
-// package can declare the plugin seam below without importing anything private.
-type clusterPromotionEnterpriseDeps struct {
+// ClusterPromotionEnterpriseDeps bundles what the Sveltos Enterprise ClusterPromotion
+// implementation needs.
+type ClusterPromotionEnterpriseDeps struct {
 	Client           client.Client
 	Config           *rest.Config
 	Scheme           *runtime.Scheme
@@ -56,17 +55,23 @@ type clusterPromotionEnterpriseDeps struct {
 	SveltosNamespace string
 }
 
+// reconcileClusterPromotionNormal implements ClusterPromotion's stage-advancement business
+// logic (a Sveltos Enterprise feature). The default (clusterpromotion_default.go) is a stub
+// that reports the feature is unavailable. A Sveltos Enterprise build wires in the real
+// implementation via SetClusterPromotionReconciler before starting the manager; this package
+// never imports anything private itself.
 var (
-	// reconcileClusterPromotionNormal implements ClusterPromotion's stage-advancement business
-	// logic (a Sveltos Enterprise feature). A default (non-"enterprise" tagged) build of this
-	// package cannot import the private sveltos-enterprise module at all, so it wires this to
-	// a stub that reports the feature is unavailable (see clusterpromotion_oss.go). Official
-	// Sveltos images are built with `-tags enterprise` and a checkout of sveltos-enterprise
-	// available, which wires this to the real implementation instead (see
-	// clusterpromotion_plugin.go). Either way, this file never imports sveltos-enterprise.
-	reconcileClusterPromotionNormal func(ctx context.Context, deps clusterPromotionEnterpriseDeps,
+	reconcileClusterPromotionNormal func(ctx context.Context, deps ClusterPromotionEnterpriseDeps,
 		promotionScope *scope.ClusterPromotionScope, isInFreeTopX bool, logger logr.Logger) reconcile.Result
 )
+
+// SetClusterPromotionReconciler overrides the ClusterPromotion stage-advancement implementation.
+// Called by a Sveltos Enterprise build's composition root before starting the manager.
+func SetClusterPromotionReconciler(fn func(ctx context.Context, deps ClusterPromotionEnterpriseDeps,
+	promotionScope *scope.ClusterPromotionScope, isInFreeTopX bool, logger logr.Logger) reconcile.Result) {
+
+	reconcileClusterPromotionNormal = fn
+}
 
 var (
 	clusterPromotionNameLabel = "config.projectsveltos.io/promotionname"
@@ -185,7 +190,7 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 	isInFreeTopX := GetLicenseManager().IsClusterPromotionInTopX("", promotionScope.ClusterPromotion.Name,
 		maxFreeClusterPromotionStages)
 
-	deps := clusterPromotionEnterpriseDeps{
+	deps := ClusterPromotionEnterpriseDeps{
 		Client:           r.Client,
 		Config:           r.Config,
 		Scheme:           r.Scheme,

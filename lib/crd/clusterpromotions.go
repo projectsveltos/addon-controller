@@ -1211,7 +1211,7 @@ spec:
                           type: array
                         featureID:
                           description: |-
-                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                             This field indicates when to run this check.
                             For instance:
                             - if set to Helm this check will be run after all helm
@@ -1229,6 +1229,46 @@ spec:
                             Group of the resource to fetch in the managed Cluster.
                             Required when Kind is set. Leave empty for metric-only checks.
                           type: string
+                        jobCheck:
+                          description: |-
+                            JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                            outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                          properties:
+                            jobRef:
+                              description: |-
+                                JobRef references the Secret/ConfigMap containing the Job manifest to
+                                deploy in the managed Cluster as this check.
+                              properties:
+                                kind:
+                                  description: 'Kind of the resource. Supported kinds
+                                    are: Secrets and ConfigMaps.'
+                                  enum:
+                                  - Secret
+                                  - ConfigMap
+                                  type: string
+                                name:
+                                  description: Name of the referenced resource.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referenced resource.
+                                    Namespace can be left empty. In such a case, namespace will
+                                    be implicit set to cluster's namespace.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              - namespace
+                              type: object
+                            timeout:
+                              description: |-
+                                Timeout is how long to wait for the Job to reach Complete or Failed
+                                before treating the check as failed.
+                              type: string
+                          required:
+                          - jobRef
+                          type: object
                         kind:
                           description: |-
                             Kind of the resource to fetch in the managed Cluster.
@@ -1343,6 +1383,9 @@ spec:
                       - featureID
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: jobCheck cannot be set together with script or evaluateCEL
+                        rule: '!has(self.jobCheck) || (!has(self.script) && !has(self.evaluateCEL))'
                     type: array
                     x-kubernetes-list-type: atomic
                   preDeleteChecks:
@@ -1382,7 +1425,7 @@ spec:
                           type: array
                         featureID:
                           description: |-
-                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                             This field indicates when to run this check.
                             For instance:
                             - if set to Helm this check will be run after all helm
@@ -1400,6 +1443,46 @@ spec:
                             Group of the resource to fetch in the managed Cluster.
                             Required when Kind is set. Leave empty for metric-only checks.
                           type: string
+                        jobCheck:
+                          description: |-
+                            JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                            outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                          properties:
+                            jobRef:
+                              description: |-
+                                JobRef references the Secret/ConfigMap containing the Job manifest to
+                                deploy in the managed Cluster as this check.
+                              properties:
+                                kind:
+                                  description: 'Kind of the resource. Supported kinds
+                                    are: Secrets and ConfigMaps.'
+                                  enum:
+                                  - Secret
+                                  - ConfigMap
+                                  type: string
+                                name:
+                                  description: Name of the referenced resource.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referenced resource.
+                                    Namespace can be left empty. In such a case, namespace will
+                                    be implicit set to cluster's namespace.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              - namespace
+                              type: object
+                            timeout:
+                              description: |-
+                                Timeout is how long to wait for the Job to reach Complete or Failed
+                                before treating the check as failed.
+                              type: string
+                          required:
+                          - jobRef
+                          type: object
                         kind:
                           description: |-
                             Kind of the resource to fetch in the managed Cluster.
@@ -1514,6 +1597,9 @@ spec:
                       - featureID
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: jobCheck cannot be set together with script or evaluateCEL
+                        rule: '!has(self.jobCheck) || (!has(self.script) && !has(self.evaluateCEL))'
                     type: array
                     x-kubernetes-list-type: atomic
                   preDeployChecks:
@@ -1553,7 +1639,7 @@ spec:
                           type: array
                         featureID:
                           description: |-
-                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                             This field indicates when to run this check.
                             For instance:
                             - if set to Helm this check will be run after all helm
@@ -1571,6 +1657,46 @@ spec:
                             Group of the resource to fetch in the managed Cluster.
                             Required when Kind is set. Leave empty for metric-only checks.
                           type: string
+                        jobCheck:
+                          description: |-
+                            JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                            outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                          properties:
+                            jobRef:
+                              description: |-
+                                JobRef references the Secret/ConfigMap containing the Job manifest to
+                                deploy in the managed Cluster as this check.
+                              properties:
+                                kind:
+                                  description: 'Kind of the resource. Supported kinds
+                                    are: Secrets and ConfigMaps.'
+                                  enum:
+                                  - Secret
+                                  - ConfigMap
+                                  type: string
+                                name:
+                                  description: Name of the referenced resource.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referenced resource.
+                                    Namespace can be left empty. In such a case, namespace will
+                                    be implicit set to cluster's namespace.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              - namespace
+                              type: object
+                            timeout:
+                              description: |-
+                                Timeout is how long to wait for the Job to reach Complete or Failed
+                                before treating the check as failed.
+                              type: string
+                          required:
+                          - jobRef
+                          type: object
                         kind:
                           description: |-
                             Kind of the resource to fetch in the managed Cluster.
@@ -1685,6 +1811,9 @@ spec:
                       - featureID
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: jobCheck cannot be set together with script or evaluateCEL
+                        rule: '!has(self.jobCheck) || (!has(self.script) && !has(self.evaluateCEL))'
                     type: array
                     x-kubernetes-list-type: atomic
                   reloader:
@@ -1872,7 +2001,7 @@ spec:
                           type: array
                         featureID:
                           description: |-
-                            FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                            FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                             This field indicates when to run this check.
                             For instance:
                             - if set to Helm this check will be run after all helm
@@ -1890,6 +2019,46 @@ spec:
                             Group of the resource to fetch in the managed Cluster.
                             Required when Kind is set. Leave empty for metric-only checks.
                           type: string
+                        jobCheck:
+                          description: |-
+                            JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                            outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                          properties:
+                            jobRef:
+                              description: |-
+                                JobRef references the Secret/ConfigMap containing the Job manifest to
+                                deploy in the managed Cluster as this check.
+                              properties:
+                                kind:
+                                  description: 'Kind of the resource. Supported kinds
+                                    are: Secrets and ConfigMaps.'
+                                  enum:
+                                  - Secret
+                                  - ConfigMap
+                                  type: string
+                                name:
+                                  description: Name of the referenced resource.
+                                  minLength: 1
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referenced resource.
+                                    Namespace can be left empty. In such a case, namespace will
+                                    be implicit set to cluster's namespace.
+                                  type: string
+                              required:
+                              - kind
+                              - name
+                              - namespace
+                              type: object
+                            timeout:
+                              description: |-
+                                Timeout is how long to wait for the Job to reach Complete or Failed
+                                before treating the check as failed.
+                              type: string
+                          required:
+                          - jobRef
+                          type: object
                         kind:
                           description: |-
                             Kind of the resource to fetch in the managed Cluster.
@@ -2004,6 +2173,9 @@ spec:
                       - featureID
                       - name
                       type: object
+                      x-kubernetes-validations:
+                      - message: jobCheck cannot be set together with script or evaluateCEL
+                        rule: '!has(self.jobCheck) || (!has(self.script) && !has(self.evaluateCEL))'
                     type: array
                     x-kubernetes-list-type: atomic
                 type: object
@@ -2114,7 +2286,7 @@ spec:
                                     type: array
                                   featureID:
                                     description: |-
-                                      FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                                      FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                                       This field indicates when to run this check.
                                       For instance:
                                       - if set to Helm this check will be run after all helm
@@ -2132,6 +2304,46 @@ spec:
                                       Group of the resource to fetch in the managed Cluster.
                                       Required when Kind is set. Leave empty for metric-only checks.
                                     type: string
+                                  jobCheck:
+                                    description: |-
+                                      JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                                      outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                                    properties:
+                                      jobRef:
+                                        description: |-
+                                          JobRef references the Secret/ConfigMap containing the Job manifest to
+                                          deploy in the managed Cluster as this check.
+                                        properties:
+                                          kind:
+                                            description: 'Kind of the resource. Supported
+                                              kinds are: Secrets and ConfigMaps.'
+                                            enum:
+                                            - Secret
+                                            - ConfigMap
+                                            type: string
+                                          name:
+                                            description: Name of the referenced resource.
+                                            minLength: 1
+                                            type: string
+                                          namespace:
+                                            description: |-
+                                              Namespace of the referenced resource.
+                                              Namespace can be left empty. In such a case, namespace will
+                                              be implicit set to cluster's namespace.
+                                            type: string
+                                        required:
+                                        - kind
+                                        - name
+                                        - namespace
+                                        type: object
+                                      timeout:
+                                        description: |-
+                                          Timeout is how long to wait for the Job to reach Complete or Failed
+                                          before treating the check as failed.
+                                        type: string
+                                    required:
+                                    - jobRef
+                                    type: object
                                   kind:
                                     description: |-
                                       Kind of the resource to fetch in the managed Cluster.
@@ -2249,6 +2461,11 @@ spec:
                                 - featureID
                                 - name
                                 type: object
+                                x-kubernetes-validations:
+                                - message: jobCheck cannot be set together with script
+                                    or evaluateCEL
+                                  rule: '!has(self.jobCheck) || (!has(self.script)
+                                    && !has(self.evaluateCEL))'
                               type: array
                             preHealthCheckDeployment:
                               description: |-
@@ -2484,7 +2701,7 @@ spec:
                                     type: array
                                   featureID:
                                     description: |-
-                                      FeatureID is an indentifier of the feature (Helm/Kustomize/Resources)
+                                      FeatureID is an identifier of the feature (Helm/Kustomize/Resources)
                                       This field indicates when to run this check.
                                       For instance:
                                       - if set to Helm this check will be run after all helm
@@ -2502,6 +2719,46 @@ spec:
                                       Group of the resource to fetch in the managed Cluster.
                                       Required when Kind is set. Leave empty for metric-only checks.
                                     type: string
+                                  jobCheck:
+                                    description: |-
+                                      JobCheck runs a Job in the managed cluster and uses its Complete/Failed
+                                      outcome as the check result. Mutually exclusive with Script and EvaluateCEL.
+                                    properties:
+                                      jobRef:
+                                        description: |-
+                                          JobRef references the Secret/ConfigMap containing the Job manifest to
+                                          deploy in the managed Cluster as this check.
+                                        properties:
+                                          kind:
+                                            description: 'Kind of the resource. Supported
+                                              kinds are: Secrets and ConfigMaps.'
+                                            enum:
+                                            - Secret
+                                            - ConfigMap
+                                            type: string
+                                          name:
+                                            description: Name of the referenced resource.
+                                            minLength: 1
+                                            type: string
+                                          namespace:
+                                            description: |-
+                                              Namespace of the referenced resource.
+                                              Namespace can be left empty. In such a case, namespace will
+                                              be implicit set to cluster's namespace.
+                                            type: string
+                                        required:
+                                        - kind
+                                        - name
+                                        - namespace
+                                        type: object
+                                      timeout:
+                                        description: |-
+                                          Timeout is how long to wait for the Job to reach Complete or Failed
+                                          before treating the check as failed.
+                                        type: string
+                                    required:
+                                    - jobRef
+                                    type: object
                                   kind:
                                     description: |-
                                       Kind of the resource to fetch in the managed Cluster.
@@ -2619,6 +2876,11 @@ spec:
                                 - featureID
                                 - name
                                 type: object
+                                x-kubernetes-validations:
+                                - message: jobCheck cannot be set together with script
+                                    or evaluateCEL
+                                  rule: '!has(self.jobCheck) || (!has(self.script)
+                                    && !has(self.evaluateCEL))'
                               type: array
                             preHealthCheckDeployment:
                               description: |-

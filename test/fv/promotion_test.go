@@ -100,7 +100,7 @@ spec:
 end`
 	)
 
-	It("Deploy ClusterPromotion with multiple stages", Label("ClusterPromotion"), func() {
+	It("Deploy ClusterPromotion with multiple stages", Label("Enterprise"), func() {
 		configMapNs := defaultNamespace
 		configMap := createConfigMapWithPolicy(configMapNs, namePrefix+randomString(),
 			fmt.Sprintf(counterJob, configMapNs))

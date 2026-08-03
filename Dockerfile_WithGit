@@ -8,10 +8,7 @@ WORKDIR /workspace
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
-# Deps are downloaded as part of the build step below, not in a separate "go mod download"
-# layer: go.mod lists the private sveltos-enterprise module (needed only for `-tags
-# enterprise` builds), and unlike `go build`, bare `go mod download` is not build-tag-aware
-# and would eagerly try to resolve it even for this default (non-enterprise) build.
+RUN go mod download
 
 # Copy the go source
 COPY cmd/main.go cmd/main.go

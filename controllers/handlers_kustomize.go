@@ -249,8 +249,8 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 		return err
 	}
 
-	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
-		libsveltosv1beta1.FeatureKustomize, false, logger)
+	return clusterops.ValidateHealthPolicies(ctx, c, clusterSummary, getSveltosNamespace(), remoteRestConfig,
+		clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, libsveltosv1beta1.FeatureKustomize, false, logger)
 }
 
 func cleanStaleKustomizeResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,

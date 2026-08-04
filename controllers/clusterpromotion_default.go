@@ -1,5 +1,3 @@
-//go:build !enterprise
-
 /*
 Copyright 2026. projectsveltos.io. All rights reserved.
 
@@ -28,12 +26,10 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
-// Default (non-"enterprise") build: ClusterPromotion is a Sveltos Enterprise feature and
-// its implementation lives in the private sveltos-enterprise module, which this build
-// does not import. Building official images requires `-tags enterprise` with a checkout
-// of sveltos-enterprise available; see clusterpromotion_plugin.go.
+// Default ClusterPromotion implementation: reports the feature is unavailable. A Sveltos
+// Enterprise build overrides this via SetClusterPromotionReconciler before starting the manager.
 func init() {
-	reconcileClusterPromotionNormal = func(_ context.Context, _ clusterPromotionEnterpriseDeps,
+	reconcileClusterPromotionNormal = func(_ context.Context, _ ClusterPromotionEnterpriseDeps,
 		promotionScope *scope.ClusterPromotionScope, _ bool, logger logr.Logger) reconcile.Result {
 
 		logger.V(logs.LogInfo).Info("ClusterPromotion requires a Sveltos Enterprise build")

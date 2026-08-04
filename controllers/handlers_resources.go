@@ -207,8 +207,8 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 		return err
 	}
 
-	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
-		libsveltosv1beta1.FeatureResources, false, logger)
+	return clusterops.ValidateHealthPolicies(ctx, c, clusterSummary, getSveltosNamespace(), remoteRestConfig,
+		clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, libsveltosv1beta1.FeatureResources, false, logger)
 }
 
 func cleanStaleResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,

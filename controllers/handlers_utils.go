@@ -1916,6 +1916,6 @@ func validatePreDeployChecks(ctx context.Context, c client.Client, clusterSummar
 		return err
 	}
 
-	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig,
+	return clusterops.ValidateHealthPolicies(ctx, c, clusterSummary, getSveltosNamespace(), remoteRestConfig,
 		clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, featureID, false, logger)
 }

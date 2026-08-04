@@ -75,8 +75,8 @@ func validateDeleteChecks(ctx context.Context, clusterSummary *configv1beta1.Clu
 	}
 
 	logger.V(logs.LogDebug).Info("validate delete checks")
-	err = clusterops.ValidateHealthPolicies(ctx, remoteRestConfig,
-		clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, featureID, true, logger)
+	err = clusterops.ValidateHealthPolicies(ctx, getManagementClusterClient(), clusterSummary, getSveltosNamespace(),
+		remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, featureID, true, logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "delete check failed")
 		return err

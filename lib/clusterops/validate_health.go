@@ -37,7 +37,9 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/cel"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
@@ -69,6 +71,31 @@ func (e *HealthCheckError) Unwrap() error {
 	return e.InternalErr
 }
 
+// JobHealthCheckDeps bundles what the Sveltos Enterprise JobHealthCheck implementation needs.
+type JobHealthCheckDeps struct {
+	MgmtClient       client.Client
+	ClusterSummary   *configv1beta1.ClusterSummary
+	SveltosNamespace string
+	RemoteConfig     *rest.Config
+}
+
+// validateJobHealthCheck runs a JobCheck. JobCheck is a Sveltos Enterprise feature; the default
+// (jobhealthcheck_oss.go) is a stub reporting the feature is unavailable. A Sveltos Enterprise
+// build wires in the real implementation via SetJobHealthCheckValidator.
+var (
+	validateJobHealthCheck func(ctx context.Context, deps JobHealthCheckDeps,
+		check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) error
+)
+
+// SetJobHealthCheckValidator overrides the JobCheck implementation. Called by a Sveltos
+// Enterprise build's composition root before starting the manager; this package never imports
+// anything private itself.
+func SetJobHealthCheckValidator(fn func(ctx context.Context, deps JobHealthCheckDeps,
+	check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) error) {
+
+	validateJobHealthCheck = fn
+}
+
 // prometheusResponse is the top-level Prometheus HTTP API response.
 type prometheusResponse struct {
 	Status string         `json:"status"`
@@ -83,7 +110,8 @@ type prometheusData struct {
 }
 
 // ValidateHealthPolicies runs all validateDeployment checks registered for the feature (Helm/Kustomize/Resources)
-func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, validateHealths []libsveltosv1beta1.ValidateHealth,
+func ValidateHealthPolicies(ctx context.Context, mgmtClient client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	sveltosNamespace string, remoteConfig *rest.Config, validateHealths []libsveltosv1beta1.ValidateHealth,
 	featureID libsveltosv1beta1.FeatureID, isDelete bool, logger logr.Logger) error {
 
 	// If SveltosCluster is in pull mode, this will done by the agent in the managed cluster
@@ -98,7 +126,8 @@ func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, vali
 			continue
 		}
 
-		if err := validateHealthPolicy(ctx, remoteConfig, check, isDelete, logger); err != nil {
+		if err := validateHealthPolicy(ctx, mgmtClient, clusterSummary, sveltosNamespace, remoteConfig,
+			check, isDelete, logger); err != nil {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to validate check: %s", err))
 			return &HealthCheckError{
 				FeatureID:   featureID,
@@ -111,11 +140,21 @@ func ValidateHealthPolicies(ctx context.Context, remoteConfig *rest.Config, vali
 	return nil
 }
 
-func validateHealthPolicy(ctx context.Context, remoteConfig *rest.Config, check *libsveltosv1beta1.ValidateHealth,
+func validateHealthPolicy(ctx context.Context, mgmtClient client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	sveltosNamespace string, remoteConfig *rest.Config, check *libsveltosv1beta1.ValidateHealth,
 	isDelete bool, logger logr.Logger) error {
 
 	l := logger.WithValues("validation", check.Name)
 	l.V(logs.LogDebug).Info("running health validation")
+
+	if check.JobCheck != nil {
+		return validateJobHealthCheck(ctx, JobHealthCheckDeps{
+			MgmtClient:       mgmtClient,
+			ClusterSummary:   clusterSummary,
+			SveltosNamespace: sveltosNamespace,
+			RemoteConfig:     remoteConfig,
+		}, check, l)
+	}
 
 	metricsData, err := fetchMetrics(ctx, remoteConfig, check, l)
 	if err != nil {

@@ -280,8 +280,8 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 	if err != nil {
 		return err
 	}
-	return clusterops.ValidateHealthPolicies(ctx, remoteRestConfig, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths,
-		libsveltosv1beta1.FeatureHelm, false, logger)
+	return clusterops.ValidateHealthPolicies(ctx, c, clusterSummary, getSveltosNamespace(), remoteRestConfig,
+		clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, libsveltosv1beta1.FeatureHelm, false, logger)
 }
 
 func manageDriftDetectionManagerDeploymentForHelm(ctx context.Context, c client.Client,

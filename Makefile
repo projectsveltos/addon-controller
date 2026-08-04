@@ -36,11 +36,6 @@ K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
 TAG ?= main
 
-# SSH key with read access to the private github.com/projectsveltos/sveltos-enterprise repo,
-# forwarded into the enterprise docker-buildx build (see Dockerfile.enterprise) so it can
-# fetch that module. Override with e.g. `make docker-buildx SVELTOS_ENTERPRISE_SSH_KEY=~/.ssh/other_key`.
-SVELTOS_ENTERPRISE_SSH_KEY ?= $(HOME)/.ssh/id_ed25519
-
 .PHONY: all
 all: build
 
@@ -554,11 +549,6 @@ docker-build: ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push $(CONTROLLER_IMG):$(TAG)
-
-.PHONY: docker-buildx
-docker-buildx: ## docker build for multiple arch and push to docker hub (enterprise build - requires SSH access to sveltos-enterprise)
-	docker buildx build --push --platform linux/amd64,linux/arm64 --ssh default=$(SVELTOS_ENTERPRISE_SSH_KEY) --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG):$(TAG) -f Dockerfile.enterprise .
-	docker buildx build --push --platform linux/amd64,linux/arm64 --ssh default=$(SVELTOS_ENTERPRISE_SSH_KEY) --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG)-git:$(TAG) -f Dockerfile_WithGit.enterprise .
 
 .PHONY: load-image
 load-image: docker-build $(KIND)

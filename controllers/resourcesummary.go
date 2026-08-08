@@ -757,31 +757,42 @@ func getGlobalDriftDetectionManagerPatches(ctx context.Context, c client.Client,
 	return getDriftDetectionManagerPatchesOld(ctx, c, logger)
 }
 
+// getPatchFromConfigMapEntry parses a single ConfigMap entry into a Patch.
+// The entry can either be a structured libsveltosv1beta1.Patch document (with a
+// "patch" field and an optional "target"), or a legacy bare patch (the raw
+// StrategicMerge/JSON6902 content, with no "patch" wrapper). Each entry is
+// evaluated independently so a ConfigMap can mix both formats across its keys.
+func getPatchFromConfigMapEntry(key, value string, logger logr.Logger) libsveltosv1beta1.Patch {
+	patch := &libsveltosv1beta1.Patch{}
+	err := yaml.Unmarshal([]byte(value), patch)
+	if err != nil || patch.Patch == "" {
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("key %s is not a structured Patch (%v), "+
+				"treating it as a legacy patch", key, err))
+		}
+		// Not a structured Patch document (or "patch" field is missing/empty). Fall back to
+		// treating the whole entry as a legacy, bare patch.
+		patch = &libsveltosv1beta1.Patch{
+			Patch: value,
+		}
+	}
+
+	if patch.Target == nil {
+		patch.Target = &libsveltosv1beta1.PatchSelector{
+			Kind:  deploymentKind,
+			Group: appsGroupName,
+		}
+	}
+
+	return *patch
+}
+
 func getPatchesFromConfigMap(configMap *corev1.ConfigMap, logger logr.Logger,
 ) ([]libsveltosv1beta1.Patch, error) {
 
 	patches := make([]libsveltosv1beta1.Patch, 0)
 	for k := range configMap.Data {
-		patch := &libsveltosv1beta1.Patch{}
-		err := yaml.Unmarshal([]byte(configMap.Data[k]), patch)
-		if err != nil {
-			logger.V(logs.LogInfo).Error(err, "failed to marshal unstructured object")
-			return nil, err
-		}
-
-		if patch.Patch == "" {
-			return nil, fmt.Errorf("ConfigMap %s: content of key %s is not a Patch",
-				configMap.Name, k)
-		}
-
-		if patch.Target == nil {
-			patch.Target = &libsveltosv1beta1.PatchSelector{
-				Kind:  "Deployment",
-				Group: appsGroupName,
-			}
-		}
-
-		patches = append(patches, *patch)
+		patches = append(patches, getPatchFromConfigMapEntry(k, configMap.Data[k], logger))
 	}
 
 	return patches, nil

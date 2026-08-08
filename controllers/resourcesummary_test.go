@@ -19,6 +19,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -248,6 +249,69 @@ metadata:
 			}
 		}
 		Expect(found).To(BeTrue())
+	})
+
+	It("getGlobalDriftDetectionManagerPatches supports mixing legacy and structured patches in the same ConfigMap", func() {
+		cmYAML := fmt.Sprintf(`apiVersion: v1
+data:
+  legacy-patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: drift-detection-manager
+  structured-patch: |-
+    patch: |-
+      - op: add
+        path: /spec/template/spec/imagePullSecrets
+        value:
+        - name: registry-pull-secret
+kind: ConfigMap
+metadata:
+  name: drift-detection-config-mixed
+  namespace: %s`, sveltosNamespace)
+
+		cm, err := deployer.GetUnstructured([]byte(cmYAML), logger)
+		Expect(err).To(BeNil())
+
+		initObjects := []client.Object{}
+		for i := range cm {
+			initObjects = append(initObjects, cm[i])
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initObjects...).Build()
+
+		controllers.SetDriftdetectionConfigMap("drift-detection-config-mixed")
+		patches, err := controllers.GetGlobalDriftDetectionManagerPatches(context.TODO(), c, logger)
+		Expect(err).To(BeNil())
+		Expect(len(patches)).To(Equal(2))
+		controllers.SetDriftdetectionConfigMap("")
+
+		// Both entries default to targeting Deployment/apps since neither ConfigMap key
+		// specifies a target.
+		for i := range patches {
+			Expect(patches[i].Target).ToNot(BeNil())
+			Expect(patches[i].Target.Kind).To(Equal(testKindDeployment))
+		}
+
+		// The structured entry must remain structured: its Patch field is the JSON6902
+		// document as-is, not re-wrapped in another "patch:" key.
+		foundStructured := false
+		for i := range patches {
+			if strings.Contains(patches[i].Patch, "op: add") {
+				foundStructured = true
+				Expect(patches[i].Patch).ToNot(ContainSubstring("patch: |-"))
+			}
+		}
+		Expect(foundStructured).To(BeTrue())
+
+		// The legacy entry must still be carried verbatim as the raw patch content.
+		foundLegacy := false
+		for i := range patches {
+			if strings.Contains(patches[i].Patch, "kind: Deployment") {
+				foundLegacy = true
+			}
+		}
+		Expect(foundLegacy).To(BeTrue())
 	})
 })
 

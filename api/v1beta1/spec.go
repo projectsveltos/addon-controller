@@ -671,6 +671,9 @@ type KustomizationRef struct {
 	// KustomizationRef when an update is rejected with an error that only a delete+recreate
 	// can resolve (eg an invalid combination of fields, or a field enforced as immutable).
 	// By default, such errors are surfaced instead of recreating the resource.
+	// This applies to every resource produced by this KustomizationRef. To force just one
+	// resource, regardless of this field's value, annotate that resource with
+	// projectsveltos.io/forceRecreate instead.
 	// +kubebuilder:default:=false
 	// +optional
 	Force bool `json:"force,omitempty"`
@@ -838,6 +841,9 @@ type PolicyRef struct {
 	// PolicyRef when an update is rejected with an error that only a delete+recreate can
 	// resolve (eg an invalid combination of fields, or a field enforced as immutable).
 	// By default, such errors are surfaced instead of recreating the resource.
+	// This applies to every resource produced by this PolicyRef. To force just one
+	// resource, regardless of this field's value, annotate that resource with
+	// projectsveltos.io/forceRecreate instead.
 	// +kubebuilder:default:=false
 	// +optional
 	Force bool `json:"force,omitempty"`

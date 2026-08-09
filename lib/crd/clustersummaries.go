@@ -832,6 +832,9 @@ spec:
                             KustomizationRef when an update is rejected with an error that only a delete+recreate
                             can resolve (eg an invalid combination of fields, or a field enforced as immutable).
                             By default, such errors are surfaced instead of recreating the resource.
+                            This applies to every resource produced by this KustomizationRef. To force just one
+                            resource, regardless of this field's value, annotate that resource with
+                            projectsveltos.io/forceRecreate instead.
                           type: boolean
                         kind:
                           description: |-
@@ -1186,6 +1189,9 @@ spec:
                             PolicyRef when an update is rejected with an error that only a delete+recreate can
                             resolve (eg an invalid combination of fields, or a field enforced as immutable).
                             By default, such errors are surfaced instead of recreating the resource.
+                            This applies to every resource produced by this PolicyRef. To force just one
+                            resource, regardless of this field's value, annotate that resource with
+                            projectsveltos.io/forceRecreate instead.
                           type: boolean
                         kind:
                           description: |-
@@ -1401,7 +1407,7 @@ spec:
                             timeout:
                               description: |-
                                 Timeout is how long to wait for the Job to reach Complete or Failed
-                                before treating the check as failed.
+                                before treating the check as failed. Defaults to 5 minutes when unset.
                               type: string
                           required:
                           - jobRef
@@ -1615,7 +1621,7 @@ spec:
                             timeout:
                               description: |-
                                 Timeout is how long to wait for the Job to reach Complete or Failed
-                                before treating the check as failed.
+                                before treating the check as failed. Defaults to 5 minutes when unset.
                               type: string
                           required:
                           - jobRef
@@ -1829,7 +1835,7 @@ spec:
                             timeout:
                               description: |-
                                 Timeout is how long to wait for the Job to reach Complete or Failed
-                                before treating the check as failed.
+                                before treating the check as failed. Defaults to 5 minutes when unset.
                               type: string
                           required:
                           - jobRef
@@ -2199,7 +2205,7 @@ spec:
                             timeout:
                               description: |-
                                 Timeout is how long to wait for the Job to reach Complete or Failed
-                                before treating the check as failed.
+                                before treating the check as failed. Defaults to 5 minutes when unset.
                               type: string
                           required:
                           - jobRef

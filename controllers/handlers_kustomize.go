@@ -18,6 +18,7 @@ package controllers
 
 import (
 	archivetar "archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -479,14 +480,15 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 }
 
 // getHashFromRemoteKustomizeURL fetches the content referenced by a KustomizationRef's
-// RemoteURL and returns a hash covering it. It reuses fetchContent (rather than
-// fetchContentToDir) since only a byte stream that changes when the content changes is
-// needed here; the directory structure is only relevant when the content is actually
-// extracted for a kustomize build.
+// RemoteURL and returns a hash covering it. It uses fetchContentForHash, which returns
+// the same raw bytes fetchContentToDir extracts to disk for deployment (rather than
+// fetchContent's flattened .yaml/.yml/.json-only view), so the hash changes whenever
+// anything fetchContentToDir would actually deploy changes — including non-manifest
+// files a kustomize build depends on (patches, generators, etc.) and directory structure.
 func getHashFromRemoteKustomizeURL(ctx context.Context, remoteURL *configv1beta1.RemoteKustomizeURL,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) ([]byte, error) {
 
-	body, err := fetchContent(ctx, remoteURL.URL, remoteURL.SecretRef,
+	body, err := fetchContentForHash(ctx, remoteURL.URL, remoteURL.SecretRef,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
@@ -1247,6 +1249,11 @@ func deployEachKustomizeRefs(ctx context.Context, c client.Client, remoteRestCon
 	return localResourceReports, remoteResourceReports, err
 }
 
+// extractTarGz extracts the tar archive at src into dest, preserving directory
+// structure. The archive may be gzip-compressed (the layout produced by tools
+// such as `flux push artifact`) or an uncompressed tar; the gzip magic bytes
+// are sniffed to tell which. macOS AppleDouble sidecar entries and PAX header
+// entries are skipped (see isSkippableTarEntry) rather than extracted.
 func extractTarGz(src, dest string) error {
 	// Open the tarball for reading
 	tarball, err := os.Open(src)
@@ -1255,15 +1262,25 @@ func extractTarGz(src, dest string) error {
 	}
 	defer tarball.Close()
 
-	// Create a gzip reader to decompress the tarball
-	gzipReader, err := gzip.NewReader(io.LimitReader(tarball, maxSize))
-	if err != nil {
+	bufReader := bufio.NewReader(io.LimitReader(tarball, maxSize))
+	magic, err := bufReader.Peek(len(gzipMagicBytes))
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
-	defer gzipReader.Close()
 
-	// Create a tar reader to read the uncompressed tarball
-	tarReader := archivetar.NewReader(gzipReader)
+	// tarSource yields the uncompressed tar stream: the gzip-decompressed
+	// reader if the archive is gzip-compressed, or bufReader itself otherwise.
+	tarSource := io.Reader(bufReader)
+	if bytes.Equal(magic, gzipMagicBytes) {
+		gzipReader, err := gzip.NewReader(bufReader)
+		if err != nil {
+			return err
+		}
+		defer gzipReader.Close()
+		tarSource = gzipReader
+	}
+
+	tarReader := archivetar.NewReader(tarSource)
 
 	// Iterate over each file in the tarball and extract it to the destination
 	for {
@@ -1273,6 +1290,10 @@ func extractTarGz(src, dest string) error {
 		}
 		if err != nil {
 			return err
+		}
+
+		if isSkippableTarEntry(header.Name) {
+			continue
 		}
 
 		target := filepath.Join(dest, filepath.Clean(header.Name))

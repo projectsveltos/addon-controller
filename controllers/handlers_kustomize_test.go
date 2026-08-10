@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
@@ -245,6 +246,55 @@ var _ = Describe("KustomizeRefs", func() {
 		// Check that no additional files were extracted
 		extraFilePath := filepath.Join(dest, "testdir", "extra.txt")
 		_, err = os.Stat(extraFilePath)
+		Expect(os.IsNotExist(err)).To(BeTrue())
+	})
+
+	It("extractTarGz extracts an uncompressed tar archive", func() {
+		srcDir, err := os.MkdirTemp("", "test")
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(srcDir)
+
+		src := filepath.Join(srcDir, "plain.tar")
+		writeTarArchive(src, false, map[string]string{
+			"overlay.yaml": "namePrefix: uncompressed-\n",
+		})
+
+		dest, err := os.MkdirTemp("", "extract")
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(dest)
+
+		Expect(controllers.ExtractTarGz(src, dest)).To(Succeed())
+
+		contents, err := os.ReadFile(filepath.Join(dest, "overlay.yaml"))
+		Expect(err).To(BeNil())
+		Expect(string(contents)).To(ContainSubstring("namePrefix"))
+	})
+
+	It("extractTarGz skips AppleDouble and PAX header entries", func() {
+		srcDir, err := os.MkdirTemp("", "test")
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(srcDir)
+
+		src := filepath.Join(srcDir, "with-junk.tar.gz")
+		writeTarArchive(src, true, map[string]string{
+			"kustomization.yaml":    "resources:\n- deploy.yaml\n",
+			"._kustomization.yaml":  "\x00\x05\x16\x07AppleDouble binary junk",
+			"PaxHeader/deploy.yaml": "not a real manifest",
+		})
+
+		dest, err := os.MkdirTemp("", "extract")
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(dest)
+
+		Expect(controllers.ExtractTarGz(src, dest)).To(Succeed())
+
+		_, err = os.ReadFile(filepath.Join(dest, "kustomization.yaml"))
+		Expect(err).To(BeNil())
+
+		_, err = os.Stat(filepath.Join(dest, "._kustomization.yaml"))
+		Expect(os.IsNotExist(err)).To(BeTrue())
+
+		_, err = os.Stat(filepath.Join(dest, "PaxHeader", "deploy.yaml"))
 		Expect(os.IsNotExist(err)).To(BeTrue())
 	})
 })
@@ -610,6 +660,37 @@ var _ = Describe("Hash methods", func() {
 		Expect(string(data)).To(ContainSubstring("region: west"))
 	})
 })
+
+// writeTarArchive builds a tar archive from entries (name -> content) and writes it to
+// dest. When gz is true the archive is gzip-compressed first.
+func writeTarArchive(dest string, gz bool, entries map[string]string) {
+	var tarBuf bytes.Buffer
+	tw := tar.NewWriter(&tarBuf)
+	for name, content := range entries {
+		hdr := &tar.Header{
+			Name:     name,
+			Typeflag: tar.TypeReg,
+			Mode:     0600,
+			Size:     int64(len(content)),
+		}
+		Expect(tw.WriteHeader(hdr)).To(Succeed())
+		_, err := tw.Write([]byte(content))
+		Expect(err).To(BeNil())
+	}
+	Expect(tw.Close()).To(Succeed())
+
+	raw := tarBuf.Bytes()
+	if gz {
+		var gzBuf bytes.Buffer
+		gw := gzip.NewWriter(&gzBuf)
+		_, err := gw.Write(raw)
+		Expect(err).To(BeNil())
+		Expect(gw.Close()).To(Succeed())
+		raw = gzBuf.Bytes()
+	}
+
+	Expect(os.WriteFile(dest, raw, 0600)).To(Succeed())
+}
 
 func createTarGz(dest string) {
 	// Create the test directory and some test files.

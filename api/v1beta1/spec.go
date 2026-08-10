@@ -861,8 +861,13 @@ type RemoteURL struct {
 	// Sveltos fetches the content on every reconciliation and redeploys if the
 	// content hash has changed.
 	// Supported schemes:
-	//   "http://" or "https://" — HTTP/HTTPS endpoint returning raw YAML/JSON
-	//   "oci://"                — OCI registry artifact containing YAML manifests
+	//   "http://" or "https://" — HTTP/HTTPS endpoint returning a raw YAML/JSON
+	//                             document, a gzip-compressed document, an
+	//                             uncompressed tar, or a gzip-compressed tar of
+	//                             .yaml/.yml/.json files
+	//   "oci://"                — OCI registry artifact whose layers are accepted
+	//                             in the same shapes: raw YAML/JSON, gzip-compressed
+	//                             YAML/JSON, uncompressed tar, or gzip-compressed tar
 	// +kubebuilder:validation:Pattern=`^(https?|oci)://`
 	URL string `json:"url"`
 

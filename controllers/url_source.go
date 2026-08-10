@@ -19,6 +19,7 @@ package controllers
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -131,8 +132,12 @@ func fetchURL(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 }
 
 // fetchContent retrieves raw manifest bytes from a remote source.
-// It dispatches on the URL scheme: "oci://" routes to fetchOCI; everything
-// else is handled by fetchURL.
+// It dispatches on the URL scheme: "oci://" routes to fetchOCI; everything else is
+// fetched via fetchURL. Either way, the fetched bytes are normalized through
+// extractYAMLFromLayer, so an http(s) endpoint may return a raw YAML/JSON document
+// (the original contract), a gzip-compressed YAML/JSON document, an uncompressed tar,
+// or a gzip-compressed tar of multiple .yaml/.yml/.json files — the same set of shapes
+// already accepted per-layer for oci://.
 // The secretRef Name and Namespace are treated as Go templates and instantiated
 // against the target cluster, following the same convention as PolicyRef ConfigMap/Secret
 // references. When Namespace is empty it defaults to clusterNamespace.
@@ -143,13 +148,20 @@ func fetchContent(ctx context.Context, rawURL string, secretRef *corev1.SecretRe
 	if strings.HasPrefix(rawURL, "oci://") {
 		return fetchOCI(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
 	}
-	return fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+
+	body, err := fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	if err != nil {
+		return nil, err
+	}
+	return extractYAMLFromLayer(body, rawURL, logger)
 }
 
 // fetchOCI pulls an OCI artifact and returns its YAML content.
-// The artifact layers are read as gzipped tar archives; if a layer is not a
-// valid tar archive it is used as-is (raw YAML blob). All .yaml/.yml/.json
-// files found across all layers are concatenated and returned.
+// Each layer may be a gzip-compressed tar (e.g. the layout produced by
+// `flux push artifact`), an uncompressed tar, or a raw YAML/JSON blob;
+// gzip-compressed layers are decompressed before the tar is read. All
+// .yaml/.yml/.json files found across all layers (or the raw blob itself)
+// are concatenated and returned.
 // Supported Secret keys: "token" (pre-obtained bearer token), "username"+"password" (basic auth
 // exchanged for a registry token), "caFile" (PEM CA for TLS verification).
 // The secretRef Name and Namespace support Go templating against the target cluster.
@@ -278,36 +290,50 @@ func pullOCIArtifactLayers(ctx context.Context, rawURL string, secretRef *corev1
 }
 
 // extractYAMLFromLayer extracts YAML/JSON manifest bytes from a single OCI layer.
-// It first attempts to parse the bytes as a tar archive and concatenates all
-// .yaml/.yml/.json files found inside. If the bytes are not a valid tar archive
-// (e.g. a raw YAML blob), they are returned as-is.
+// If the layer is gzip-compressed, it is decompressed first. It then attempts
+// to parse the (possibly decompressed) bytes as a tar archive and concatenates
+// all .yaml/.yml/.json files found inside, skipping AppleDouble sidecar files
+// and PAX header entries (see isYAMLManifestEntry). If the bytes are not a
+// valid tar archive (e.g. a raw YAML blob), they are returned as-is.
 func extractYAMLFromLayer(raw []byte, rawURL string, logger logr.Logger) ([]byte, error) {
-	tr := tar.NewReader(bytes.NewReader(raw))
+	content := raw
+	if isGzip(raw) {
+		decompressed, err := gunzipBytes(raw)
+		if err != nil {
+			// Magic bytes matched but the stream isn't valid gzip — fall back
+			// to treating the original bytes as raw content, consistent with
+			// how a non-tar layer is handled below.
+			logger.V(logs.LogDebug).Info(fmt.Sprintf(
+				"OCI layer from %s has a gzip header but failed to decompress, using as raw content: %v",
+				rawURL, err))
+			return raw, nil
+		}
+		content = decompressed
+	}
+
+	tr := tar.NewReader(bytes.NewReader(content))
 	hdr, err := tr.Next()
 	if err == io.EOF {
 		// Valid tar archive with no entries.
 		return []byte{}, nil
 	}
 	if err != nil {
-		// Not a tar archive — treat the raw bytes as YAML/JSON content directly.
+		// Not a tar archive — treat the bytes as YAML/JSON content directly.
 		logger.V(logs.LogDebug).Info(fmt.Sprintf(
 			"OCI layer from %s is not a tar archive, using as raw content", rawURL))
-		return raw, nil
+		return content, nil
 	}
 
 	var buf bytes.Buffer
 	for {
-		if hdr.Typeflag == tar.TypeReg {
-			ext := strings.ToLower(filepath.Ext(hdr.Name))
-			if ext == ".yaml" || ext == ".yml" || ext == ".json" {
-				content, err := io.ReadAll(tr)
-				if err != nil {
-					return nil, fmt.Errorf("failed to read %s from OCI artifact %s: %w",
-						hdr.Name, rawURL, err)
-				}
-				buf.Write(content)
-				buf.WriteString("\n---\n")
+		if hdr.Typeflag == tar.TypeReg && isYAMLManifestEntry(hdr.Name) {
+			content, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read %s from OCI artifact %s: %w",
+					hdr.Name, rawURL, err)
 			}
+			buf.Write(content)
+			buf.WriteString("\n---\n")
 		}
 		hdr, err = tr.Next()
 		if err == io.EOF {
@@ -318,6 +344,57 @@ func extractYAMLFromLayer(raw []byte, rawURL string, logger logr.Logger) ([]byte
 		}
 	}
 	return buf.Bytes(), nil
+}
+
+var (
+	// gzipMagicBytes is the two-byte header identifying a gzip stream (RFC 1952).
+	gzipMagicBytes = []byte{0x1f, 0x8b}
+)
+
+// isGzip reports whether raw starts with the gzip magic bytes.
+func isGzip(raw []byte) bool {
+	return bytes.HasPrefix(raw, gzipMagicBytes)
+}
+
+// isSkippableTarEntry reports whether a tar entry is not real archive
+// content and should never be extracted or read, regardless of its name's
+// extension:
+//   - macOS AppleDouble sidecar files (e.g. "._ns.yaml"), written alongside
+//     the real file by bsdtar's default extended-attribute handling; they
+//     can carry the same extension as the real file but their content is
+//     binary AppleDouble data.
+//   - PAX extended header entries some tar implementations materialize as
+//     ordinary path entries (e.g. under a "PaxHeader/" prefix) instead of
+//     merging them into the following entry.
+func isSkippableTarEntry(name string) bool {
+	if strings.HasPrefix(filepath.Base(name), "._") {
+		return true
+	}
+	return strings.Contains(name, "PaxHeader")
+}
+
+// isYAMLManifestEntry reports whether a tar entry name is a genuine
+// YAML/JSON manifest file, filtering out skippable entries (see
+// isSkippableTarEntry) that happen to share the extension but aren't
+// manifest content.
+func isYAMLManifestEntry(name string) bool {
+	if isSkippableTarEntry(name) {
+		return false
+	}
+
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".yaml" || ext == ".yml" || ext == ".json"
+}
+
+// gunzipBytes decompresses a gzip-compressed byte slice in full.
+func gunzipBytes(raw []byte) ([]byte, error) {
+	gr, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	defer gr.Close()
+
+	return io.ReadAll(gr)
 }
 
 // deployContentOfURL fetches YAML/JSON content from a remote source and deploys it
@@ -403,8 +480,9 @@ func minKustomizeURLInterval(refs []configv1beta1.KustomizationRef) time.Duratio
 // extracts it into destDir, preserving the relative paths of every file so that
 // kustomize build can resolve files referenced by relative path (bases, resources,
 // patches, generator files, and so on).
-// It dispatches on the URL scheme: "oci://" routes to fetchOCIToDir; everything else
-// is fetched via fetchURL and treated as a gzipped tarball (.tar.gz).
+// It dispatches on the URL scheme: "oci://" pulls and concatenates every OCI layer;
+// everything else is fetched via fetchURL as a single archive. Either a gzip-compressed
+// or an uncompressed tar is accepted (see extractTarGz).
 func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	destDir string, logger logr.Logger) error {
@@ -427,6 +505,30 @@ func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.Sec
 		return err
 	}
 	return extractTarGzBytes(body, destDir, 0)
+}
+
+// fetchContentForHash retrieves the same raw bytes that fetchContentToDir would extract
+// for rawURL — every OCI layer concatenated in manifest order, or the single HTTP/HTTPS
+// response body — without extracting anything to disk. Hashing these bytes (rather than
+// re-deriving a separate representation of the content) keeps drift-detection hashes for
+// KustomizationRef.RemoteURL in sync with exactly what fetchContentToDir will deploy.
+func fetchContentForHash(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) ([]byte, error) {
+
+	if strings.HasPrefix(rawURL, "oci://") {
+		layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+		if err != nil {
+			return nil, err
+		}
+		var buf bytes.Buffer
+		for _, raw := range layers {
+			buf.Write(raw)
+		}
+		return buf.Bytes(), nil
+	}
+
+	return fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
 }
 
 // extractTarGzBytes writes a gzipped tarball's raw bytes to a temporary file inside

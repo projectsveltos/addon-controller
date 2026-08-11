@@ -100,11 +100,12 @@ var (
 )
 
 const (
-	notInstalledMessage        = "Not installed yet and action is uninstall"
-	defaultMaxHistory          = 2
-	defaultDeletionPropagation = "background"
-	defaultChartVersion        = "0.1.0"
-	conditionStatusTrue        = "True"
+	notInstalledMessage                    = "Not installed yet and action is uninstall"
+	defaultMaxHistory                      = 2
+	defaultRecoverAfterConsecutiveFailures = 5
+	defaultDeletionPropagation             = "background"
+	defaultChartVersion                    = "0.1.0"
+	conditionStatusTrue                    = "True"
 )
 
 type registryClientOptions struct {
@@ -1590,11 +1591,11 @@ func handleInstall(ctx context.Context, dCtx *deploymentContext,
 
 	logger.V(logs.LogDebug).Info("install helm release")
 
-	maxHistory := uint(getMaxHistoryValue(currentChart.Options))
+	recoverAfter := getRecoverAfterConsecutiveFailuresValue(currentChart.Options)
 
 	if !isPullMode {
 		if fs := getFeatureSummaryForFeatureID(dCtx.clusterSummary, libsveltosv1beta1.FeatureHelm); fs != nil {
-			if fs.ConsecutiveFailures%maxHistory == 0 && fs.FailureMessage != nil {
+			if fs.ConsecutiveFailures%recoverAfter == 0 && fs.FailureMessage != nil {
 				err := doUninstallRelease(ctx, dCtx.clusterSummary, currentChart, kubeconfig, registryOptions, logger)
 				if err != nil {
 					// Ignore release not found error
@@ -2801,33 +2802,25 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		requestedChart.ReleaseNamespace, kubeconfig, registryOptions, requestedChart, logger)
 }
 
-// shouldInstall returns true if action is not uninstall and either there
-// is no installed or version, or version is same requested by customer but status is
-// not yet deployed
+// shouldInstall returns true if action is not uninstall and there is no release to manage
+// the lifecycle of: either none was ever created, or the last one was cleanly uninstalled.
+// Any other state (deployed at a different version, failed, pending-*, superseded, ...) is
+// an existing release that shouldUpgrade must handle instead. In particular, a release whose
+// last upgrade/install attempt failed still has a release record (Helm keeps history for
+// failed attempts too, stamped with the version that attempt tried to reach) — that must not
+// be mistaken for "nothing to do here but install", since it goes through handleInstall's
+// own uninstall-on-repeated-failure recovery, which is destructive and must stay reserved for
+// the case where there is genuinely nothing deployed to lose.
 func shouldInstall(currentRelease *releaseInfo, requestedChart *configv1beta1.HelmChart) bool {
 	if requestedChart.HelmChartAction == configv1beta1.HelmChartActionUninstall {
 		return false
 	}
 
-	if currentRelease != nil &&
-		currentRelease.Status == releasecommon.StatusUninstalled.String() {
-
+	if currentRelease == nil {
 		return true
 	}
 
-	if currentRelease != nil &&
-		currentRelease.ChartVersion != requestedChart.ChartVersion {
-
-		return false
-	}
-
-	if currentRelease != nil &&
-		currentRelease.Status == releasecommon.StatusDeployed.String() {
-
-		return false
-	}
-
-	return true
+	return currentRelease.Status == releasecommon.StatusUninstalled.String()
 }
 
 // shouldUpgrade returns true if action is not uninstall and current installed chart is different
@@ -4289,6 +4282,17 @@ func getMaxHistoryValue(options *configv1beta1.HelmOptions) int {
 	}
 
 	return defaultMaxHistory
+}
+
+// getRecoverAfterConsecutiveFailuresValue returns the number of consecutive install failures
+// handleInstall tolerates, for a release it is not currently protecting (see shouldInstall),
+// before uninstalling any stale release record under that name and retrying.
+func getRecoverAfterConsecutiveFailuresValue(options *configv1beta1.HelmOptions) uint {
+	if options != nil && options.InstallOptions.RecoverAfterConsecutiveFailures > 0 {
+		return uint(options.InstallOptions.RecoverAfterConsecutiveFailures)
+	}
+
+	return defaultRecoverAfterConsecutiveFailures
 }
 
 func getCleanupOnFailValue(options *configv1beta1.HelmOptions) bool {

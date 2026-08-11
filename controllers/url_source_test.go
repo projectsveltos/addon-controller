@@ -21,11 +21,21 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
+	"github.com/google/go-containerregistry/pkg/registry"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content"
+	"oras.land/oras-go/v2/content/memory"
+	orasremote "oras.land/oras-go/v2/registry/remote"
+	orasauth "oras.land/oras-go/v2/registry/remote/auth"
 
 	"github.com/go-logr/logr"
 
@@ -202,7 +212,7 @@ var _ = Describe("fetchContent (http/https)", func() {
 		url, cleanup := serve(raw)
 		defer cleanup()
 
-		got, err := fetchContent(context.TODO(), url, nil, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		got, err := fetchContent(context.TODO(), url, remoteFetchOptions{}, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(Equal(raw))
 	})
@@ -212,7 +222,7 @@ var _ = Describe("fetchContent (http/https)", func() {
 		url, cleanup := serve(gzipBytes(raw))
 		defer cleanup()
 
-		got, err := fetchContent(context.TODO(), url, nil, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		got, err := fetchContent(context.TODO(), url, remoteFetchOptions{}, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(got).To(Equal(raw))
 	})
@@ -226,7 +236,7 @@ var _ = Describe("fetchContent (http/https)", func() {
 		url, cleanup := serve(archive)
 		defer cleanup()
 
-		got, err := fetchContent(context.TODO(), url, nil, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		got, err := fetchContent(context.TODO(), url, remoteFetchOptions{}, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).ToNot(HaveOccurred())
 		s := string(got)
 		Expect(s).To(ContainSubstring(dep))
@@ -239,8 +249,132 @@ var _ = Describe("fetchContent (http/https)", func() {
 		url, cleanup := serve(archive)
 		defer cleanup()
 
-		got, err := fetchContent(context.TODO(), url, nil, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		got, err := fetchContent(context.TODO(), url, remoteFetchOptions{}, "", "", libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(string(got)).To(ContainSubstring(svc))
+	})
+})
+
+var _ = Describe("pullOCIArtifactLayers (plain HTTP)", func() {
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = logr.Discard()
+	})
+
+	// servePlainOCIRegistry starts an in-process, plain-HTTP OCI registry
+	// (github.com/google/go-containerregistry/pkg/registry) seeded with a
+	// single-layer artifact tagged tag, and returns the "oci://" reference to
+	// pull it back alongside a cleanup func.
+	servePlainOCIRegistry := func(tag string, layerContent []byte) (string, func()) {
+		server := httptest.NewServer(registry.New())
+
+		store := memory.New()
+		layerDesc := content.NewDescriptorFromBytes("application/vnd.projectsveltos.yaml", layerContent)
+		Expect(store.Push(context.TODO(), layerDesc, bytes.NewReader(layerContent))).To(Succeed())
+
+		manifestDesc, err := oras.PackManifest(context.TODO(), store, oras.PackManifestVersion1_1,
+			"application/vnd.projectsveltos.manifest", oras.PackManifestOptions{Layers: []ocispec.Descriptor{layerDesc}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(store.Tag(context.TODO(), manifestDesc, tag)).To(Succeed())
+
+		host := strings.TrimPrefix(server.URL, "http://")
+		repoRef := fmt.Sprintf("%s/unit/plainhttp:%s", host, tag)
+
+		remoteRepo, err := orasremote.NewRepository(repoRef)
+		Expect(err).ToNot(HaveOccurred())
+		remoteRepo.PlainHTTP = true
+
+		_, err = oras.Copy(context.TODO(), store, tag, remoteRepo, tag, oras.CopyOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		return "oci://" + repoRef, server.Close
+	}
+
+	It("pulls layers when PlainHTTP is set", func() {
+		layerContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: oci-plain-http\n")
+		ociURL, cleanup := servePlainOCIRegistry("v1", layerContent)
+		defer cleanup()
+
+		got, err := fetchOCI(context.TODO(), ociURL, remoteFetchOptions{plainHTTP: true},
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(got).To(Equal(layerContent))
+	})
+
+	It("fails without PlainHTTP against a plain-HTTP registry", func() {
+		layerContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: oci-plain-http\n")
+		ociURL, cleanup := servePlainOCIRegistry("v1", layerContent)
+		defer cleanup()
+
+		_, err := fetchOCI(context.TODO(), ociURL, remoteFetchOptions{},
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("pullOCIArtifactLayers (self-signed TLS)", func() {
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = logr.Discard()
+	})
+
+	// serveSelfSignedOCIRegistry starts an in-process OCI registry behind a
+	// self-signed TLS certificate (httptest.NewTLSServer) seeded with a
+	// single-layer artifact tagged tag, and returns the "oci://" reference to
+	// pull it back alongside a cleanup func. Seeding itself skips certificate
+	// verification, same as a caFile-less client with InsecureSkipTLSVerify set
+	// would need to, since the server's cert is not signed by a known CA.
+	serveSelfSignedOCIRegistry := func(tag string, layerContent []byte) (string, func()) {
+		server := httptest.NewTLSServer(registry.New())
+
+		store := memory.New()
+		layerDesc := content.NewDescriptorFromBytes("application/vnd.projectsveltos.yaml", layerContent)
+		Expect(store.Push(context.TODO(), layerDesc, bytes.NewReader(layerContent))).To(Succeed())
+
+		manifestDesc, err := oras.PackManifest(context.TODO(), store, oras.PackManifestVersion1_1,
+			"application/vnd.projectsveltos.manifest", oras.PackManifestOptions{Layers: []ocispec.Descriptor{layerDesc}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(store.Tag(context.TODO(), manifestDesc, tag)).To(Succeed())
+
+		host := strings.TrimPrefix(server.URL, "https://")
+		repoRef := fmt.Sprintf("%s/unit/selfsigned:%s", host, tag)
+
+		remoteRepo, err := orasremote.NewRepository(repoRef)
+		Expect(err).ToNot(HaveOccurred())
+		remoteRepo.Client = &orasauth.Client{
+			Client: &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // test-only, seeding a self-signed test registry
+				},
+			},
+		}
+
+		_, err = oras.Copy(context.TODO(), store, tag, remoteRepo, tag, oras.CopyOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		return "oci://" + repoRef, server.Close
+	}
+
+	It("pulls layers when InsecureSkipTLSVerify is set and no caFile is provided", func() {
+		layerContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: oci-self-signed\n")
+		ociURL, cleanup := serveSelfSignedOCIRegistry("v1", layerContent)
+		defer cleanup()
+
+		got, err := fetchOCI(context.TODO(), ociURL, remoteFetchOptions{insecureSkipTLSVerify: true},
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(got).To(Equal(layerContent))
+	})
+
+	It("fails without InsecureSkipTLSVerify against a self-signed TLS registry", func() {
+		layerContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: oci-self-signed\n")
+		ociURL, cleanup := serveSelfSignedOCIRegistry("v1", layerContent)
+		defer cleanup()
+
+		_, err := fetchOCI(context.TODO(), ociURL, remoteFetchOptions{},
+			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
+		Expect(err).To(HaveOccurred())
 	})
 })

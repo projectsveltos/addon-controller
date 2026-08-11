@@ -718,6 +718,18 @@ type RemoteKustomizeURL struct {
 	//   "caFile"             — PEM-encoded CA certificate for TLS verification
 	// +optional
 	SecretRef *corev1.SecretReference `json:"secretRef,omitempty"`
+
+	// InsecureSkipTLSVerify controls server certificate verification.
+	// Ignored if the referenced SecretRef provides a "caFile".
+	// +kubebuilder:default:=false
+	// +optional
+	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify,omitempty"`
+
+	// PlainHTTP indicates to use insecure HTTP connections when URL uses the
+	// "oci://" scheme. Ignored for "http://"/"https://" URLs.
+	// +kubebuilder:default:=false
+	// +optional
+	PlainHTTP bool `json:"plainHTTP,omitempty"`
 }
 
 // StopMatchingBehavior indicates what will happen when Cluster stops matching
@@ -893,6 +905,18 @@ type RemoteURL struct {
 	// on a ConfigMap or Secret.
 	// +optional
 	Template bool `json:"template,omitempty"`
+
+	// InsecureSkipTLSVerify controls server certificate verification.
+	// Ignored if the referenced SecretRef provides a "caFile".
+	// +kubebuilder:default:=false
+	// +optional
+	InsecureSkipTLSVerify bool `json:"insecureSkipTLSVerify,omitempty"`
+
+	// PlainHTTP indicates to use insecure HTTP connections when URL uses the
+	// "oci://" scheme. Ignored for "http://"/"https://" URLs.
+	// +kubebuilder:default:=false
+	// +optional
+	PlainHTTP bool `json:"plainHTTP,omitempty"`
 }
 
 type Clusters struct {

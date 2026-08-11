@@ -78,9 +78,11 @@ type referencedObject struct {
 	Optional              bool
 	Path                  string
 	// URL and related fields are set only for URL-based PolicyRefs (Kind == urlSourceKind).
-	URL        string
-	IsTemplate bool
-	SecretRef  *corev1.SecretReference
+	URL                   string
+	IsTemplate            bool
+	SecretRef             *corev1.SecretReference
+	InsecureSkipTLSVerify bool
+	PlainHTTP             bool
 }
 
 func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
@@ -787,6 +789,8 @@ func collectReferencedObjects(references []configv1beta1.PolicyRef) (local, remo
 			object.URL = reference.RemoteURL.URL
 			object.IsTemplate = reference.RemoteURL.Template
 			object.SecretRef = reference.RemoteURL.SecretRef
+			object.InsecureSkipTLSVerify = reference.RemoteURL.InsecureSkipTLSVerify
+			object.PlainHTTP = reference.RemoteURL.PlainHTTP
 			setCommonReferencedObjectFields(&object, reference)
 
 			if reference.DeploymentType == configv1beta1.DeploymentTypeLocal {

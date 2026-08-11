@@ -488,7 +488,12 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 func getHashFromRemoteKustomizeURL(ctx context.Context, remoteURL *configv1beta1.RemoteKustomizeURL,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) ([]byte, error) {
 
-	body, err := fetchContentForHash(ctx, remoteURL.URL, remoteURL.SecretRef,
+	opts := remoteFetchOptions{
+		secretRef:             remoteURL.SecretRef,
+		insecureSkipTLSVerify: remoteURL.InsecureSkipTLSVerify,
+		plainHTTP:             remoteURL.PlainHTTP,
+	}
+	body, err := fetchContentForHash(ctx, remoteURL.URL, opts,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
@@ -860,7 +865,12 @@ func prepareFileSystemWithRemoteURL(ctx context.Context, kustomizationRef *confi
 		return "", fmt.Errorf("tmp dir error: %w", err)
 	}
 
-	err = fetchContentToDir(ctx, kustomizationRef.RemoteURL.URL, kustomizationRef.RemoteURL.SecretRef,
+	opts := remoteFetchOptions{
+		secretRef:             kustomizationRef.RemoteURL.SecretRef,
+		insecureSkipTLSVerify: kustomizationRef.RemoteURL.InsecureSkipTLSVerify,
+		plainHTTP:             kustomizationRef.RemoteURL.PlainHTTP,
+	}
+	err = fetchContentToDir(ctx, kustomizationRef.RemoteURL.URL, opts,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType,
 		tmpDir, logger)
 	if err != nil {

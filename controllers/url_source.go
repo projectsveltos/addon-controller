@@ -54,12 +54,26 @@ const (
 	defaultURLInterval = 5 * time.Minute
 )
 
+// remoteFetchOptions groups the options shared by every function that fetches
+// content from a RemoteURL/RemoteKustomizeURL source.
+type remoteFetchOptions struct {
+	// secretRef references a Secret containing optional auth credentials
+	// (keys: "token", "username"+"password", "caFile").
+	secretRef *corev1.SecretReference
+	// insecureSkipTLSVerify disables server certificate verification. Ignored
+	// if secretRef provides a "caFile".
+	insecureSkipTLSVerify bool
+	// plainHTTP uses an insecure HTTP connection instead of HTTPS when
+	// fetching from an OCI registry ("oci://" scheme). Ignored otherwise.
+	plainHTTP bool
+}
+
 // fetchURL retrieves the raw content from rawURL.
-// If secretRef is non-nil, the referenced Secret is read for optional auth
+// If opts.secretRef is non-nil, the referenced Secret is read for optional auth
 // credentials (keys: "token", "username"+"password", "caFile").
 // The secretRef Name and Namespace support Go templating against the target cluster.
 // When Namespace is empty it defaults to clusterNamespace.
-func fetchURL(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+func fetchURL(ctx context.Context, rawURL string, opts remoteFetchOptions,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]byte, error) {
 
@@ -69,7 +83,8 @@ func fetchURL(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 		return nil, fmt.Errorf("failed to build HTTP request for %s: %w", rawURL, err)
 	}
 
-	if secretRef != nil {
+	var caPool *x509.CertPool
+	if secretRef := opts.secretRef; secretRef != nil {
 		ns, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
 			clusterNamespace, clusterName, secretRef.Namespace, clusterType)
 		if err != nil {
@@ -96,14 +111,22 @@ func fetchURL(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 		}
 
 		if caFile, ok := secret.Data["caFile"]; ok {
-			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM(caFile) {
+			caPool = x509.NewCertPool()
+			if !caPool.AppendCertsFromPEM(caFile) {
 				return nil, fmt.Errorf("failed to parse caFile from secret %s/%s",
 					ns, name)
 			}
-			transport = &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: pool},
-			}
+		}
+	}
+
+	switch {
+	case caPool != nil:
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: caPool},
+		}
+	case opts.insecureSkipTLSVerify:
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // explicit opt-in via RemoteURL.InsecureSkipTLSVerify
 		}
 	}
 
@@ -141,15 +164,15 @@ func fetchURL(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 // The secretRef Name and Namespace are treated as Go templates and instantiated
 // against the target cluster, following the same convention as PolicyRef ConfigMap/Secret
 // references. When Namespace is empty it defaults to clusterNamespace.
-func fetchContent(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+func fetchContent(ctx context.Context, rawURL string, opts remoteFetchOptions,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]byte, error) {
 
 	if strings.HasPrefix(rawURL, "oci://") {
-		return fetchOCI(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+		return fetchOCI(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 	}
 
-	body, err := fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	body, err := fetchURL(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -166,11 +189,11 @@ func fetchContent(ctx context.Context, rawURL string, secretRef *corev1.SecretRe
 // exchanged for a registry token), "caFile" (PEM CA for TLS verification).
 // The secretRef Name and Namespace support Go templating against the target cluster.
 // When Namespace is empty it defaults to clusterNamespace.
-func fetchOCI(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+func fetchOCI(ctx context.Context, rawURL string, opts remoteFetchOptions,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]byte, error) {
 
-	layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	layers, err := pullOCIArtifactLayers(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -187,26 +210,22 @@ func fetchOCI(ctx context.Context, rawURL string, secretRef *corev1.SecretRefere
 	return buf.Bytes(), nil
 }
 
-// pullOCIArtifactLayers connects to the OCI registry referenced by rawURL (scheme "oci://")
-// and returns the raw bytes of every layer in the artifact's manifest, in order.
+// buildOCIAuthClient resolves opts.secretRef (if set) into an oras auth client carrying
+// registry credentials and, if the Secret provides a "caFile", a custom CA pool. When no
+// caFile is present, opts.insecureSkipTLSVerify is applied as a fallback so the caller can
+// still connect to a registry with a self-signed certificate.
 // Supported Secret keys: "token" (pre-obtained bearer token), "username"+"password" (basic auth
 // exchanged for a registry token), "caFile" (PEM CA for TLS verification).
 // The secretRef Name and Namespace support Go templating against the target cluster.
-// When Namespace is empty it defaults to clusterNamespace.
-func pullOCIArtifactLayers(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
-	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
-	logger logr.Logger) ([][]byte, error) {
-
-	ref := strings.TrimPrefix(rawURL, "oci://")
-
-	repo, err := orasremote.NewRepository(ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse OCI reference %s: %w", rawURL, err)
-	}
+// When Namespace is empty it defaults to clusterNamespace. registryHost scopes the resolved
+// credential, matching the OCI reference's registry (e.g. repo.Reference.Registry).
+func buildOCIAuthClient(ctx context.Context, rawURL, registryHost string, opts remoteFetchOptions,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType) (*orasauth.Client, error) {
 
 	authClient := &orasauth.Client{}
 
-	if secretRef != nil {
+	var caPool *x509.CertPool
+	if secretRef := opts.secretRef; secretRef != nil {
 		ns, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, getManagementClusterClient(),
 			clusterNamespace, clusterName, secretRef.Namespace, clusterType)
 		if err != nil {
@@ -235,22 +254,61 @@ func pullOCIArtifactLayers(ctx context.Context, rawURL string, secretRef *corev1
 				}
 			}
 		}
-		authClient.Credential = orasauth.StaticCredential(repo.Reference.Registry, cred)
+		authClient.Credential = orasauth.StaticCredential(registryHost, cred)
 
 		if caFile, ok := secret.Data["caFile"]; ok {
-			pool := x509.NewCertPool()
-			if !pool.AppendCertsFromPEM(caFile) {
+			caPool = x509.NewCertPool()
+			if !caPool.AppendCertsFromPEM(caFile) {
 				return nil, fmt.Errorf("failed to parse caFile from secret %s/%s", ns, name)
-			}
-			authClient.Client = &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{RootCAs: pool},
-				},
 			}
 		}
 	}
 
-	repo.Client = authClient
+	switch {
+	case caPool != nil:
+		authClient.Client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: caPool},
+			},
+		}
+	case opts.insecureSkipTLSVerify:
+		authClient.Client = &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // explicit opt-in via RemoteURL.InsecureSkipTLSVerify
+			},
+		}
+	}
+
+	return authClient, nil
+}
+
+// pullOCIArtifactLayers connects to the OCI registry referenced by rawURL (scheme "oci://")
+// and returns the raw bytes of every layer in the artifact's manifest, in order.
+// Supported Secret keys: "token" (pre-obtained bearer token), "username"+"password" (basic auth
+// exchanged for a registry token), "caFile" (PEM CA for TLS verification).
+// The secretRef Name and Namespace support Go templating against the target cluster.
+// When Namespace is empty it defaults to clusterNamespace.
+// opts.plainHTTP connects to the registry over plain HTTP instead of HTTPS, and
+// opts.insecureSkipTLSVerify disables server certificate verification (ignored if
+// the referenced Secret provides a "caFile"); oras-go otherwise requires HTTPS with
+// a verified certificate.
+func pullOCIArtifactLayers(ctx context.Context, rawURL string, opts remoteFetchOptions,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) ([][]byte, error) {
+
+	ref := strings.TrimPrefix(rawURL, "oci://")
+
+	repo, err := orasremote.NewRepository(ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse OCI reference %s: %w", rawURL, err)
+	}
+	repo.PlainHTTP = opts.plainHTTP
+
+	repo.Client, err = buildOCIAuthClient(ctx, rawURL, repo.Reference.Registry, opts,
+		clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		return nil, err
+	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("pulling OCI artifact %s", rawURL))
 
@@ -403,7 +461,12 @@ func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destCo
 	destClient client.Client, ref *referencedObject, dCtx *deploymentContext,
 	logger logr.Logger) ([]libsveltosv1beta1.ResourceReport, error) {
 
-	body, err := fetchContent(ctx, ref.URL, ref.SecretRef,
+	opts := remoteFetchOptions{
+		secretRef:             ref.SecretRef,
+		insecureSkipTLSVerify: ref.InsecureSkipTLSVerify,
+		plainHTTP:             ref.PlainHTTP,
+	}
+	body, err := fetchContent(ctx, ref.URL, opts,
 		dCtx.clusterSummary.Spec.ClusterNamespace, dCtx.clusterSummary.Spec.ClusterName,
 		dCtx.clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
@@ -483,12 +546,12 @@ func minKustomizeURLInterval(refs []configv1beta1.KustomizationRef) time.Duratio
 // It dispatches on the URL scheme: "oci://" pulls and concatenates every OCI layer;
 // everything else is fetched via fetchURL as a single archive. Either a gzip-compressed
 // or an uncompressed tar is accepted (see extractTarGz).
-func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+func fetchContentToDir(ctx context.Context, rawURL string, opts remoteFetchOptions,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	destDir string, logger logr.Logger) error {
 
 	if strings.HasPrefix(rawURL, "oci://") {
-		layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+		layers, err := pullOCIArtifactLayers(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 		if err != nil {
 			return err
 		}
@@ -500,7 +563,7 @@ func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.Sec
 		return nil
 	}
 
-	body, err := fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	body, err := fetchURL(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 	if err != nil {
 		return err
 	}
@@ -512,12 +575,12 @@ func fetchContentToDir(ctx context.Context, rawURL string, secretRef *corev1.Sec
 // response body — without extracting anything to disk. Hashing these bytes (rather than
 // re-deriving a separate representation of the content) keeps drift-detection hashes for
 // KustomizationRef.RemoteURL in sync with exactly what fetchContentToDir will deploy.
-func fetchContentForHash(ctx context.Context, rawURL string, secretRef *corev1.SecretReference,
+func fetchContentForHash(ctx context.Context, rawURL string, opts remoteFetchOptions,
 	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
 	logger logr.Logger) ([]byte, error) {
 
 	if strings.HasPrefix(rawURL, "oci://") {
-		layers, err := pullOCIArtifactLayers(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+		layers, err := pullOCIArtifactLayers(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -528,7 +591,7 @@ func fetchContentForHash(ctx context.Context, rawURL string, secretRef *corev1.S
 		return buf.Bytes(), nil
 	}
 
-	return fetchURL(ctx, rawURL, secretRef, clusterNamespace, clusterName, clusterType, logger)
+	return fetchURL(ctx, rawURL, opts, clusterNamespace, clusterName, clusterType, logger)
 }
 
 // extractTarGzBytes writes a gzipped tarball's raw bytes to a temporary file inside

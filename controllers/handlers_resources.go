@@ -630,7 +630,12 @@ func urlPolicyRefsHash(ctx context.Context, clusterSummary *configv1beta1.Cluste
 		if ref.RemoteURL == nil {
 			continue
 		}
-		body, err := fetchContent(ctx, ref.RemoteURL.URL, ref.RemoteURL.SecretRef,
+		opts := remoteFetchOptions{
+			secretRef:             ref.RemoteURL.SecretRef,
+			insecureSkipTLSVerify: ref.RemoteURL.InsecureSkipTLSVerify,
+			plainHTTP:             ref.RemoteURL.PlainHTTP,
+		}
+		body, err := fetchContent(ctx, ref.RemoteURL.URL, opts,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Spec.ClusterType, logger)
 		if err != nil {

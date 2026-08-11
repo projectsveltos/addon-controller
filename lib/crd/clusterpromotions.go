@@ -750,11 +750,23 @@ spec:
                             or a ConfigMap/Secret.
                             When set, Kind/Name/Namespace must be omitted.
                           properties:
+                            insecureSkipTLSVerify:
+                              default: false
+                              description: |-
+                                InsecureSkipTLSVerify controls server certificate verification.
+                                Ignored if the referenced SecretRef provides a "caFile".
+                              type: boolean
                             interval:
                               description: |-
                                 Interval defines how often Sveltos re-fetches the source to detect changes.
                                 Defaults to 5 minutes.
                               type: string
+                            plainHTTP:
+                              default: false
+                              description: |-
+                                PlainHTTP indicates to use insecure HTTP connections when URL uses the
+                                "oci://" scheme. Ignored for "http://"/"https://" URLs.
+                              type: boolean
                             secretRef:
                               description: |-
                                 SecretRef references a Secret in the management cluster containing optional
@@ -1105,11 +1117,23 @@ spec:
                             RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
                             When set, Kind/Name/Namespace must be omitted.
                           properties:
+                            insecureSkipTLSVerify:
+                              default: false
+                              description: |-
+                                InsecureSkipTLSVerify controls server certificate verification.
+                                Ignored if the referenced SecretRef provides a "caFile".
+                              type: boolean
                             interval:
                               description: |-
                                 Interval defines how often Sveltos re-fetches the source to detect changes.
                                 Defaults to 5 minutes.
                               type: string
+                            plainHTTP:
+                              default: false
+                              description: |-
+                                PlainHTTP indicates to use insecure HTTP connections when URL uses the
+                                "oci://" scheme. Ignored for "http://"/"https://" URLs.
+                              type: boolean
                             secretRef:
                               description: |-
                                 SecretRef references a Secret in the management cluster containing optional
@@ -2555,11 +2579,23 @@ spec:
                                       RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
                                       When set, Kind/Name/Namespace must be omitted.
                                     properties:
+                                      insecureSkipTLSVerify:
+                                        default: false
+                                        description: |-
+                                          InsecureSkipTLSVerify controls server certificate verification.
+                                          Ignored if the referenced SecretRef provides a "caFile".
+                                        type: boolean
                                       interval:
                                         description: |-
                                           Interval defines how often Sveltos re-fetches the source to detect changes.
                                           Defaults to 5 minutes.
                                         type: string
+                                      plainHTTP:
+                                        default: false
+                                        description: |-
+                                          PlainHTTP indicates to use insecure HTTP connections when URL uses the
+                                          "oci://" scheme. Ignored for "http://"/"https://" URLs.
+                                        type: boolean
                                       secretRef:
                                         description: |-
                                           SecretRef references a Secret in the management cluster containing optional
@@ -2978,11 +3014,23 @@ spec:
                                       RemoteURL configures fetching content from an HTTP/HTTPS endpoint or an OCI registry.
                                       When set, Kind/Name/Namespace must be omitted.
                                     properties:
+                                      insecureSkipTLSVerify:
+                                        default: false
+                                        description: |-
+                                          InsecureSkipTLSVerify controls server certificate verification.
+                                          Ignored if the referenced SecretRef provides a "caFile".
+                                        type: boolean
                                       interval:
                                         description: |-
                                           Interval defines how often Sveltos re-fetches the source to detect changes.
                                           Defaults to 5 minutes.
                                         type: string
+                                      plainHTTP:
+                                        default: false
+                                        description: |-
+                                          PlainHTTP indicates to use insecure HTTP connections when URL uses the
+                                          "oci://" scheme. Ignored for "http://"/"https://" URLs.
+                                        type: boolean
                                       secretRef:
                                         description: |-
                                           SecretRef references a Secret in the management cluster containing optional

@@ -45,26 +45,35 @@ const (
 	kubeconfigPostfix = "-kubeconfig"
 )
 
-// addOwnerReference adds owner as OwnerReference of obj
+// addOwnerReference adds owner as OwnerReference of obj.
+// This method can be invoked by different tests in parallel, all touching the same obj
+// (e.g. a shared ClusterConfiguration), so the get-modify-update is wrapped in a retry:
+// otherwise a conflicting write between the Get and the Update below would fail the
+// calling spec outright instead of retrying against the latest version.
 func addOwnerReference(ctx context.Context, c client.Client, obj, owner client.Object) {
 	Expect(addTypeInformationToObject(testEnv.Scheme(), owner)).To(Succeed())
 
 	objCopy := obj.DeepCopyObject().(client.Object)
 	key := client.ObjectKeyFromObject(obj)
-	Expect(c.Get(ctx, key, objCopy)).To(Succeed())
-	refs := objCopy.GetOwnerReferences()
-	if refs == nil {
-		refs = make([]metav1.OwnerReference, 0)
-	}
-	refs = append(refs,
-		metav1.OwnerReference{
-			UID:        owner.GetUID(),
-			Name:       owner.GetName(),
-			Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
-			APIVersion: owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
-		})
-	objCopy.SetOwnerReferences(refs)
-	Expect(c.Update(ctx, objCopy)).To(Succeed())
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := c.Get(ctx, key, objCopy); err != nil {
+			return err
+		}
+		refs := objCopy.GetOwnerReferences()
+		if refs == nil {
+			refs = make([]metav1.OwnerReference, 0)
+		}
+		refs = append(refs,
+			metav1.OwnerReference{
+				UID:        owner.GetUID(),
+				Name:       owner.GetName(),
+				Kind:       owner.GetObjectKind().GroupVersionKind().Kind,
+				APIVersion: owner.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+			})
+		objCopy.SetOwnerReferences(refs)
+		return c.Update(ctx, objCopy)
+	})
+	Expect(err).To(Succeed())
 }
 
 // waitForObject waits for the cache to be updated helps in preventing test flakes due to the cache sync delays.

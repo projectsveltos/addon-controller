@@ -337,6 +337,19 @@ spec:
                                 disable hooks on install
                                 Default to false
                               type: boolean
+                            recoverAfterConsecutiveFailures:
+                              default: 5
+                              description: |-
+                                RecoverAfterConsecutiveFailures is the number of consecutive install failures for this
+                                chart after which Sveltos uninstalls any existing release under this name before
+                                retrying, to clear potentially stale Helm release history that would otherwise keep
+                                blocking every subsequent install attempt. This only ever runs when there is no
+                                currently deployed release to protect: a release that is deployed, or mid-upgrade, or
+                                failed while already existing, is always retried through helm upgrade instead, never
+                                through this. It only applies to a release that was never successfully installed, or
+                                was already cleanly uninstalled.
+                                Default to 5
+                              type: integer
                             replace:
                               default: true
                               description: Replaces if set indicates to replace an

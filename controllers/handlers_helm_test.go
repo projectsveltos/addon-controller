@@ -135,6 +135,35 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(controllers.ShouldInstall(nil, requestChart)).To(BeFalse())
 	})
 
+	It("shouldInstall returns false for a failed release even when its recorded version matches the request", func() {
+		// A failed upgrade/install attempt still leaves a release record behind, stamped
+		// with the version that attempt tried (and failed) to reach. That must not be
+		// mistaken for "nothing to do here but install" - it has to be retried as an
+		// upgrade instead, never routed through handleInstall's uninstall-on-repeated-
+		// failure recovery.
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusFailed.String(),
+			ChartVersion: testChartVersion253,
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    testChartVersion253,
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeFalse())
+	})
+
+	It("shouldInstall returns true when the current release was cleanly uninstalled", func() {
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusUninstalled.String(),
+			ChartVersion: testChartVersion253,
+		}
+		requestChart := &configv1beta1.HelmChart{
+			ChartVersion:    testChartVersion253,
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+		}
+		Expect(controllers.ShouldInstall(currentRelease, requestChart)).To(BeTrue())
+	})
+
 	It("shouldUninstall returns false when there is no current release installed", func() {
 		requestChart := &configv1beta1.HelmChart{
 			ChartVersion:    testChartVersion253,

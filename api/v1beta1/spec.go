@@ -298,6 +298,19 @@ type HelmInstallOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	TakeOwnership bool `json:"takeOwnership,omitempty"`
+
+	// RecoverAfterConsecutiveFailures is the number of consecutive install failures for this
+	// chart after which Sveltos uninstalls any existing release under this name before
+	// retrying, to clear potentially stale Helm release history that would otherwise keep
+	// blocking every subsequent install attempt. This only ever runs when there is no
+	// currently deployed release to protect: a release that is deployed, or mid-upgrade, or
+	// failed while already existing, is always retried through helm upgrade instead, never
+	// through this. It only applies to a release that was never successfully installed, or
+	// was already cleanly uninstalled.
+	// Default to 5
+	// +kubebuilder:default:=5
+	// +optional
+	RecoverAfterConsecutiveFailures int `json:"recoverAfterConsecutiveFailures,omitempty"`
 }
 
 type HelmUpgradeOptions struct {

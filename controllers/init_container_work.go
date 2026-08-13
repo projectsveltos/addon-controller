@@ -124,6 +124,16 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 		}
 		setHelmHash(currentClusterSummary, helmHash)
 
+		// PatchesHash is one value for the whole ClusterProfileSpec.Patches list, shared across
+		// every chart (same as buildReferencedHelmReleaseSummaries), so it's computed once here,
+		// not per chart.
+		patchesHash, err := getHelmChartPatchesHash(ctx, currentClusterSummary, logger)
+		if err != nil {
+			logger.V(logs.LogInfo).Error(err, "failed to get helm patches hash")
+			return err
+		}
+		setHelmChartsPatchesHash(currentClusterSummary, patchesHash)
+
 		for i := range currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 			helmChart := &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 			innerDCtx := &deploymentContext{
@@ -169,5 +179,14 @@ func setHelmChartValueHash(clusterSummary *configv1beta1.ClusterSummary, helmCha
 
 			rs.ValuesHash = helmChartValueHash
 		}
+	}
+}
+
+// setHelmChartsPatchesHash stores patchesHash on every HelmReleaseSummaries entry, mirroring
+// buildReferencedHelmReleaseSummaries: PatchesHash is one value for the whole ClusterProfileSpec.Patches
+// list, not per chart, so every chart gets the same value.
+func setHelmChartsPatchesHash(clusterSummary *configv1beta1.ClusterSummary, patchesHash []byte) {
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		clusterSummary.Status.HelmReleaseSummaries[i].PatchesHash = patchesHash
 	}
 }

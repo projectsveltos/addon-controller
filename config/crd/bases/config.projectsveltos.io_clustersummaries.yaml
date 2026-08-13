@@ -2532,6 +2532,13 @@ spec:
                         greater than ChartVersion. Populated by a periodic background check, independent of
                         the reconcile loop. Detection only: Sveltos never mutates ChartVersion based on this.
                       type: string
+                    needsRedeploy:
+                      description: |-
+                        NeedsRedeploy is set to true when drift-detection reports that a resource deployed by
+                        this chart changed out of band. Only meaningful when SyncMode is ContinuousWithDriftDetection.
+                        When true, this chart is upgraded on the next reconciliation regardless of whether its
+                        desired values/version changed; cleared once the upgrade succeeds.
+                      type: boolean
                     patchesHash:
                       description: PatchesHash represents of a unique value for the
                         patches section

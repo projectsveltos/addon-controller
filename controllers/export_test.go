@@ -136,6 +136,7 @@ var (
 	ShouldInstall                            = shouldInstall
 	ShouldUninstall                          = shouldUninstall
 	ShouldUpgrade                            = shouldUpgrade
+	NeedsRedeployForDrift                    = needsRedeployForDrift
 	UpdateChartsInClusterConfiguration       = updateChartsInClusterConfiguration
 	UpdateStatusForReferencedHelmReleases    = updateStatusForReferencedHelmReleases
 	UpdateStatusForNonReferencedHelmReleases = updateStatusForNonReferencedHelmReleases
@@ -143,6 +144,9 @@ var (
 	UpdateClusterReportWithHelmReports       = updateClusterReportWithHelmReports
 	HandleCharts                             = handleCharts
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
+	GetHelmChartPatchesHash                  = getHelmChartPatchesHash
+	GetPatchesHash                           = getPatchesHash
+	UpdateValueHashOnHelmChartSummary        = updateValueHashOnHelmChartSummary
 	DesiredValuesAreSubset                   = desiredValuesAreSubset
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
 	GetInstantiatedChart                     = getInstantiatedChart
@@ -211,6 +215,8 @@ var (
 		resourceSummaryInstalledCache = make(map[corev1.ObjectReference]bool)
 		resourceSummaryInstalledCacheMu.Unlock()
 	}
+	ProcessResourceSummary = processResourceSummary
+	MarkDriftedHelmCharts  = markDriftedHelmCharts
 )
 
 var (
@@ -259,6 +265,11 @@ var (
 type (
 	ReferencedObject      = referencedObject
 	RegistryClientOptions = registryClientOptions
+)
+
+var (
+	UpdateClusterSummaryHelmHashes = updateClusterSummaryHelmHashes
+	SetHelmChartsPatchesHash       = setHelmChartsPatchesHash
 )
 
 // NewDeploymentContext constructs a deploymentContext for use in tests.

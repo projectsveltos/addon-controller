@@ -1455,6 +1455,27 @@ func getValuesHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
 	return nil
 }
 
+// getNeedsRedeployFromHelmChartSummary returns the NeedsRedeploy flag stored for this chart in
+// clusterSummary. buildReferencedHelmReleaseSummaries rebuilds Status.HelmReleaseSummaries from
+// scratch on every reconcile, before shouldUpgrade ever runs, so NeedsRedeploy (set by
+// markDriftedHelmCharts when drift-detection reports this chart changed out of band) must be
+// carried forward explicitly here, the same way ValuesHash already is, or it gets silently reset
+// to false before shouldUpgrade gets a chance to read it.
+func getNeedsRedeployFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
+	clusterSummary *configv1beta1.ClusterSummary) bool {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		rs := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if rs.ReleaseName == requestedChart.ReleaseName &&
+			rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
+
+			return rs.NeedsRedeploy
+		}
+	}
+
+	return false
+}
+
 // getPatchesHashFromHelmChartSummary returns the patchesHash stored for this chart
 // in the ClusterSummary
 func getPatchesHashFromHelmChartSummary(requestedChart *configv1beta1.HelmChart,
@@ -2842,14 +2863,30 @@ func shouldUpgrade(ctx context.Context, currentRelease *releaseInfo, instantiate
 		return shouldUpgradeForContinuousMode(ctx, currentRelease, instantiatedChart, dCtx, currentPatchesHash, logger)
 	}
 
-	// ContinuousWithDriftDetection: always upgrade except on the very first reconciliation
-	// when the live release already matches desired state (no stored ValuesHash yet).
-	// Subsequent reconciliations always upgrade so the drift-detection agent can repair drift.
+	// ContinuousWithDriftDetection: upgrade if drift-detection reported this specific chart's
+	// deployed resources changed out of band (NeedsRedeploy, set by markDriftedHelmCharts in
+	// resourcesummary_collection.go), or if the desired chart spec itself changed, same check
+	// Continuous mode uses. A chart that neither drifted nor changed is left alone, instead of
+	// being upgraded on every single reconcile regardless of whether anything needs it.
 	// ResourceSummary is deployed by postProcessDeployedHelmCharts regardless of this decision.
-	if driftDetectionFirstReconciliationCanSkip(ctx, currentRelease, instantiatedChart, dCtx, currentPatchesHash, logger) {
-		return false
+	if needsRedeployForDrift(instantiatedChart, dCtx.clusterSummary) {
+		return true
 	}
-	return true
+	return shouldUpgradeForContinuousMode(ctx, currentRelease, instantiatedChart, dCtx, currentPatchesHash, logger)
+}
+
+// needsRedeployForDrift returns true if drift-detection has flagged this chart's deployed
+// resources as changed out of band since the last successful deploy of this chart.
+func needsRedeployForDrift(instantiatedChart *configv1beta1.HelmChart, clusterSummary *configv1beta1.ClusterSummary) bool {
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if summary.ReleaseName == instantiatedChart.ReleaseName &&
+			summary.ReleaseNamespace == instantiatedChart.ReleaseNamespace {
+
+			return summary.NeedsRedeploy
+		}
+	}
+	return false
 }
 
 // shouldUpgradeForContinuousMode handles the upgrade decision for Continuous and DryRun modes.
@@ -2885,8 +2922,9 @@ func shouldUpgradeForContinuousMode(ctx context.Context, currentRelease *release
 			}
 		}
 		if oldPatchesHash == nil {
-			emptyHash := sha256.Sum256([]byte(""))
-			if reflect.DeepEqual(currentPatchesHash, emptyHash[:]) {
+			// getHelmChartPatchesHash returns an empty []byte when no patches are configured
+			// (getPatchesHash short-circuits to "" before hashing anything).
+			if len(currentPatchesHash) == 0 {
 				oldPatchesHash = currentPatchesHash
 			}
 		}
@@ -2914,35 +2952,6 @@ func shouldUpgradeForContinuousMode(ctx context.Context, currentRelease *release
 		return !current.Equal(expected)
 	}
 	return false
-}
-
-// driftDetectionFirstReconciliationCanSkip returns true when the live release already
-// reflects the desired state and this is the first reconciliation (no stored ValuesHash).
-// Conditions: no stored state, release deployed, same version, desired values are a subset
-// of the coalesced release values, and no patches configured.
-// Patches are not skipped: we cannot infer from the release whether they were applied before.
-func driftDetectionFirstReconciliationCanSkip(ctx context.Context, currentRelease *releaseInfo,
-	instantiatedChart *configv1beta1.HelmChart, dCtx *deploymentContext,
-	currentPatchesHash []byte, logger logr.Logger) bool {
-
-	if getValuesHashFromHelmChartSummary(instantiatedChart, dCtx.clusterSummary) != nil {
-		return false
-	}
-	if currentRelease == nil || currentRelease.Status != releasecommon.StatusDeployed.String() {
-		return false
-	}
-	emptyPatchesHash := sha256.Sum256([]byte(""))
-	if !reflect.DeepEqual(currentPatchesHash, emptyPatchesHash[:]) {
-		return false
-	}
-	current, err1 := semver.NewVersion(currentRelease.ChartVersion)
-	expected, err2 := semver.NewVersion(instantiatedChart.ChartVersion)
-	if err1 != nil || err2 != nil || !current.Equal(expected) {
-		return false
-	}
-	desiredValues, err := getHelmChartInstantiatedValues(ctx, dCtx.clusterSummary,
-		dCtx.mgmtResources, instantiatedChart, logger)
-	return err == nil && desiredValuesAreSubset(desiredValues, currentRelease.FullValues)
 }
 
 // shouldUninstall returns true if action is uninstall there is a release installed currently
@@ -3152,7 +3161,7 @@ type getManagerForChart func(clusterNamespace, clusterName string,
 func buildReferencedHelmReleaseSummaries(ctx context.Context, c client.Client,
 	getManager getManagerForChart, clusterSummary *configv1beta1.ClusterSummary,
 	currentClusterSummary *configv1beta1.ClusterSummary, dCtx *deploymentContext,
-	patchesHash string, logger logr.Logger,
+	logger logr.Logger,
 ) (summaries []configv1beta1.HelmChartSummary, conflict bool, err error) {
 
 	helmInfo := func(releaseNamespace, releaseName string) string {
@@ -3180,8 +3189,16 @@ func buildReferencedHelmReleaseSummaries(ctx context.Context, c client.Client,
 				ReleaseNamespace: instantiatedChart.ReleaseNamespace,
 				Status:           configv1beta1.HelmChartStatusManaging,
 				FailureMessage:   getFailureMessageFromHelmChartSummary(instantiatedChart, clusterSummary),
-				PatchesHash:      []byte(patchesHash),
-				ValuesHash:       getValuesHashFromHelmChartSummary(instantiatedChart, clusterSummary),
+				// Carried forward, not recomputed: shouldUpgradeForContinuousMode compares this
+				// against a freshly computed value to detect a real patches change. Overwriting
+				// it with the fresh value here, before that comparison ever runs, would make the
+				// comparison structurally unable to see a difference (old and current would
+				// always match, since both come from the same current state). PatchesHash is
+				// only advanced to the current value on a successful deploy, in
+				// updateValueHashOnHelmChartSummary, the same point ValuesHash is.
+				PatchesHash:   getPatchesHashFromHelmChartSummary(instantiatedChart, clusterSummary),
+				ValuesHash:    getValuesHashFromHelmChartSummary(instantiatedChart, clusterSummary),
+				NeedsRedeploy: getNeedsRedeployFromHelmChartSummary(instantiatedChart, clusterSummary),
 			}
 			currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
 		} else {
@@ -3235,11 +3252,6 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 	conflict := false
 
-	patchesHash, err := getPatchesHash(ctx, clusterSummary, logger)
-	if err != nil {
-		return clusterSummary, false, err
-	}
-
 	currentClusterSummary := &configv1beta1.ClusterSummary{}
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		err = c.Get(ctx,
@@ -3262,7 +3274,7 @@ func updateStatusForReferencedHelmReleases(ctx context.Context, c client.Client,
 
 		var summaries []configv1beta1.HelmChartSummary
 		summaries, conflict, err = buildReferencedHelmReleaseSummaries(ctx, c, chartManager.GetManagerForChart,
-			clusterSummary, currentClusterSummary, innerDCtx, patchesHash, logger)
+			clusterSummary, currentClusterSummary, innerDCtx, logger)
 		if err != nil {
 			return err
 		}
@@ -4669,6 +4681,14 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 		return nil, err
 	}
 
+	// Advanced here, on a successful deploy, same as ValuesHash. buildReferencedHelmReleaseSummaries
+	// only ever carries the stored PatchesHash forward, it never recomputes it, so this is the only
+	// place PatchesHash catches up to the patches that were actually just applied.
+	helmChartPatchesHash, err := getHelmChartPatchesHash(ctx, dCtx.clusterSummary, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err = c.Get(ctx,
@@ -4683,6 +4703,8 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
 				rs.ValuesHash = helmChartValuesHash
+				rs.PatchesHash = helmChartPatchesHash
+				rs.NeedsRedeploy = false
 				setResolvedHelmChartIdentity(ctx, c, dCtx.clusterSummary, rs, requestedChart, currentRelease, logger)
 			}
 		}
@@ -4774,6 +4796,10 @@ func clearStaleOutdatedVersionInfo(clusterSummary *configv1beta1.ClusterSummary,
 	rs.LastCheckedTime = nil
 }
 
+// getHelmChartPatchesHash returns the same hex-string-as-bytes encoding buildReferencedHelmReleaseSummaries
+// stores in HelmChartSummary.PatchesHash (getPatchesHash already returns a hex-encoded sha256 digest), so
+// the two are directly comparable. Do not hash patchesHash again here, that would compare a hex(sha256(...))
+// value against a sha256(hex(sha256(...))) value, which can never be equal regardless of whether patches changed.
 func getHelmChartPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) ([]byte, error) {
 
@@ -4782,9 +4808,7 @@ func getHelmChartPatchesHash(ctx context.Context, clusterSummary *configv1beta1.
 		return nil, err
 	}
 
-	h := sha256.New()
-	h.Write([]byte(patchesHash))
-	return h.Sum(nil), nil
+	return []byte(patchesHash), nil
 }
 
 func getCredentialsAndCAFiles(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,

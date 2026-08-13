@@ -91,7 +91,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		}
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
 
-		resourceSummary := getResourceSummary(nil, nil)
+		resourceSummary := getResourceSummary()
 		resourceSummary.Annotations = map[string]string{
 			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
 			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummary.Namespace,
@@ -151,6 +151,118 @@ var _ = Describe("ResourceSummary Collection", func() {
 			return err == nil && !currentResourceSummary.Status.HelmResourcesChanged
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
+	It("processResourceSummary scopes NeedsRedeploy to only the drifted chart", func() {
+		cluster := prepareCluster()
+
+		chartA := configv1beta1.HelmChartSummary{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Status:           configv1beta1.HelmChartStatusManaging,
+		}
+		chartB := configv1beta1.HelmChartSummary{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			Status:           configv1beta1.HelmChartStatusManaging,
+		}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      clusterProfileNamePrefix + randomString(),
+				Labels:    map[string]string{clusterops.ClusterProfileLabelName: randomString()},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+				Hash:      []byte(randomString()),
+			},
+		}
+		currentClusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{chartA, chartB}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		resourceSummary := getResourceSummary()
+		resourceSummary.Annotations = map[string]string{
+			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
+			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummary.Namespace,
+		}
+		Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())
+
+		currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+			currentResourceSummary)).To(Succeed())
+		currentResourceSummary.Status.HelmResourcesChanged = true
+		// Only chartA drifted. chartB must be left alone.
+		currentResourceSummary.Status.DriftedHelmCharts = []libsveltosv1beta1.HelmChartRef{
+			{
+				ChartName:        randomString(),
+				ReleaseName:      chartA.ReleaseName,
+				ReleaseNamespace: chartA.ReleaseNamespace,
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentResourceSummary)).To(Succeed())
+
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+				currentResourceSummary)
+			return err == nil && currentResourceSummary.Status.HelmResourcesChanged
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.ProcessResourceSummary(context.TODO(), testEnv.Client, currentResourceSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil {
+				return false
+			}
+			for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+				rs := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+				if rs.ReleaseName == chartA.ReleaseName {
+					if !rs.NeedsRedeploy {
+						return false
+					}
+				} else if rs.NeedsRedeploy {
+					return false
+				}
+			}
+			return true
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("markDriftedHelmCharts marks every chart when no chart-scoped drift info is available", func() {
+		clusterSummary := &configv1beta1.ClusterSummary{
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString()},
+					{ReleaseName: randomString(), ReleaseNamespace: randomString()},
+				},
+			},
+		}
+
+		controllers.MarkDriftedHelmCharts(clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+
+		for i := range clusterSummary.Status.HelmReleaseSummaries {
+			Expect(clusterSummary.Status.HelmReleaseSummaries[i].NeedsRedeploy).To(BeTrue())
+		}
+	})
+
 	It("isResourceSummaryInstalledCached caches positive result", func() {
 		controllers.ResetResourceSummaryInstalledCache()
 
@@ -233,7 +345,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
 
 		// RS labeled as CAPI cluster — drift detected.
-		capiRS := getResourceSummary(nil, nil)
+		capiRS := getResourceSummary()
 		capiRS.Namespace = capiCluster.Namespace
 		capiRS.Annotations = map[string]string{
 			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
@@ -253,7 +365,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 
 		// RS labeled as Sveltos cluster — same namespace/name as the CAPI cluster, also with drift.
 		// This must NOT be processed since its cluster type does not match the CAPI entry in clustersWithDD.
-		sveltosRS := getResourceSummary(nil, nil)
+		sveltosRS := getResourceSummary()
 		sveltosRS.Namespace = capiCluster.Namespace
 		sveltosRS.Annotations = map[string]string{
 			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
@@ -311,44 +423,13 @@ var _ = Describe("ResourceSummary Collection", func() {
 	})
 })
 
-func getResourceSummary(resource, helmResource *corev1.ObjectReference) *libsveltosv1beta1.ResourceSummary {
-	rs := &libsveltosv1beta1.ResourceSummary{
+// getResourceSummary returns a bare ResourceSummary. None of the tests in this file need it
+// pre-populated with Spec.Resources/ChartResources, they set Status directly instead.
+func getResourceSummary() *libsveltosv1beta1.ResourceSummary {
+	return &libsveltosv1beta1.ResourceSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      randomString(),
 			Namespace: sveltosNamespace,
 		},
 	}
-
-	if resource != nil {
-		rs.Spec.Resources = []libsveltosv1beta1.Resource{
-			{
-				Name:      resource.Name,
-				Namespace: resource.Namespace,
-				Kind:      resource.Kind,
-				Group:     resource.GroupVersionKind().Group,
-				Version:   resource.GroupVersionKind().Version,
-			},
-		}
-	}
-
-	if helmResource != nil {
-		rs.Spec.ChartResources = []libsveltosv1beta1.HelmResources{
-			{
-				ChartName:        randomString(),
-				ReleaseName:      randomString(),
-				ReleaseNamespace: randomString(),
-				Resources: []libsveltosv1beta1.ResourceSummaryResource{
-					{
-						Name:      helmResource.Name,
-						Namespace: helmResource.Namespace,
-						Kind:      helmResource.Kind,
-						Group:     helmResource.GroupVersionKind().Group,
-						Version:   helmResource.GroupVersionKind().Version,
-					},
-				},
-			},
-		}
-	}
-
-	return rs
 }

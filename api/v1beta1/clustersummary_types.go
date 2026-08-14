@@ -166,6 +166,13 @@ type HelmChartSummary struct {
 	// LastCheckedTime is when LatestVersion/LatestPatchVersion were last evaluated.
 	// +optional
 	LastCheckedTime *metav1.Time `json:"lastCheckedTime,omitempty"`
+
+	// NeedsRedeploy is set to true when drift-detection reports that a resource deployed by
+	// this chart changed out of band. Only meaningful when SyncMode is ContinuousWithDriftDetection.
+	// When true, this chart is upgraded on the next reconciliation regardless of whether its
+	// desired values/version changed; cleared once the upgrade succeeds.
+	// +optional
+	NeedsRedeploy bool `json:"needsRedeploy,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

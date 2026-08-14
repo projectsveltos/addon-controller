@@ -43,6 +43,9 @@ const (
 	testReleaseNameContour      = "contour-latest"
 	testRepoURLBitnami          = "https://charts.bitnami.com/bitnami"
 	testChartNameBitnamiContour = "bitnami/contour"
+	testRepoURLNginxStable      = "https://helm.nginx.com/stable/"
+	testRepoNameNginxStable     = "nginx-stable"
+	testChartNameNginxIngress   = "nginx-stable/nginx-ingress"
 
 	// Label keys and values
 	testEnvLabelKey    = "env"
@@ -114,6 +117,9 @@ const (
 	testEnvLabelPatch = `- op: add
   path: /metadata/labels/environment
   value: production`
+	testManagedAnnotationPatch = `- op: add
+  path: /metadata/annotations/projectsveltos.io~1managed
+  value: "true"`
 
 	// Verbs and resources
 	testCreateVerb         = "create"

@@ -17,6 +17,7 @@ limitations under the License.
 package controllers_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -397,9 +398,10 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
 	})
 
-	It("shouldUpgrade returns true on second reconciliation with ContinuousWithDriftDetection (stored ValuesHash present)", func() {
-		// Once a ValuesHash is stored in HelmReleaseSummaries, every reconciliation must
-		// trigger an upgrade so the drift-detection agent can repair configuration drift.
+	// shouldUpgradeWithDriftDetection sets up a chart whose stored ValuesHash already matches
+	// what's actually deployed (nothing about the desired spec changed), with NeedsRedeploy set
+	// as requested, and returns what shouldUpgrade decides for it under ContinuousWithDriftDetection.
+	shouldUpgradeWithDriftDetection := func(needsRedeploy bool) bool {
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
 		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
@@ -414,12 +416,25 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+
+		requestChart := &configv1beta1.HelmChart{
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			ChartVersion:     testChartVersion100,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		storedValuesHash, err := controllers.GetHelmChartValuesHash(context.TODO(), testEnv, requestChart,
+			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
 		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
 			{
 				ReleaseName:      testReleaseNameNginxLatest,
 				ReleaseNamespace: testNginxRepo,
-				ValuesHash:       []byte("previously-stored-hash"),
+				ValuesHash:       storedValuesHash,
 				Status:           configv1beta1.HelmChartStatusManaging,
+				NeedsRedeploy:    needsRedeploy,
 			},
 		}
 
@@ -428,11 +443,88 @@ var _ = Describe("HandlersHelm", func() {
 			ChartVersion: testChartVersion100,
 			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
+
+		return controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))
+	}
+
+	It("shouldUpgrade returns false with ContinuousWithDriftDetection when stored state matches and NeedsRedeploy is false", func() {
+		// Nothing changed and drift-detection hasn't flagged this chart, so there's nothing to
+		// do: shouldUpgrade must not blindly re-upgrade every chart on every reconcile
+		// regardless of state.
+		Expect(shouldUpgradeWithDriftDetection(false)).To(BeFalse())
+	})
+
+	It("shouldUpgrade returns true with ContinuousWithDriftDetection when NeedsRedeploy is set, even if stored state matches", func() {
+		// Same as above, nothing about the desired spec changed, but drift-detection flagged
+		// this chart's deployed resources as changed out of band. That alone must trigger the
+		// upgrade, scoped to this chart.
+		Expect(shouldUpgradeWithDriftDetection(true)).To(BeTrue())
+	})
+
+	It("shouldUpgrade returns true when patches are added to a chart that previously had none", func() {
+		// Regression test: buildReferencedHelmReleaseSummaries used to overwrite PatchesHash
+		// with the freshly computed value on every reconcile, before shouldUpgrade ever compared
+		// it, so a real patches change was undetectable, old and current were always equal by
+		// construction, since both came from the same current state. PatchesHash now behaves
+		// like ValuesHash: carried forward until a successful deploy, so a genuine change here
+		// (patches added where there were none) must be visible to the comparison.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+
 		requestChart := &configv1beta1.HelmChart{
 			ReleaseName:      testReleaseNameNginxLatest,
 			ReleaseNamespace: testNginxRepo,
 			ChartVersion:     testChartVersion100,
 			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		// Deployed previously with no patches configured.
+		noPatchesHash, err := controllers.GetHelmChartPatchesHash(context.TODO(), clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		storedValuesHash, err := controllers.GetHelmChartValuesHash(context.TODO(), testEnv, requestChart,
+			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{
+				ReleaseName:      testReleaseNameNginxLatest,
+				ReleaseNamespace: testNginxRepo,
+				ValuesHash:       storedValuesHash,
+				PatchesHash:      noPatchesHash,
+				Status:           configv1beta1.HelmChartStatusManaging,
+			},
+		}
+
+		// Patches just got added to the ClusterProfile.
+		clusterSummary.Spec.ClusterProfileSpec.Patches = []libsveltosv1beta1.Patch{
+			{
+				Patch: testManagedAnnotationPatch,
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind: testKindDeployment,
+				},
+			},
+		}
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
 		}
 
 		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
@@ -460,9 +552,7 @@ var _ = Describe("HandlersHelm", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 		clusterSummary.Spec.ClusterProfileSpec.Patches = []libsveltosv1beta1.Patch{
 			{
-				Patch: `- op: add
-  path: /metadata/annotations/projectsveltos.io~1managed
-  value: "true"`,
+				Patch: testManagedAnnotationPatch,
 				Target: &libsveltosv1beta1.PatchSelector{
 					Kind: testKindDeployment,
 				},
@@ -484,6 +574,110 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
 			controllers.NewDeploymentContext(clusterSummary, nil, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))).To(BeTrue())
+	})
+
+	It("getHelmChartPatchesHash returns the same encoding stored by buildReferencedHelmReleaseSummaries", func() {
+		// buildReferencedHelmReleaseSummaries stores getPatchesHash's return value directly as
+		// []byte(patchesHash), a hex-encoded digest kept as text. getHelmChartPatchesHash must
+		// return that same encoding, not hash it again, otherwise the two are never equal and
+		// shouldUpgradeForContinuousMode reports "patches changed" on every single reconcile
+		// regardless of whether patches actually changed.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.Patches = []libsveltosv1beta1.Patch{
+			{
+				Patch: testManagedAnnotationPatch,
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind: testKindDeployment,
+				},
+			},
+		}
+
+		storedFormat, err := controllers.GetPatchesHash(context.TODO(), clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(storedFormat).ToNot(BeEmpty())
+
+		comparisonFormat, err := controllers.GetHelmChartPatchesHash(context.TODO(), clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		Expect(comparisonFormat).To(Equal([]byte(storedFormat)))
+	})
+
+	It("shouldUpgrade returns false when patches are configured but unchanged", func() {
+		// Regression test: previously getHelmChartPatchesHash hashed the already-hex-encoded
+		// stored value a second time, so this always evaluated to true, forcing a redeploy of
+		// every chart with patches configured on every reconcile, in any sync mode, regardless
+		// of whether anything actually changed.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: clusterSummary.Spec.ClusterNamespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.Patches = []libsveltosv1beta1.Patch{
+			{
+				Patch: testManagedAnnotationPatch,
+				Target: &libsveltosv1beta1.PatchSelector{
+					Kind: testKindDeployment,
+				},
+			},
+		}
+
+		requestChart := &configv1beta1.HelmChart{
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			ChartVersion:     testChartVersion100,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		storedValuesHash, err := controllers.GetHelmChartValuesHash(context.TODO(), testEnv, requestChart,
+			clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		storedPatchesHash, err := controllers.GetHelmChartPatchesHash(context.TODO(), clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{
+				ReleaseName:      testReleaseNameNginxLatest,
+				ReleaseNamespace: testNginxRepo,
+				ValuesHash:       storedValuesHash,
+				PatchesHash:      storedPatchesHash,
+				Status:           configv1beta1.HelmChartStatusManaging,
+			},
+		}
+
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
+		}
+
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, requestChart,
+			controllers.NewDeploymentContext(clusterSummary, nil, nil),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(BeFalse())
 	})
 
 	It("UpdateStatusForeferencedHelmReleases updates ClusterSummary.Status.HelmReleaseSummaries", func() {
@@ -568,6 +762,152 @@ var _ = Describe("HandlersHelm", func() {
 				currentClusterSummary.Status.HelmReleaseSummaries[1].ReleaseNamespace == kyvernoSummary.ReleaseNamespace
 		}, timeout, pollingInterval).Should(BeTrue())
 
+	})
+
+	It("UpdateStatusForReferencedHelmReleases preserves NeedsRedeploy across a rebuild", func() {
+		// Regression test: UpdateStatusForReferencedHelmReleases (via buildReferencedHelmReleaseSummaries)
+		// rebuilds Status.HelmReleaseSummaries from scratch on every reconcile, before shouldUpgrade
+		// ever runs. It already carries ValuesHash forward explicitly; it must do the same for
+		// NeedsRedeploy, set by markDriftedHelmCharts when drift-detection reports this chart
+		// changed out of band, otherwise the flag is silently wiped before shouldUpgrade can act on
+		// it, and a chart with a real, detected drift is never actually redeployed.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+					NeedsRedeploy:    true,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		_, conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(),
+			testEnv.Client, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(conflict).To(BeFalse())
+
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			if err != nil || len(currentClusterSummary.Status.HelmReleaseSummaries) != 1 {
+				return false
+			}
+			return currentClusterSummary.Status.HelmReleaseSummaries[0].NeedsRedeploy
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("UpdateStatusForReferencedHelmReleases carries PatchesHash forward instead of recomputing it", func() {
+		// Regression test: buildReferencedHelmReleaseSummaries used to store the freshly computed
+		// PatchesHash directly, on every reconcile, before shouldUpgrade ever ran. That made a
+		// real patches change undetectable: by the time shouldUpgrade compared old vs current,
+		// both had already been set to the same fresh value moments earlier in the same
+		// reconcile. PatchesHash must instead be carried forward here, the same way ValuesHash
+		// already is, and only advanced to the current value on a successful deploy
+		// (updateValueHashOnHelmChartSummary), so shouldUpgrade's comparison has something real
+		// to compare against.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+			// Patches configured now. If PatchesHash were recomputed instead of carried
+			// forward, this reconcile would store the hash of *this* patch list, matching
+			// whatever shouldUpgrade computes as "current" right after, and the change below
+			// would never be visible.
+			Patches: []libsveltosv1beta1.Patch{
+				{
+					Patch: testManagedAnnotationPatch,
+					Target: &libsveltosv1beta1.PatchSelector{
+						Kind: testKindDeployment,
+					},
+				},
+			},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		stalePatchesHash := []byte("stale-patches-hash-from-before-patches-were-added")
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+					PatchesHash:      stalePatchesHash,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		// Checked on the function's direct return value, not via a Get against testEnv's cache:
+		// the cache can still be showing the pre-call state for a beat after this returns, which
+		// would let a broken (fresh-value-writing) implementation slip past an Eventually/Get
+		// check by accident, since the stale cache read looks like the pre-existing value too.
+		updatedClusterSummary, conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(),
+			testEnv.Client, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(conflict).To(BeFalse())
+		Expect(updatedClusterSummary.Status.HelmReleaseSummaries).To(HaveLen(1))
+		Expect(bytes.Equal(updatedClusterSummary.Status.HelmReleaseSummaries[0].PatchesHash, stalePatchesHash)).To(BeTrue())
 	})
 
 	It("updateStatusForeferencedHelmReleases is no-op in DryRun mode", func() {
@@ -1140,9 +1480,9 @@ var _ = Describe("Hash methods", func() {
 		}
 
 		nginxChart := configv1beta1.HelmChart{
-			RepositoryURL:    "https://helm.nginx.com/stable/",
-			RepositoryName:   "nginx-stable",
-			ChartName:        "nginx-stable/nginx-ingress",
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
 			ChartVersion:     "0.17.1",
 			ReleaseName:      testReleaseNameNginxLatest,
 			ReleaseNamespace: testNginxRepo,

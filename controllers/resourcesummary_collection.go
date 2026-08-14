@@ -532,6 +532,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy helm")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
+					markDriftedHelmCharts(clusterSummary, rs.Status.DriftedHelmCharts, l)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -586,7 +587,37 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	resourceSummary.Status.ResourcesChanged = false
 	resourceSummary.Status.KustomizeResourcesChanged = false
 	resourceSummary.Status.HelmResourcesChanged = false
+	resourceSummary.Status.DriftedHelmCharts = nil
 	return remoteClient.Status().Update(ctx, resourceSummary)
+}
+
+// markDriftedHelmCharts sets NeedsRedeploy on the HelmReleaseSummaries entries matching
+// driftedCharts (by release name/namespace), so shouldUpgrade can later scope the redeploy
+// to only those charts instead of the whole Helm feature. If driftedCharts is empty (e.g. an
+// older drift-detection-manager that doesn't report chart ownership yet), every chart is
+// marked, same as today's behavior, so drift is never silently missed.
+func markDriftedHelmCharts(clusterSummary *configv1beta1.ClusterSummary,
+	driftedCharts []libsveltosv1beta1.HelmChartRef, logger logr.Logger) {
+
+	if len(driftedCharts) == 0 {
+		logger.V(logs.LogDebug).Info("no chart-scoped drift info available, marking all charts for redeploy")
+		for i := range clusterSummary.Status.HelmReleaseSummaries {
+			clusterSummary.Status.HelmReleaseSummaries[i].NeedsRedeploy = true
+		}
+		return
+	}
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
+		for j := range driftedCharts {
+			if summary.ReleaseName == driftedCharts[j].ReleaseName &&
+				summary.ReleaseNamespace == driftedCharts[j].ReleaseNamespace {
+
+				summary.NeedsRedeploy = true
+				break
+			}
+		}
+	}
 }
 
 func getListOfClusterWithDriftDetectionDeployed(ctx context.Context, c client.Client,

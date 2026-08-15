@@ -458,14 +458,27 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 		return err
 	}
 
+	// rsListOptions only scopes by cluster name/type, not namespace - client-go label
+	// selectors can't match on ClusterSummary namespace, so multiple clusters sharing the
+	// same name across different namespaces (a normal setup) all come back in one List.
+	// matchingCount tracks only the ones that are ours to wait on: known to belong to
+	// clusterNamespace, or - conservatively - ones whose namespace we can't determine at
+	// all. That keeps an unrelated cluster's still-finalizing ResourceSummary (a namespace
+	// we can positively rule out) from blocking this one's cleanup, without letting an
+	// unidentifiable ResourceSummary be ignored outright.
+	matchingCount := 0
 	for i := range resourceSummaries.Items {
 		rs := &resourceSummaries.Items[i]
 
 		ns, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
-		if !ok {
+		if ok && ns != clusterNamespace {
 			continue
 		}
-		if ns != clusterNamespace {
+		matchingCount++
+
+		if !ok {
+			// Can't tell which cluster this belongs to, so don't risk deleting it - just
+			// count it, so the caller waits rather than proceeding as if it weren't there.
 			continue
 		}
 
@@ -477,7 +490,7 @@ func removeStaleResourceSummary(ctx context.Context, clusterNamespace, clusterNa
 		}
 	}
 
-	if len(resourceSummaries.Items) > 0 {
+	if matchingCount > 0 {
 		// The drift-detection-manager adds a finalizer to ResourceSummary instances and removes
 		// it only after a successful deletion. If ResourceSummary instances still exist, we return
 		// an error to prevent the drift-detection-manager deployment from being deleted, ensuring

@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/cli"
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -2753,5 +2754,28 @@ var _ = Describe("getHelmUpgradeClient Force", func() {
 		Expect(upgradeClient.ForceReplace).To(BeFalse())
 		Expect(upgradeClient.ServerSideApply).To(Equal("true"))
 		Expect(upgradeClient.ForceConflicts).To(BeTrue())
+	})
+})
+
+var _ = Describe("locateChartWithTimeout", func() {
+	It("returns the result once locateFn returns", func() {
+		expectedPath := randomString()
+		locateFn := func(chartName string, settings *cli.EnvSettings) (string, error) {
+			return expectedPath, nil
+		}
+
+		cp, err := controllers.LocateChartWithTimeout(locateFn, randomString(), &cli.EnvSettings{})
+		Expect(err).To(BeNil())
+		Expect(cp).To(Equal(expectedPath))
+	})
+
+	It("propagates the error returned by locateFn", func() {
+		expectedErr := errors.New(randomString())
+		locateFn := func(chartName string, settings *cli.EnvSettings) (string, error) {
+			return "", expectedErr
+		}
+
+		_, err := controllers.LocateChartWithTimeout(locateFn, randomString(), &cli.EnvSettings{})
+		Expect(err).To(Equal(expectedErr))
 	})
 })

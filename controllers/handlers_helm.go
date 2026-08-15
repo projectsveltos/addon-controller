@@ -2052,6 +2052,40 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	return rel, nil
 }
 
+const (
+	// locateChartTimeout bounds a single LocateChart call. Like repo.ChartRepository.DownloadIndexFile,
+	// action.Install/Upgrade's LocateChart takes no context.Context - it downloads the chart tarball with
+	// its own HTTP client, so nothing here can cancel a stalled call. Without this timeout, a repository
+	// that accepts the connection but never completes the response wedges the deployer worker processing
+	// this request forever: the request only leaves the deployer's inProgress tracking once the handler
+	// call returns, so a call that never returns permanently occupies one of the worker pool's fixed
+	// slots and its ClusterSummary/feature is stuck reporting "still being provisioned" with no further
+	// retries, indefinitely.
+	locateChartTimeout = 90 * time.Second
+)
+
+func locateChartWithTimeout(locateFn func(string, *cli.EnvSettings) (string, error),
+	chartName string, settings *cli.EnvSettings) (string, error) {
+
+	type locateResult struct {
+		path string
+		err  error
+	}
+
+	done := make(chan locateResult, 1)
+	go func() {
+		cp, err := locateFn(chartName, settings)
+		done <- locateResult{cp, err}
+	}()
+
+	select {
+	case r := <-done:
+		return r.path, r.err
+	case <-time.After(locateChartTimeout):
+		return "", fmt.Errorf("timed out locating chart %s", chartName)
+	}
+}
+
 // locateChartWithCacheRetry calls locateFn to resolve the chart path. If the call fails (e.g.
 // because the local repository index is stale and does not yet contain a newly published version),
 // the cache is cleared and the call is retried once so that the current reconciliation can succeed
@@ -2062,12 +2096,12 @@ func locateChartWithCacheRetry(
 	requestedChart *configv1beta1.HelmChart, registryOptions *registryClientOptions,
 	logger logr.Logger) (string, error) {
 
-	cp, err := locateFn(chartName, settings)
+	cp, err := locateChartWithTimeout(locateFn, chartName, settings)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("LocateChart failed: %v; refreshing cache and retrying", err))
 		removeCachedData(settings, requestedChart.RepositoryName, requestedChart.RepositoryURL,
 			registryOptions, logger)
-		cp, err = locateFn(chartName, settings)
+		cp, err = locateChartWithTimeout(locateFn, chartName, settings)
 	}
 	return cp, err
 }

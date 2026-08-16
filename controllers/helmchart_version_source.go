@@ -33,7 +33,6 @@ import (
 	repo "helm.sh/helm/v4/pkg/repo/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
@@ -58,15 +57,18 @@ const (
 // setResolvedHelmChartIdentity at deploy time, so no cluster context is needed here) from the
 // management cluster and extracts username/password for hostname. Returns empty strings, no
 // error, when secretRef is nil (anonymous access).
-func resolveChartCredentials(ctx context.Context, c client.Client, secretRef *corev1.SecretReference,
+func resolveChartCredentials(ctx context.Context, secretRef *corev1.SecretReference,
 	hostname string) (username, password string, err error) {
 
 	if secretRef == nil {
 		return "", "", nil
 	}
 
+	// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
+	// use the direct client rather than c.
 	secret := &corev1.Secret{}
-	if getErr := c.Get(ctx, types.NamespacedName{Namespace: secretRef.Namespace, Name: secretRef.Name}, secret); getErr != nil {
+	if getErr := getManagementClusterDirectClient().Get(ctx,
+		types.NamespacedName{Namespace: secretRef.Namespace, Name: secretRef.Name}, secret); getErr != nil {
 		return "", "", getErr
 	}
 
@@ -78,7 +80,7 @@ func resolveChartCredentials(ctx context.Context, c client.Client, secretRef *co
 // credentialsSecretRef, if non-nil, is used to authenticate the request; on any credential
 // resolution failure this falls back to an anonymous request rather than failing outright,
 // since that request may still succeed for a public chart.
-func fetchAvailableVersions(ctx context.Context, c client.Client, key helmChartKey,
+func fetchAvailableVersions(ctx context.Context, key helmChartKey,
 	credentialsSecretRef *corev1.SecretReference, logger logr.Logger) ([]string, error) {
 
 	fetchCtx, cancel := context.WithTimeout(ctx, fetchAvailableVersionsTimeout)
@@ -91,7 +93,7 @@ func fetchAvailableVersions(ctx context.Context, c client.Client, key helmChartK
 		return nil, fmt.Errorf("failed to parse repository URL %q: %w", key.repositoryURL, err)
 	}
 
-	username, password, credErr := resolveChartCredentials(fetchCtx, c, credentialsSecretRef, parsedURL.Host)
+	username, password, credErr := resolveChartCredentials(fetchCtx, credentialsSecretRef, parsedURL.Host)
 	if credErr != nil {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to resolve credentials for %s, trying anonymously: %v",
 			key.repositoryURL, credErr))

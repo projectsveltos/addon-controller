@@ -202,18 +202,25 @@ func Run() {
 func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]cache.ByObject) {
 	disableFor = []client.Object{}
 	byObject = map[client.Object]cache.ByObject{}
+
+	// Only Secrets of type addons.projectsveltos.io/cluster-profile (policyRefs) are ever read
+	// through a cached client. Every other Secret read in this codebase - kubeconfigs, Helm
+	// registry credentials/CA, cosign/GPG verification keys - goes through
+	// getManagementClusterDirectClient(), which always bypasses the cache. So this scoping is
+	// safe unconditionally, not just when --disable-secret-caching is set, and Secret is
+	// deliberately left out of disableFor below: the (now permanently scoped) cache is safe and
+	// cheaper than forcing every Secret read live.
+	fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
+	byObject[&corev1.Secret{}] = cache.ByObject{
+		Field: fieldSelector,
+	}
+
 	if disableCaching {
-		// Note: Only Secrets with type addons.projectsveltos.io/cluster-profile are cached
-		// The default client of the manager won't use the cache for secrets at all.
+		// ConfigMaps have no equivalent type field to scope by, so this only forces ConfigMap
+		// reads to bypass the cache; it does not reduce the ConfigMap informer's memory
+		// footprint (ClusterSummaryReconciler watches all ConfigMaps cluster-wide unscoped).
 		disableFor = []client.Object{
-			&corev1.Secret{},
 			&corev1.ConfigMap{},
-		}
-
-		fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
-
-		byObject[&corev1.Secret{}] = cache.ByObject{
-			Field: fieldSelector,
 		}
 	}
 	return

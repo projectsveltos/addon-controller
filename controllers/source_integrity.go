@@ -94,8 +94,10 @@ func verifyCosignSignature(ctx context.Context, requestedChart *configv1beta1.He
 		if ns == "" {
 			ns = secretNamespace
 		}
+		// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
+		// use the direct client.
 		secret := &corev1.Secret{}
-		if err := getManagementClusterClient().Get(ctx,
+		if err := getManagementClusterDirectClient().Get(ctx,
 			types.NamespacedName{Namespace: ns, Name: sv.SecretRef.Name},
 			secret); err != nil {
 			return fmt.Errorf("cosign: failed to get public key secret %s/%s: %w",
@@ -222,8 +224,10 @@ func createFileWithKeyring(ctx context.Context, clusterSummary *configv1beta1.Cl
 	if ns == "" {
 		ns = clusterSummary.Namespace
 	}
+	// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
+	// use the direct client.
 	secret := &corev1.Secret{}
-	if err := getManagementClusterClient().Get(ctx,
+	if err := getManagementClusterDirectClient().Get(ctx,
 		types.NamespacedName{Namespace: ns, Name: secretRef.Name},
 		secret); err != nil {
 		return "", fmt.Errorf("failed to get keyring secret %s/%s: %w",

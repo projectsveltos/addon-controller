@@ -289,8 +289,10 @@ func skipUpgrading(ctx context.Context, c client.Client, cluster client.Object,
 		return ok, nil
 	}
 
+	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
+	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
-	managedClient, err := cacheMgr.GetKubernetesClient(ctx, c, cluster.GetNamespace(), cluster.GetName(),
+	managedClient, err := cacheMgr.GetKubernetesClient(ctx, getManagementClusterDirectClient(), cluster.GetNamespace(), cluster.GetName(),
 		"", "", clusterproxy.GetClusterType(clusterRef), logger)
 	if err != nil {
 		logger.V(logs.LogDebug).Error(err, "failed to get managed client")

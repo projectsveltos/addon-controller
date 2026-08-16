@@ -224,7 +224,7 @@ func isNamespaced(ctx context.Context, r *unstructured.Unstructured, clusterName
 		mapper = getManagementClusterMapper()
 	} else {
 		cacheMgr := clustercache.GetManager()
-		mapper, err = cacheMgr.GetMapper(ctx, getManagementClusterClient(), clusterNamespace,
+		mapper, err = cacheMgr.GetMapper(ctx, getManagementClusterDirectClient(), clusterNamespace,
 			clusterName, clusterType, logger)
 		if err != nil {
 			return false, err

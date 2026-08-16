@@ -70,6 +70,7 @@ var (
 	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
+	AreDependentsRemoved                 = (*ClusterSummaryReconciler).areDependentsRemoved
 	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
 	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 
@@ -152,6 +153,7 @@ var (
 	GetInstantiatedChart                     = getInstantiatedChart
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
 	GetHelmChartInstantiatedValues           = getHelmChartInstantiatedValues
+	LocateChartWithTimeout                   = locateChartWithTimeout
 
 	InstantiateTemplateValues = instantiateTemplateValues
 	FetchClusterObjects       = fetchClusterObjects

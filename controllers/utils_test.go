@@ -548,6 +548,96 @@ metadata:
 			}, timeout, pollingInterval).Should(BeTrue())
 		})
 
+	It("removeStaleResourceSummary is not blocked by another cluster's ResourceSummary sharing the same name",
+		func() {
+			// Two clusters registered under the same name/type but different namespaces -
+			// a normal setup, e.g. "prod" registered in multiple tenant namespaces. The
+			// ClusterNameLabel/ClusterTypeLabel selector used to List ResourceSummary
+			// instances cannot distinguish between them, so both come back in one List.
+			clusterName := randomString()
+			clusterType := libsveltosv1beta1.ClusterTypeSveltos
+
+			targetNamespace := randomString()
+			otherNamespace := randomString()
+
+			logger := textlogger.NewLogger(textlogger.NewConfig())
+
+			for _, ns := range []string{targetNamespace, otherNamespace} {
+				n := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: ns,
+					},
+				}
+				Expect(testEnv.Create(context.TODO(), n)).To(Succeed())
+				Expect(waitForObject(context.TODO(), testEnv.Client, n)).To(Succeed())
+			}
+
+			targetRS := fmt.Sprintf(`apiVersion: lib.projectsveltos.io/v1beta1
+kind: ResourceSummary
+metadata:
+  labels:
+    projectsveltos.io/cluster-summary-namespace: %s
+    version.projectsveltos.io/clustername: %s
+    version.projectsveltos.io/clustertype: %s
+  name: deploy-cert-manager-sveltos-cluster1
+  namespace: %s
+`, targetNamespace, clusterName, strings.ToLower(string(clusterType)), targetNamespace)
+
+			// otherRS belongs to a different cluster (different namespace) that just
+			// happens to share the same clusterName/clusterType. It must survive the
+			// call below untouched: it is not what removeStaleResourceSummary(targetNamespace, ...)
+			// was asked to clean up, and its mere existence must not block that cleanup either.
+			otherRS := fmt.Sprintf(`apiVersion: lib.projectsveltos.io/v1beta1
+kind: ResourceSummary
+metadata:
+  labels:
+    projectsveltos.io/cluster-summary-namespace: %s
+    version.projectsveltos.io/clustername: %s
+    version.projectsveltos.io/clustertype: %s
+  name: deploy-cert-manager-sveltos-cluster1
+  namespace: %s
+`, otherNamespace, clusterName, strings.ToLower(string(clusterType)), otherNamespace)
+
+			target, err := k8s_utils.GetUnstructured([]byte(targetRS))
+			Expect(err).To(BeNil())
+			Expect(testEnv.Create(context.TODO(), target)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, target)).To(Succeed())
+
+			other, err := k8s_utils.GetUnstructured([]byte(otherRS))
+			Expect(err).To(BeNil())
+			Expect(testEnv.Create(context.TODO(), other)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, other)).To(Succeed())
+
+			// First call finds and deletes targetNamespace's own ResourceSummary, so - same as
+			// the sibling test above - it reports "still present" to give that deletion a
+			// chance to actually complete before the caller (e.g. drift-detection-manager
+			// removal) proceeds. That's expected here too; it is not what this test is about.
+			err = controllers.RemoveStaleResourceSummary(context.TODO(), targetNamespace, clusterName,
+				clusterType, logger)
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("resourceSummary instances still present"))
+
+			// targetNamespace's ResourceSummary had no finalizer, so it should be fully gone.
+			currentRS := &libsveltosv1beta1.ResourceSummary{}
+			Eventually(func() bool {
+				err = testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: target.GetNamespace(), Name: target.GetName()}, currentRS)
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			// otherNamespace's ResourceSummary belongs to a different cluster and must be untouched.
+			Expect(testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: other.GetNamespace(), Name: other.GetName()}, currentRS)).To(Succeed())
+
+			// Now targetNamespace has nothing left of its own. This is the actual regression
+			// this test guards: otherNamespace's still-existing ResourceSummary shares
+			// clusterName/clusterType and would previously have kept this call reporting "still
+			// present" forever, even though nothing belonging to targetNamespace remains.
+			err = controllers.RemoveStaleResourceSummary(context.TODO(), targetNamespace, clusterName,
+				clusterType, logger)
+			Expect(err).To(BeNil())
+		})
+
 	It("removeStaleDriftDetectionResources deletes drift-detection-manager after all ResourceSummaries are gone",
 		func(ctx SpecContext) {
 			namespace := randomString()

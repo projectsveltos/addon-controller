@@ -367,6 +367,18 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 			}
 		}
 
+		// Mirror the dependsOn ordering enforced on deploy: do not undeploy a prerequisite
+		// while a dependent ClusterSummary for the same cluster still exists and still
+		// requires it.
+		allRemoved, dependentMsg, err := r.areDependentsRemoved(ctx, clusterSummaryScope, logger)
+		if err != nil {
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+		clusterSummaryScope.SetDependenciesMessage(&dependentMsg)
+		if !allRemoved {
+			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		}
+
 		// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
 		// in the management cluster and those need to be removed.
 		err = r.undeploy(ctx, clusterSummaryScope, logger)
@@ -902,15 +914,15 @@ func (r *ClusterSummaryReconciler) isClusterPresent(ctx context.Context,
 
 	cs := clusterSummaryScope.ClusterSummary
 
-	var cluster client.Object
-	cluster, err = clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
+	cluster, err := clusterproxy.GetCluster(ctx, r.Client, cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return false, false, nil
 		}
+		return false, false, err
 	}
 
-	return true, !cluster.GetDeletionTimestamp().IsZero(), err
+	return true, !cluster.GetDeletionTimestamp().IsZero(), nil
 }
 
 func (r *ClusterSummaryReconciler) undeploy(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
@@ -1753,6 +1765,64 @@ func (r *ClusterSummaryReconciler) areDependenciesDeployed(ctx context.Context, 
 	}
 
 	return true, dependencyMessage, nil
+}
+
+// areDependentsRemoved is the mirror check of areDependenciesDeployed, run on delete instead of
+// deploy. dependsOn is a two-way contract, not just a one-time deploy-ordering hint:
+// prepareForDeployment blocks a dependent from deploying until its prerequisites are Provisioned,
+// and symmetrically, a prerequisite (e.g. cert-manager) must not be undeployed while a dependent
+// that still needs it (e.g. kyverno) is still around - deleting it out from under a live dependent
+// would silently break that dependent, with no error at the moment that actually caused it. This
+// mirrors how Kubernetes itself protects still-referenced objects (a CRD while CRs of that type
+// exist, a PVC while a pod mounts it): the block is deliberate, and lifts once the dependent is
+// gone or no longer lists this profile as a dependency.
+//
+// Returns false, with a message, if another ClusterSummary for the same cluster still exists and
+// still lists this ClusterSummary's profile in its own DependsOn.
+func (r *ClusterSummaryReconciler) areDependentsRemoved(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,
+	logger logr.Logger) (allRemoved bool, dependentMessage string, err error) {
+
+	profileReference, err := configv1beta1.GetProfileOwnerReference(clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get profile owner: %v", err))
+		return false, "", fmt.Errorf("failed to get profile owner: %w", err)
+	}
+
+	if profileReference == nil {
+		return false, "", fmt.Errorf("profile owner not found: %w", err)
+	}
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+
+	listOptions := []client.ListOption{
+		client.InNamespace(clusterSummary.Spec.ClusterNamespace),
+		client.MatchingLabels{
+			configv1beta1.ClusterNameLabel: clusterSummary.Spec.ClusterName,
+			configv1beta1.ClusterTypeLabel: string(clusterSummary.Spec.ClusterType),
+		},
+	}
+
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+	if err := r.List(ctx, clusterSummaryList, listOptions...); err != nil {
+		return false, "", err
+	}
+
+	for i := range clusterSummaryList.Items {
+		other := &clusterSummaryList.Items[i]
+		if other.Name == clusterSummary.Name {
+			continue
+		}
+
+		for j := range other.Spec.ClusterProfileSpec.DependsOn {
+			if other.Spec.ClusterProfileSpec.DependsOn[j] == profileReference.Name {
+				msg := fmt.Sprintf("%s still depends on this profile and has not been removed yet", other.Name)
+				logger.V(logs.LogInfo).Info(msg)
+				return false, msg, nil
+			}
+		}
+	}
+
+	return true, "", nil
 }
 
 func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.ClusterSummaryScope, failureMessage string) {

@@ -263,7 +263,7 @@ func processHelmChartKey(ctx context.Context, c client.Client, key helmChartKey,
 		}
 	}
 
-	versions, err := fetchAvailableVersions(ctx, c, key, credentialsSecretRef, logger)
+	versions, err := fetchAvailableVersions(ctx, key, credentialsSecretRef, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("skipping chart %q in %q: %v", key.chartName, key.repositoryURL, err))
 		recordHelmChartCheckFailure()

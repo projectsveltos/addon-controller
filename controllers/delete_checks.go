@@ -66,7 +66,7 @@ func validateDeleteChecks(ctx context.Context, clusterSummary *configv1beta1.Clu
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(),
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, adminNamespace,
 		adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {

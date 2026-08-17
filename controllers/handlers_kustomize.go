@@ -101,7 +101,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteRestConfig, logger, err := getRestConfig(ctx, c, clusterSummary, logger)
+	remoteRestConfig, logger, err := getRestConfig(ctx, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -260,7 +260,7 @@ func cleanStaleKustomizeResources(ctx context.Context, clusterSummary *configv1b
 
 	// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
 	// use cluster-admin account to do the removal
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType,
 		logger)
 	if err != nil {
@@ -268,7 +268,7 @@ func cleanStaleKustomizeResources(ctx context.Context, clusterSummary *configv1b
 	}
 
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err

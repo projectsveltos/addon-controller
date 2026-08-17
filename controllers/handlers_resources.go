@@ -62,7 +62,7 @@ func deployResources(ctx context.Context, c client.Client,
 		return err
 	}
 
-	remoteRestConfig, logger, err := getRestConfig(ctx, c, clusterSummary, logger)
+	remoteRestConfig, logger, err := getRestConfig(ctx, clusterSummary, logger)
 	if err != nil {
 		return err
 	}
@@ -217,7 +217,7 @@ func cleanStaleResources(ctx context.Context, clusterSummary *configv1beta1.Clus
 
 	// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
 	// use cluster-admin account to do the removal
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType,
 		logger)
 	if err != nil {
@@ -225,7 +225,7 @@ func cleanStaleResources(ctx context.Context, clusterSummary *configv1beta1.Clus
 	}
 
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, "", "", clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
@@ -437,14 +437,17 @@ func pushModeUndeployResources(ctx context.Context, c client.Client, clusterSumm
 
 	// Only resources previously deployed by ClusterSummary are removed here. Even if profile is created by serviceAccount
 	// use cluster-admin account to do the removal
+	// Kubeconfig Secret reads must bypass any Secret-cache scoping (see
+	// getManagementClusterDirectClient), so these two calls deliberately use the
+	// direct client rather than the c passed into this function.
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
 		"", "", clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
 	}
 
-	remoteClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterNamespace, clusterName,
+	remoteClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
 		"", "", clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err

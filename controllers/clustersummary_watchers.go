@@ -24,12 +24,14 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/dynamic/dynamicinformer"
-	"k8s.io/client-go/informers"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/cache"
@@ -366,32 +368,39 @@ func (m *manager) startWatcher(ctx context.Context, gvk *schema.GroupVersionKind
 	}
 
 	logger.V(logs.LogInfo).Info("start watcher")
-	// dynamic informer needs to be told which type to watch
-	dcinformer, err := m.getDynamicInformer(gvk)
+
+	lw, err := m.getListerWatcher(ctx, gvk)
 	if err != nil {
-		logger.Error(err, "Failed to get informer")
+		logger.Error(err, "Failed to get lister watcher")
 		return err
 	}
 
 	watcherCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is stored in m.watchers and called when the watcher is stopped
 	m.watchers[*gvk] = cancel
-	go m.runInformer(watcherCtx.Done(), dcinformer.Informer(), logger)
+
+	// Nothing here ever reads a resource back out of this watcher: react() below only needs
+	// the identity (and, for the "ignore status changes" case, the Generation) of the object
+	// carried by the event that fired it. Back the reflector with a store that forwards each
+	// event straight to react() and discards the object right after, instead of retaining
+	// every instance of gvk - cluster-wide, for whatever type is referenced by any
+	// ClusterSummary's policyRefs/kustomizationRefs/templateResourceRefs - in an indexed cache
+	// for as long as the watcher stays active, the way a SharedIndexInformer would.
+	store := newDiscardingStore(func(oldGeneration *int64, newObj client.Object) {
+		m.react(oldGeneration, newObj, logger)
+	})
+	reflector := cache.NewReflector(lw, &unstructured.Unstructured{}, store, 0)
+	go reflector.Run(watcherCtx.Done())
+
 	return nil
 }
 
-func (m *manager) getDynamicInformer(gvk *schema.GroupVersionKind) (informers.GenericInformer, error) {
-	// Grab a dynamic interface that we can create informers from
+// getListerWatcher returns a cache.ListerWatcher scoped to gvk's resource, cluster-wide -
+// matching the scope the previous SharedIndexInformer-based watcher used.
+func (m *manager) getListerWatcher(ctx context.Context, gvk *schema.GroupVersionKind) (cache.ListerWatcher, error) {
 	d, err := dynamic.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
-	// Create a factory object that can generate informers for resource types
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		d,
-		0,
-		corev1.NamespaceAll,
-		nil,
-	)
 
 	dc := discovery.NewDiscoveryClientForConfigOrDie(m.config)
 	groupResources, err := restmapper.GetAPIGroupResources(dc)
@@ -402,8 +411,7 @@ func (m *manager) getDynamicInformer(gvk *schema.GroupVersionKind) (informers.Ge
 
 	mapping, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version)
 	if err != nil {
-		// getDynamicInformer is only called after verifying resource
-		// is installed.
+		// getListerWatcher is only called after verifying resource is installed.
 		return nil, err
 	}
 
@@ -413,33 +421,139 @@ func (m *manager) getDynamicInformer(gvk *schema.GroupVersionKind) (informers.Ge
 		Resource: mapping.Resource.Resource,
 	}
 
-	informer := factory.ForResource(resourceId)
-	return informer, nil
+	resourceClient := d.Resource(resourceId)
+
+	return &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return resourceClient.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return resourceClient.Watch(ctx, options)
+		},
+	}, nil
 }
 
-func (m *manager) runInformer(stopCh <-chan struct{}, s cache.SharedIndexInformer,
-	logger logr.Logger) {
+// discardingStore implements cache.ReflectorStore for use with a cache.Reflector, but never
+// retains a full copy of any object: every Add/Update/Delete - including the ones replayed
+// from the initial List - is forwarded straight to the handler and then dropped. The only
+// state kept is, per watched object, its last-seen Generation (a single int64, not the whole
+// object): templateResourceRefsWatchedIgnoreStatus consumers only care whether Spec/Metadata
+// changed (a Generation bump), not status-only updates, and a Reflector's ReflectorStore.Update
+// is only ever given the new object, never the old one - so that one comparison is the one
+// piece of state this store can't discard.
+type discardingStore struct {
+	handler func(oldGeneration *int64, newObj client.Object)
 
-	handlers := cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			m.react(nil, obj.(client.Object), logger)
-		},
-		DeleteFunc: func(obj interface{}) {
-			m.react(nil, obj.(client.Object), logger)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			m.react(oldObj.(client.Object), newObj.(client.Object), logger)
-		},
-	}
-	_, err := s.AddEventHandler(handlers)
-	if err != nil {
-		panic(1)
-	}
-	s.Run(stopCh)
+	mu          sync.Mutex
+	generations map[corev1.ObjectReference]int64
 }
 
-// react gets called when an instance of passed in gvk has been modified.
-func (m *manager) react(oldObj, newObj client.Object, logger logr.Logger) {
+func newDiscardingStore(handler func(oldGeneration *int64, newObj client.Object)) *discardingStore {
+	return &discardingStore{
+		handler:     handler,
+		generations: make(map[corev1.ObjectReference]int64),
+	}
+}
+
+func refForObject(obj interface{}) (ref corev1.ObjectReference, o client.Object, ok bool) {
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return corev1.ObjectReference{}, nil, false
+	}
+
+	ref = corev1.ObjectReference{
+		Kind:       u.GetObjectKind().GroupVersionKind().Kind,
+		APIVersion: u.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		Namespace:  u.GetNamespace(),
+		Name:       u.GetName(),
+	}
+	return ref, u, true
+}
+
+func (s *discardingStore) Add(obj interface{}) error {
+	ref, o, ok := refForObject(obj)
+	if !ok {
+		return nil
+	}
+
+	s.mu.Lock()
+	s.generations[ref] = o.GetGeneration()
+	s.mu.Unlock()
+
+	s.handler(nil, o)
+	return nil
+}
+
+func (s *discardingStore) Update(obj interface{}) error {
+	ref, o, ok := refForObject(obj)
+	if !ok {
+		return nil
+	}
+
+	s.mu.Lock()
+	oldGeneration, known := s.generations[ref]
+	s.generations[ref] = o.GetGeneration()
+	s.mu.Unlock()
+
+	if known {
+		s.handler(&oldGeneration, o)
+	} else {
+		s.handler(nil, o)
+	}
+	return nil
+}
+
+func (s *discardingStore) Delete(obj interface{}) error {
+	ref, o, ok := refForObject(obj)
+	if !ok {
+		return nil
+	}
+
+	s.mu.Lock()
+	delete(s.generations, ref)
+	s.mu.Unlock()
+
+	s.handler(nil, o)
+	return nil
+}
+
+// Replace is invoked by the Reflector after each (re)list, once per listed object. Those are
+// treated the same way an informer's initial sync would: as Add events.
+func (s *discardingStore) Replace(list []interface{}, _ string) error {
+	for i := range list {
+		if err := s.Add(list[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *discardingStore) Resync() error {
+	return nil
+}
+
+func (s *discardingStore) List() []interface{} {
+	return nil
+}
+
+func (s *discardingStore) ListKeys() []string {
+	return nil
+}
+
+func (s *discardingStore) Get(obj interface{}) (item interface{}, exists bool, err error) {
+	return nil, false, nil
+}
+
+func (s *discardingStore) GetByKey(key string) (item interface{}, exists bool, err error) {
+	return nil, false, nil
+}
+
+// react gets called when an instance of the watched gvk has been added, deleted, or updated.
+// oldGeneration is the object's previously observed Generation - nil if this is the first time
+// it's been seen (Add/Delete events are always treated this way) - used only to decide whether
+// templateResourceRefsWatchedIgnoreStatus consumers should be notified of what would otherwise
+// be a status-only change.
+func (m *manager) react(oldGeneration *int64, newObj client.Object, logger logr.Logger) {
 	m.watchMu.RLock()
 	defer m.watchMu.RUnlock()
 
@@ -476,7 +590,7 @@ func (m *manager) react(oldObj, newObj client.Object, logger logr.Logger) {
 	// Consumers ignoring Status changes
 	if v, ok := m.templateResourceRefsWatchedIgnoreStatus[ref]; ok {
 		// - Or the Generation has increased (Spec/Metadata change)
-		if oldObj == nil || oldObj.GetGeneration() != newObj.GetGeneration() {
+		if oldGeneration == nil || *oldGeneration != newObj.GetGeneration() {
 			m.notify(v, logger)
 		} else {
 			logger.V(logs.LogDebug).Info("skipping notification: only status changed")

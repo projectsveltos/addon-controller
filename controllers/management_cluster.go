@@ -30,7 +30,9 @@ import (
 )
 
 var (
-	managementClusterClient          client.Client
+	managementClusterClient       client.Client
+	managementClusterDirectClient client.Client
+
 	managementClusterConfig          *rest.Config
 	managementClusterMapper          *restmapper.DeferredDiscoveryRESTMapper
 	managementClusterCachedDiscovery discovery.CachedDiscoveryInterface
@@ -51,6 +53,20 @@ func SetManagementClusterAccess(c client.Client, config *rest.Config, dc *discov
 
 	managementClusterCachedDiscovery = memory.NewMemCacheClient(dc)
 	managementClusterMapper = restmapper.NewDeferredDiscoveryRESTMapper(managementClusterCachedDiscovery)
+
+	// Uncached client for reads that must never be served - or silently hidden as NotFound -
+	// by a scoped cache. Concretely: kubeconfig Secrets for SveltosCluster/CAPI managed
+	// clusters are not of type ClusterProfileSecretType, so they fall outside the Secret cache
+	// scope --disable-secret-caching applies; reading them through the (possibly scoped)
+	// managementClusterClient would break cluster connectivity the moment that scoping is
+	// narrower than "every Secret". Built once here rather than per-call; on the rare
+	// construction failure, fall back to c so callers always get a usable client.
+	directClient, err := client.New(config, client.Options{Scheme: c.Scheme(), Mapper: managementClusterMapper})
+	if err != nil {
+		managementClusterDirectClient = c
+	} else {
+		managementClusterDirectClient = directClient
+	}
 }
 
 func SetDriftdetectionConfigMap(name string) {
@@ -91,6 +107,14 @@ func getManagementClusterConfig() *rest.Config {
 
 func getManagementClusterClient() client.Client {
 	return managementClusterClient
+}
+
+// getManagementClusterDirectClient returns an uncached client to the management cluster.
+// Use this specifically for reads that must see every object of their type - kubeconfig
+// Secret lookups above all - regardless of any ByObject/field-selector scoping applied to
+// the (possibly cached) client getManagementClusterClient returns.
+func getManagementClusterDirectClient() client.Client {
+	return managementClusterDirectClient
 }
 
 func getManagementClusterMapper() *restmapper.DeferredDiscoveryRESTMapper {

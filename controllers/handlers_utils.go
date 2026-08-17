@@ -740,7 +740,9 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 	}
 
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
-	clusterClient, err := clusterproxy.GetKubernetesClient(ctx, c, clusterSummary.Spec.ClusterNamespace,
+	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
+	// direct client rather than the c passed into this function.
+	clusterClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(), clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
@@ -1362,7 +1364,7 @@ func tranformGroupVersionKindToString(gvks []schema.GroupVersionKind) []string {
 }
 
 // getRestConfig returns restConfig to access remote cluster
-func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+func getRestConfig(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (*rest.Config, logr.Logger, error) {
 
 	clusterNamespace := clusterSummary.Spec.ClusterNamespace
@@ -1373,8 +1375,10 @@ func getRestConfig(ctx context.Context, c client.Client, clusterSummary *configv
 		WithValues("clusterSummary", clusterSummary.Name).WithValues("admin", fmt.Sprintf("%s/%s", adminNamespace, adminName))
 
 	logger.V(logs.LogDebug).Info("get remote restConfig")
+	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
+	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, logger, err
@@ -1809,7 +1813,7 @@ func getReloaderClient(ctx context.Context, clusterNamespace, clusterName string
 	// ResourceSummary is a Sveltos resource created in managed clusters.
 	// Sveltos resources are always created using cluster-admin so that admin does not need to be
 	// given such permissions.
-	return clusterproxy.GetKubernetesClient(ctx, getManagementClusterClient(),
+	return clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(),
 		clusterNamespace, clusterName, "", "", clusterType, logger)
 }
 
@@ -1912,9 +1916,11 @@ func validatePreDeployChecks(ctx context.Context, c client.Client, clusterSummar
 	clusterName := clusterSummary.Spec.ClusterName
 	clusterType := clusterSummary.Spec.ClusterType
 
+	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
+	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
 
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, c, clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterType, logger)
 	if err != nil {
 		return err

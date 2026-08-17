@@ -1786,27 +1786,45 @@ resources:
 		credentialsBytes, err := json.Marshal(credentials)
 		Expect(err).To(BeNil())
 
+		// getCredentialsAndCAFiles reads these Secrets through getManagementClusterDirectClient(),
+		// which is backed by the shared envtest API server (see controllers_suite_test.go), not by
+		// the local fake client c built below. So they must be created via testEnv, not just added
+		// to initObjects.
+		credentialsNamespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), credentialsNamespace)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, credentialsNamespace)).To(Succeed())
+
 		secretCredentials := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
+				Namespace: credentialsNamespace.Name,
 				Name:      randomString(),
 			},
 			Data: map[string][]byte{
-				"config.json": credentialsBytes,
+				// The real API server (this Secret is now created via testEnv, not the local
+				// fake client) enforces this exact key for type=kubernetes.io/dockerconfigjson.
+				corev1.DockerConfigJsonKey: credentialsBytes,
 			},
 			Type: corev1.SecretTypeDockerConfigJson,
 		}
+		Expect(testEnv.Create(context.TODO(), secretCredentials)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secretCredentials)).To(Succeed())
 
 		caByte := []byte(randomString())
 		secretCA := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Namespace: randomString(),
+				Namespace: credentialsNamespace.Name,
 				Name:      randomString(),
 			},
 			Data: map[string][]byte{
 				"ca.crt": caByte,
 			},
 		}
+		Expect(testEnv.Create(context.TODO(), secretCA)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, secretCA)).To(Succeed())
 
 		cluster := &clusterv1.Cluster{
 			ObjectMeta: metav1.ObjectMeta{

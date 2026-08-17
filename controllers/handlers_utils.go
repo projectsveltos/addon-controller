@@ -1632,8 +1632,9 @@ func getPatchesHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	return hashString, nil
 }
 
-func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
-	profileRef *corev1.ObjectReference, configurationHash []byte, includeDeployChecks, includeDeleteChecks bool) []pullmode.Option {
+func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary, featureID libsveltosv1beta1.FeatureID,
+	profileRef *corev1.ObjectReference, configurationHash []byte, includeDeployChecks, includeDeleteChecks bool,
+	logger logr.Logger) ([]pullmode.Option, error) {
 
 	setters := make([]pullmode.Option, 0)
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
@@ -1674,15 +1675,41 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 		pullmode.WithDeployedGVKs(gvks))
 
 	if includeDeployChecks {
+		preDeployCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, logger)
+		if err != nil {
+			return nil, err
+		}
+		validateHealthJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, logger)
+		if err != nil {
+			return nil, err
+		}
+
 		setters = append(setters,
 			pullmode.WithPreDeployChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks),
-			pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths))
+			pullmode.WithPreDeployCheckJobs(preDeployCheckJobs),
+			pullmode.WithValidateHealths(clusterSummary.Spec.ClusterProfileSpec.ValidateHealths),
+			pullmode.WithValidateHealthJobs(validateHealthJobs))
 	}
 
 	if includeDeleteChecks {
+		preDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, logger)
+		if err != nil {
+			return nil, err
+		}
+		postDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks, logger)
+		if err != nil {
+			return nil, err
+		}
+
 		setters = append(setters,
 			pullmode.WithPreDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks),
+			pullmode.WithPreDeleteCheckJobs(preDeleteCheckJobs),
 			pullmode.WithPostDeleteChecks(clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks),
+			pullmode.WithPostDeleteCheckJobs(postDeleteCheckJobs),
 		)
 	}
 
@@ -1700,7 +1727,7 @@ func prepareSetters(clusterSummary *configv1beta1.ClusterSummary, featureID libs
 
 	setters = append(setters, pullmode.WithSourceRef(&sourceRef))
 
-	return setters
+	return setters, nil
 }
 
 func updateReloaderWithDeployedResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,

@@ -21,16 +21,24 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	batchv1 "k8s.io/api/batch/v1"
 
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 // Default JobCheck implementation: reports the feature is unavailable. A Sveltos Enterprise
-// build overrides this via SetJobHealthCheckValidator before starting the manager.
+// build overrides this via SetJobHealthCheckValidator/SetJobHealthCheckResolver before
+// starting the manager.
 func init() {
 	validateJobHealthCheck = func(_ context.Context, _ JobHealthCheckDeps,
 		check *libsveltosv1beta1.ValidateHealth, _ logr.Logger) error {
 
 		return fmt.Errorf("JobCheck (%s) requires a Sveltos Enterprise build", check.Name)
+	}
+
+	resolveJobHealthCheck = func(_ context.Context, _ JobHealthCheckDeps,
+		check *libsveltosv1beta1.ValidateHealth, _ logr.Logger) (*batchv1.Job, error) {
+
+		return nil, fmt.Errorf("JobCheck (%s) requires a Sveltos Enterprise build", check.Name)
 	}
 }

@@ -426,7 +426,10 @@ func undeployHelmChartsInPullMode(ctx context.Context, c client.Client, clusterS
 	if err != nil {
 		return err
 	}
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil, false, true)
+	setters, err := prepareSetters(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, nil, false, true, logger)
+	if err != nil {
+		return err
+	}
 
 	// If charts have pre/post delete hooks, those need to be deployed. A ConfigurationGroup to deploy those
 	// is created. If this does not exist yet assume we still have to deploy those.
@@ -5777,7 +5780,11 @@ func commitStagedResourcesForDeployment(ctx context.Context, clusterSummary *con
 	}
 
 	// if a stale helm release is being deleted, run the pre/post delete checks
-	setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash, includeDeployChecks, len(staleReleases) != 0)
+	setters, err := prepareSetters(ctx, clusterSummary, libsveltosv1beta1.FeatureHelm, profileRef, configurationHash,
+		includeDeployChecks, len(staleReleases) != 0, logger)
+	if err != nil {
+		return err
+	}
 	// Commit deployment
 	return pullmode.CommitStagedResourcesForDeployment(ctx, getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,

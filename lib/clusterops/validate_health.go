@@ -29,6 +29,7 @@ import (
 
 	"github.com/go-logr/logr"
 	lua "github.com/yuin/gopher-lua"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,6 +39,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -49,6 +51,12 @@ import (
 const (
 	defaultPrometheusPath = "api/v1/query"
 	metricsHTTPTimeout    = 30 * time.Second
+
+	// jobHealthCheckDefaultTimeout matches the Sveltos Enterprise JobCheck Validator's own
+	// default (see sveltos-enterprise/jobhealthcheck), used here only as the
+	// ActiveDeadlineSeconds fallback when a resolved pull-mode Job's check has no explicit
+	// Timeout.
+	jobHealthCheckDefaultTimeout = 5 * time.Minute
 )
 
 type healthStatus struct {
@@ -80,7 +88,7 @@ type JobHealthCheckDeps struct {
 }
 
 // validateJobHealthCheck runs a JobCheck. JobCheck is a Sveltos Enterprise feature; the default
-// (jobhealthcheck_oss.go) is a stub reporting the feature is unavailable. A Sveltos Enterprise
+// (jobhealthcheck_default.go) is a stub reporting the feature is unavailable. A Sveltos Enterprise
 // build wires in the real implementation via SetJobHealthCheckValidator.
 var (
 	validateJobHealthCheck func(ctx context.Context, deps JobHealthCheckDeps,
@@ -94,6 +102,89 @@ func SetJobHealthCheckValidator(fn func(ctx context.Context, deps JobHealthCheck
 	check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) error) {
 
 	validateJobHealthCheck = fn
+}
+
+// resolveJobHealthCheck fetches and resolves (Cluster-field templating applied) the Job
+// manifest referenced by check.JobCheck.JobRef, without running it. Used only when staging a
+// pull-mode ConfigurationGroup: sveltos-applier cannot verify a Sveltos Enterprise license or
+// fetch JobRef itself, so addon-controller resolves the Job once, up front, here, and stages
+// the result for sveltos-applier to run unattended. Same default-stub/SetX-override pattern as
+// validateJobHealthCheck.
+var (
+	resolveJobHealthCheck func(ctx context.Context, deps JobHealthCheckDeps,
+		check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) (*batchv1.Job, error)
+)
+
+// SetJobHealthCheckResolver overrides the JobCheck resolution implementation. Called by a
+// Sveltos Enterprise build's composition root before starting the manager, alongside
+// SetJobHealthCheckValidator; this package never imports anything private itself.
+func SetJobHealthCheckResolver(fn func(ctx context.Context, deps JobHealthCheckDeps,
+	check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) (*batchv1.Job, error)) {
+
+	resolveJobHealthCheck = fn
+}
+
+// ResolveJobChecksForPullMode resolves every JobCheck entry in checks (fetching JobRef's
+// ConfigMap/Secret and applying Cluster-field templating, same as the push-mode path) and
+// returns the resolved manifests as YAML, keyed by "<job namespace>/<job name>" - ready to
+// stage onto a ConfigurationGroup's PreDeployCheckJobs/ValidateHealthJobs/PreDeleteCheckJobs/
+// PostDeleteCheckJobs field. Returns an empty, non-nil map when checks has no JobCheck entries.
+// Fails the same way a push-mode JobCheck failure would (license, fetch, or templating error).
+func ResolveJobChecksForPullMode(ctx context.Context, mgmtClient client.Client,
+	clusterSummary *configv1beta1.ClusterSummary, sveltosNamespace string,
+	checks []libsveltosv1beta1.ValidateHealth, logger logr.Logger) (map[string]string, error) {
+
+	jobs := make(map[string]string)
+
+	for i := range checks {
+		check := &checks[i]
+		if check.JobCheck == nil {
+			continue
+		}
+
+		deps := JobHealthCheckDeps{
+			MgmtClient:       mgmtClient,
+			ClusterSummary:   clusterSummary,
+			SveltosNamespace: sveltosNamespace,
+		}
+
+		job, err := resolveJobHealthCheck(ctx, deps, check, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve JobCheck %q: %w", check.Name, err)
+		}
+
+		// Only the resolved Job manifest travels to sveltos-applier (as YAML, keyed by
+		// namespace/name) - check.JobCheck.Timeout itself does not. Carry it via the Job's own
+		// ActiveDeadlineSeconds instead, which the Job controller already enforces natively, so
+		// sveltos-applier's poll loop doesn't need a side channel for it. Respects an
+		// ActiveDeadlineSeconds the manifest already set explicitly.
+		if job.Spec.ActiveDeadlineSeconds == nil {
+			timeout := jobHealthCheckDefaultTimeout
+			if check.JobCheck.Timeout != nil {
+				timeout = check.JobCheck.Timeout.Duration
+			}
+			seconds := int64(timeout.Seconds())
+			job.Spec.ActiveDeadlineSeconds = &seconds
+		}
+
+		// Same reasoning: the map is keyed by the Job's own namespace/name, not check.Name, so
+		// carry check.Name onto the Job itself for sveltos-applier to build a failure message
+		// consistent with push-mode's HealthCheckError.
+		if job.Annotations == nil {
+			job.Annotations = map[string]string{}
+		}
+		job.Annotations[libsveltosv1beta1.ValidateHealthCheckNameAnnotation] = check.Name
+
+		content, err := yaml.Marshal(job)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal resolved Job for JobCheck %q: %w", check.Name, err)
+		}
+
+		key := fmt.Sprintf("%s/%s", job.Namespace, job.Name)
+		jobs[key] = string(content)
+	}
+
+	return jobs, nil
 }
 
 // prometheusResponse is the top-level Prometheus HTTP API response.

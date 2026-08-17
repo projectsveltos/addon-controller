@@ -185,13 +185,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	}
 
 	if isPullMode {
-		setters := prepareSetters(clusterSummary, libsveltosv1beta1.FeatureResources, profileRef,
-			configurationHash, true, false)
-		err = pullmode.CommitStagedResourcesForDeployment(ctx, c,
-			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
-			clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
-			logger, setters...)
-		if err != nil {
+		if err := commitPullModeResourcesStaging(ctx, c, clusterSummary, profileRef, configurationHash, logger); err != nil {
 			return err
 		}
 
@@ -209,6 +203,24 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 
 	return clusterops.ValidateHealthPolicies(ctx, c, clusterSummary, getSveltosNamespace(), remoteRestConfig,
 		clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, libsveltosv1beta1.FeatureResources, false, logger)
+}
+
+// commitPullModeResourcesStaging prepares the ConfigurationGroup setters (including any
+// resolved JobCheck manifests, see prepareSetters) and commits the staged resources for
+// sveltos-applier to pick up.
+func commitPullModeResourcesStaging(ctx context.Context, c client.Client, clusterSummary *configv1beta1.ClusterSummary,
+	profileRef *corev1.ObjectReference, configurationHash []byte, logger logr.Logger) error {
+
+	setters, err := prepareSetters(ctx, clusterSummary, libsveltosv1beta1.FeatureResources, profileRef,
+		configurationHash, true, false, logger)
+	if err != nil {
+		return err
+	}
+
+	return pullmode.CommitStagedResourcesForDeployment(ctx, c,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind,
+		clusterSummary.Name, string(libsveltosv1beta1.FeatureResources),
+		logger, setters...)
 }
 
 func cleanStaleResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
@@ -504,7 +516,10 @@ func pullModeUndeployResources(ctx context.Context, c client.Client, clusterSumm
 		return err
 	}
 
-	setters := prepareSetters(clusterSummary, fID, profileRef, nil, false, true)
+	setters, err := prepareSetters(ctx, clusterSummary, fID, profileRef, nil, false, true, logger)
+	if err != nil {
+		return err
+	}
 
 	// discard all previous staged resources. This will instruct agent to undeploy
 	err = pullmode.RemoveDeployedResources(ctx, c, clusterSummary.Spec.ClusterNamespace,

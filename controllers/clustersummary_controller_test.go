@@ -965,6 +965,48 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(result.RequeueAfter).To(BeZero())
 	})
 
+	It("reconcileDelete requeues and does not remove finalizer when cluster is present but not ready", func() {
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+
+		// Cluster exists and is not marked for deletion, but is not ready yet.
+		notInitialized := false
+		cluster.Status.Initialization.ControlPlaneInitialized = &notInitialized
+
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).ToNot(BeZero())
+
+		// Cleanup was skipped (cluster not ready) so the finalizer must still be there - removing
+		// it here would orphan whatever this ClusterSummary had deployed.
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		Expect(controllerutil.ContainsFinalizer(currentClusterSummary, configv1beta1.ClusterSummaryFinalizer)).To(BeTrue())
+	})
+
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {
 		clusterProfileAName := randomString()
 		clusterSummaryAName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,

@@ -338,58 +338,16 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 	if isPresent && isReady { // if cluster is not ready, do not try to clean up. It would fail.
-		// Cleanup
-		paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
-		if err != nil {
-			return reconcile.Result{}, err
+		if result, cleanupErr, done := r.cleanupBeforeFinalizerRemoval(ctx, clusterSummaryScope, isDeleted, logger); done {
+			return result, cleanupErr
 		}
-		if paused {
-			logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
-			clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = true
-			suspensionReason := clusterPausedMessage
-			clusterSummaryScope.ClusterSummary.Status.SuspensionReason = &suspensionReason
-			return reconcile.Result{}, nil
-		}
-
-		clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
-		clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
-
-		if !isDeleted {
-			// if cluster is marked for deletion do not try to remove ResourceSummaries.
-			// those are only deployed in the managed cluster so no need to cleanup on a deleted cluster
-			if r.anyFeatureNeedsResourceSummaryRemoval(clusterSummaryScope) {
-				err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
-				if err != nil {
-					logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
-					return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-				}
-				r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
-			}
-		}
-
-		// Mirror the dependsOn ordering enforced on deploy: do not undeploy a prerequisite
-		// while a dependent ClusterSummary for the same cluster still exists and still
-		// requires it.
-		allRemoved, dependentMsg, err := r.areDependentsRemoved(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-		}
-		clusterSummaryScope.SetDependenciesMessage(&dependentMsg)
-		if !allRemoved {
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-		}
-
-		// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
-		// in the management cluster and those need to be removed.
-		err = r.undeploy(ctx, clusterSummaryScope, logger)
-		if err != nil {
-			return r.processUndeployError(clusterSummaryScope, err, logger)
-		}
-
-		if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
-			logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
-		}
+	} else if isPresent && !isDeleted {
+		// Cluster exists, is not marked for deletion, but is not ready yet (e.g. a heartbeat
+		// gap). Cleanup was skipped above because it would fail against a cluster that is not
+		// ready. Wait for it rather than falling through to removeFinalizer below with nothing
+		// actually cleaned up - that would orphan whatever was previously deployed.
+		logger.V(logs.LogInfo).Info("cluster is not ready yet. Do not remove finalizer.")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// If cluster is not present anymore or is it marked for deletion
@@ -413,6 +371,75 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 	logger.V(logs.LogDebug).Info("Reconcile delete success")
 
 	return reconcile.Result{}, nil
+}
+
+// cleanupBeforeFinalizerRemoval runs the delete-path cleanup for a cluster that is present and
+// ready: honors a paused cluster, removes ResourceSummaries where appropriate, waits for
+// dependent ClusterSummaries to be removed first, undeploys, and checks whether the finalizer
+// can be removed yet.
+//
+// done is true whenever reconcileDelete should return (result, err) immediately as-is, whether
+// that means stopping reconciliation (paused), requeuing to wait on some condition, or
+// surfacing an undeploy error. done is false only once cleanup has fully succeeded, in which
+// case reconcileDelete should continue on to remove the finalizer.
+func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Context,
+	clusterSummaryScope *scope.ClusterSummaryScope, isDeleted bool, logger logr.Logger,
+) (result reconcile.Result, err error, done bool) {
+
+	paused, err := r.isPaused(ctx, clusterSummaryScope.ClusterSummary)
+	if err != nil {
+		return reconcile.Result{}, err, true
+	}
+	if paused {
+		logger.V(logs.LogInfo).Info("cluster is paused. Do nothing.")
+		clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = true
+		suspensionReason := clusterPausedMessage
+		clusterSummaryScope.ClusterSummary.Status.SuspensionReason = &suspensionReason
+		return reconcile.Result{}, nil, true
+	}
+
+	clusterSummaryScope.ClusterSummary.Status.ReconciliationSuspended = false
+	clusterSummaryScope.ClusterSummary.Status.SuspensionReason = nil
+
+	if !isDeleted {
+		// if cluster is marked for deletion do not try to remove ResourceSummaries.
+		// those are only deployed in the managed cluster so no need to cleanup on a deleted cluster
+		if r.anyFeatureNeedsResourceSummaryRemoval(clusterSummaryScope) {
+			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
+			if err != nil {
+				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+			}
+			r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
+		}
+	}
+
+	// Mirror the dependsOn ordering enforced on deploy: do not undeploy a prerequisite
+	// while a dependent ClusterSummary for the same cluster still exists and still
+	// requires it.
+	allRemoved, dependentMsg, err := r.areDependentsRemoved(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+	}
+	clusterSummaryScope.SetDependenciesMessage(&dependentMsg)
+	if !allRemoved {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+	}
+
+	// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
+	// in the management cluster and those need to be removed.
+	err = r.undeploy(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		result, err = r.processUndeployError(clusterSummaryScope, err, logger)
+		return result, err, true
+	}
+
+	if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
+		logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+	}
+
+	return reconcile.Result{}, nil, false
 }
 
 func (r *ClusterSummaryReconciler) postFinalizerCleanup(ctx context.Context,

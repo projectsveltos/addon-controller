@@ -1676,12 +1676,12 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	if includeDeployChecks {
 		preDeployCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
-			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, logger)
+			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, logger)
 		if err != nil {
 			return nil, err
 		}
 		validateHealthJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
-			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, logger)
+			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -1695,12 +1695,12 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 
 	if includeDeleteChecks {
 		preDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
-			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, logger)
+			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, logger)
 		if err != nil {
 			return nil, err
 		}
 		postDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
-			clusterSummary, getSveltosNamespace(), clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks, logger)
+			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks, logger)
 		if err != nil {
 			return nil, err
 		}

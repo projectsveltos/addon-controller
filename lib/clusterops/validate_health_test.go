@@ -30,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2/textlogger"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -40,7 +41,22 @@ const (
 	luaFileName     = "lua_policy.lua"
 	validFileName   = "valid_resource.yaml"
 	invalidFileName = "invalid_resource.yaml"
+
+	jobManifestDataKey = "job.yaml"
 )
+
+const jobManifest = `apiVersion: batch/v1
+kind: Job
+metadata:
+  name: probe
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: probe
+        image: busybox
+`
 
 var _ = Describe("Lua Health Policies", func() {
 
@@ -326,6 +342,132 @@ end`
 			Expect(err).To(BeNil())
 			Expect(healthy).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("FetchJobManifest", func() {
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+
+	var clusterNamespace string
+	var clusterName string
+	var clusterType libsveltosv1beta1.ClusterType
+	var sveltosCluster *libsveltosv1beta1.SveltosCluster
+
+	BeforeEach(func() {
+		clusterNamespace = randomString()
+		clusterName = randomString()
+		clusterType = libsveltosv1beta1.ClusterTypeSveltos
+
+		sveltosCluster = &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: clusterName},
+		}
+	})
+
+	It("decodes a Job manifest from a referenced ConfigMap", func() {
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Data:       map[string]string{jobManifestDataKey: jobManifest},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, configMap).Build()
+
+		jobRef := &libsveltosv1beta1.PolicyRef{
+			Namespace: configMap.Namespace,
+			Name:      configMap.Name,
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+		}
+
+		job, err := clusterops.FetchJobManifest(context.TODO(), c, clusterNamespace, clusterName, clusterType, jobRef, logger)
+		Expect(err).To(BeNil())
+		Expect(job.Name).To(Equal("probe"))
+		Expect(job.Spec.Template.Spec.Containers).To(HaveLen(1))
+	})
+
+	It("decodes a Job manifest from a referenced Secret", func() {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Data:       map[string][]byte{jobManifestDataKey: []byte(jobManifest)},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, secret).Build()
+
+		jobRef := &libsveltosv1beta1.PolicyRef{
+			Namespace: secret.Namespace,
+			Name:      secret.Name,
+			Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
+		}
+
+		job, err := clusterops.FetchJobManifest(context.TODO(), c, clusterNamespace, clusterName, clusterType, jobRef, logger)
+		Expect(err).To(BeNil())
+		Expect(job.Name).To(Equal("probe"))
+	})
+
+	It("fails when the ConfigMap does not contain a Job manifest", func() {
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Data: map[string]string{"deployment.yaml": `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: foo
+`},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, configMap).Build()
+
+		jobRef := &libsveltosv1beta1.PolicyRef{
+			Namespace: configMap.Namespace,
+			Name:      configMap.Name,
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+		}
+
+		_, err := clusterops.FetchJobManifest(context.TODO(), c, clusterNamespace, clusterName, clusterType, jobRef, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("does not contain a Job manifest"))
+	})
+
+	It("fails when the ConfigMap contains more than one entry", func() {
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Data: map[string]string{
+				jobManifestDataKey: jobManifest,
+				"other.yaml":       jobManifest,
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, configMap).Build()
+
+		jobRef := &libsveltosv1beta1.PolicyRef{
+			Namespace: configMap.Namespace,
+			Name:      configMap.Name,
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+		}
+
+		_, err := clusterops.FetchJobManifest(context.TODO(), c, clusterNamespace, clusterName, clusterType, jobRef, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("exactly one Job manifest"))
+	})
+
+	It("fails when the manifest has no containers", func() {
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Data: map[string]string{jobManifestDataKey: `apiVersion: batch/v1
+kind: Job
+metadata:
+  name: probe
+`},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster, configMap).Build()
+
+		jobRef := &libsveltosv1beta1.PolicyRef{
+			Namespace: configMap.Namespace,
+			Name:      configMap.Name,
+			Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+		}
+
+		_, err := clusterops.FetchJobManifest(context.TODO(), c, clusterNamespace, clusterName, clusterType, jobRef, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("no containers"))
 	})
 })
 

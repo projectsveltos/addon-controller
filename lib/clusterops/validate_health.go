@@ -30,10 +30,12 @@ import (
 	"github.com/go-logr/logr"
 	lua "github.com/yuin/gopher-lua"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
@@ -46,6 +48,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/cel"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	sveltoslua "github.com/projectsveltos/libsveltos/lib/lua"
+	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
 
 const (
@@ -104,34 +107,91 @@ func SetJobHealthCheckValidator(fn func(ctx context.Context, deps JobHealthCheck
 	validateJobHealthCheck = fn
 }
 
-// resolveJobHealthCheck fetches and resolves (Cluster-field templating applied) the Job
-// manifest referenced by check.JobCheck.JobRef, without running it. Used only when staging a
-// pull-mode ConfigurationGroup: sveltos-applier cannot verify a Sveltos Enterprise license or
-// fetch JobRef itself, so addon-controller resolves the Job once, up front, here, and stages
-// the result for sveltos-applier to run unattended. Same default-stub/SetX-override pattern as
-// validateJobHealthCheck.
-var (
-	resolveJobHealthCheck func(ctx context.Context, deps JobHealthCheckDeps,
-		check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) (*batchv1.Job, error)
-)
+// FetchJobManifest resolves jobRef (Cluster-field templating on namespace/name, same as any
+// other referenced resource) and decodes the referenced ConfigMap/Secret's content into a Job.
+// It fails if the referenced resource does not contain exactly one valid Job manifest.
+//
+// This has no proprietary logic of its own - it's a plain read plus the same
+// libsveltos/lib/template resolution every other PolicyRef-style reference already uses - so,
+// unlike running a JobCheck (which does require a Sveltos Enterprise license), fetching the
+// manifest does not. Used both by ResolveJobChecksForPullMode below (addon-controller resolving
+// a Job to stage for sveltos-applier to run in pull mode - itself gated by the pull-mode
+// cluster-count license check, not a JobHealthCheck-specific one) and by the Sveltos Enterprise
+// JobCheck Validator (push mode, after its own separate license check).
+func FetchJobManifest(ctx context.Context, mgmtClient client.Client, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType, jobRef *libsveltosv1beta1.PolicyRef, logger logr.Logger) (*batchv1.Job, error) {
 
-// SetJobHealthCheckResolver overrides the JobCheck resolution implementation. Called by a
-// Sveltos Enterprise build's composition root before starting the manager, alongside
-// SetJobHealthCheckValidator; this package never imports anything private itself.
-func SetJobHealthCheckResolver(fn func(ctx context.Context, deps JobHealthCheckDeps,
-	check *libsveltosv1beta1.ValidateHealth, logger logr.Logger) (*batchv1.Job, error)) {
+	namespace, err := libsveltostemplate.GetReferenceResourceNamespace(ctx, mgmtClient,
+		clusterNamespace, clusterName, jobRef.Namespace, clusterType)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating jobRef namespace: %w", err)
+	}
 
-	resolveJobHealthCheck = fn
+	name, err := libsveltostemplate.GetReferenceResourceName(ctx, mgmtClient,
+		clusterNamespace, clusterName, jobRef.Name, clusterType)
+	if err != nil {
+		return nil, fmt.Errorf("instantiating jobRef name: %w", err)
+	}
+
+	nsName := types.NamespacedName{Namespace: namespace, Name: name}
+
+	var data map[string][]byte
+	switch jobRef.Kind {
+	case string(libsveltosv1beta1.ConfigMapReferencedResourceKind):
+		configMap := &corev1.ConfigMap{}
+		if err := mgmtClient.Get(ctx, nsName, configMap); err != nil {
+			return nil, fmt.Errorf("getting ConfigMap %s: %w", nsName, err)
+		}
+		data = make(map[string][]byte, len(configMap.Data))
+		for k, v := range configMap.Data {
+			data[k] = []byte(v)
+		}
+	case string(libsveltosv1beta1.SecretReferencedResourceKind):
+		secret := &corev1.Secret{}
+		if err := mgmtClient.Get(ctx, nsName, secret); err != nil {
+			return nil, fmt.Errorf("getting Secret %s: %w", nsName, err)
+		}
+		data = secret.Data
+	default:
+		return nil, fmt.Errorf("jobRef.kind %q is neither ConfigMap nor Secret", jobRef.Kind)
+	}
+
+	if len(data) != 1 {
+		return nil, fmt.Errorf("%s %s must contain exactly one Job manifest, found %d",
+			jobRef.Kind, nsName, len(data))
+	}
+
+	var content []byte
+	for k := range data {
+		content = data[k]
+	}
+
+	job := &batchv1.Job{}
+	if err := yaml.Unmarshal(content, job); err != nil {
+		return nil, fmt.Errorf("%s %s does not contain a valid Job manifest: %w", jobRef.Kind, nsName, err)
+	}
+
+	if job.Kind != "" && job.Kind != "Job" {
+		return nil, fmt.Errorf("%s %s does not contain a Job manifest (kind: %q)", jobRef.Kind, nsName, job.Kind)
+	}
+
+	if len(job.Spec.Template.Spec.Containers) == 0 {
+		return nil, fmt.Errorf("%s %s does not contain a valid Job manifest (no containers)", jobRef.Kind, nsName)
+	}
+
+	logger.V(logs.LogDebug).Info("fetched Job manifest", "job", client.ObjectKeyFromObject(job))
+
+	return job, nil
 }
 
 // ResolveJobChecksForPullMode resolves every JobCheck entry in checks (fetching JobRef's
-// ConfigMap/Secret and applying Cluster-field templating, same as the push-mode path) and
-// returns the resolved manifests as YAML, keyed by "<job namespace>/<job name>" - ready to
-// stage onto a ConfigurationGroup's PreDeployCheckJobs/ValidateHealthJobs/PreDeleteCheckJobs/
-// PostDeleteCheckJobs field. Returns an empty, non-nil map when checks has no JobCheck entries.
-// Fails the same way a push-mode JobCheck failure would (license, fetch, or templating error).
+// ConfigMap/Secret and applying Cluster-field templating, via FetchJobManifest - no license
+// check: see FetchJobManifest's comment) and returns the resolved manifests as YAML, keyed by
+// "<job namespace>/<job name>" - ready to stage onto a ConfigurationGroup's
+// PreDeployCheckJobs/ValidateHealthJobs/PreDeleteCheckJobs/PostDeleteCheckJobs field. Returns
+// an empty, non-nil map when checks has no JobCheck entries.
 func ResolveJobChecksForPullMode(ctx context.Context, mgmtClient client.Client,
-	clusterSummary *configv1beta1.ClusterSummary, sveltosNamespace string,
+	clusterSummary *configv1beta1.ClusterSummary,
 	checks []libsveltosv1beta1.ValidateHealth, logger logr.Logger) (map[string]string, error) {
 
 	jobs := make(map[string]string)
@@ -142,13 +202,8 @@ func ResolveJobChecksForPullMode(ctx context.Context, mgmtClient client.Client,
 			continue
 		}
 
-		deps := JobHealthCheckDeps{
-			MgmtClient:       mgmtClient,
-			ClusterSummary:   clusterSummary,
-			SveltosNamespace: sveltosNamespace,
-		}
-
-		job, err := resolveJobHealthCheck(ctx, deps, check, logger)
+		job, err := FetchJobManifest(ctx, mgmtClient, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, &check.JobCheck.JobRef, logger)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve JobCheck %q: %w", check.Name, err)
 		}

@@ -66,7 +66,7 @@ var _ = Describe("JobCheck", func() {
 		namePrefix = "job-check-"
 	)
 
-	It("provisions once the referenced Job completes successfully", Label("Enterprise"), func() {
+	It("provisions once the referenced Job completes successfully", Label("Enterprise", "NEW-FV-PULLMODE"), func() {
 		resourceNs := randomString()
 		resourceName := randomString()
 		jobName := randomString()
@@ -125,7 +125,7 @@ var _ = Describe("JobCheck", func() {
 		deleteClusterProfile(clusterProfile)
 	})
 
-	It("reports a failure while the referenced Job keeps failing", Label("Enterprise"), func() {
+	It("reports a failure while the referenced Job keeps failing", Label("Enterprise", "NEW-FV-PULLMODE"), func() {
 		resourceNs := randomString()
 		resourceName := randomString()
 		jobName := randomString()

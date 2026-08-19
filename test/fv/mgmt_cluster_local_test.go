@@ -139,11 +139,11 @@ var _ = Describe("ClusterProfile matching the management cluster with deployment
 
 			Byf("Verifying ConfigMap my-test-%s is present in namespace %s of the management cluster",
 				mgmt, configMapNamespace)
-			Eventually(func() error {
+			Consistently(func() error {
 				cm := &corev1.ConfigMap{}
 				return k8sClient.Get(context.TODO(),
 					types.NamespacedName{Namespace: configMapNamespace, Name: "my-test-" + mgmt}, cm)
-			}, timeout, pollingInterval).Should(BeNil())
+			}, timeout/2, pollingInterval).Should(BeNil())
 
 			deleteClusterProfile(clusterProfile)
 
@@ -152,6 +152,9 @@ var _ = Describe("ClusterProfile matching the management cluster with deployment
 				cm := &corev1.ConfigMap{}
 				err := k8sClient.Get(context.TODO(),
 					types.NamespacedName{Namespace: configMapNamespace, Name: "my-test-" + mgmt}, cm)
+				if err == nil {
+					return !cm.DeletionTimestamp.IsZero()
+				}
 				return err != nil && apierrors.IsNotFound(err)
 			}, timeout, pollingInterval).Should(BeTrue())
 		})

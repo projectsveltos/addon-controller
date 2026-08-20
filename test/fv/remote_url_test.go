@@ -46,12 +46,10 @@ var _ = Describe("Remote URL", func() {
 		saName              = "metrics-server"
 	)
 
-	// Extra Labels/Annotations are deprecated. Not supported in pull mode
-	// Do not run in PullMode. ExtraLabels/ExtraAnnotations are deprecated. So not implemented in pull mode.
-	It("Deploy the content of a remote URL", Label("FV", "EXTENDED"), func() {
+	It("Deploy the content of a remote URL", Label("FV", "PULLMODE", "EXTENDED"), func() {
 		Byf("Create a ClusterProfile matching Cluster %s/%s", kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 		clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
-		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
 		verifyClusterProfileMatches(clusterProfile)
@@ -124,6 +122,21 @@ var _ = Describe("Remote URL", func() {
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureResources,
 			policies, nil)
+
+		verifyDriftDetectionManagerDeployment(workloadClient)
+
+		Byf("Deleting metric-server ServiceAccount %s/%s from the workload cluster", saNamespace, saName)
+		currentServiceAccount := &corev1.ServiceAccount{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: saNamespace, Name: saName}, currentServiceAccount)).To(Succeed())
+		Expect(workloadClient.Delete(context.TODO(), currentServiceAccount)).To(Succeed())
+
+		Byf("Verifying Sveltos redeploys metric-server ServiceAccount %s/%s after it is deleted", saNamespace, saName)
+		Eventually(func() error {
+			return workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: saNamespace, Name: saName},
+				&corev1.ServiceAccount{})
+		}, timeout, pollingInterval).Should(BeNil())
 
 		Byf("Update ClusterProfile %s to not reference Remote URL", clusterProfile.Name)
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {

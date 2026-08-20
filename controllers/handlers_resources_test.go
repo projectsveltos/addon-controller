@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -264,6 +266,56 @@ var _ = Describe("HandlersResource", func() {
 			return err != nil &&
 				apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("undeployResources propagates a management cluster cleanup failure even when the remote cleanup succeeds", func() {
+		// ClusterType Capi never routes through pull mode, so this exercises the push-mode
+		// branch of undeployResources: a local (management cluster) cleanup pass and a
+		// remote (managed cluster) cleanup pass, run one after the other.
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID:                libsveltosv1beta1.FeatureResources,
+				DeployedGroupVersionKind: []string{"ConfigMap.v1."},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		// Wait for cache to be updated
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+				currentClusterSummary)
+			return err == nil && currentClusterSummary.Status.DeployedGVKs != nil
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Break only the rest.Config the local (management cluster) cleanup pass builds its
+		// discovery/dynamic client from. managementClusterClient/managementClusterDirectClient
+		// are left untouched, so the remote pass - which resolves its own client independently,
+		// from the kubeconfig Secret created in BeforeEach - keeps working. That is what lets
+		// this test tell the two passes apart: the local pass must fail while the remote pass
+		// succeeds.
+		brokenConfig := rest.CopyConfig(testEnv.Config)
+		brokenConfig.Host = "https://127.0.0.1:1"
+		brokenConfig.Timeout = 2 * time.Second
+		oldConfig := controllers.SetManagementClusterConfigForTest(brokenConfig)
+		defer controllers.SetManagementClusterConfigForTest(oldConfig)
+
+		err := controllers.UndeployResources(ctx, testEnv.Client, cluster.Namespace, cluster.Name, clusterSummary.Name,
+			string(libsveltosv1beta1.FeatureResources), libsveltosv1beta1.ClusterTypeCapi, deployer.Options{},
+			textlogger.NewLogger(textlogger.NewConfig()))
+		// The local cleanup pass failed (unreachable management cluster config). Even though the
+		// remote cleanup pass succeeds, that failure must not be silently dropped.
+		Expect(err).ToNot(BeNil())
 	})
 
 	It("updateDeployedGroupVersionKind updates ClusterSummary Status with list of deployed GroupVersionKinds", func() {

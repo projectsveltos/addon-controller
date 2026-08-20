@@ -19,6 +19,7 @@ package controllers
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/client-go/rest"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
@@ -94,6 +95,7 @@ var (
 	GetHandlersForFeature   = getHandlersForFeature
 	GenericDeploy           = genericDeploy
 	GenericUndeploy         = genericUndeploy
+	UndeployResources       = undeployResources
 
 	GetEntryKey                          = getEntryKey
 	DeployContentOfConfigMap             = deployContentOfConfigMap
@@ -273,6 +275,18 @@ var (
 	UpdateClusterSummaryHelmHashes = updateClusterSummaryHelmHashes
 	SetHelmChartsPatchesHash       = setHelmChartsPatchesHash
 )
+
+// SetManagementClusterConfigForTest overrides the cached management cluster rest.Config,
+// leaving managementClusterClient/managementClusterDirectClient untouched, and returns the
+// previous value so a test can restore it. Unlike SetManagementClusterAccess, this lets a
+// test break only the config the "local" (management cluster) undeploy pass builds its
+// discovery/dynamic clients from, without also breaking the direct client other code paths
+// (e.g. kubeconfig Secret reads for the "remote" pass) rely on.
+func SetManagementClusterConfigForTest(config *rest.Config) *rest.Config {
+	old := managementClusterConfig
+	managementClusterConfig = config
+	return old
+}
 
 // NewDeploymentContext constructs a deploymentContext for use in tests.
 func NewDeploymentContext(

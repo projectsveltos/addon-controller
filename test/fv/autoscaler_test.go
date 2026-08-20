@@ -78,9 +78,12 @@ var _ = Describe("Feature", func() {
 			clusterRole := &rbacv1.ClusterRole{}
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: addonControllerRoleExtra}, clusterRole)).To(Succeed())
-			clusterRole.Rules = []rbacv1.PolicyRule{
-				{Verbs: []string{"*"}, APIGroups: []string{""}, Resources: []string{serviceAccountsResource, "secrets"}},
-			}
+			clusterRole.Rules = append(clusterRole.Rules,
+				rbacv1.PolicyRule{
+					Verbs:     []string{"*"},
+					APIGroups: []string{""},
+					Resources: []string{serviceAccountsResource, resourceTypeSecrets},
+				})
 			return k8sClient.Update(context.TODO(), clusterRole)
 		})
 		Expect(err).To(BeNil())

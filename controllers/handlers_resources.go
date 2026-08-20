@@ -419,8 +419,9 @@ func undeployResources(ctx context.Context, c client.Client,
 		}
 	} else {
 		err = pushModeUndeployResources(ctx, c, clusterSummary, libsveltosv1beta1.FeatureResources, logger)
-		if err != nil {
-			return err
+		combinedErr := errors.Join(localUndeployErr, err)
+		if combinedErr != nil {
+			return combinedErr
 		}
 	}
 

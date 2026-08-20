@@ -668,7 +668,6 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		interval = kustomizeRefInterval
 	}
 	if interval > 0 {
-		r.setNextReconcileTime(clusterSummaryScope, interval)
 		return reconcile.Result{RequeueAfter: interval}, nil
 	}
 

@@ -119,7 +119,7 @@ spec:
                               type: object
                             type: array
                           featureID:
-                            description: FeatureID is an indentifier of the feature
+                            description: FeatureID is an identifier of the feature
                               whose status is reported
                             enum:
                             - Resources
@@ -247,7 +247,7 @@ spec:
                               type: object
                             type: array
                           featureID:
-                            description: FeatureID is an indentifier of the feature
+                            description: FeatureID is an identifier of the feature
                               whose status is reported
                             enum:
                             - Resources

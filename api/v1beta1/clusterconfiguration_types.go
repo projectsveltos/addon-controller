@@ -90,7 +90,7 @@ type DeployedResource struct {
 }
 
 type Feature struct {
-	// FeatureID is an indentifier of the feature whose status is reported
+	// FeatureID is an identifier of the feature whose status is reported
 	FeatureID libsveltosv1beta1.FeatureID `json:"featureID"`
 
 	// Resources is a list of resources deployed in the Cluster.

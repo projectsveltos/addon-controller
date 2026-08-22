@@ -43,7 +43,7 @@ const (
 // FeatureSummary contains a summary of the state of a workload
 // cluster feature.
 type FeatureSummary struct {
-	// FeatureID is an indentifier of the feature whose status is reported
+	// FeatureID is an identifier of the feature whose status is reported
 	FeatureID libsveltosv1beta1.FeatureID `json:"featureID"`
 
 	// Hash represents of a unique value for a feature at a fixed point in

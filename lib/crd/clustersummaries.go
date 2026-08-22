@@ -2453,7 +2453,7 @@ spec:
                         occurred.
                       type: string
                     featureID:
-                      description: FeatureID is an indentifier of the feature whose
+                      description: FeatureID is an identifier of the feature whose
                         status is reported
                       enum:
                       - Resources

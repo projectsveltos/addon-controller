@@ -96,7 +96,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterType := libsveltosv1beta1.ClusterTypeSveltos
 
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
-			clusterNamespace, clusterName, "", clusterType, nil,
+			clusterNamespace, clusterName, "", clusterType, nil, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
 		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
@@ -142,6 +142,68 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			}
 			return true
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("deployDriftDetectionManagerInManagementCluster passes --watch-namespaces through when configured", func() {
+		clusterNamespace := randomString()
+		clusterName := randomString()
+		clusterType := libsveltosv1beta1.ClusterTypeSveltos
+		watchNamespace1 := randomString()
+		watchNamespace2 := randomString()
+		watchNamespaces := []string{watchNamespace1, watchNamespace2}
+
+		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
+			clusterNamespace, clusterName, "", clusterType, nil, watchNamespaces,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		expectedLabels := controllers.GetDriftDetectionManagerLabels(clusterNamespace, clusterName, clusterType)
+		listOptions := []client.ListOption{
+			client.InNamespace(controllers.GetDriftDetectionNamespaceInMgmtCluster(sveltosNamespace)),
+		}
+
+		Eventually(func() bool {
+			deployments := &appsv1.DeploymentList{}
+			err := testEnv.List(context.TODO(), deployments, listOptions...)
+			if err != nil {
+				return false
+			}
+
+			for i := range deployments.Items {
+				d := &deployments.Items[i]
+				if !verifyLabels(d.Labels, expectedLabels) {
+					continue
+				}
+				expectedArg := fmt.Sprintf("--watch-namespaces=%s,%s", watchNamespace1, watchNamespace2)
+				for _, arg := range d.Spec.Template.Spec.Containers[0].Args {
+					if arg == expectedArg {
+						return true
+					}
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Expect(controllers.RemoveDriftDetectionManagerFromManagementCluster(context.TODO(), clusterNamespace, clusterName,
+			clusterType, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+	})
+
+	It("deployDriftDetectionManagerInCluster ignores the watch-namespaces annotation for push-mode clusters", func() {
+		cluster := prepareCluster()
+		clusterSummaryName := randomString()
+
+		cluster.Annotations = map[string]string{
+			controllers.AgentWatchNamespacesAnnotation: fmt.Sprintf("%s,%s", randomString(), randomString()),
+		}
+		Expect(testEnv.Update(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		// Succeeding at all, for a push-mode (agentless=false) deploy, is the assertion: the
+		// annotation only ever gets read and passed through for agentless deploys (see
+		// deployDriftDetectionManagerInCluster), so a push-mode deploy with it set must behave
+		// exactly as if it were never set, not fail or behave differently.
+		Expect(controllers.DeployDriftDetectionManagerInCluster(context.TODO(), testEnv.Client, cluster.Namespace,
+			cluster.Name, clusterSummaryName, string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi,
+			false, false, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 	})
 
 	It("getGlobalDriftDetectionManagerPatches reads old post render patches from ConfigMap", func() {
@@ -312,6 +374,63 @@ metadata:
 			}
 		}
 		Expect(foundLegacy).To(BeTrue())
+	})
+})
+
+var _ = Describe("getAgentWatchNamespaces", func() {
+	It("returns nil when the Cluster has no watch-namespaces annotation", func() {
+		namespace := randomString()
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), sveltosCluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, sveltosCluster)).To(Succeed())
+
+		watchNamespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), testEnv.Client,
+			sveltosCluster.Namespace, sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(watchNamespaces).To(BeNil())
+	})
+
+	It("parses the comma-separated annotation, trimming whitespace", func() {
+		namespace := randomString()
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace,
+				Annotations: map[string]string{
+					controllers.AgentWatchNamespacesAnnotation: "ns-a, ns-b ,ns-c",
+				},
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), sveltosCluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, sveltosCluster)).To(Succeed())
+
+		watchNamespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), testEnv.Client,
+			sveltosCluster.Namespace, sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(watchNamespaces).To(Equal([]string{"ns-a", "ns-b", "ns-c"}))
+	})
+
+	It("returns nil, not an error, when the Cluster instance does not exist", func() {
+		watchNamespaces, err := controllers.GetAgentWatchNamespaces(context.TODO(), testEnv.Client,
+			randomString(), randomString(), libsveltosv1beta1.ClusterTypeSveltos,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(watchNamespaces).To(BeNil())
 	})
 })
 

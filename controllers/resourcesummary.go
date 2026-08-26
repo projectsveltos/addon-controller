@@ -75,6 +75,27 @@ const (
 	// * **Strategic Merge Patch**
 	// * **JSON Patch (RFC6902)**
 	driftDetectionOverrideAnnotation = "driftdetection.projectsveltos.io/config-override-ref"
+
+	// This optional annotation restricts namespaced-resource access to the listed namespaces: a
+	// comma-separated list, e.g. "ns-a,ns-b,ns-c". Named under agent.projectsveltos.io, not
+	// driftdetection.projectsveltos.io, since it has more than one consumer, each with its own
+	// rule for when it applies:
+	//
+	//   - drift-detection-manager (and sveltos-agent, not wired up here yet) only honors it for
+	//     clusters deployed in agentless (management-cluster) mode, and only with a valid Sveltos
+	//     Enterprise license granting NamespaceScopedAgents. It checks that directly against the
+	//     sveltos-license Secret and falls back to watching everything, cluster-wide, if the
+	//     license is missing or invalid. This is the paid differentiator: continuous deployment
+	//     under restricted RBAC works either way (see below), but continuous drift detection
+	//     under restricted RBAC requires a license.
+	//   - addon-controller's own search for stale resources to remove (processDeployedGVKs)
+	//     honors it unconditionally: no license check, agentless or not. Unlike watching for
+	//     drift, this isn't a premium capability — without it, a genuinely RBAC-restricted
+	//     credential just can't deploy at all, license or no license.
+	//
+	// Cluster-scoped resources are unaffected in both cases, since they have no namespace for
+	// this restriction to apply to.
+	agentWatchNamespacesAnnotation = "agent.projectsveltos.io/watch-namespaces"
 )
 
 func getDriftDetectionNamespaceInMgmtCluster(sveltosNamespace string) string {
@@ -104,6 +125,12 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 		}
 	}
 
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, c, clusterNamespace, clusterName,
+		clusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	err = deployDriftDetectionCRDs(ctx, clusterNamespace, clusterName, applicant, featureID, clusterType,
 		isPullMode, startInMgmtCluster, logger)
 	if err != nil {
@@ -115,11 +142,59 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	if startInMgmtCluster && !isPullMode {
 		restConfig := getManagementClusterConfig()
 		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace, clusterName,
-			"do-not-send-updates", clusterType, patches, logger)
+			"do-not-send-updates", clusterType, patches, watchNamespaces, logger)
+	}
+
+	if len(watchNamespaces) > 0 {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf(
+			"%s is only supported for agentless (management-cluster) deploys, ignoring it for this push-mode cluster",
+			agentWatchNamespacesAnnotation))
 	}
 
 	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace, clusterName,
 		applicant, featureID, "do-not-send-updates", clusterType, patches, logger)
+}
+
+// getAgentWatchNamespaces reads agentWatchNamespacesAnnotation off the Cluster/SveltosCluster
+// instance, the same way getPerClusterDriftDetectionManagerPatches reads its own annotation.
+// Returns nil, not an error, when the Cluster instance, the annotation, or its value is missing:
+// all of which mean "no restriction configured", the same as an empty --watch-namespaces on
+// drift-detection-manager itself. See agentWatchNamespacesAnnotation's doc comment for how its
+// two callers (this file, and processDeployedGVKs) differ in when they apply it.
+func getAgentWatchNamespaces(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) ([]string, error) {
+
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	annotations := cluster.GetAnnotations()
+	if annotations == nil {
+		return nil, nil
+	}
+
+	value, ok := annotations[agentWatchNamespacesAnnotation]
+	if !ok || value == "" {
+		return nil, nil
+	}
+
+	namespaces := make([]string, 0)
+	for _, ns := range strings.Split(value, ",") {
+		ns = strings.TrimSpace(ns)
+		if ns != "" {
+			namespaces = append(namespaces, ns)
+		}
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("drift-detection-manager watch namespaces: %v", namespaces),
+		"annotation", agentWatchNamespacesAnnotation)
+
+	return namespaces, nil
 }
 
 func deployDriftDetectionCRDs(ctx context.Context, clusterNamespace, clusterName, applicant, featureID string,
@@ -274,13 +349,20 @@ func deployDriftDetectionManagerInManagedCluster(ctx context.Context,
 // Those instances are all running in the namespace where projectsveltos is deployed
 func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restConfig *rest.Config,
 	clusterNamespace, clusterName, mode string, clusterType libsveltosv1beta1.ClusterType,
-	patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+	patches []libsveltosv1beta1.Patch, watchNamespaces []string, logger logr.Logger) error {
 
 	logger.V(logs.LogDebug).Info("deploy drift-detection-manager in management cluster")
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerInMgmtClusterYAML())
 
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
 		clusterName, mode, clusterType)
+
+	// Unlike cluster-namespace/cluster-name/cluster-type above, this substitution is a no-op
+	// (empty in, empty out) when watchNamespaces is empty, keeping today's cluster-wide default.
+	if len(watchNamespaces) > 0 {
+		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "watch-namespaces=",
+			fmt.Sprintf("watch-namespaces=%s", strings.Join(watchNamespaces, ",")))
+	}
 
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.

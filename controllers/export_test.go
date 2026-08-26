@@ -208,6 +208,11 @@ var (
 	RemoveDriftDetectionManagerFromManagementCluster = removeDriftDetectionManagerFromManagementCluster
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
 	GetGlobalDriftDetectionManagerPatches            = getGlobalDriftDetectionManagerPatches
+	GetAgentWatchNamespaces                          = getAgentWatchNamespaces
+)
+
+const (
+	AgentWatchNamespacesAnnotation = agentWatchNamespacesAnnotation
 )
 
 var (

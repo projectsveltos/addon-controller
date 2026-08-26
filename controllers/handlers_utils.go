@@ -1104,6 +1104,21 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 		LabelSelector: labels.Set(labelSelector.MatchLabels).String(),
 	}
 
+	// Only the remote (managed) cluster is ever reached with a credential restricted by
+	// agentWatchNamespacesAnnotation; local (management-cluster) deploys use addon-controller's
+	// own full-privilege client and are unaffected. Unlike drift-detection-manager, this is
+	// honored unconditionally: no license check, agentless or not (see the annotation's doc
+	// comment). Without it, a genuinely RBAC-restricted credential can't deploy at all.
+	var watchNamespaces []string
+	if !isMgmtCluster {
+		watchNamespaces, err = getAgentWatchNamespaces(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, logger)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for i := range deployedGVKs {
 		// TODO: move this to separate method
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("removing stale resources for GVK %s", deployedGVKs[i].String()))
@@ -1125,7 +1140,8 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 			Resource: mapping.Resource.Resource,
 		}
 
-		list, err := d.Resource(resourceId).List(ctx, listOptions)
+		namespaced := mapping.Scope.Name() == meta.RESTScopeNameNamespace
+		items, err := listDeployedResources(ctx, d, resourceId, &listOptions, namespaced, watchNamespaces)
 		if err != nil {
 			return nil, err
 		}
@@ -1139,8 +1155,8 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 			expectedDeploymentType = string(configv1beta1.DeploymentTypeLocal)
 		}
 
-		for j := range list.Items {
-			r := list.Items[j]
+		for j := range items {
+			r := items[j]
 
 			// Protective signal, same reasoning as the clustersummary annotation check below:
 			// skip a resource here when it is explicitly annotated for the *other* deployment
@@ -1181,6 +1197,33 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 	}
 
 	return undeployed, nil
+}
+
+// listDeployedResources lists resources of resourceId matching listOptions. The dynamic client
+// has no single call to list across only a chosen subset of namespaces, only across all of them
+// (used here when the resource is cluster-scoped, or watchNamespaces is empty) or within exactly
+// one, so a non-empty watchNamespaces for a namespaced resource is handled by fanning out one
+// List per configured namespace and aggregating the results.
+func listDeployedResources(ctx context.Context, d dynamic.Interface, resourceId schema.GroupVersionResource,
+	listOptions *metav1.ListOptions, namespaced bool, watchNamespaces []string) ([]unstructured.Unstructured, error) {
+
+	if !namespaced || len(watchNamespaces) == 0 {
+		list, err := d.Resource(resourceId).List(ctx, *listOptions)
+		if err != nil {
+			return nil, err
+		}
+		return list.Items, nil
+	}
+
+	items := make([]unstructured.Unstructured, 0)
+	for _, ns := range watchNamespaces {
+		list, err := d.Resource(resourceId).Namespace(ns).List(ctx, *listOptions)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, list.Items...)
+	}
+	return items, nil
 }
 
 func undeployStaleResources(ctx context.Context, isMgmtCluster bool,
@@ -1527,6 +1570,18 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 		// the upgrade via ClusterSummary redeployment. v1.0.1 is still added here to make
 		// sure hash does not change
 		config += "v1.0.1"
+
+		// A change to the operator's agentWatchNamespacesAnnotation on the target Cluster must
+		// redeploy drift-detection-manager with the new --watch-namespaces value. Without this,
+		// shouldRedeploy would see an unchanged hash and skip the redeploy entirely, leaving the
+		// annotation change unapplied until the next periodic drift-detection upgrade sweep.
+		watchNamespaces, err := getAgentWatchNamespaces(ctx, getManagementClusterClient(),
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Spec.ClusterType, logger)
+		if err != nil {
+			return "", err
+		}
+		config += strings.Join(watchNamespaces, ",")
 	}
 
 	mgmtResourceHash, err := getTemplateResourceRefHash(ctx, clusterSummary)

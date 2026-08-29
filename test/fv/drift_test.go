@@ -26,6 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,6 +75,10 @@ const (
 
 	// podinfoExcludedRelease plays the role the cleanup-controller Deployment used to:
 	// only /spec/replicas is excluded from drift detection, everything else is not.
+	// It is deployed with hpa.enabled: true, so replicas is HPA-owned and the rendered
+	// Deployment never has spec.replicas at all: the driftExclusion path is a genuine
+	// no-op. This is regression coverage for #1934, where a helm upgrade failed hard
+	// applying such a no-op exclusion instead of treating it as one.
 	podinfoExcludedRelease  = "podinfo-excluded"
 	podinfoExcludedDriftTag = "6.7.0"
 )
@@ -149,6 +154,13 @@ image:
   repository: %s
   tag: %s`, podinfoDriftImageRepo, podinfoBaselineTag)
 
+		// podinfo-excluded additionally hands replicas to an HPA, so the rendered Deployment
+		// never has spec.replicas: the driftExclusion on that path is a genuine no-op (#1934).
+		excludedReleaseValues := fmt.Sprintf(`%s
+hpa:
+  enabled: true
+  maxReplicas: 5`, baselineImageValues)
+
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
@@ -183,7 +195,7 @@ image:
 					ReleaseName:      podinfoExcludedRelease,
 					ReleaseNamespace: podinfoDriftNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
-					Values:           baselineImageValues,
+					Values:           excludedReleaseValues,
 					ValuesFrom: []configv1beta1.ValueFrom{
 						{
 							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
@@ -401,6 +413,38 @@ image:
 			}
 			return hasAnnotation(depl.Spec.Template.Annotations, clusterKey, tagValue)
 		}, timeout, pollingInterval).Should(BeTrue())
+
+		// podinfo-excluded's driftExclusion targets spec/replicas, a path that is never in the
+		// render because hpa.enabled: true hands replicas to the HPA. A helm upgrade must still
+		// succeed applying that no-op exclusion (regression coverage for #1934).
+		// Run this last: it changes the ClusterProfile, which in pull mode currently causes
+		// every chart to be re-templated and re-bundled for the agent (see #1940), including
+		// podinfo-ignored — racing the driftDetectionIgnore checks above if run earlier.
+		// Placed here, after those checks have already concluded, it can't race them.
+		By("Trigger a helm upgrade of podinfo-excluded via an unrelated values change")
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(),
+				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			for i := range currentClusterProfile.Spec.HelmCharts {
+				if currentClusterProfile.Spec.HelmCharts[i].ReleaseName == podinfoExcludedRelease {
+					currentClusterProfile.Spec.HelmCharts[i].Values = fmt.Sprintf(`%s
+hpa:
+  enabled: true
+  maxReplicas: 6`, baselineImageValues)
+				}
+			}
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Byf("Verifying the helm upgrade succeeds despite the driftExclusion on the HPA-owned spec/replicas")
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
+		By("Verifying podinfo-excluded's replicas are still HPA-owned (an HPA targeting it exists)")
+		hpa := &autoscalingv2.HorizontalPodAutoscaler{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, hpa)).To(Succeed())
+		Expect(hpa.Spec.ScaleTargetRef.Name).To(Equal(podinfoExcludedRelease))
 
 		deleteClusterProfile(clusterProfile)
 

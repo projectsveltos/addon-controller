@@ -705,6 +705,24 @@ metadata:
 			Expect(waitForObject(context.TODO(), testEnv, driftDetectionManager)).To(Succeed())
 
 			logger := textlogger.NewLogger(textlogger.NewConfig())
+
+			Expect(sveltos_upgrade.StoreDriftDetectionVersion(context.TODO(), testEnv.Client, sveltosNamespace, "v1.0.0",
+				namespace, clusterName, libsveltosv1beta1.ClusterTypeSveltos, true, logger)).To(Succeed())
+
+			var versionConfigMap corev1.ConfigMap
+			Eventually(func() bool {
+				versionConfigMaps := &corev1.ConfigMapList{}
+				err := testEnv.List(context.TODO(), versionConfigMaps, client.InNamespace(namespace), client.MatchingLabels{
+					sveltos_upgrade.ClusterNameLabel: clusterName,
+					sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(libsveltosv1beta1.ClusterTypeSveltos)),
+				})
+				if err != nil || len(versionConfigMaps.Items) != 1 {
+					return false
+				}
+				versionConfigMap = versionConfigMaps.Items[0]
+				return true
+			}, timeout, pollingInterval).Should(BeTrue())
+
 			go controllers.RemoveStaleDriftDetectionResources(ctx, logger)
 
 			// RemoveStaleDriftDetectionResources sleeps for a minute
@@ -745,6 +763,13 @@ metadata:
 				if err == nil {
 					return !currentDeployment.DeletionTimestamp.IsZero()
 				}
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Eventually(func() bool {
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: versionConfigMap.Namespace, Name: versionConfigMap.Name},
+					&corev1.ConfigMap{})
 				return apierrors.IsNotFound(err)
 			}, timeout, pollingInterval).Should(BeTrue())
 		})

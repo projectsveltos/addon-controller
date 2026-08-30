@@ -432,6 +432,18 @@ func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger)
 					logger.V(logs.LogInfo).Info(fmt.Sprintf("deleting driftDetection deployment %s/%s",
 						depl.Namespace, depl.Name))
 					_ = c.Delete(ctx, depl)
+
+					// Delete the deployment first, not the ConfigMap. drift-detection-manager itself writes
+					// the ConfigMap and is still running at this point, so deleting it first risks a
+					// recreate in the gap - and once the deployment's gone we have no way back to this
+					// cluster to retry. This only narrows that window, doesn't close it (we don't know the
+					// pod's write cadence, and waiting here for it to fully terminate would stall cleanup
+					// for every other cluster). Best effort, same as the deployment delete above - still
+					// better than the unconditional orphan today.
+					if err := sveltos_upgrade.DeleteDriftDetectionVersion(ctx, c, getSveltosNamespace(), clusterNs, clusterName,
+						clusterType, true, logger); err != nil {
+						logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete driftDetection version configMap: %v", err))
+					}
 				}
 			}
 		}

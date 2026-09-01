@@ -515,4 +515,85 @@ var _ = Describe("Hash methods", func() {
 			Expect(reflect.DeepEqual(hash, expectedHash)).To(BeTrue())
 		}
 	})
+
+	It("ResourcesHash changes when the target Cluster's watch-namespaces annotation changes, "+
+		"only in ContinuousWithDriftDetection mode", func() {
+		namespace := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), namespace)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, namespace)).To(Succeed())
+
+		cluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: namespace.Name,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv, cluster)).To(Succeed())
+
+		newClusterSummary := func(syncMode configv1beta1.SyncMode) *configv1beta1.ClusterSummary {
+			cs := &configv1beta1.ClusterSummary{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      randomString(),
+					Namespace: namespace.Name,
+				},
+				Spec: configv1beta1.ClusterSummarySpec{
+					ClusterNamespace: cluster.Namespace,
+					ClusterName:      cluster.Name,
+					ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+					ClusterProfileSpec: configv1beta1.Spec{
+						SyncMode: syncMode,
+					},
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), cs)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv, cs)).To(Succeed())
+			return cs
+		}
+
+		driftClusterSummary := newClusterSummary(configv1beta1.SyncModeContinuousWithDriftDetection)
+		beforeHash, err := controllers.ResourcesHash(context.TODO(), testEnv, driftClusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		continuousClusterSummary := newClusterSummary(configv1beta1.SyncModeContinuous)
+		continuousBeforeHash, err := controllers.ResourcesHash(context.TODO(), testEnv, continuousClusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		updatedWatchNamespaces := "ns-a,ns-b"
+		cluster.Annotations = map[string]string{
+			controllers.AgentWatchNamespacesAnnotation: updatedWatchNamespaces,
+		}
+		Expect(testEnv.Update(context.TODO(), cluster)).To(Succeed())
+
+		// waitForObject only confirms the object still exists, which for an Update (unlike a
+		// Create) is trivially already true: it says nothing about whether this specific
+		// annotation value has propagated through testEnv's cache yet. getClusterProfileSpecHash
+		// reads through that same cache (getManagementClusterClient), so poll for the real value
+		// there instead, or afterHash below could still observe the pre-update annotations.
+		Eventually(func() bool {
+			current := &libsveltosv1beta1.SveltosCluster{}
+			if err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(cluster), current); err != nil {
+				return false
+			}
+			return current.Annotations[controllers.AgentWatchNamespacesAnnotation] == updatedWatchNamespaces
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		afterHash, err := controllers.ResourcesHash(context.TODO(), testEnv, driftClusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(beforeHash, afterHash)).To(BeFalse())
+
+		// Same annotation change must NOT affect the hash outside ContinuousWithDriftDetection:
+		// nothing reads --watch-namespaces in that mode, so it would just be wasted cost.
+		continuousAfterHash, err := controllers.ResourcesHash(context.TODO(), testEnv, continuousClusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(continuousBeforeHash, continuousAfterHash)).To(BeTrue())
+	})
 })

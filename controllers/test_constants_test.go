@@ -111,7 +111,8 @@ const (
 	testRegionLabelTemplate      = `{{ index .Cluster.metadata.labels "region" }}`
 
 	// Misc
-	testClusterRoleKindV1 = "ClusterRole.v1.rbac.authorization.k8s.io"
+	testClusterRoleKindV1    = "ClusterRole.v1.rbac.authorization.k8s.io"
+	testServiceAccountKindV1 = "ServiceAccount.v1."
 
 	// Multiline patch
 	testEnvLabelPatch = `- op: add

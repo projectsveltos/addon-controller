@@ -1144,6 +1144,115 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
+	It(`undeployStaleResources honors agent.projectsveltos.io/watch-namespaces, ignoring stale resources outside the configured namespaces`, func() {
+		watchedNamespace := randomString()
+		otherNamespace := randomString()
+		for _, ns := range []string{watchedNamespace, otherNamespace} {
+			Expect(testEnv.Create(context.TODO(), &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: ns},
+			})).To(Succeed())
+			Expect(waitForObject(ctx, testEnv.Client, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})).To(Succeed())
+		}
+
+		// Restrict this Cluster to watchedNamespace only.
+		currentCluster := &clusterv1.Cluster{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Spec.ClusterNamespace, Name: clusterSummary.Spec.ClusterName},
+			currentCluster)).To(Succeed())
+		if currentCluster.Annotations == nil {
+			currentCluster.Annotations = map[string]string{}
+		}
+		currentCluster.Annotations[controllers.AgentWatchNamespacesAnnotation] = watchedNamespace
+		Expect(testEnv.Update(context.TODO(), currentCluster)).To(Succeed())
+
+		// Neither ServiceAccount is in currentPolicies (nil), so both are candidates for
+		// deletion were it not for the namespace scoping.
+		watchedServiceAccount := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: watchedNamespace,
+				Name:      randomString(),
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+				},
+			},
+		}
+		otherServiceAccount := &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: otherNamespace,
+				Name:      randomString(),
+				Labels: map[string]string{
+					deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+				},
+				Annotations: map[string]string{
+					deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					deployer.ReferenceNamespaceAnnotation: randomString(),
+					deployer.ReferenceNameAnnotation:      randomString(),
+				},
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), watchedServiceAccount)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, watchedServiceAccount)).To(Succeed())
+		Expect(testEnv.Create(context.TODO(), otherServiceAccount)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, otherServiceAccount)).To(Succeed())
+
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+		addOwnerReference(context.TODO(), testEnv.Client, watchedServiceAccount, currentClusterProfile)
+		addOwnerReference(context.TODO(), testEnv.Client, otherServiceAccount, currentClusterProfile)
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				DeployedGroupVersionKind: []string{
+					testServiceAccountKindV1,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+
+		_, err := controllers.UndeployStaleResources(context.TODO(), false, testEnv.Config, testEnv.Client,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		// Stale and inside the configured namespace: found and removed.
+		Eventually(func() bool {
+			currentServiceAccount := &corev1.ServiceAccount{}
+			err = testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: watchedNamespace, Name: watchedServiceAccount.Name},
+				currentServiceAccount)
+			return err != nil && apierrors.IsNotFound(err)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Also stale, but outside the configured namespace: the scoped search never reaches
+		// it, so it must never be touched.
+		Consistently(func() error {
+			currentServiceAccount := &corev1.ServiceAccount{}
+			return testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: otherNamespace, Name: otherServiceAccount.Name},
+				currentServiceAccount)
+		}, timeout, pollingInterval).Should(BeNil())
+	})
+
 	It(`undeployStaleResources does not remove resources deployed by the other deployment type of the same ClusterSummary`, func() {
 		// Further self-managed SveltosCluster scenario: this time both resources were deployed
 		// by the SAME ClusterSummary, one via deploymentType Local and one via deploymentType

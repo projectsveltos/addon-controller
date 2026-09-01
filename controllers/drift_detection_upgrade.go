@@ -194,6 +194,7 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 			}
 
 			var patches []libsveltosv1beta1.Patch
+			var watchNamespaces []string
 			clusterNamespace, clusterName, clusterType, found :=
 				getClusterDataFromDriftDetectionManagerDeployment(&driftDetectionDeployments.Items[i])
 			if found {
@@ -207,10 +208,19 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 				} else if patches == nil {
 					patches = globalPatches
 				}
+
+				watchNamespaces, err = getAgentWatchNamespaces(ctx, mgmtClient,
+					clusterNamespace, clusterName, clusterType, logger)
+				if err != nil {
+					logger.V(logs.LogInfo).Info(
+						fmt.Sprintf("cluster %s %s/%s failed to get drift detection watch namespaces: %v",
+							clusterType, clusterNamespace, clusterName, err))
+					allProcessed = false
+				}
 			}
 
 			err = upgradeDriftDetectionDeployment(ctx, config, mgmtClient, &driftDetectionDeployments.Items[i],
-				patches, logger)
+				patches, watchNamespaces, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade driftDetection deployment: %v", err))
 				allProcessed = false
@@ -226,14 +236,15 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 }
 
 func upgradeDriftDetectionDeployment(ctx context.Context, config *rest.Config, c client.Client,
-	depl *appsv1.Deployment, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+	depl *appsv1.Deployment, patches []libsveltosv1beta1.Patch, watchNamespaces []string,
+	logger logr.Logger) error {
 
 	exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
 	if exist {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Upgrade drift detection deployment for cluster %s %s/%s",
 			clusterType, clusterNs, clusterName))
 		return deployDriftDetectionManagerInManagementCluster(ctx, config, clusterNs, clusterName,
-			"do-not-send-updates", clusterType, patches, logger)
+			"do-not-send-updates", clusterType, patches, watchNamespaces, logger)
 	}
 
 	return nil

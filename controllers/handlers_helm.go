@@ -3356,13 +3356,6 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 		currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
 	}
 
-	currentClusterSummary := &configv1beta1.ClusterSummary{}
-	err := c.Get(ctx,
-		types.NamespacedName{Namespace: dCtx.clusterSummary.Namespace, Name: dCtx.clusterSummary.Name}, currentClusterSummary)
-	if err != nil {
-		return dCtx.clusterSummary, err
-	}
-
 	// Index the in-memory FailureMessages written by walkChartsAndDeploy so they are
 	// not lost when we overwrite the status from the freshly fetched currentClusterSummary.
 	inMemoryFailure := make(map[string]*string, len(dCtx.clusterSummary.Status.HelmReleaseSummaries))
@@ -3371,21 +3364,30 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 		inMemoryFailure[helmInfo(s.ReleaseNamespace, s.ReleaseName)] = s.FailureMessage
 	}
 
-	helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(currentClusterSummary.Status.HelmReleaseSummaries))
-	for i := range currentClusterSummary.Status.HelmReleaseSummaries {
-		summary := &currentClusterSummary.Status.HelmReleaseSummaries[i]
-		if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
-			entry := *summary
-			if msg, exists := inMemoryFailure[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; exists {
-				entry.FailureMessage = msg
-			}
-			helmReleaseSummaries = append(helmReleaseSummaries, entry)
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		err := c.Get(ctx,
+			types.NamespacedName{Namespace: dCtx.clusterSummary.Namespace, Name: dCtx.clusterSummary.Name}, currentClusterSummary)
+		if err != nil {
+			return err
 		}
-	}
 
-	currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
+		helmReleaseSummaries := make([]configv1beta1.HelmChartSummary, 0, len(currentClusterSummary.Status.HelmReleaseSummaries))
+		for i := range currentClusterSummary.Status.HelmReleaseSummaries {
+			summary := &currentClusterSummary.Status.HelmReleaseSummaries[i]
+			if _, ok := currentlyReferenced[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; ok {
+				entry := *summary
+				if msg, exists := inMemoryFailure[helmInfo(summary.ReleaseNamespace, summary.ReleaseName)]; exists {
+					entry.FailureMessage = msg
+				}
+				helmReleaseSummaries = append(helmReleaseSummaries, entry)
+			}
+		}
 
-	err = c.Status().Update(ctx, currentClusterSummary)
+		currentClusterSummary.Status.HelmReleaseSummaries = helmReleaseSummaries
+
+		return c.Status().Update(ctx, currentClusterSummary)
+	})
 	if err != nil {
 		return dCtx.clusterSummary, err
 	}

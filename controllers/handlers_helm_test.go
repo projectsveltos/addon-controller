@@ -35,14 +35,17 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -1053,6 +1056,42 @@ var _ = Describe("HandlersHelm", func() {
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
+
+	It("UpdateStatusForNonReferencedHelmReleases retries on a status update conflict (regression for #1933)",
+		func() {
+			// No helm charts referenced and no existing HelmReleaseSummaries: the only side
+			// effect left is the unconditional Status().Update() at the end of the function.
+			initObjects := []client.Object{
+				clusterSummary,
+			}
+
+			// Simulate the cached-client race from #1933: a concurrent write (e.g.
+			// updateValueHashOnHelmChartSummary) lands between this function's Get and its
+			// own Status().Update, so the first attempt loses with a stale-resourceVersion
+			// conflict. Only the first status update conflicts, mirroring a real race rather
+			// than a permanently broken client.
+			conflictCount := 0
+			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).
+				WithInterceptorFuncs(interceptor.Funcs{
+					SubResourceUpdate: func(ctx context.Context, cl client.Client, subResourceName string,
+						obj client.Object, opts ...client.SubResourceUpdateOption) error {
+
+						if subResourceName == testStatusField && conflictCount == 0 {
+							conflictCount++
+							return apierrors.NewConflict(
+								schema.GroupResource{Group: configv1beta1.GroupVersion.Group, Resource: "clustersummaries"},
+								obj.GetName(),
+								fmt.Errorf("the object has been modified; please apply your changes to the latest version and try again"))
+						}
+						return cl.SubResource(subResourceName).Update(ctx, obj, opts...)
+					},
+				}).Build()
+
+			_, err := controllers.UpdateStatusForNonReferencedHelmReleases(context.TODO(), c,
+				controllers.NewDeploymentContext(clusterSummary, nil, nil), textlogger.NewLogger(textlogger.NewConfig()))
+			Expect(err).To(BeNil())
+			Expect(conflictCount).To(Equal(1))
+		})
 
 	It("updateChartsInClusterConfiguration updates ClusterConfiguration with deployed helm releases", func() {
 		chartDeployed := []configv1beta1.Chart{

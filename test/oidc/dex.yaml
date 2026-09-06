@@ -1,0 +1,120 @@
+# Dex, used by the OIDC workload identity FV test as a standalone IdP. Deployed into the
+# management cluster and reached by both addon-controller (in-cluster DNS) and the FV
+# workload cluster's kube-apiserver (over the shared kind Docker network, hence the NodePort
+# and the IP-based issuer URL instead of a DNS name).
+#
+# ${DEX_NODE_IP}, ${DEX_NODE_PORT}, ${DEX_ISSUER_URL}, ${OIDC_CLIENT_ID} and
+# ${OIDC_CLIENT_SECRET} are filled in by `make create-cluster-oidc` via envsubst.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dex
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: dex-selfsigned
+  namespace: dex
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dex-tls
+  namespace: dex
+spec:
+  secretName: dex-tls
+  isCA: true
+  commonName: dex
+  ipAddresses:
+    - ${DEX_NODE_IP}
+  dnsNames:
+    - dex.dex.svc.cluster.local
+    - dex.dex.svc
+  issuerRef:
+    name: dex-selfsigned
+    kind: Issuer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-config
+  namespace: dex
+data:
+  config.yaml: |
+    issuer: ${DEX_ISSUER_URL}
+    storage:
+      type: memory
+    web:
+      https: 0.0.0.0:5556
+      tlsCert: /etc/dex/tls/tls.crt
+      tlsKey: /etc/dex/tls/tls.key
+    oauth2:
+      grantTypes:
+        - "client_credentials"
+    staticClients:
+      - id: ${OIDC_CLIENT_ID}
+        secret: ${OIDC_CLIENT_SECRET}
+        name: Sveltos FV
+    # client_credentials tokens carry no user identity, but Dex still requires at least
+    # one connector configured before it will start.
+    enablePasswordDB: true
+    staticPasswords:
+      - email: "admin@example.com"
+        hash: "$$2y$$10$$34AKFkjUplqWVEJ8u6tdieXAqWI642btGT2hFgd6MCdt.cf/ZOeBC"
+        username: admin
+        userID: 08a8684b-db88-4b73-90a9-3cd1661f5466
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: dex
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+    spec:
+      containers:
+        - name: dex
+          image: ghcr.io/dexidp/dex:latest
+          command: ["/usr/local/bin/dex", "serve", "/etc/dex/cfg/config.yaml"]
+          env:
+            - name: DEX_CLIENT_CREDENTIAL_GRANT_ENABLED_BY_DEFAULT
+              value: "true"
+          ports:
+            - name: https
+              containerPort: 5556
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex/cfg
+            - name: tls
+              mountPath: /etc/dex/tls
+      volumes:
+        - name: config
+          configMap:
+            name: dex-config
+        - name: tls
+          secret:
+            secretName: dex-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: dex
+spec:
+  type: NodePort
+  selector:
+    app: dex
+  ports:
+    - name: https
+      port: 5556
+      targetPort: 5556
+      nodePort: ${DEX_NODE_PORT}

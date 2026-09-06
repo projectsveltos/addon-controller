@@ -222,6 +222,12 @@ TIMEOUT ?= 10m
 WORKLOAD_CLUSTER_YAML ?= test/$(WORKLOAD_CLUSTER_NAME).yaml
 NUM_NODES ?= 8
 
+# Used by create-cluster-oidc / fv-oidc. OIDC_CLIENT_SECRET is a test fixture, not a
+# real credential.
+DEX_NODE_PORT ?= 30556
+OIDC_CLIENT_ID ?= sveltos
+OIDC_CLIENT_SECRET ?= sveltos-fv-secret
+
 .PHONY: quickstart
 quickstart:  ## start kind cluster; install all cluster api components; create a capi cluster; install projectsveltos
 	$(MAKE) create-control-cluster
@@ -284,6 +290,42 @@ fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existin
 	@echo "Waiting for projectsveltos addon-controller to be available..."
 	$(KUBECTL) wait --for=condition=Available deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
+
+.PHONY: create-cluster-oidc
+create-cluster-oidc: $(KUBECTL) $(ENVSUBST) ## Deploy Dex and register the workload cluster as an OIDC SveltosCluster. Run once, right after create-cluster (not safe to re-run against the same cluster: it appends a patch to the ClusterClass).
+	@echo "Deploying Dex"
+	set -euo pipefail; \
+	DEX_NODE_IP=$$(docker inspect $(CONTROL_CLUSTER_NAME)-control-plane --format '{{.NetworkSettings.Networks.kind.IPAddress}}'); \
+	DEX_ISSUER_URL="https://$$DEX_NODE_IP:$(DEX_NODE_PORT)/dex"; \
+	export DEX_NODE_IP DEX_NODE_PORT="$(DEX_NODE_PORT)" DEX_ISSUER_URL OIDC_CLIENT_ID="$(OIDC_CLIENT_ID)" OIDC_CLIENT_SECRET="$(OIDC_CLIENT_SECRET)"; \
+	$(ENVSUBST) < test/oidc/dex.yaml | $(KUBECTL) apply -f -; \
+	$(KUBECTL) wait --for=condition=Ready certificate/dex-tls -n dex --timeout=60s; \
+	$(KUBECTL) rollout status deployment/dex -n dex --timeout=90s; \
+	\
+	echo "Trusting Dex as an OIDC issuer on the workload cluster's kube-apiserver"; \
+	DEX_CA_B64=$$($(KUBECTL) get secret dex-tls -n dex -o jsonpath='{.data.tls\.crt}'); \
+	export DEX_CA_B64; \
+	$(ENVSUBST) < test/oidc/clusterclass-patch.json > test/oidc/clusterclass-patch.json.tmp; \
+	$(KUBECTL) patch clusterclass quick-start -n default --type json --patch-file test/oidc/clusterclass-patch.json.tmp; \
+	rm -f test/oidc/clusterclass-patch.json.tmp; \
+	\
+	echo "Waiting for the workload cluster's control plane to roll out with the OIDC trust"; \
+	KCP=$$($(KUBECTL) get kubeadmcontrolplane -n default -l cluster.x-k8s.io/cluster-name=$(WORKLOAD_CLUSTER_NAME) -o jsonpath='{.items[0].metadata.name}'); \
+	sleep 15; \
+	$(KUBECTL) wait kubeadmcontrolplane $$KCP -n default --for='condition=RollingOut=False' --timeout=$(TIMEOUT); \
+	\
+	echo "Granting the OIDC identity cluster-admin on the workload cluster"; \
+	OIDC_CLIENT_ID="$(OIDC_CLIENT_ID)" $(ENVSUBST) < test/oidc/workload-rbac.yaml | $(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f -; \
+	\
+	echo "Registering the workload cluster as an OIDC SveltosCluster"; \
+	WORKLOAD_ENDPOINT="https://$$($(KUBECTL) get cluster $(WORKLOAD_CLUSTER_NAME) -n default -o jsonpath='{.spec.controlPlaneEndpoint.host}:{.spec.controlPlaneEndpoint.port}')"; \
+	WORKLOAD_APISERVER_CA_B64=$$($(KUBECTL) get secret $(WORKLOAD_CLUSTER_NAME)-ca -n default -o jsonpath='{.data.tls\.crt}'); \
+	export WORKLOAD_ENDPOINT WORKLOAD_APISERVER_CA_B64; \
+	$(ENVSUBST) < test/oidc/sveltoscluster.yaml | $(KUBECTL) apply -f -
+
+.PHONY: fv-oidc
+fv-oidc: $(KUBECTL) $(GINKGO) ## Run the OIDC workload identity FV test. Run after create-cluster and create-cluster-oidc.
+	cd test/fv; $(GINKGO) -nodes 1 --label-filter='OIDC' --v --trace
 
 .PHONY: create-cluster-infra
 create-cluster-infra: $(KIND) $(CLUSTERCTL) $(KUBECTL) ## Create cluster infrastructure without deploying Sveltos

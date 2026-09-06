@@ -1,0 +1,69 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/patches/-",
+    "value": {
+      "name": "dexOIDC",
+      "description": "Trusts the FV Dex instance as an OIDC issuer, for the OIDC workload identity FV test.",
+      "definitions": [
+        {
+          "selector": {
+            "apiVersion": "controlplane.cluster.x-k8s.io/v1beta2",
+            "kind": "KubeadmControlPlaneTemplate",
+            "matchResources": {
+              "controlPlane": true
+            }
+          },
+          "jsonPatches": [
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs/-",
+              "value": {"name": "oidc-issuer-url", "value": "${DEX_ISSUER_URL}"}
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs/-",
+              "value": {"name": "oidc-client-id", "value": "${OIDC_CLIENT_ID}"}
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs/-",
+              "value": {"name": "oidc-username-claim", "value": "aud"}
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs/-",
+              "value": {"name": "oidc-username-prefix", "value": "-"}
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraArgs/-",
+              "value": {"name": "oidc-ca-file", "value": "/etc/kubernetes/pki/dex-ca.crt"}
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/clusterConfiguration/apiServer/extraVolumes/-",
+              "value": {
+                "name": "dex-ca",
+                "hostPath": "/etc/kubernetes/pki/dex-ca.crt",
+                "mountPath": "/etc/kubernetes/pki/dex-ca.crt",
+                "pathType": "File",
+                "readOnly": true
+              }
+            },
+            {
+              "op": "add",
+              "path": "/spec/template/spec/kubeadmConfigSpec/files/-",
+              "value": {
+                "path": "/etc/kubernetes/pki/dex-ca.crt",
+                "permissions": "0644",
+                "encoding": "base64",
+                "content": "${DEX_CA_B64}"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

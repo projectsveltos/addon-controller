@@ -225,7 +225,7 @@ func instantiateTemplate(referencedObject client.Object, logger logr.Logger) boo
 	annotations := referencedObject.GetAnnotations()
 	if annotations != nil {
 		if _, ok := annotations[libsveltosv1beta1.PolicyTemplateAnnotation]; ok {
-			logger.V(logs.LogInfo).Info(fmt.Sprintf("referencedObject %s %s/%s is a template",
+			logger.V(logs.LogDebug).Info(fmt.Sprintf("referencedObject %s %s/%s is a template",
 				referencedObject.GetObjectKind().GroupVersionKind().Kind, referencedObject.GetNamespace(), referencedObject.GetName()))
 			return true
 		}

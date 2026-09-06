@@ -1,0 +1,16 @@
+# Grants the OIDC identity Sveltos authenticates as (the client_id itself, since the
+# apiserver is configured with --oidc-username-claim=aud --oidc-username-prefix=-) the
+# permissions Sveltos needs in the managed cluster. Applied with
+# --kubeconfig test/fv/workload_kubeconfig, i.e. against the workload cluster itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sveltos-oidc-workload-identity
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: User
+    name: "${OIDC_CLIENT_ID}"
+    apiGroup: rbac.authorization.k8s.io

@@ -408,6 +408,10 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				// See the matching comment in prepareForDeployment: surface it as a failure
+				// rather than leaving status wherever it last was.
+				r.setFailureMessage(clusterSummaryScope, err.Error())
+				r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
 				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
 			}
 			r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
@@ -557,6 +561,12 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 			err = r.removeResourceSummary(ctx, clusterSummaryScope, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to remove ResourceSummary.")
+				// Surface it as a failure so an ongoing connectivity or auth problem is
+				// visible in status instead of ClusterSummary silently sitting wherever it
+				// last was (often Provisioning) while this keeps failing every reconcile.
+				// Retriable: this is generally a transient condition that clears on its own.
+				r.setFailureMessage(clusterSummaryScope, err.Error())
+				r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
 				r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 				return reconcile.Result{RequeueAfter: normalRequeueAfter}
 			}

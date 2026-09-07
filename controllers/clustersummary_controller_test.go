@@ -494,6 +494,65 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(featureKustomizeVerified).To(BeTrue())
 	})
 
+	It("prepareForDeployment surfaces a removeResourceSummary failure in ClusterSummary status", func() {
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{
+				Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+		}
+		// No ResourceSummaryDeployed recorded yet: ShouldRemoveResourceSummary defaults to
+		// true, so prepareForDeployment attempts removeResourceSummary.
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+
+		// The outer BeforeEach (prepareForDeployment, the test helper) already created a
+		// working kubeconfig Secret for cluster, pointing at testEnv itself. Corrupt it: this
+		// makes removeResourceSummary fail with a real error, neither apierrors.IsNotFound nor
+		// meta.IsNoMatchError, matching an unreachable or misconfigured managed cluster rather
+		// than one that is simply absent.
+		kubeconfigSecret := &corev1.Secret{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name + kubeconfigPostfix},
+			kubeconfigSecret)).To(Succeed())
+		kubeconfigSecret.Data[testValueKey] = []byte("not a valid kubeconfig")
+		Expect(testEnv.Update(context.TODO(), kubeconfigSecret)).To(Succeed())
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         testEnv.Client,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:             testEnv.Client,
+			Scheme:             scheme,
+			Deployer:           nil,
+			ClusterMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:          sync.Mutex{},
+			NextReconcileTimes: make(map[types.NamespacedName]controllers.ReconcileCooldown),
+		}
+
+		controllers.PrepareForDeployment(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+
+		featureResourcesVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				featureResourcesVerified = true
+			}
+		}
+		Expect(featureResourcesVerified).To(BeTrue())
+	})
+
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{

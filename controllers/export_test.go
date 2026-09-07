@@ -74,6 +74,7 @@ var (
 	AreDependentsRemoved                 = (*ClusterSummaryReconciler).areDependentsRemoved
 	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
 	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
+	PrepareForDeployment                 = (*ClusterSummaryReconciler).prepareForDeployment
 
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference

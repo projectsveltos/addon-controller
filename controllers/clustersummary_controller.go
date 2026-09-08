@@ -430,6 +430,19 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 
+	// TransitionFrom support: do not undeploy this profile's resources on this cluster while
+	// a successor profile that currently matches this cluster and names this profile in
+	// TransitionFrom has not yet reached Provisioned. Lets the successor take over shared
+	// resources in place instead of undeploy-then-redeploy.
+	allProvisioned, transitionMsg, err := r.areSuccessorsProvisioned(ctx, clusterSummaryScope, logger)
+	if err != nil {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+	}
+	clusterSummaryScope.SetDependenciesMessage(&transitionMsg)
+	if !allProvisioned {
+		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+	}
+
 	// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
 	// in the management cluster and those need to be removed.
 	err = r.undeploy(ctx, clusterSummaryScope, logger)

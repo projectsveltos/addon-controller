@@ -124,6 +124,16 @@ type ProfileSpec struct {
 	// until all add-ons and applications in the profiles listed as dependencies are deployed.
 	DependsOn []string `json:"dependsOn,omitempty"`
 
+	// TransitionFrom names the Profiles or ClusterProfiles this instance replaces.
+	// For matching target clusters, teardown of the replaced profiles is deferred
+	// until this instance reaches Provisioned. This instance is also permitted to
+	// adopt resources owned by the replaced profiles, ignoring tier restrictions.
+	// Same-kind only: a ClusterProfile names other ClusterProfiles, a Profile names
+	// other Profiles in the same namespace.
+	// +listType=atomic
+	// +optional
+	TransitionFrom []string `json:"transitionFrom,omitempty"`
+
 	// PolicyRefs references all the ConfigMaps/Secrets/Flux Sources containing kubernetes resources
 	// that need to be deployed in the matching managed clusters.
 	// The values contained in those resources can be static or leverage Go templates for dynamic customization.

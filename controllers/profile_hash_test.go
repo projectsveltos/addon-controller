@@ -63,6 +63,7 @@ var _ = Describe("getProfileSpecHash slice-field coverage", func() {
 			"PatchesFrom":          true,
 			"DriftExclusions":      true,
 			"DependsOn":            true,
+			"TransitionFrom":       true,
 		}
 		// Slice fields whose element order is author-determined and therefore
 		// does not need normalisation to produce a stable hash.

@@ -683,7 +683,7 @@ func setAnnotationOnCluster(key, value string) {
 	Expect(err).To(BeNil())
 }
 
-func setLabelOnCluster(labelKey, labelValue string) {
+func setLabelOnCluster(labelValue string) {
 	var currentCluster client.Object
 
 	if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
@@ -706,7 +706,7 @@ func setLabelOnCluster(labelKey, labelValue string) {
 		if updatedLabels == nil {
 			updatedLabels = map[string]string{}
 		}
-		updatedLabels[labelKey] = labelValue
+		updatedLabels[key] = labelValue
 		currentCluster.SetLabels(updatedLabels)
 		return k8sClient.Update(context.TODO(), currentCluster)
 	})

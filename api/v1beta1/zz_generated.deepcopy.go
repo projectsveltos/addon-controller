@@ -1211,6 +1211,11 @@ func (in *ProfileSpec) DeepCopyInto(out *ProfileSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.TransitionFrom != nil {
+		in, out := &in.TransitionFrom, &out.TransitionFrom
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.PolicyRefs != nil {
 		in, out := &in.PolicyRefs, &out.PolicyRefs
 		*out = make([]PolicyRef, len(*in))
@@ -1430,6 +1435,11 @@ func (in *Spec) DeepCopyInto(out *Spec) {
 	}
 	if in.DependsOn != nil {
 		in, out := &in.DependsOn, &out.DependsOn
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.TransitionFrom != nil {
+		in, out := &in.TransitionFrom, &out.TransitionFrom
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

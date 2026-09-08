@@ -486,6 +486,7 @@ func deployUnstructured(ctx context.Context, deployingToMgmtCluster bool, destCo
 			profile,
 			profileTier,
 			referenceTier,
+			clusterSummary.Spec.ClusterProfileSpec.TransitionFrom,
 			logger,
 		)
 		if err != nil {
@@ -1725,6 +1726,7 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	gvks := tranformGroupVersionKindToString(deployedGVKs)
 
 	setters = append(setters, pullmode.WithTier(clusterSummary.Spec.ClusterProfileSpec.Tier),
+		pullmode.WithTransitionFrom(clusterSummary.Spec.ClusterProfileSpec.TransitionFrom),
 		pullmode.WithContinueOnConflict(clusterSummary.Spec.ClusterProfileSpec.ContinueOnConflict),
 		pullmode.WithContinueOnError(clusterSummary.Spec.ClusterProfileSpec.ContinueOnError),
 		pullmode.WithDeployedGVKs(gvks))

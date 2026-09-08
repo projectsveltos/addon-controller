@@ -1006,6 +1006,9 @@ func getProfileSpecHash(profileScope *scope.ProfileScope) []byte {
 	specCopy.DependsOn = make([]string, len(specCopy.DependsOn))
 	copy(specCopy.DependsOn, profileScope.GetSpec().DependsOn)
 	sort.Strings(specCopy.DependsOn)
+	specCopy.TransitionFrom = make([]string, len(specCopy.TransitionFrom))
+	copy(specCopy.TransitionFrom, profileScope.GetSpec().TransitionFrom)
+	sort.Strings(specCopy.TransitionFrom)
 
 	if data, err := json.Marshal(specCopy); err == nil {
 		h.Write(data)

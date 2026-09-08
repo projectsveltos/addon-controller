@@ -72,6 +72,9 @@ var (
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
 	AreDependentsRemoved                 = (*ClusterSummaryReconciler).areDependentsRemoved
+	AreSuccessorsProvisioned             = (*ClusterSummaryReconciler).areSuccessorsProvisioned
+	GetTransitionSuccessors              = (*ClusterSummaryReconciler).getTransitionSuccessors
+	IsChartTransitioningFrom             = isChartTransitioningFrom
 	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
 	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 	PrepareForDeployment                 = (*ClusterSummaryReconciler).prepareForDeployment

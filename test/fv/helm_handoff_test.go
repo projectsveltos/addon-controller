@@ -56,7 +56,7 @@ var _ = Describe("HelmHandoff", Serial, func() {
 
 	AfterEach(func() {
 		Byf("Restoring cluster label %s=%s", key, value)
-		setLabelOnCluster(key, value)
+		setLabelOnCluster(value)
 
 		if clusterProfileA != nil {
 			deleteClusterProfile(clusterProfileA)
@@ -136,7 +136,7 @@ var _ = Describe("HelmHandoff", Serial, func() {
 
 			Byf("Changing cluster label from %s=%s to %s=%s to trigger handoff",
 				key, value, key, handoffLabelValue)
-			setLabelOnCluster(key, handoffLabelValue)
+			setLabelOnCluster(handoffLabelValue)
 
 			Byf("Verifying dragonfly-operator deployment is never absent and never recreated during the handoff")
 			Consistently(func() error {

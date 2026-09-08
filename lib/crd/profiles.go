@@ -2115,6 +2115,18 @@ spec:
                 format: int32
                 minimum: 1
                 type: integer
+              transitionFrom:
+                description: |-
+                  TransitionFrom names the Profiles or ClusterProfiles this instance replaces.
+                  For matching target clusters, teardown of the replaced profiles is deferred
+                  until this instance reaches Provisioned. This instance is also permitted to
+                  adopt resources owned by the replaced profiles, ignoring tier restrictions.
+                  Same-kind only: a ClusterProfile names other ClusterProfiles, a Profile names
+                  other Profiles in the same namespace.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
               validateHealths:
                 description: |-
                   ValidateHealths is a slice of checks to run against the managed cluster

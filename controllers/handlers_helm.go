@@ -1566,7 +1566,9 @@ func determineChartOwnership(ctx context.Context, c client.Client, claimingHelmM
 			return false, err
 		}
 
-		if deployer.HasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) {
+		if deployer.HasHigherOwnershipPriority(currentHelmManager.Spec.ClusterProfileSpec.Tier, claimingHelmManager.Spec.ClusterProfileSpec.Tier) ||
+			isChartTransitioningFrom(currentHelmManager, claimingHelmManager) {
+
 			if claimingHelmManager.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
 				return true, nil
 			}

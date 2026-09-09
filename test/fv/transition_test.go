@@ -94,7 +94,7 @@ var _ = Describe("Transition", Serial, func() {
 	})
 
 	It("A shared resource is taken over and updated in place, and the predecessor's exclusive resource is still cleaned up",
-		Label("NEW-FV", "EXTENDED"), func() {
+		Label("NEW-FV", "NEW-FV-PULLMODE", "EXTENDED"), func() {
 			Byf("Create predecessor ClusterProfile matching Cluster %s/%s",
 				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
 			predecessor = getClusterProfile(namePrefix+"predecessor-", map[string]string{key: value})

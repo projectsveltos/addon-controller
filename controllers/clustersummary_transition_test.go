@@ -258,6 +258,65 @@ var _ = Describe("TransitionFrom", func() {
 		Expect(msg).To(ContainSubstring(successor.Name))
 	})
 
+	It("cleanupBeforeFinalizerRemoval marks featureSummaries Blocked while a matching successor is not yet Provisioned", func() {
+		// Same setup as the areSuccessorsProvisioned test above. This time going through
+		// cleanupBeforeFinalizerRemoval to check the caller does not leave featureSummaries frozen
+		// at whatever status they had when teardown was deferred (issue #1950).
+		successor := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterProfileNamePrefix + randomString()},
+			Spec: configv1beta1.Spec{
+				TransitionFrom: []string{predecessor.Name},
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{testDCLabelKey: testEngValue},
+					},
+				},
+			},
+		}
+		successorSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+			successor.Name, clusterName, false)
+		successorSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{Name: successorSummaryName, Namespace: namespace},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					PolicyRefs: []configv1beta1.PolicyRef{
+						{Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind), Namespace: namespace, Name: randomString()},
+					},
+				},
+			},
+			// No FeatureSummaries yet: not Provisioned.
+		}
+		successorSummary.Labels = map[string]string{
+			clusterops.ClusterProfileLabelName: successor.Name,
+			configv1beta1.ClusterNameLabel:     clusterName,
+			configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
+		}
+
+		predecessorSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind), Namespace: namespace, Name: randomString()},
+		}
+		predecessorSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioning},
+		}
+
+		reconciler := newReconciler(predecessorSummary, predecessor, cluster, successor, successorSummary)
+
+		// isDeleted: true skips the ResourceSummary-removal branch, which needs a real managed
+		// cluster connection; it plays no part in the gate this test is about.
+		_, err, done := controllers.CleanupBeforeFinalizerRemoval(reconciler, context.TODO(), newScope(reconciler),
+			true, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(done).To(BeTrue())
+
+		Expect(predecessorSummary.Status.FeatureSummaries).To(HaveLen(1))
+		Expect(predecessorSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusBlocked))
+		Expect(predecessorSummary.Status.Dependencies).ToNot(BeNil())
+		Expect(*predecessorSummary.Status.Dependencies).To(ContainSubstring(successor.Name))
+	})
+
 	It("areSuccessorsProvisioned proceeds once the matching successor is Provisioned", func() {
 		successor := &configv1beta1.ClusterProfile{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterProfileNamePrefix + randomString()},

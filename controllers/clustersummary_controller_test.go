@@ -1282,6 +1282,81 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(removed).To(BeTrue())
 	})
 
+	It("cleanupBeforeFinalizerRemoval marks featureSummaries Blocked while a dependent ClusterSummary still exists", func() {
+		// Same DependsOn setup as the areDependentsRemoved test above. This time going through
+		// cleanupBeforeFinalizerRemoval to check the caller does not leave featureSummaries frozen
+		// at whatever status they had when teardown was deferred (issue #1950).
+		dependentProfileName := randomString()
+		dependentSummaryName := clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind,
+			dependentProfileName, clusterName, false)
+		dependentSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      dependentSummaryName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					clusterops.ClusterProfileLabelName: dependentProfileName,
+					configv1beta1.ClusterNameLabel:     clusterName,
+					configv1beta1.ClusterTypeLabel:     string(libsveltosv1beta1.ClusterTypeCapi),
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+				ClusterProfileSpec: configv1beta1.Spec{
+					DependsOn: []string{clusterProfile.Name},
+				},
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind), Namespace: randomString(), Name: randomString()},
+		}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioning},
+		}
+
+		initObjects := []client.Object{
+			dependentSummary,
+			clusterSummary,
+			clusterProfile,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		addOwnerReference(context.TODO(), c, clusterSummary, clusterProfile)
+
+		deployer := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:       c,
+			Scheme:       scheme,
+			Deployer:     deployer,
+			ClusterMap:   make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap: make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:    sync.Mutex{},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		// isDeleted: true skips the ResourceSummary-removal branch, which needs a real managed
+		// cluster connection; it plays no part in the gate this test is about.
+		_, err, done := controllers.CleanupBeforeFinalizerRemoval(reconciler, context.TODO(), clusterSummaryScope,
+			true, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(done).To(BeTrue())
+
+		Expect(clusterSummary.Status.FeatureSummaries).To(HaveLen(1))
+		Expect(clusterSummary.Status.FeatureSummaries[0].Status).To(Equal(libsveltosv1beta1.FeatureStatusBlocked))
+		Expect(clusterSummary.Status.Dependencies).ToNot(BeNil())
+		Expect(*clusterSummary.Status.Dependencies).To(ContainSubstring(dependentSummaryName))
+	})
+
 	It("processUndeployError requeues with deleteRequeueAfter and no error for WaitForProfileProcessingError", func() {
 		initObjects := []client.Object{
 			clusterProfile,

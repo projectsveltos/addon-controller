@@ -400,6 +400,11 @@ func (r *ClusterSummaryReconciler) proceedDeployingFeatureInPullMode(ctx context
 		case libsveltosv1beta1.FeatureStatusFailedNonRetriable, libsveltosv1beta1.FeatureStatusRemoving,
 			libsveltosv1beta1.FeatureStatusAgentRemoving, libsveltosv1beta1.FeatureStatusRemoved:
 			logger.V(logs.LogDebug).Info("proceed deploying")
+		case libsveltosv1beta1.FeatureStatusBlocked:
+			// Blocked is set locally by cleanupBeforeFinalizerRemoval while a predecessor waits on a
+			// successor (TransitionFrom); the agent never reports it in a ConfigurationGroup, so this
+			// case is unreachable in practice. Listed only to satisfy exhaustive.
+			logger.V(logs.LogDebug).Info("proceed deploying")
 		}
 	} else {
 		provisioning := libsveltosv1beta1.FeatureStatusProvisioning
@@ -937,6 +942,11 @@ func (r *ClusterSummaryReconciler) updateFeatureStatus(clusterSummaryScope *scop
 		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusAgentRemoving, hash, nil)
 	case libsveltosv1beta1.FeatureStatusRemoving:
 		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusRemoving, hash, nil)
+	case libsveltosv1beta1.FeatureStatusBlocked:
+		// Not expected here: cleanupBeforeFinalizerRemoval sets Blocked directly via
+		// resetFeatureStatus, bypassing updateFeatureStatus. Handled the same way as the other
+		// non-terminal statuses above in case that ever changes.
+		clusterSummaryScope.SetFeatureStatus(featureID, libsveltosv1beta1.FeatureStatusBlocked, hash, nil)
 	case libsveltosv1beta1.FeatureStatusFailed, libsveltosv1beta1.FeatureStatusFailedNonRetriable:
 		failed := true
 		clusterSummaryScope.SetFeatureStatus(featureID, *status, hash, &failed)

@@ -427,6 +427,9 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 	}
 	clusterSummaryScope.SetDependenciesMessage(&dependentMsg)
 	if !allRemoved {
+		// Teardown is deferred, not in progress: reflect that in featureSummaries instead of
+		// leaving it frozen at whatever status it last had (e.g. a stale Provisioning).
+		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusBlocked)
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 
@@ -440,6 +443,8 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 	}
 	clusterSummaryScope.SetDependenciesMessage(&transitionMsg)
 	if !allProvisioned {
+		// Same as the DependsOn gate above: teardown is deferred, not in progress.
+		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusBlocked)
 		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 

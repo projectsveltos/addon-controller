@@ -70,6 +70,7 @@ var (
 	ShouldRedeploy                       = (*ClusterSummaryReconciler).shouldRedeploy
 	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
+	CleanupBeforeFinalizerRemoval        = (*ClusterSummaryReconciler).cleanupBeforeFinalizerRemoval
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
 	AreDependentsRemoved                 = (*ClusterSummaryReconciler).areDependentsRemoved
 	AreSuccessorsProvisioned             = (*ClusterSummaryReconciler).areSuccessorsProvisioned

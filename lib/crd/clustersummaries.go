@@ -2499,6 +2499,7 @@ spec:
                       - Removing
                       - Removed
                       - AgentRemoving
+                      - Blocked
                       type: string
                   required:
                   - featureID

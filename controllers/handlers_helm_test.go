@@ -1825,7 +1825,7 @@ resources:
 		credentialsBytes, err := json.Marshal(credentials)
 		Expect(err).To(BeNil())
 
-		// getCredentialsAndCAFiles reads these Secrets through getManagementClusterDirectClient(),
+		// getCredentialsAndCAFiles reads these Secrets through getManagementClusterClient(),
 		// which is backed by the shared envtest API server (see controllers_suite_test.go), not by
 		// the local fake client c built below. So they must be created via testEnv, not just added
 		// to initObjects.

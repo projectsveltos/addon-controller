@@ -287,11 +287,11 @@ var (
 )
 
 // SetManagementClusterConfigForTest overrides the cached management cluster rest.Config,
-// leaving managementClusterClient/managementClusterDirectClient untouched, and returns the
-// previous value so a test can restore it. Unlike SetManagementClusterAccess, this lets a
-// test break only the config the "local" (management cluster) undeploy pass builds its
-// discovery/dynamic clients from, without also breaking the direct client other code paths
-// (e.g. kubeconfig Secret reads for the "remote" pass) rely on.
+// leaving managementClusterClient untouched, and returns the previous value so a test can
+// restore it. Unlike SetManagementClusterAccess, this lets a test break only the config the
+// "local" (management cluster) undeploy pass builds its discovery/dynamic clients from,
+// without also breaking other code paths (e.g. kubeconfig Secret reads for the "remote" pass)
+// that go through managementClusterClient directly.
 func SetManagementClusterConfigForTest(config *rest.Config) *rest.Config {
 	old := managementClusterConfig
 	managementClusterConfig = config

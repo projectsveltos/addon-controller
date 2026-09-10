@@ -160,7 +160,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 		adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 		// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
 		// direct client rather than c.
-		remoteRestConfig, restErr := clustercache.GetManager().GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(),
+		remoteRestConfig, restErr := clustercache.GetManager().GetKubernetesRestConfig(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 		if restErr != nil {
@@ -280,7 +280,7 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
 	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
@@ -367,7 +367,7 @@ func undeployHelmCharts(ctx context.Context, c client.Client,
 
 	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
 	// direct client rather than c.
-	remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(),
+	remoteRestConfig, err := clustercache.GetManager().GetKubernetesRestConfig(ctx, getManagementClusterClient(),
 		clusterNamespace, clusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return err
@@ -1746,10 +1746,8 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 			return nil, err
 		}
 
-		// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
-		// use the direct client.
 		secret := &corev1.Secret{}
-		err = getManagementClusterDirectClient().Get(ctx,
+		err = getManagementClusterClient().Get(ctx,
 			types.NamespacedName{
 				Namespace: credentialSecretNamespace,
 				Name:      currentChart.RegistryCredentialsConfig.CredentialsSecretRef.Name,
@@ -2845,7 +2843,7 @@ func recoverRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 				requestedChart.ReleaseNamespace, secretName))
 
 		cacheMgr := clustercache.GetManager()
-		remoteClient, err := cacheMgr.GetKubernetesClient(ctx, getManagementClusterDirectClient(),
+		remoteClient, err := cacheMgr.GetKubernetesClient(ctx, getManagementClusterClient(),
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			"", "", clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
@@ -4894,10 +4892,8 @@ func createFileWithCredentials(ctx context.Context, c client.Client, clusterSumm
 		return "", err
 	}
 
-	// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
-	// use the direct client rather than c.
 	secret := &corev1.Secret{}
-	err = getManagementClusterDirectClient().Get(ctx,
+	err = getManagementClusterClient().Get(ctx,
 		types.NamespacedName{
 			Namespace: namespace,
 			Name:      credSecretRef.Name,
@@ -4952,10 +4948,8 @@ func createFileWithCA(ctx context.Context, c client.Client, clusterSummary *conf
 		return "", err
 	}
 
-	// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
-	// use the direct client rather than c.
 	secret := &corev1.Secret{}
-	err = getManagementClusterDirectClient().Get(ctx,
+	err = getManagementClusterClient().Get(ctx,
 		types.NamespacedName{
 			Namespace: namespace,
 			Name:      requestedChart.RegistryCredentialsConfig.CASecretRef.Name,

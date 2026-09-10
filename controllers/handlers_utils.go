@@ -743,7 +743,7 @@ func getClusterSummaryAndClusterClient(ctx context.Context, clusterNamespace, cl
 	adminNamespace, adminName := getClusterSummaryAdmin(clusterSummary)
 	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
 	// direct client rather than the c passed into this function.
-	clusterClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(), clusterSummary.Spec.ClusterNamespace,
+	clusterClient, err := clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterClient(), clusterSummary.Spec.ClusterNamespace,
 		clusterSummary.Spec.ClusterName, adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, nil, err
@@ -1422,7 +1422,7 @@ func getRestConfig(ctx context.Context, clusterSummary *configv1beta1.ClusterSum
 	// Kubeconfig Secret read: must bypass any Secret-cache scoping, so use the
 	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		return nil, logger, err
@@ -1732,12 +1732,12 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		pullmode.WithDeployedGVKs(gvks))
 
 	if includeDeployChecks {
-		preDeployCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+		preDeployCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterClient(),
 			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PreDeployChecks, logger)
 		if err != nil {
 			return nil, err
 		}
-		validateHealthJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+		validateHealthJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterClient(),
 			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.ValidateHealths, logger)
 		if err != nil {
 			return nil, err
@@ -1751,12 +1751,12 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	}
 
 	if includeDeleteChecks {
-		preDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+		preDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterClient(),
 			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PreDeleteChecks, logger)
 		if err != nil {
 			return nil, err
 		}
-		postDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterDirectClient(),
+		postDeleteCheckJobs, err := clusterops.ResolveJobChecksForPullMode(ctx, getManagementClusterClient(),
 			clusterSummary, clusterSummary.Spec.ClusterProfileSpec.PostDeleteChecks, logger)
 		if err != nil {
 			return nil, err
@@ -1897,7 +1897,7 @@ func getReloaderClient(ctx context.Context, clusterNamespace, clusterName string
 	// ResourceSummary is a Sveltos resource created in managed clusters.
 	// Sveltos resources are always created using cluster-admin so that admin does not need to be
 	// given such permissions.
-	return clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterDirectClient(),
+	return clustercache.GetManager().GetKubernetesClient(ctx, getManagementClusterClient(),
 		clusterNamespace, clusterName, "", "", clusterType, logger)
 }
 
@@ -2004,7 +2004,7 @@ func validatePreDeployChecks(ctx context.Context, c client.Client, clusterSummar
 	// direct client rather than c.
 	cacheMgr := clustercache.GetManager()
 
-	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterDirectClient(), clusterNamespace, clusterName,
+	remoteRestConfig, err := cacheMgr.GetKubernetesRestConfig(ctx, getManagementClusterClient(), clusterNamespace, clusterName,
 		adminNamespace, adminName, clusterType, logger)
 	if err != nil {
 		return err

@@ -299,11 +299,10 @@ var _ = Describe("HandlersResource", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		// Break only the rest.Config the local (management cluster) cleanup pass builds its
-		// discovery/dynamic client from. managementClusterClient/managementClusterDirectClient
-		// are left untouched, so the remote pass - which resolves its own client independently,
-		// from the kubeconfig Secret created in BeforeEach - keeps working. That is what lets
-		// this test tell the two passes apart: the local pass must fail while the remote pass
-		// succeeds.
+		// discovery/dynamic client from. managementClusterClient is left untouched, so the
+		// remote pass - which resolves its own client independently, from the kubeconfig Secret
+		// created in BeforeEach - keeps working. That is what lets this test tell the two passes
+		// apart: the local pass must fail while the remote pass succeeds.
 		brokenConfig := rest.CopyConfig(testEnv.Config)
 		brokenConfig.Host = "https://127.0.0.1:1"
 		brokenConfig.Timeout = 2 * time.Second

@@ -203,14 +203,8 @@ func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]ca
 	disableFor = []client.Object{}
 	byObject = map[client.Object]cache.ByObject{}
 
-	// Only Secrets of type addons.projectsveltos.io/cluster-profile (policyRefs) are ever read
-	// through a cached client. Every other Secret read in this codebase - kubeconfigs, Helm
-	// registry credentials/CA, cosign/GPG verification keys - goes through
-	// getManagementClusterDirectClient(), which always bypasses the cache. So this scoping is
-	// safe unconditionally, not just when --disable-secret-caching is set, and Secret is
-	// deliberately left out of disableFor below: the (now permanently scoped) cache is safe and
-	// cheaper than forcing every Secret read live.
-	fieldSelector := fields.OneTermEqualSelector("type", string(libsveltosv1beta1.ClusterProfileSecretType))
+	// Cache every Secret except Helm's own release-history storage (type helm.sh/release.v1).
+	fieldSelector := fields.OneTermNotEqualSelector("type", "helm.sh/release.v1")
 	byObject[&corev1.Secret{}] = cache.ByObject{
 		Field: fieldSelector,
 	}

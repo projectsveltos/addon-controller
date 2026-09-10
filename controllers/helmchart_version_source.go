@@ -64,10 +64,8 @@ func resolveChartCredentials(ctx context.Context, secretRef *corev1.SecretRefere
 		return "", "", nil
 	}
 
-	// Not a ClusterProfileSecretType Secret, so it is never in the (possibly scoped) cache;
-	// use the direct client rather than c.
 	secret := &corev1.Secret{}
-	if getErr := getManagementClusterDirectClient().Get(ctx,
+	if getErr := getManagementClusterClient().Get(ctx,
 		types.NamespacedName{Namespace: secretRef.Namespace, Name: secretRef.Name}, secret); getErr != nil {
 		return "", "", getErr
 	}

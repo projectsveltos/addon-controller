@@ -327,12 +327,7 @@ func collectResourceSummariesFromCluster(ctx context.Context, c client.Client, c
 			return nil
 		}
 
-		// When !isAgentInMgmtMode, IsDriftDetectionVersionCompatible internally calls
-		// clusterproxy.GetKubernetesClient to build a client for the managed cluster, which
-		// reads its kubeconfig Secret (e.g. the CAPI type=cluster.x-k8s.io/secret Secret) - not
-		// a ClusterProfileSecretType Secret, so it must never be read through the (possibly
-		// scoped) cached client.
-		if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterDirectClient(), getSveltosNamespace(), version,
+		if !sveltos_upgrade.IsDriftDetectionVersionCompatible(ctx, getManagementClusterClient(), getSveltosNamespace(), version,
 			cluster.Namespace, cluster.Name, clusterproxy.GetClusterType(clusterRef), getAgentInMgmtCluster(), logger) {
 
 			msg := "compatibility checks failed"

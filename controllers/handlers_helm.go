@@ -5429,6 +5429,16 @@ func getInstantiatedChart(ctx context.Context, dCtx *deploymentContext,
 	// Create a deep copy of the chart to avoid modifying the original.
 	instantiatedChart := currentChart.DeepCopy()
 
+	// Values are deliberately left out of the instantiation below: they are templated by
+	// getHelmChartInstantiatedValues at the point of use (install/upgrade/hash). This method
+	// is also called on paths that only need the chart identity (chartManager registration,
+	// uninstall): failing those paths on values that are not valid Sveltos templates (e.g.
+	// helm-style {{ .Values.x }} placeholders meant for the chart's own tpl rendering) would
+	// permanently wedge undeploy of every chart in the profile and, through
+	// allMatchingProfilesProcessed, block helm uninstalls of other profiles on the cluster.
+	values := instantiatedChart.Values
+	instantiatedChart.Values = ""
+
 	// Call the new recursive helper function to instantiate all fields.
 	if err := instantiateStructFields(ctx, getManagementClusterConfig(), getManagementClusterClient(),
 		instantiatedChart, dCtx.clusterSummary, dCtx.clusterObjects, dCtx.mgmtResources, logger); err != nil {
@@ -5436,6 +5446,8 @@ func getInstantiatedChart(ctx context.Context, dCtx *deploymentContext,
 		logger.V(logs.LogInfo).Info(msg)
 		return nil, &configv1beta1.TemplateInstantiationError{Message: msg}
 	}
+
+	instantiatedChart.Values = values
 
 	return instantiatedChart, nil
 }

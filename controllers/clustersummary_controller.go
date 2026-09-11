@@ -195,7 +195,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.skipReconciliation(clusterSummaryScope, req) {
 		logger.V(logs.LogInfo).Info("ignore update")
-		return reconcile.Result{Requeue: true, RequeueAfter: r.remainingCooldown(clusterSummaryScope, req)}, nil
+		return reconcile.Result{RequeueAfter: r.remainingCooldown(clusterSummaryScope, req)}, nil
 	}
 
 	var isMatch bool
@@ -204,7 +204,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		msg := err.Error()
 		logger.Error(err, msg)
 		clusterSummary.Status.FailureMessage = &msg
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	} else if !isMatch {
 		// This addon-controller pod is not a shard match, yet we need to refresh internal state by:
 		// - removing any helm chart registration made by this ClusterSummary
@@ -218,7 +218,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		msg := err.Error()
 		logger.Error(err, msg)
 		clusterSummary.Status.FailureMessage = &msg
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterSummary
@@ -249,7 +249,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		msg := err.Error()
 		logger.Error(err, msg)
 		clusterSummaryScope.ClusterSummary.Status.FailureMessage = &msg
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 	if !proceed {
 		return reconcile.Result{}, nil
@@ -329,13 +329,13 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// If Sveltos/Cluster is not found, there is nothing to clean up.
 	isPresent, isDeleted, err := r.isClusterPresent(ctx, clusterSummaryScope)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 	if isPresent && isReady { // if cluster is not ready, do not try to clean up. It would fail.
 		if result, cleanupErr, done := r.cleanupBeforeFinalizerRemoval(ctx, clusterSummaryScope, isDeleted, logger); done {
@@ -347,14 +347,14 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		// ready. Wait for it rather than falling through to removeFinalizer below with nothing
 		// actually cleaned up - that would orphan whatever was previously deployed.
 		logger.V(logs.LogInfo).Info("cluster is not ready yet. Do not remove finalizer.")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// If cluster is not present anymore or is it marked for deletion
 	if !isPresent || isDeleted {
 		err = r.handleDeletedCluster(ctx, clusterSummaryScope, logger)
 		if err != nil {
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 		}
 	}
 
@@ -412,7 +412,7 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 				// rather than leaving status wherever it last was.
 				r.setFailureMessage(clusterSummaryScope, err.Error())
 				r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailed)
-				return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+				return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 			}
 			r.markResourceSummaryRemovedForAllFeatures(clusterSummaryScope)
 		}
@@ -423,14 +423,14 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 	// requires it.
 	allRemoved, dependentMsg, err := r.areDependentsRemoved(ctx, clusterSummaryScope, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 	clusterSummaryScope.SetDependenciesMessage(&dependentMsg)
 	if !allRemoved {
 		// Teardown is deferred, not in progress: reflect that in featureSummaries instead of
 		// leaving it frozen at whatever status it last had (e.g. a stale Provisioning).
 		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusBlocked)
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 
 	// TransitionFrom support: do not undeploy this profile's resources on this cluster while
@@ -439,13 +439,13 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 	// resources in place instead of undeploy-then-redeploy.
 	allProvisioned, transitionMsg, err := r.areSuccessorsProvisioned(ctx, clusterSummaryScope, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 	clusterSummaryScope.SetDependenciesMessage(&transitionMsg)
 	if !allProvisioned {
 		// Same as the DependsOn gate above: teardown is deferred, not in progress.
 		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusBlocked)
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 
 	// still call undeploy even if cluster is deleted. Sveltos might have deployed resources
@@ -458,7 +458,7 @@ func (r *ClusterSummaryReconciler) cleanupBeforeFinalizerRemoval(ctx context.Con
 
 	if !r.canRemoveFinalizer(ctx, clusterSummaryScope, logger) {
 		logger.V(logs.LogInfo).Error(err, "cannot remove finalizer yet")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil, true
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil, true
 	}
 
 	return reconcile.Result{}, nil, false
@@ -511,7 +511,7 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 
 	if !isEligible {
 		r.updateStatusWithMissingLicenseError(clusterSummaryScope, logger)
-		return reconcile.Result{Requeue: true, RequeueAfter: licenseRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: licenseRequeueAfter}, nil
 	}
 
 	updateMapErrs := r.updateMaps(ctx, clusterSummaryScope, logger)
@@ -616,7 +616,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 					clusterSummary.Spec.ClusterName, conflictErr.Error())
 			}
 			r.setNextReconcileTime(clusterSummaryScope, r.ConflictRetryTime)
-			return reconcile.Result{Requeue: true, RequeueAfter: r.ConflictRetryTime}, nil
+			return reconcile.Result{RequeueAfter: r.ConflictRetryTime}, nil
 		}
 
 		var healthCheckError *clusterops.HealthCheckError
@@ -628,7 +628,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 				"reason", healthCheckError.InternalErr.Error(),
 				"requeueAfter", r.HealthErrorRetryTime.String())
 			r.setNextReconcileTime(clusterSummaryScope, r.HealthErrorRetryTime)
-			return reconcile.Result{Requeue: true, RequeueAfter: r.HealthErrorRetryTime}, nil
+			return reconcile.Result{RequeueAfter: r.HealthErrorRetryTime}, nil
 		}
 
 		requeueAfter := normalRequeueAfter
@@ -671,7 +671,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 
 		logger.V(logs.LogInfo).Error(err, "failed to deploy")
 		r.setNextReconcileTime(clusterSummaryScope, requeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
+		return reconcile.Result{RequeueAfter: requeueAfter}, nil
 	}
 
 	logger.V(logs.LogDebug).Info("Reconciling ClusterSummary success")
@@ -680,7 +680,7 @@ func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Co
 		r.resetFeatureStatusToProvisioning(clusterSummaryScope)
 		// we need to keep retrying in DryRun ClusterSummaries
 		r.setNextReconcileTime(clusterSummaryScope, dryRunRequeueAfter)
-		return reconcile.Result{Requeue: true, RequeueAfter: dryRunRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: dryRunRequeueAfter}, nil
 	}
 
 	// If any PolicyRef or KustomizationRef uses a URL source, schedule a periodic
@@ -2161,31 +2161,31 @@ func (r *ClusterSummaryReconciler) processUndeployError(clusterSummaryScope *sco
 	var waitError *configv1beta1.WaitForProfileProcessingError
 	if errors.As(undeployError, &waitError) {
 		logger.V(logs.LogDebug).Info("waiting for other profiles to process charts", "message", waitError.Message)
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	// In DryRun mode it is expected to always get an error back
 	if !clusterSummaryScope.IsDryRunSync() {
 		logger.V(logs.LogInfo).Error(undeployError, "failed to undeploy")
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 	}
 
 	var nonRetriableError *configv1beta1.NonRetriableError
 	if errors.As(undeployError, &nonRetriableError) {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteHandOverRequeueAfter}, nil
 	}
 
 	var templateError *configv1beta1.TemplateInstantiationError
 	if errors.As(undeployError, &templateError) {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteHandOverRequeueAfter}, nil
+		return reconcile.Result{RequeueAfter: deleteHandOverRequeueAfter}, nil
 	}
 
 	var healthCheckError *clusterops.HealthCheckError
 	if errors.As(undeployError, &healthCheckError) {
-		return reconcile.Result{Requeue: true, RequeueAfter: r.HealthErrorRetryTime}, nil
+		return reconcile.Result{RequeueAfter: r.HealthErrorRetryTime}, nil
 	}
 
-	return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}, nil
+	return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
 }
 
 // getPatchesFrom gets referenced ConfigMap/Secret in a PatchesFrom.

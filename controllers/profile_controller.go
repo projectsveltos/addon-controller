@@ -180,7 +180,7 @@ func (r *ProfileReconciler) reconcileDelete(
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
 		configv1beta1.ProfileFinalizer, logger); err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}
 	}
 
 	r.cleanMaps(profileScope)
@@ -198,26 +198,26 @@ func (r *ProfileReconciler) reconcileNormal(
 
 	if !controllerutil.ContainsFinalizer(profileScope.Profile, configv1beta1.ProfileFinalizer) {
 		if err := addFinalizer(ctx, profileScope, configv1beta1.ProfileFinalizer); err != nil {
-			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+			return reconcile.Result{RequeueAfter: normalRequeueAfter}
 		}
 	}
 
 	depManager, err := dependencymanager.GetManagerInstance()
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	// Limit the search of matching cluster to the Profile namespace
 	matchingCluster, err := getMatchingClusters(ctx, r.Client, profileScope.Profile.GetNamespace(),
 		profileScope.GetSelector(), profileScope.GetSpec().ClusterRefs, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	// Get all clusters from referenced Sets
 	clusterSetClusters, err := r.getClustersFromSets(ctx, profileScope.Namespace(), profileScope.GetSpec().SetRefs, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 	matchingCluster = append(matchingCluster, clusterSetClusters...)
 
@@ -234,7 +234,7 @@ func (r *ProfileReconciler) reconcileNormal(
 	r.updateMaps(profileScope)
 
 	if err := reconcileNormalCommon(ctx, r.Client, profileScope, logger); err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	logger.V(logs.LogDebug).Info("Reconcile success")

@@ -152,13 +152,13 @@ func (r *ClusterPromotionReconciler) reconcileDelete(
 	if !promotionScope.ClusterPromotion.Spec.PreserveClusterProfilesOnDelete {
 		if err := r.cleanClusterProfiles(ctx, promotionScope.ClusterPromotion); err != nil {
 			promotionScope.V(logs.LogInfo).Error(err, "failed to clean ClusterProfiles")
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}
 		}
 
 		if !r.allClusterProfilesGone(ctx, promotionScope.ClusterPromotion, promotionScope.Logger) {
 			msg := "not all ClusterProfiles are gone"
 			promotionScope.V(logs.LogInfo).Info(msg)
-			return reconcile.Result{Requeue: true, RequeueAfter: deleteRequeueAfter}
+			return reconcile.Result{RequeueAfter: deleteRequeueAfter}
 		}
 	}
 
@@ -183,7 +183,7 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 	if !controllerutil.ContainsFinalizer(promotionScope.ClusterPromotion, configv1beta1.ClusterPromotionFinalizer) {
 		if err := r.addFinalizer(ctx, promotionScope); err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to add finalizer")
-			return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+			return reconcile.Result{RequeueAfter: normalRequeueAfter}
 		}
 	}
 

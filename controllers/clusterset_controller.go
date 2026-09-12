@@ -138,14 +138,14 @@ func (r *ClusterSetReconciler) reconcileNormal(
 	matchingCluster, err := getMatchingClusters(ctx, r.Client, "", setScope.GetSelector(),
 		setScope.GetSpec().ClusterRefs, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	setScope.SetMatchingClusterRefs(matchingCluster)
 
 	err = selectClusters(ctx, r.Client, setScope, logger)
 	if err != nil {
-		return reconcile.Result{Requeue: true, RequeueAfter: normalRequeueAfter}
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}
 
 	r.updateMaps(setScope)

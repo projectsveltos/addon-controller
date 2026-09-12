@@ -369,13 +369,14 @@ func (m *manager) startWatcher(ctx context.Context, gvk *schema.GroupVersionKind
 
 	logger.V(logs.LogInfo).Info("start watcher")
 
-	lw, err := m.getListerWatcher(ctx, gvk)
+	lw, err := m.getListerWatcher(gvk)
 	if err != nil {
 		logger.Error(err, "Failed to get lister watcher")
 		return err
 	}
 
-	watcherCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is stored in m.watchers and called when the watcher is stopped
+	// cancel is stored in m.watchers and called when the watcher is stopped.
+	watcherCtx, cancel := context.WithCancel(ctx)
 	m.watchers[*gvk] = cancel
 
 	// Nothing here ever reads a resource back out of this watcher: react() below only needs
@@ -396,7 +397,7 @@ func (m *manager) startWatcher(ctx context.Context, gvk *schema.GroupVersionKind
 
 // getListerWatcher returns a cache.ListerWatcher scoped to gvk's resource, cluster-wide -
 // matching the scope the previous SharedIndexInformer-based watcher used.
-func (m *manager) getListerWatcher(ctx context.Context, gvk *schema.GroupVersionKind) (cache.ListerWatcher, error) {
+func (m *manager) getListerWatcher(gvk *schema.GroupVersionKind) (cache.ListerWatcher, error) {
 	d, err := dynamic.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
@@ -424,10 +425,10 @@ func (m *manager) getListerWatcher(ctx context.Context, gvk *schema.GroupVersion
 	resourceClient := d.Resource(resourceId)
 
 	return &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			return resourceClient.List(ctx, options)
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			return resourceClient.Watch(ctx, options)
 		},
 	}, nil

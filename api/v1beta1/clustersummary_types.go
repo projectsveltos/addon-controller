@@ -328,7 +328,7 @@ func GetProfileRef(clusterSummary *ClusterSummary) (*corev1.ObjectReference, err
 // GetProfileOwnerAndTier returns the (Cluster)Profile owning this clusterSummary and its tier.
 // Returns nil if (Cluster)Profile does not exist anymore.
 func GetProfileOwnerAndTier(ctx context.Context, c client.Client, clusterSummary *ClusterSummary,
-) (client.Object, int32, error) {
+) (profileOwner client.Object, tier int32, err error) {
 
 	for _, ref := range clusterSummary.OwnerReferences {
 		gv, err := schema.ParseGroupVersion(ref.APIVersion)

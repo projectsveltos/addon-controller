@@ -141,7 +141,7 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 				clusterObjects: clusterObjects,
 				mgmtResources:  mgmtResources,
 			}
-			instantiatedChart, err := getInstantiatedChart(ctx, innerDCtx, helmChart, logger)
+			instantiatedChart, err := getInstantiatedChartIdentity(ctx, innerDCtx, helmChart, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to get instantiated chart")
 				return err

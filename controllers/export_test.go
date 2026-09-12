@@ -157,7 +157,7 @@ var (
 	UpdateValueHashOnHelmChartSummary        = updateValueHashOnHelmChartSummary
 	DesiredValuesAreSubset                   = desiredValuesAreSubset
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
-	GetInstantiatedChart                     = getInstantiatedChart
+	GetInstantiatedChartIdentity             = getInstantiatedChartIdentity
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
 	GetHelmChartInstantiatedValues           = getHelmChartInstantiatedValues
 	LocateChartWithTimeout                   = locateChartWithTimeout

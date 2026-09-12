@@ -1236,7 +1236,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(report.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
 	})
 
-	It("getInstantiatedChart returns instantiated HelmChart matching passed in chart", func() {
+	It("getInstantiatedChartIdentity returns instantiated HelmChart matching passed in chart", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
 			ChartName: randomString(), ChartVersion: randomString(),
@@ -1265,7 +1265,7 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -1278,7 +1278,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(instaniatedChart.ChartVersion).To(Equal(helmChart.ChartVersion))
 	})
 
-	It("getInstantiatedChart returns instantiated HelmChart", func() {
+	It("getInstantiatedChartIdentity returns instantiated HelmChart", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
 			ChartName: randomString(), RepositoryURL: randomString(),
@@ -1316,7 +1316,7 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -1329,7 +1329,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(instaniatedChart.ChartVersion).To(Equal("25.0.2"))
 	})
 
-	It("getInstantiatedChart leaves Values alone even when they are not a valid Sveltos template", func() {
+	It("getInstantiatedChartIdentity leaves Values alone even when they are not a valid Sveltos template", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
 			ChartName: randomString(), ChartVersion: randomString(),
@@ -1366,7 +1366,7 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())

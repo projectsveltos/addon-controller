@@ -2249,7 +2249,7 @@ func getClusterSummaryWithInstantiatedCharts(ctx context.Context, cs *configv1be
 
 	for i := range cs.Spec.ClusterProfileSpec.HelmCharts {
 		helmChart := &cs.Spec.ClusterProfileSpec.HelmCharts[i]
-		instantiateHelmChart, err := getInstantiatedChart(ctx, innerDCtx, helmChart, logger)
+		instantiateHelmChart, err := getInstantiatedChartIdentity(ctx, innerDCtx, helmChart, logger)
 		if err != nil {
 			return nil, err
 		}

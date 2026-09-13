@@ -39,6 +39,7 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 var _ = Describe("ResourceSummary Deployer", func() {
@@ -95,6 +96,17 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		clusterName := randomString()
 		clusterType := libsveltosv1beta1.ClusterTypeSveltos
 
+		// The version ConfigMap is created in clusterNamespace itself (matching a real CAPI/Sveltos
+		// cluster's namespace), so it needs to actually exist for that Create to pass namespace
+		// admission.
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterNamespace,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
 		Expect(controllers.DeployDriftDetectionManagerInManagementCluster(context.TODO(), testEnv.Config,
 			clusterNamespace, clusterName, "", clusterType, nil, nil,
 			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
@@ -124,6 +136,24 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			return false
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Expect(sveltos_upgrade.StoreDriftDetectionVersion(context.TODO(), testEnv.Client, sveltosNamespace, "v1.0.0",
+			clusterNamespace, clusterName, clusterType, true,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		var versionConfigMap corev1.ConfigMap
+		Eventually(func() bool {
+			versionConfigMaps := &corev1.ConfigMapList{}
+			err := testEnv.List(context.TODO(), versionConfigMaps, client.InNamespace(clusterNamespace), client.MatchingLabels{
+				sveltos_upgrade.ClusterNameLabel: clusterName,
+				sveltos_upgrade.ClusterTypeLabel: strings.ToLower(string(clusterType)),
+			})
+			if err != nil || len(versionConfigMaps.Items) != 1 {
+				return false
+			}
+			versionConfigMap = versionConfigMaps.Items[0]
+			return true
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		Expect(controllers.RemoveDriftDetectionManagerFromManagementCluster(context.TODO(), clusterNamespace, clusterName,
 			clusterType, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 
@@ -141,6 +171,15 @@ var _ = Describe("ResourceSummary Deployer", func() {
 				}
 			}
 			return true
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		// Verify the version ConfigMap is gone too - it isn't owned by the Deployment,
+		// so nothing else would ever remove it
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: versionConfigMap.Namespace, Name: versionConfigMap.Name},
+				&corev1.ConfigMap{})
+			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 

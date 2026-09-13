@@ -46,6 +46,7 @@ import (
 	"github.com/projectsveltos/libsveltos/lib/patcher"
 	pullmode "github.com/projectsveltos/libsveltos/lib/pullmode"
 	"github.com/projectsveltos/libsveltos/lib/randutils"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 const (
@@ -714,6 +715,15 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete resource %s:%s/%s: %v",
 				policy.GetKind(), policy.GetNamespace(), policy.GetName(), err))
 		}
+	}
+
+	// Propagate the error here (unlike the deletes in the loop above): the caller turns this
+	// into a requeue, so it gets retried via the reconciler instead of leaving the version
+	// ConfigMap behind for good.
+	if err := sveltos_upgrade.DeleteDriftDetectionVersion(ctx, getManagementClusterClient(), getSveltosNamespace(),
+		clusterNamespace, clusterName, clusterType, true, logger); err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete driftDetection version configMap: %v", err))
+		return err
 	}
 
 	return nil

@@ -1236,7 +1236,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(report.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
 	})
 
-	It("getInstantiatedChart returns instantiated HelmChart matching passed in chart", func() {
+	It("getInstantiatedChartIdentity returns instantiated HelmChart matching passed in chart", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
 			ChartName: randomString(), ChartVersion: randomString(),
@@ -1265,7 +1265,7 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -1278,7 +1278,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(instaniatedChart.ChartVersion).To(Equal(helmChart.ChartVersion))
 	})
 
-	It("getInstantiatedChart returns instantiated HelmChart", func() {
+	It("getInstantiatedChartIdentity returns instantiated HelmChart", func() {
 		helmChart := &configv1beta1.HelmChart{
 			ReleaseName: randomString(), ReleaseNamespace: randomString(),
 			ChartName: randomString(), RepositoryURL: randomString(),
@@ -1316,7 +1316,7 @@ var _ = Describe("HandlersHelm", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
-		instaniatedChart, err := controllers.GetInstantiatedChart(context.TODO(),
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
 			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
@@ -1327,6 +1327,52 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(instaniatedChart.RepositoryName).To(Equal(helmChart.RepositoryName))
 		Expect(instaniatedChart.HelmChartAction).To(Equal(helmChart.HelmChartAction))
 		Expect(instaniatedChart.ChartVersion).To(Equal("25.0.2"))
+	})
+
+	It("getInstantiatedChartIdentity leaves Values alone even when they are not a valid Sveltos template", func() {
+		helmChart := &configv1beta1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			ChartName: randomString(), ChartVersion: randomString(),
+			RepositoryURL: randomString(), RepositoryName: randomString(),
+			HelmChartAction: configv1beta1.HelmChartActionInstall,
+			// Helm-style placeholders meant for the chart's own tpl rendering. They are not
+			// valid Sveltos templates (.Values does not exist in the Sveltos template context):
+			// instantiating them here used to fail and wedge chart registration and uninstall.
+			Values: `config:
+  service: |
+    [SERVICE]
+        Flush {{ .Values.flush }}
+        Log_Level {{ .Values.logLevel }}`,
+		}
+
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterSummary.Spec.ClusterName,
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+			},
+		}
+
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		clusterObjects, err := controllers.FetchClusterObjects(context.TODO(), testEnv.Config, testEnv.Client,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.ClusterTypeCapi,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		instaniatedChart, err := controllers.GetInstantiatedChartIdentity(context.TODO(),
+			controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil), helmChart,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(instaniatedChart.Values).To(Equal(helmChart.Values))
+		Expect(instaniatedChart.ReleaseName).To(Equal(helmChart.ReleaseName))
+		Expect(instaniatedChart.ReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
 	})
 
 	It("updateClusterReportWithHelmReports updates ClusterReports with HelmReports", func() {

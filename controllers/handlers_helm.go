@@ -514,7 +514,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
-		instantiatedChart, err := getInstantiatedChart(ctx, dCtx, currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 		if err != nil {
 			return err
 		}
@@ -966,7 +966,7 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
-		instantiatedChart, err := getInstantiatedChart(ctx, dCtx, currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -1271,7 +1271,7 @@ func deploySingleChart(ctx context.Context, c client.Client, dCtx *deploymentCon
 	currentChart *configv1beta1.HelmChart, kubeconfig string, isPullMode bool,
 	logger logr.Logger) (*chartStepResult, error) {
 
-	instantiatedChart, err := getInstantiatedChart(ctx, dCtx, currentChart, logger)
+	instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -3219,7 +3219,7 @@ func buildReferencedHelmReleaseSummaries(ctx context.Context, c client.Client,
 	for i := range currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &currentClusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
-		instantiatedChart, err := getInstantiatedChart(ctx, dCtx, currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 		if err != nil {
 			return nil, false, err
 		}
@@ -3349,7 +3349,7 @@ func updateStatusForNonReferencedHelmReleases(ctx context.Context, c client.Clie
 
 	for i := range dCtx.clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := dCtx.clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		instantiatedChart, err := getInstantiatedChart(ctx, dCtx, &currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, &currentChart, logger)
 		if err != nil {
 			return dCtx.clusterSummary, err
 		}
@@ -3593,7 +3593,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
 
-		instantiatedChart, err := getInstantiatedChart(ctx, innerDCtx, currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, innerDCtx, currentChart, logger)
 		if err != nil {
 			return nil, err
 		}
@@ -5423,11 +5423,21 @@ func generateReportForSameVersion(ctx context.Context, currentValues map[string]
 	return report, nil
 }
 
-func getInstantiatedChart(ctx context.Context, dCtx *deploymentContext,
+func getInstantiatedChartIdentity(ctx context.Context, dCtx *deploymentContext,
 	currentChart *configv1beta1.HelmChart, logger logr.Logger) (*configv1beta1.HelmChart, error) {
 
 	// Create a deep copy of the chart to avoid modifying the original.
 	instantiatedChart := currentChart.DeepCopy()
+
+	// Values are deliberately left out of the instantiation below: they are templated by
+	// getHelmChartInstantiatedValues at the point of use (install/upgrade/hash). This method
+	// is also called on paths that only need the chart identity (chartManager registration,
+	// uninstall): failing those paths on values that are not valid Sveltos templates (e.g.
+	// helm-style {{ .Values.x }} placeholders meant for the chart's own tpl rendering) would
+	// permanently wedge undeploy of every chart in the profile and, through
+	// allMatchingProfilesProcessed, block helm uninstalls of other profiles on the cluster.
+	values := instantiatedChart.Values
+	instantiatedChart.Values = ""
 
 	// Call the new recursive helper function to instantiate all fields.
 	if err := instantiateStructFields(ctx, getManagementClusterConfig(), getManagementClusterClient(),
@@ -5436,6 +5446,8 @@ func getInstantiatedChart(ctx context.Context, dCtx *deploymentContext,
 		logger.V(logs.LogInfo).Info(msg)
 		return nil, &configv1beta1.TemplateInstantiationError{Message: msg}
 	}
+
+	instantiatedChart.Values = values
 
 	return instantiatedChart, nil
 }
@@ -5927,7 +5939,7 @@ func getStaleReleases(ctx context.Context, c client.Client, clusterSummary *conf
 	currentlyReferencedReleases := make(map[string]bool)
 	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
 		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
-		instantiatedChart, err := getInstantiatedChart(ctx, dCtx, currentChart, logger)
+		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 		if err != nil {
 			return nil, err
 		}

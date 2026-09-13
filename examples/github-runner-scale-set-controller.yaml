@@ -9,7 +9,7 @@ spec:
   syncMode: Continuous
   helmCharts:
   - chartName: gha-runner-scale-set-controller
-    chartVersion: "0.12.1"
+    chartVersion: "0.14.2"
     helmChartAction: Install
     releaseName: arc
     releaseNamespace: arc-systems

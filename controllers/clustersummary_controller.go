@@ -564,12 +564,12 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 
 	err = r.updateChartMap(ctx, clusterSummaryScope, logger)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// A required (non-optional) templateResourceRef is missing. Surface it as a
-			// failure so the operator can see why deployment is blocked.
-			r.setFailureMessage(clusterSummaryScope, err.Error())
-			r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailedNonRetriable)
-		}
+		// Whether this is a missing (non-optional) templateResourceRef, a Helm chart field
+		// that fails Sveltos template instantiation, or anything else updateChartMap can
+		// return: surface it as a failure so the operator can see why deployment is blocked
+		// from `kubectl get clustersummary` alone, instead of only in the controller logs.
+		r.setFailureMessage(clusterSummaryScope, err.Error())
+		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusFailedNonRetriable)
 		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}

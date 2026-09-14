@@ -553,6 +553,51 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(featureResourcesVerified).To(BeTrue())
 	})
 
+	It("prepareForDeployment surfaces an updateChartMap template failure in ClusterSummary status", func() {
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
+			{
+				// ReleaseName is still instantiated as a Sveltos template by
+				// getInstantiatedChartIdentity (only Values is excluded). An unclosed
+				// action here fails template parsing with a generic error: neither
+				// apierrors.IsNotFound nor any other special-cased error type.
+				RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+				ReleaseName: "{{ .Bad", ReleaseNamespace: randomString(), RepositoryName: randomString(),
+			},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         testEnv.Client,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:             testEnv.Client,
+			Scheme:             scheme,
+			Deployer:           nil,
+			ClusterMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:          sync.Mutex{},
+			NextReconcileTimes: make(map[types.NamespacedName]controllers.ReconcileCooldown),
+		}
+
+		controllers.PrepareForDeployment(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+
+		featureHelmVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusFailedNonRetriable))
+				Expect(clusterSummary.Status.FeatureSummaries[i].FailureMessage).ToNot(BeNil())
+				featureHelmVerified = true
+			}
+		}
+		Expect(featureHelmVerified).To(BeTrue())
+	})
+
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{

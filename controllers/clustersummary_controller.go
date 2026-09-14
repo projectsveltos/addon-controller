@@ -558,6 +558,10 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 	}
 	clusterSummaryScope.SetDependenciesMessage(&msg)
 	if !allDeployed {
+		// Deploy is deferred, not in progress: reflect that in featureSummaries instead of
+		// leaving it empty (a fresh ClusterSummary) or frozen at whatever it last had, the
+		// same way the mirroring dependsOn/transitionFrom gates on the delete side already do.
+		r.resetFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureStatusBlocked)
 		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
 		return reconcile.Result{RequeueAfter: normalRequeueAfter}
 	}

@@ -598,6 +598,53 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(featureHelmVerified).To(BeTrue())
 	})
 
+	It("prepareForDeployment marks featureSummaries Blocked when a DependsOn prerequisite is missing", func() {
+		// Mirrors "cleanupBeforeFinalizerRemoval marks featureSummaries Blocked while a
+		// dependent ClusterSummary still exists" on the delete side: before this fix, a
+		// ClusterSummary blocked on a not-yet-existing DependsOn prerequisite got a
+		// status.dependencies message but no featureSummaries entry at all, so
+		// `kubectl get clustersummary` (no featureSummaries to populate the printer columns
+		// from) showed nothing indicating anything was wrong.
+		missingProfileName := randomString()
+		clusterSummary.Spec.ClusterProfileSpec.DependsOn = []string{missingProfileName}
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind), Namespace: randomString(), Name: randomString()},
+		}
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         testEnv.Client,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		reconciler := &controllers.ClusterSummaryReconciler{
+			Client:             testEnv.Client,
+			Scheme:             scheme,
+			Deployer:           nil,
+			ClusterMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ReferenceMap:       make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:          sync.Mutex{},
+			NextReconcileTimes: make(map[types.NamespacedName]controllers.ReconcileCooldown),
+		}
+
+		controllers.PrepareForDeployment(reconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+
+		Expect(clusterSummary.Status.Dependencies).ToNot(BeNil())
+		Expect(*clusterSummary.Status.Dependencies).To(ContainSubstring(missingProfileName))
+
+		featureResourcesVerified := false
+		for i := range clusterSummary.Status.FeatureSummaries {
+			if clusterSummary.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureResources {
+				Expect(clusterSummary.Status.FeatureSummaries[i].Status).To(Equal(libsveltosv1beta1.FeatureStatusBlocked))
+				featureResourcesVerified = true
+			}
+		}
+		Expect(featureResourcesVerified).To(BeTrue())
+	})
+
 	It("shouldReconcile returns true when mode is OneTime but not all helm charts are deployed", func() {
 		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
 		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{

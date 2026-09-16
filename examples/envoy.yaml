@@ -11,7 +11,7 @@ spec:
     - repositoryURL:    oci://docker.io/envoyproxy
       repositoryName:   envoyproxy
       chartName:        gateway-helm
-      chartVersion:     v1.7.1
+      chartVersion:     v1.9.1
       releaseName:      envoy-gateway
       releaseNamespace: envoy-gateway-system
       helmChartAction:  Install

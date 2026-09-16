@@ -13,7 +13,7 @@ spec:
   - repositoryURL:    https://helm.goharbor.io
     repositoryName:   harbor
     chartName:        harbor/harbor
-    chartVersion:     1.18.3 
+    chartVersion:     1.19.2
     releaseName:      harbor
     releaseNamespace: harbor
     helmChartAction:  Install

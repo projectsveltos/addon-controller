@@ -49,10 +49,10 @@ var _ = Describe("Helm", Serial, func() {
 		kroDeploymentName = "kro"
 		// kro's chart is pulled from OCI using the bare tag ("0.9.2"), but Sveltos reports the
 		// version recorded in the chart's own Chart.yaml ("v0.9.2") in ClusterConfiguration.
-		kroVersion092         = "0.9.2"
-		kroVersion092Reported = "v0.9.2"
-		kroVersion091         = "0.9.1"
-		kroVersion091Reported = "v0.9.1"
+		kroVersion094         = "0.9.4"
+		kroVersion094Reported = "v0.9.4"
+		kroVersion093         = "0.9.3"
+		kroVersion093Reported = "v0.9.3"
 	)
 
 	It("Use tier to solve conflicts", Label("FV", "PULLMODE", "EXTENDED"), func() {
@@ -77,7 +77,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    kroRepoURL,
 					RepositoryName:   kroRepoName,
 					ChartName:        kroChartName,
-					ChartVersion:     kroVersion092,
+					ChartVersion:     kroVersion094,
 					ReleaseName:      kroReleaseName,
 					ReleaseNamespace: kroNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -86,7 +86,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    prometheusCommunityURL,
 					RepositoryName:   prometheusCommunityName,
 					ChartName:        prometheusChartName,
-					ChartVersion:     prometheusVersion2739,
+					ChartVersion:     prometheusVersion2930,
 					ReleaseName:      prometheusRelease,
 					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -95,7 +95,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    "https://grafana.github.io/helm-charts",
 					RepositoryName:   grafanaRepoName,
 					ChartName:        grafanaChartName,
-					ChartVersion:     grafanaVersion1000,
+					ChartVersion:     grafanaVersion10515,
 					ReleaseName:      grafanaRepoName,
 					ReleaseNamespace: grafanaRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -131,9 +131,9 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kroReleaseName, ChartVersion: kroVersion092Reported, Namespace: kroNamespace},
-			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion094Reported, Namespace: kroNamespace},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -154,7 +154,7 @@ var _ = Describe("Helm", Serial, func() {
 				RepositoryURL:    kroRepoURL,
 				RepositoryName:   kroRepoName,
 				ChartName:        kroChartName,
-				ChartVersion:     kroVersion091,
+				ChartVersion:     kroVersion093,
 				ReleaseName:      kroReleaseName,
 				ReleaseNamespace: kroNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -226,8 +226,8 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), newClusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -235,7 +235,7 @@ var _ = Describe("Helm", Serial, func() {
 			nil, charts)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: kroReleaseName, ChartVersion: kroVersion091Reported, Namespace: kroNamespace},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion093Reported, Namespace: kroNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, newClusterProfile.Name,
@@ -269,9 +269,9 @@ var _ = Describe("Helm", Serial, func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts = []configv1beta1.Chart{
-			{ReleaseName: kroReleaseName, ChartVersion: kroVersion092Reported, Namespace: kroNamespace},
-			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1000, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2739, Namespace: prometheusRelease},
+			{ReleaseName: kroReleaseName, ChartVersion: kroVersion094Reported, Namespace: kroNamespace},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

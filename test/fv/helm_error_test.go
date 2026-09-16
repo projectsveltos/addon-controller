@@ -105,7 +105,7 @@ var _ = Describe("HelmSourceIntegrity", func() {
 					RepositoryURL:    jetstackURL,
 					RepositoryName:   jetstackName,
 					ChartName:        jetstackCertManagerChart,
-					ChartVersion:     "v1.19.4",
+					ChartVersion:     certManagerVersion1212,
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,

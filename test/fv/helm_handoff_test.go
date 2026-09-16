@@ -38,8 +38,8 @@ const (
 	dragonflyDeployment  = "dragonfly-operator"
 	dragonflyOCIURL      = "oci://ghcr.io/dragonflydb/dragonfly-operator/helm"
 	dragonflyChartName   = "dragonfly-operator"
-	dragonflyVersionA    = "v1.5.0"
-	dragonflyVersionB    = "v1.4.0"
+	dragonflyVersionA    = "v1.6.1"
+	dragonflyVersionB    = "v1.6.0"
 	handoffLabelValue    = "fv-handoff"
 )
 

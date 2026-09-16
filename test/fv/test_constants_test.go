@@ -22,39 +22,35 @@ const (
 	kyvernoChartName            = "kyverno/kyverno"
 	kyvernoNamespace            = "kyverno"
 	admissionControllerDeplName = "kyverno-admission-controller"
-	kyvernoVersion382           = "v3.8.2"
-	kyvernoVersion382S          = "3.8.2"
-	kyvernoVersion381           = "v3.8.1"
-	kyvernoVersion381S          = "3.8.1"
-	kyvernoVersion372           = "v3.7.2"
-	kyvernoVersion372S          = "3.7.2"
-	kyvernoVersion371           = "v3.7.1"
-	kyvernoVersion371S          = "3.7.1"
+	kyvernoVersion391           = "v3.9.1"
+	kyvernoVersion391S          = "3.9.1"
+	kyvernoVersion390           = "v3.9.0"
+	kyvernoVersion390S          = "3.9.0"
 	kyvernoLatestRelease        = "kyverno-latest"
 
 	// Prometheus community chart details
 	prometheusCommunityURL  = "https://prometheus-community.github.io/helm-charts"
 	prometheusCommunityName = "prometheus-community"
 	prometheusChartName     = "prometheus-community/prometheus"
-	prometheusVersion2524   = "25.24.0"
-	prometheusVersion2739   = "27.39.0"
+	prometheusVersion2930   = "29.30.0"
 	prometheusRelease       = "prometheus"
 
 	// Grafana chart details
-	grafanaRepoName    = "grafana"
-	grafanaChartName   = "grafana/grafana"
-	grafanaVersion1136 = "11.3.6"
-	grafanaVersion1000 = "10.0.0"
+	grafanaRepoName     = "grafana"
+	grafanaChartName    = "grafana/grafana"
+	grafanaVersion1325  = "13.2.5"
+	grafanaVersion10515 = "10.5.15"
 
 	// Jetstack/cert-manager chart details
 	jetstackURL              = "https://charts.jetstack.io"
 	jetstackName             = "jetstack"
 	jetstackCertManagerChart = "jetstack/cert-manager"
 	certManager              = "cert-manager"
+	certManagerVersion1212   = "v1.21.2"
 
 	// Kong chart details
-	kongRepoName    = "kong"
-	kongVersion2510 = "2.51.0"
+	kongRepoName   = "kong"
+	kongVersion341 = "3.4.1"
 
 	// External-DNS chart details
 	externalDNSURL       = "https://kubernetes-sigs.github.io/external-dns/"
@@ -70,7 +66,7 @@ const (
 	// NGINX chart details
 	nginxLatestRelease = "nginx-latest"
 	nginxNamespace     = "nginx"
-	nginxVersion222    = "2.2.2"
+	nginxVersion272    = "2.7.2"
 
 	// Release names
 	airflowRelease = "airflow"
@@ -110,15 +106,15 @@ const (
 	mariadbOperatorChart   = "mariadb-operator/mariadb-operator"
 	mariadbVersion0351     = "0.35.1"
 	mariadbRelease         = "mariadb"
-	prometheusVersion2584  = "25.8.4"
-	externalDNSVersion1182 = "v1.18.2"
+	prometheusVersion2584  = "26.6.0"
+	externalDNSVersion1182 = "v1.21.2"
 	crdsEnabledValues      = "crds:\n  enabled: true"
 
 	// CloudNative-PG chart details
 	cloudnativePGURL     = "https://cloudnative-pg.github.io/charts"
 	cloudnativePGName    = "cloudnative-pg"
 	cloudnativePGChart   = "cloudnative-pg/cloudnative-pg"
-	cloudnativePGVersion = "0.26.0"
+	cloudnativePGVersion = "0.29.0"
 	cnpgRelease          = "cnpg"
 	cnpgSystem           = "cnpg-system"
 
@@ -220,11 +216,9 @@ const (
 
 	// Helm chart versions
 	externalDNSVersion1170 = "1.17.0"
-	argocdChartVersion     = "3.35.4"
+	argocdChartVersion     = "10.9.1"
 	wildflyVersion         = "2.4.0"
-	kyvernoVersion370      = "v3.7.0"
-	kyvernoVersion370S     = "3.7.0"
-	kubePrometheusVersion  = "75.9.0"
+	kubePrometheusVersion  = "91.4.1"
 
 	// ArgoCD chart
 	argocdName       = "argocd"

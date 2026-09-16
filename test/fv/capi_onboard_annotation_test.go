@@ -72,7 +72,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    prometheusCommunityURL,
 					RepositoryName:   prometheusCommunityName,
 					ChartName:        prometheusChartName,
-					ChartVersion:     prometheusVersion2524,
+					ChartVersion:     prometheusVersion2930,
 					ReleaseName:      prometheusRelease,
 					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -81,7 +81,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    "https://grafana-community.github.io/helm-charts",
 					RepositoryName:   grafanaRepoName,
 					ChartName:        grafanaChartName,
-					ChartVersion:     grafanaVersion1136,
+					ChartVersion:     grafanaVersion1325,
 					ReleaseName:      grafanaRepoName,
 					ReleaseNamespace: grafanaRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -145,8 +145,8 @@ var _ = Describe("Helm", Serial, func() {
 			libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1136, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2524, Namespace: prometheusRelease},
+			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion1325, Namespace: grafanaRepoName},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

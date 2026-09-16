@@ -100,7 +100,7 @@ var _ = Describe("Helm", func() {
 			clusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
 				{
 					ChartName:        "hashicorp/vault-secrets-operator",
-					ChartVersion:     "1.2.0",
+					ChartVersion:     "1.5.1",
 					ReleaseName:      "vso",
 					ReleaseNamespace: randomString(),
 					RepositoryName:   "hashicorp",

@@ -91,7 +91,7 @@ installCRDs: true`
 					RepositoryURL:    "https://fluxcd-community.github.io/helm-charts",
 					RepositoryName:   flux2Name,
 					ChartName:        "flux2/flux2",
-					ChartVersion:     "2.18.2",
+					ChartVersion:     "2.19.0",
 					ReleaseName:      flux2Name,
 					ReleaseNamespace: gitRepositoryNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,

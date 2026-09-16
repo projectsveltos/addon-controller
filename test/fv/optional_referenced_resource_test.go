@@ -89,7 +89,7 @@ metadata:
 					RepositoryURL:    prometheusCommunityURL,
 					RepositoryName:   prometheusCommunityName,
 					ChartName:        prometheusChartName,
-					ChartVersion:     prometheusVersion2524,
+					ChartVersion:     prometheusVersion2930,
 					ReleaseName:      prometheusRelease,
 					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -130,7 +130,7 @@ metadata:
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2524, Namespace: prometheusRelease},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

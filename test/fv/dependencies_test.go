@@ -40,12 +40,12 @@ var _ = Describe("Dependencies", func() {
 		metricsServerRepoURL    = "https://kubernetes-sigs.github.io/metrics-server/"
 		metricsServerRepoName   = "metrics-server"
 		metricsServerChartName  = "metrics-server/metrics-server"
-		metricsServerVersion    = "3.13.1"
+		metricsServerVersion    = "3.14.0"
 		metricsServerRelease    = "metrics-server"
 		reloaderChartRepoURL    = "https://stakater.github.io/stakater-charts"
 		reloaderChartRepoName   = "stakater"
 		reloaderHelmChartName   = "stakater/reloader"
-		reloaderHelmVersion     = "2.2.16"
+		reloaderHelmVersion     = "2.2.17"
 		reloaderHelmReleaseName = "stakater-reloader"
 	)
 
@@ -68,7 +68,7 @@ var _ = Describe("Dependencies", func() {
 					RepositoryURL:    bitnamiURL,
 					RepositoryName:   bitnamiName,
 					ChartName:        "bitnami/flink",
-					ChartVersion:     "1.4.0",
+					ChartVersion:     "2.0.7",
 					ReleaseName:      flinkRelease,
 					ReleaseNamespace: flinkRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -111,7 +111,7 @@ var _ = Describe("Dependencies", func() {
 					RepositoryURL:    "https://airflow.apache.org",
 					RepositoryName:   "apache-airflow",
 					ChartName:        "apache-airflow/airflow",
-					ChartVersion:     "1.15.0",
+					ChartVersion:     "1.22.0",
 					ReleaseName:      airflowRelease,
 					ReleaseNamespace: airflowRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,

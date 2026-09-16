@@ -76,7 +76,7 @@ var _ = Describe("Helm with conflicts", func() {
 					RepositoryURL:    k0rdentCatalogURL,
 					RepositoryName:   ingressNginxName,
 					ChartName:        ingressNginxName,
-					ChartVersion:     "4.13.0",
+					ChartVersion:     "4.15.1",
 					ReleaseName:      nginxNamespace,
 					ReleaseNamespace: nginxNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,

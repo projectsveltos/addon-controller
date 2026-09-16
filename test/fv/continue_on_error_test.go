@@ -124,7 +124,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://charts.konghq.com",
 					RepositoryName:   kongRepoName,
 					ChartName:        "kong/kong",
-					ChartVersion:     kongVersion2510,
+					ChartVersion:     kongVersion341,
 					ReleaseName:      kongRepoName,
 					ReleaseNamespace: kongRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -133,7 +133,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    jetstackURL,
 					RepositoryName:   jetstackName,
 					ChartName:        jetstackCertManagerChart,
-					ChartVersion:     "v1.16.2",
+					ChartVersion:     certManagerVersion1212,
 					ReleaseName:      certManager,
 					ReleaseNamespace: certManager,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -145,7 +145,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://helm.nginx.com/stable/",
 					RepositoryName:   "nginx-stable",
 					ChartName:        "nginx-stable/nginx-ingress",
-					ChartVersion:     nginxVersion222,
+					ChartVersion:     nginxVersion272,
 					ReleaseName:      nginxLatestRelease,
 					ReleaseNamespace: nginxNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -175,8 +175,8 @@ var _ = Describe("Feature", Serial, func() {
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: kongRepoName, ChartVersion: kongVersion2510, Namespace: kongRepoName},
-			{ReleaseName: nginxLatestRelease, ChartVersion: nginxVersion222, Namespace: nginxNamespace},
+			{ReleaseName: kongRepoName, ChartVersion: kongVersion341, Namespace: kongRepoName},
+			{ReleaseName: nginxLatestRelease, ChartVersion: nginxVersion272, Namespace: nginxNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

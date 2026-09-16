@@ -914,6 +914,204 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(bytes.Equal(updatedClusterSummary.Status.HelmReleaseSummaries[0].PatchesHash, stalePatchesHash)).To(BeTrue())
 	})
 
+	It("UpdateValueHashOnHelmChartSummary clears a stale Conflict once this ClusterSummary owns the release", func() {
+		// Regression test for a latched conflict. buildReferencedHelmReleaseSummaries computes
+		// Status once, at the start of handleCharts. If the ClusterSummary holding the release
+		// unregisters after that write but before walkChartsAndDeploy re-checks ownership, this
+		// ClusterSummary deploys the chart while its entry still says Conflict. The pass then
+		// ends Provisioned with an unchanged hash, so shouldRedeploy never runs the Helm handler
+		// again and the stale entry stays forever.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		// The stale entry, naming a ClusterSummary that has since been deleted, plus a second
+		// release that is genuinely owned by someone else. Only the first may be touched.
+		otherConflictMessage := fmt.Sprintf("ClusterSummary %s managing it", randomString())
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusConflict,
+					ConflictMessage:  fmt.Sprintf("ClusterSummary %s managing it", randomString()),
+				},
+				{
+					ReleaseName:      testReleaseNameKyverno,
+					ReleaseNamespace: testReleaseNameKyverno,
+					Status:           configv1beta1.HelmChartStatusConflict,
+					ConflictMessage:  otherConflictMessage,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		// This ClusterSummary is the only registered manager, so it owns the release.
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
+		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		current := readClusterSummaryUncached(clusterSummary)
+
+		owned := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(owned).ToNot(BeNil())
+		Expect(owned.Status).To(Equal(configv1beta1.HelmChartStatusManaging))
+		Expect(owned.ConflictMessage).To(BeEmpty())
+
+		// The write must be scoped to the release that was deployed.
+		untouched := findHelmChartSummary(current, testReleaseNameKyverno, testReleaseNameKyverno)
+		Expect(untouched).ToNot(BeNil())
+		Expect(untouched.Status).To(Equal(configv1beta1.HelmChartStatusConflict))
+		Expect(untouched.ConflictMessage).To(Equal(otherConflictMessage))
+	})
+
+	It("UpdateValueHashOnHelmChartSummary keeps the Conflict when another ClusterSummary owns the release", func() {
+		// The correction above is only safe while this ClusterSummary is the chart's manager.
+		// deploySingleChart gates on that before deploying, but the write re-checks it so the
+		// guarantee does not rest on that staying the only caller.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		conflictMessage := fmt.Sprintf("ClusterSummary %s managing it", randomString())
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusConflict,
+					ConflictMessage:  conflictMessage,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		// Register a different ClusterSummary first, so it holds the release and ours does not.
+		otherClusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: clusterSummary.Namespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace:   clusterSummary.Spec.ClusterNamespace,
+				ClusterName:        clusterSummary.Spec.ClusterName,
+				ClusterType:        clusterSummary.Spec.ClusterType,
+				ClusterProfileSpec: configv1beta1.Spec{HelmCharts: []configv1beta1.HelmChart{*nginxChart}},
+			},
+		}
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(otherClusterSummary)
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+		Expect(manager.CanManageChart(clusterSummary, nginxChart)).To(BeFalse())
+
+		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
+		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		current := readClusterSummaryUncached(clusterSummary)
+		summary := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(summary.Status).To(Equal(configv1beta1.HelmChartStatusConflict))
+		Expect(summary.ConflictMessage).To(Equal(conflictMessage))
+	})
+
+	It("UpdateValueHashOnHelmChartSummary keeps the Conflict in DryRun mode", func() {
+		// DryRun can pass the ownership check without ever registering, and it no-ops the two
+		// functions that otherwise maintain these entries. It must change nothing here either.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+			SyncMode:   configv1beta1.SyncModeDryRun,
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		conflictMessage := fmt.Sprintf("ClusterSummary %s managing it", randomString())
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusConflict,
+					ConflictMessage:  conflictMessage,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		// Registered, so only the DryRun check can stop the write.
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+		Expect(manager.CanManageChart(clusterSummary, nginxChart)).To(BeTrue())
+
+		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
+		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		current := readClusterSummaryUncached(clusterSummary)
+		summary := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(summary.Status).To(Equal(configv1beta1.HelmChartStatusConflict))
+		Expect(summary.ConflictMessage).To(Equal(conflictMessage))
+	})
+
 	It("updateStatusForeferencedHelmReleases is no-op in DryRun mode", func() {
 		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
 			HelmCharts: []configv1beta1.HelmChart{
@@ -2882,3 +3080,44 @@ var _ = Describe("locateChartWithTimeout", func() {
 		Expect(err).To(Equal(expectedErr))
 	})
 })
+
+// createClusterForClusterSummary creates the Cluster that clusterSummary points at.
+// getHelmChartValuesHash resolves it via clusterproxy.GetCluster, so it must exist.
+func createClusterForClusterSummary(clusterSummary *configv1beta1.ClusterSummary) {
+	cluster := &clusterv1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterSummary.Spec.ClusterName,
+			Namespace: clusterSummary.Spec.ClusterNamespace,
+		},
+	}
+	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+}
+
+// readClusterSummaryUncached reads straight from the API server. testEnv.Client is cached and
+// can still serve the pre-update object for a beat after a status write returns, which would
+// make an assertion about a just-written value flaky.
+func readClusterSummaryUncached(clusterSummary *configv1beta1.ClusterSummary) *configv1beta1.ClusterSummary {
+	uncached, err := client.New(testEnv.Config, client.Options{Scheme: scheme})
+	Expect(err).To(BeNil())
+
+	current := &configv1beta1.ClusterSummary{}
+	Expect(uncached.Get(context.TODO(),
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+		current)).To(Succeed())
+
+	return current
+}
+
+func findHelmChartSummary(clusterSummary *configv1beta1.ClusterSummary,
+	releaseNamespace, releaseName string) *configv1beta1.HelmChartSummary {
+
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
+		if summary.ReleaseNamespace == releaseNamespace && summary.ReleaseName == releaseName {
+			return summary
+		}
+	}
+
+	return nil
+}

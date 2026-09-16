@@ -333,6 +333,98 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
 	})
 
+	It("deployFeature does not revisit a stale Helm Conflict once the feature is Provisioned", func() {
+		// Documents the latch the Helm-side fix exists to prevent. A ClusterSummary that ends a
+		// pass Provisioned while still holding a Conflict entry never runs the Helm handler
+		// again, so the entry is never recomputed and the profile reports a conflict forever.
+		// shouldRedeploy returns false for a deployed feature whose hash has not changed, and
+		// helmConflictResolved is only consulted on a deployer error, so neither path recovers.
+		releaseName := randomString()
+		releaseNamespace := randomString()
+		clusterSummary.Spec.ClusterProfileSpec.HelmCharts = []configv1beta1.HelmChart{
+			{
+				RepositoryURL:    randomString(),
+				RepositoryName:   randomString(),
+				ChartName:        randomString(),
+				ChartVersion:     randomString(),
+				ReleaseName:      releaseName,
+				ReleaseNamespace: releaseNamespace,
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterSummary,
+			clusterProfile,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+
+		// helmHash instantiates the chart values, and that resolves the Cluster through the
+		// management cluster client rather than the client passed in. So the Cluster has to
+		// exist there too, not only in the fake client driving the reconcile.
+		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+		Expect(testEnv.Create(ctx, ns)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, ns)).To(Succeed())
+		mgmtCluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterSummary.Spec.ClusterNamespace,
+				Name:      clusterSummary.Spec.ClusterName,
+			},
+		}
+		Expect(testEnv.Create(ctx, mgmtCluster)).To(Succeed())
+		Expect(waitForObject(ctx, testEnv.Client, mgmtCluster)).To(Succeed())
+
+		helmHash, err := controllers.HelmHash(ctx, c, clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Hash:      helmHash,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		// The conflict is over. The ClusterSummary named here has been deleted, so this entry
+		// can only be corrected by running the Helm handler again.
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{
+				ReleaseName:      releaseName,
+				ReleaseNamespace: releaseNamespace,
+				Status:           configv1beta1.HelmChartStatusConflict,
+				ConflictMessage:  fmt.Sprintf("ClusterSummary %s managing it", randomString()),
+			},
+		}
+
+		Expect(c.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+
+		reconciler := getClusterSummaryReconciler(c, dep)
+
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureHelm)
+
+		err = controllers.DeployFeature(reconciler, context.TODO(), clusterSummaryScope, f,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		// No deploy is submitted, so nothing recomputes HelmReleaseSummaries and the Conflict
+		// entry survives untouched.
+		key := deployer.GetKey(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+			clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi, false)
+		Expect(dep.IsKeyInProgress(key)).To(BeFalse())
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries).To(HaveLen(1))
+		Expect(currentClusterSummary.Status.HelmReleaseSummaries[0].Status).To(
+			Equal(configv1beta1.HelmChartStatusConflict))
+	})
+
 	It("deployFeature when feature is deployed and hash has changed, calls Deploy", func() {
 		clusterRoleName := randomString()
 		configMap := createConfigMapWithPolicy("default", randomString(), fmt.Sprintf(viewClusterRole, clusterRoleName))

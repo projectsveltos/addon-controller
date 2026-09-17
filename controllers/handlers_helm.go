@@ -4736,6 +4736,11 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 		return nil, err
 	}
 
+	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err = c.Get(ctx,
@@ -4743,6 +4748,17 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 		if err != nil {
 			return err
 		}
+
+		// Correct a Conflict left over from the start of this pass, but only while this
+		// ClusterSummary really is the chart's manager. deploySingleChart checks ownership
+		// before deploying; re-check it here, at the write, so the guarantee does not rest on
+		// that staying the only caller. Without the correction the entry latches: the feature
+		// ends Provisioned with an unchanged hash, so shouldRedeploy never runs the Helm
+		// handler again to recompute it. DryRun is excluded because it can pass the ownership
+		// check without ever registering, and it no-ops the two functions that otherwise
+		// maintain these entries.
+		isManager := dCtx.clusterSummary.Spec.ClusterProfileSpec.SyncMode != configv1beta1.SyncModeDryRun &&
+			chartManager.CanManageChart(dCtx.clusterSummary, requestedChart)
 
 		for i := range currentClusterSummary.Status.HelmReleaseSummaries {
 			rs := &currentClusterSummary.Status.HelmReleaseSummaries[i]
@@ -4752,6 +4768,10 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 				rs.ValuesHash = helmChartValuesHash
 				rs.PatchesHash = helmChartPatchesHash
 				rs.NeedsRedeploy = false
+				if isManager {
+					rs.Status = configv1beta1.HelmChartStatusManaging
+					rs.ConflictMessage = ""
+				}
 				setResolvedHelmChartIdentity(ctx, c, dCtx.clusterSummary, rs, requestedChart, currentRelease, logger)
 			}
 		}

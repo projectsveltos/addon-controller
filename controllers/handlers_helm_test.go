@@ -2617,6 +2617,43 @@ var _ = Describe("allMatchingProfilesProcessed", func() {
 		Expect(processed).To(BeTrue())
 	})
 
+	It("returns true when the cluster is marked for deletion even if a matching ClusterProfile's ClusterSummary has not been registered yet", func() {
+		s, err := setupScheme()
+		Expect(err).To(BeNil())
+
+		now := metav1.Now()
+		cluster.DeletionTimestamp = &now
+		// A deleting-but-still-present cluster always has at least one finalizer holding
+		// it open (e.g. an infrastructure provider's, or SveltosCluster.Spec.CleanupGracePeriod);
+		// the fake client rejects an object with a DeletionTimestamp and no finalizers.
+		cluster.Finalizers = []string{randomString()}
+
+		// cpB matches the cluster and has a HelmChart but its ClusterSummary does not exist yet.
+		// It must not be waited on: the cluster itself is going away, so there is no other
+		// ClusterSummary that could take over management of a chart on it.
+		cpB := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.Spec{
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{testEnvLabelKey: testProductionValue},
+					},
+				},
+				HelmCharts: []configv1beta1.HelmChart{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString(),
+						RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString()},
+				},
+			},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(s).WithObjects(cluster, cpB).Build()
+
+		processed, err := controllers.AllMatchingProfilesProcessed(context.TODO(), c,
+			clusterSummary, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(processed).To(BeTrue())
+	})
+
 	It("returns false when a matching ClusterProfile's ClusterSummary has not been registered yet", func() {
 		s, err := setupScheme()
 		Expect(err).To(BeNil())

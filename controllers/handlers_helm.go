@@ -760,6 +760,13 @@ func allMatchingProfilesProcessed(ctx context.Context, c client.Client,
 		}
 		return false, err
 	}
+	if !cluster.GetDeletionTimestamp().IsZero() {
+		// Cluster is being removed (possibly still present for a while, e.g.
+		// SveltosCluster.Spec.CleanupGracePeriod). No other ClusterSummary can take
+		// over management of a chart on a cluster that is going away, so there is
+		// nothing to wait for.
+		return true, nil
+	}
 	clusterLabels := labels.Set(cluster.GetLabels())
 
 	hasDeletionTimestamp := clusterSummary.DeletionTimestamp != nil && !clusterSummary.DeletionTimestamp.IsZero()

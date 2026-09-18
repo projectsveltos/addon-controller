@@ -110,6 +110,7 @@ var (
 	CollectContent                       = collectContent
 	CollectReferencedObjects             = collectReferencedObjects
 	PrepareBundleSettersWithResourceInfo = prepareBundleSettersWithResourceInfo
+	PrepareBundleSettersWithHelmInfo     = prepareBundleSettersWithHelmInfo
 	UndeployStaleResources               = undeployStaleResources
 	GetDeployedGroupVersionKinds         = getDeployedGroupVersionKinds
 	GetSecret                            = getSecret

@@ -5794,10 +5794,12 @@ func prepareBundleSettersWithHelmInfo(currentChart *configv1beta1.HelmChart, isU
 	setters := make([]pullmode.BundleOption, 0)
 
 	timeout := getTimeoutValue(currentChart.Options)
+	skipNamespaceCreation := !getCreateNamespaceHelmValue(currentChart.Options)
 	setters = append(setters,
 		pullmode.WithTimeout(&timeout),
 		pullmode.WithReleaseInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName,
-			currentChart.RepositoryURL, rInfo.ChartVersion, rInfo.Icon, isUninstall, isLast))
+			currentChart.RepositoryURL, rInfo.ChartVersion, rInfo.Icon, isUninstall, isLast),
+		pullmode.WithResourceInfo("", "", "", 0, skipNamespaceCreation, false))
 
 	return setters
 }

@@ -42,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -54,6 +55,7 @@ import (
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 var _ = Describe("HandlersHelm", func() {
@@ -3092,6 +3094,56 @@ var _ = Describe("getHelmUpgradeClient Force", func() {
 		Expect(upgradeClient.ForceReplace).To(BeFalse())
 		Expect(upgradeClient.ServerSideApply).To(Equal("true"))
 		Expect(upgradeClient.ForceConflicts).To(BeTrue())
+	})
+})
+
+var _ = Describe("prepareBundleSettersWithHelmInfo", func() {
+	It("sets SkipNamespaceCreation when createNamespace is false", func() {
+		currentChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			RepositoryURL:    randomString(),
+			Options: &configv1beta1.HelmOptions{
+				InstallOptions: configv1beta1.HelmInstallOptions{
+					CreateNamespace: ptr.To(false),
+				},
+			},
+		}
+		rInfo := &controllers.ReleaseInfo{
+			ChartVersion: randomString(),
+		}
+
+		setters := controllers.PrepareBundleSettersWithHelmInfo(currentChart, false, true, rInfo)
+
+		bundleOptions := &pullmode.BundleOptions{}
+		for _, setter := range setters {
+			setter(bundleOptions)
+		}
+
+		Expect(bundleOptions.ReleaseNamespace).To(Equal(currentChart.ReleaseNamespace))
+		Expect(bundleOptions.ReleaseName).To(Equal(currentChart.ReleaseName))
+		Expect(bundleOptions.SkipNamespaceCreation).To(BeTrue())
+	})
+
+	It("leaves SkipNamespaceCreation false when createNamespace is not set (default)", func() {
+		currentChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			RepositoryURL:    randomString(),
+			Options:          &configv1beta1.HelmOptions{},
+		}
+		rInfo := &controllers.ReleaseInfo{
+			ChartVersion: randomString(),
+		}
+
+		setters := controllers.PrepareBundleSettersWithHelmInfo(currentChart, false, true, rInfo)
+
+		bundleOptions := &pullmode.BundleOptions{}
+		for _, setter := range setters {
+			setter(bundleOptions)
+		}
+
+		Expect(bundleOptions.SkipNamespaceCreation).To(BeFalse())
 	})
 })
 

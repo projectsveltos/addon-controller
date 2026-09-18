@@ -970,8 +970,12 @@ func uninstallHelmCharts(ctx context.Context, c client.Client, clusterSummary *c
 	}
 
 	releaseReports := make([]configv1beta1.ReleaseReport, 0)
-	for i := range clusterSummary.Spec.ClusterProfileSpec.HelmCharts {
-		currentChart := &clusterSummary.Spec.ClusterProfileSpec.HelmCharts[i]
+	// Uninstall in the reverse of install order (handled by walkChartsAndDeploy): a chart
+	// installed later in the list may depend on one installed earlier (e.g. a controller on a
+	// CRD chart), so tearing the whole profile down should undo that dependency last.
+	helmCharts := clusterSummary.Spec.ClusterProfileSpec.HelmCharts
+	for i := len(helmCharts) - 1; i >= 0; i-- {
+		currentChart := &helmCharts[i]
 
 		instantiatedChart, err := getInstantiatedChartIdentity(ctx, dCtx, currentChart, logger)
 		if err != nil {

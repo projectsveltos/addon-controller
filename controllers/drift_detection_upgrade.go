@@ -142,13 +142,22 @@ func upgradeDriftDetectionDeploymentsInManagedCluster(ctx context.Context, mgmtC
 		patches = globalPatches
 	}
 
+	watchNamespaces, err := getAgentWatchNamespaces(ctx, mgmtClient, clusterRef.Namespace, clusterRef.Name,
+		clusterType, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(
+			fmt.Sprintf("cluster %s %s/%s failed to get drift detection watch namespaces: %v",
+				clusterType, clusterRef.Namespace, clusterRef.Name, err))
+		return err
+	}
+
 	// featureID is not important in this context. Drift detection is not tracked anyway. One is required
 	// so setting this.
 	featureID := string(libsveltosv1beta1.FeatureKustomize)
 
 	err = deployDriftDetectionManagerInManagedCluster(ctx, clusterRef.Namespace, clusterRef.Name,
 		"sveltos-upgrade", featureID,
-		"do-not-send-updates", clusterType, patches, logger)
+		"do-not-send-updates", clusterType, patches, watchNamespaces, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(
 			fmt.Sprintf("cluster %s %s/%s failed to upgrade driftDetection deployment: %v",

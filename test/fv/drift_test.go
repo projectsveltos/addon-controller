@@ -222,9 +222,7 @@ hpa:
 
 			currentClusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
 				{
-					Patch: `- op: add
-  path: /metadata/annotations/projectsveltos.io~1driftDetectionIgnore
-  value: ok`,
+					Patch: ignoreConfigurationDriftPatch,
 					Target: &libsveltosv1beta1.PatchSelector{
 						Group:     appsGroupName,
 						Version:   apiVersionV1,

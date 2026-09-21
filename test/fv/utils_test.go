@@ -36,6 +36,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/klog/v2"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,6 +44,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
 const (
@@ -157,6 +159,8 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 }
 
 func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryName string, featureID libsveltosv1beta1.FeatureID) {
+	var lastSeen *configv1beta1.FeatureSummary
+
 	Eventually(func() bool {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
 		err := k8sClient.Get(context.TODO(),
@@ -167,15 +171,18 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 		}
 		for i := range currentClusterSummary.Status.FeatureSummaries {
 			if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
-				if currentClusterSummary.Status.FeatureSummaries[i].Status == libsveltosv1beta1.FeatureStatusProvisioned &&
-					currentClusterSummary.Status.FeatureSummaries[i].FailureMessage == nil {
+				lastSeen = &currentClusterSummary.Status.FeatureSummaries[i]
+				if lastSeen.Status == libsveltosv1beta1.FeatureStatusProvisioned &&
+					lastSeen.FailureMessage == nil {
 
 					return true
 				}
 			}
 		}
 		return false
-	}, timeout, pollingInterval).Should(BeTrue())
+	}, timeout, pollingInterval).Should(BeTrue(), func() string {
+		return fmt.Sprintf("featureSummary for %s never reached Provisioned: %+v", featureID, lastSeen)
+	})
 }
 
 // deleteClusterProfile deletes ClusterProfile and verifies all ClusterSummaries created by this ClusterProfile
@@ -755,4 +762,29 @@ func verifyDriftDetectionManagerDeployment(workloadClient client.Client) {
 			return nil
 		}, timeout, pollingInterval).Should(Succeed())
 	}
+}
+
+// isConfigurationGroupProvisioned looks up the pull-mode ConfigurationGroup that
+// clusterSummary/featureID would have created (same requestorKind/requestorName/requestorFeature
+// triple RecordResourcesForDeployment used to create it) and reports whether it is fully
+// deployed with no failure.
+func isConfigurationGroupProvisioned(clusterSummary *configv1beta1.ClusterSummary,
+	featureID libsveltosv1beta1.FeatureID,
+) bool {
+
+	status, err := pullmode.GetDeploymentStatus(context.TODO(), k8sClient,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(featureID),
+		klog.Background())
+	if err != nil {
+		// NotFound (CG not created yet), ActionNotSetToDeploy, or ProcessingMismatch
+		// (agent hasn't caught up with the latest generation/hash yet) — all just mean
+		// "not provisioned yet", so keep polling.
+		return false
+	}
+
+	return status != nil &&
+		status.DeploymentStatus != nil &&
+		*status.DeploymentStatus == libsveltosv1beta1.FeatureStatusProvisioned &&
+		status.FailureMessage == nil
 }

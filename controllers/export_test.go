@@ -208,6 +208,7 @@ var (
 	DeployDebuggingConfigurationCRD                  = deployDebuggingConfigurationCRD
 	DeployResourceSummaryCRD                         = deployResourceSummaryCRD
 	DeployDriftDetectionManagerInCluster             = deployDriftDetectionManagerInCluster
+	DeployDriftDetectionManagerInManagedCluster      = deployDriftDetectionManagerInManagedCluster
 	UpdateDeployedGroupVersionKind                   = updateDeployedGroupVersionKind
 	DeployDriftDetectionManagerInManagementCluster   = deployDriftDetectionManagerInManagementCluster
 	GetDriftDetectionManagerLabels                   = getDriftDetectionManagerLabels
@@ -215,6 +216,7 @@ var (
 	GetDriftDetectionNamespaceInMgmtCluster          = getDriftDetectionNamespaceInMgmtCluster
 	GetGlobalDriftDetectionManagerPatches            = getGlobalDriftDetectionManagerPatches
 	GetAgentWatchNamespaces                          = getAgentWatchNamespaces
+	PrepareDriftDetectionManagerYAML                 = prepareDriftDetectionManagerYAML
 )
 
 const (

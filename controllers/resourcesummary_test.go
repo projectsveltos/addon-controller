@@ -226,7 +226,7 @@ var _ = Describe("ResourceSummary Deployer", func() {
 			clusterType, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
 	})
 
-	It("deployDriftDetectionManagerInCluster ignores the watch-namespaces annotation for push-mode clusters", func() {
+	It("deployDriftDetectionManagerInCluster succeeds for a push-mode cluster with the watch-namespaces annotation set", func() {
 		cluster := prepareCluster()
 		clusterSummaryName := randomString()
 
@@ -236,13 +236,55 @@ var _ = Describe("ResourceSummary Deployer", func() {
 		Expect(testEnv.Update(context.TODO(), cluster)).To(Succeed())
 		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
 
-		// Succeeding at all, for a push-mode (agentless=false) deploy, is the assertion: the
-		// annotation only ever gets read and passed through for agentless deploys (see
-		// deployDriftDetectionManagerInCluster), so a push-mode deploy with it set must behave
-		// exactly as if it were never set, not fail or behave differently.
+		// Succeeding at all is the assertion: the annotation is now relayed to
+		// deployDriftDetectionManagerInManagedCluster for push mode too (isPullMode=false,
+		// startInMgmtCluster=false here), same as classifier already does for sveltos-agent.
+		// drift-detection-manager itself is the one that decides not to apply it in plain push
+		// mode (see prepareDriftDetectionManagerYAML/resolveScopedNamespaces in that repo), so a
+		// push-mode deploy with the annotation set must still succeed, not fail or behave
+		// differently.
 		Expect(controllers.DeployDriftDetectionManagerInCluster(context.TODO(), testEnv.Client, cluster.Namespace,
 			cluster.Name, clusterSummaryName, string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi,
 			false, false, textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+	})
+
+	It("deployDriftDetectionManagerInManagedCluster passes --watch-namespaces through when configured", func() {
+		// This is the deploy path used by drift-detection-manager.projectsveltos.io/pull-mode as
+		// well as plain push mode: deployDriftDetectionManagerInCluster now relays the
+		// agent.projectsveltos.io/watch-namespaces annotation to it unconditionally (see the
+		// preceding push-mode test), same as classifier already does for sveltos-agent.
+		// drift-detection-manager itself decides, at runtime, whether it's actually running in
+		// pull mode and should honor the flag.
+		cluster := prepareCluster()
+		clusterSummaryName := randomString()
+		watchNamespace1 := randomString()
+		watchNamespace2 := randomString()
+
+		Expect(controllers.DeployDriftDetectionManagerInManagedCluster(context.TODO(), cluster.Namespace,
+			cluster.Name, clusterSummaryName, string(libsveltosv1beta1.FeatureHelm), "do-not-send-updates",
+			libsveltosv1beta1.ClusterTypeCapi, nil, []string{watchNamespace1, watchNamespace2},
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		// The managed-cluster drift-detection-manager YAML's own hardcoded namespace is
+		// rewritten to getSveltosNamespace() (see updateResourceNamespace in
+		// deployDriftDetectionManagerResources), and its Deployment name is fixed (see
+		// pkg/drift-detection/drift-detection-manager.go), regardless of the cluster's own
+		// namespace/name.
+		expectedArg := fmt.Sprintf("--watch-namespaces=%s,%s", watchNamespace1, watchNamespace2)
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			if err := testEnv.Get(context.TODO(),
+				types.NamespacedName{Namespace: sveltosNamespace, Name: "drift-detection-manager"}, depl); err != nil {
+				return false
+			}
+
+			for _, arg := range depl.Spec.Template.Spec.Containers[0].Args {
+				if arg == expectedArg {
+					return true
+				}
+			}
+			return false
+		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
 	It("getGlobalDriftDetectionManagerPatches reads old post render patches from ConfigMap", func() {
@@ -413,6 +455,40 @@ metadata:
 			}
 		}
 		Expect(foundLegacy).To(BeTrue())
+	})
+})
+
+const driftDetectionManagerTestYAML = `apiVersion: apps/v1
+kind: Deployment
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        - --cluster-namespace=
+        - --cluster-name=
+        - --cluster-type=
+        - --watch-namespaces=
+        command:
+        - /manager`
+
+var _ = Describe("prepareDriftDetectionManagerYAML", func() {
+	It("leaves the watch-namespaces flag empty when watchNamespaces is nil", func() {
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		result := controllers.PrepareDriftDetectionManagerYAML(driftDetectionManagerTestYAML,
+			randomString(), randomString(), "do-not-send-updates", clusterType, nil)
+		Expect(result).To(ContainSubstring("--watch-namespaces=\n"))
+	})
+
+	It("sets the watch-namespaces flag when watchNamespaces is non-empty", func() {
+		clusterType := libsveltosv1beta1.ClusterTypeCapi
+		watchNamespace1 := randomString()
+		watchNamespace2 := randomString()
+		result := controllers.PrepareDriftDetectionManagerYAML(driftDetectionManagerTestYAML,
+			randomString(), randomString(), "do-not-send-updates", clusterType,
+			[]string{watchNamespace1, watchNamespace2})
+		Expect(result).To(ContainSubstring(
+			fmt.Sprintf("--watch-namespaces=%s,%s", watchNamespace1, watchNamespace2)))
 	})
 })
 

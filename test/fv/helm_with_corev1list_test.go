@@ -94,9 +94,34 @@ var _ = Describe("Feature", func() {
 
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 
+		verifyClusterProfileMatches(clusterProfile)
+
 		clusterSummary := verifyClusterSummary(clusterops.ClusterProfileLabelName,
 			clusterProfile.Name, &clusterProfile.Spec,
 			kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+		Byf("Getting client to access the workload cluster")
+		workloadClient, err := getKindWorkloadClusterKubeconfig()
+		Expect(err).To(BeNil())
+		Expect(workloadClient).ToNot(BeNil())
+
+		Byf("Verifying kube-prometheus-stack-operator deployment is created in the workload cluster")
+		Eventually(func() bool {
+			depl := &appsv1.Deployment{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
+			if err != nil {
+				return false
+			}
+			return *depl.Spec.Replicas == depl.Status.ReadyReplicas
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+			Byf("Verifying ConfigurationGroup is set to Provisioned")
+			Eventually(func() bool {
+				return isConfigurationGroupProvisioned(clusterSummary, libsveltosv1beta1.FeatureHelm)
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
@@ -108,18 +133,6 @@ var _ = Describe("Feature", func() {
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,
 			nil, charts)
-
-		Byf("Getting client to access the workload cluster")
-		workloadClient, err := getKindWorkloadClusterKubeconfig()
-		Expect(err).To(BeNil())
-		Expect(workloadClient).ToNot(BeNil())
-
-		Byf("Verifying kube-prometheus-stack-operator deployment is created in the workload cluster")
-		Eventually(func() error {
-			depl := &appsv1.Deployment{}
-			return workloadClient.Get(context.TODO(),
-				types.NamespacedName{Namespace: deplNamespace, Name: deplName}, depl)
-		}, timeout, pollingInterval).Should(BeNil())
 
 		deleteClusterProfile(clusterProfile)
 

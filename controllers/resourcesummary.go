@@ -82,13 +82,16 @@ const (
 	// driftdetection.projectsveltos.io, since it has more than one consumer, each with its own
 	// rule for when it applies:
 	//
-	//   - drift-detection-manager (and sveltos-agent, not wired up here yet) only honors it for
-	//     clusters deployed in agentless (management-cluster) mode, and only with a valid Sveltos
-	//     Enterprise license granting NamespaceScopedAgents. It checks that directly against the
-	//     sveltos-license Secret and falls back to watching everything, cluster-wide, if the
-	//     license is missing or invalid. This is the paid differentiator: continuous deployment
-	//     under restricted RBAC works either way (see below), but continuous drift detection
-	//     under restricted RBAC requires a license.
+	//   - drift-detection-manager (and sveltos-agent, wired up the same way) honors it in
+	//     agentless (management-cluster) mode and in pull mode. In agentless mode it checks
+	//     directly against the sveltos-license Secret for a valid Sveltos Enterprise license
+	//     granting NamespaceScopedAgents, falling back to watching everything, cluster-wide, if
+	//     the license is missing or invalid: the paid differentiator there, since continuous
+	//     deployment under restricted RBAC works either way (see below), but continuous drift
+	//     detection under restricted RBAC requires a license. In pull mode no separate check is
+	//     done: using pull mode at all already requires its own Sveltos license. Plain push mode
+	//     has no connectivity to verify a license at all, so the flag is a no-op there regardless
+	//     of what addon-controller passes.
 	//   - addon-controller's own search for stale resources to remove (processDeployedGVKs)
 	//     honors it unconditionally: no license check, agentless or not. Unlike watching for
 	//     drift, this isn't a premium capability — without it, a genuinely RBAC-restricted
@@ -146,14 +149,14 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 			"do-not-send-updates", clusterType, patches, watchNamespaces, logger)
 	}
 
-	if len(watchNamespaces) > 0 {
+	if !isPullMode && len(watchNamespaces) > 0 {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf(
-			"%s is only supported for agentless (management-cluster) deploys, ignoring it for this push-mode cluster",
+			"%s is only supported for agentless (management-cluster) or pull-mode deploys, ignoring it for this push-mode cluster",
 			agentWatchNamespacesAnnotation))
 	}
 
 	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace, clusterName,
-		applicant, featureID, "do-not-send-updates", clusterType, patches, logger)
+		applicant, featureID, "do-not-send-updates", clusterType, patches, watchNamespaces, logger)
 }
 
 // getAgentWatchNamespaces reads agentWatchNamespacesAnnotation off the Cluster/SveltosCluster
@@ -292,7 +295,7 @@ func deployResourceSummaryCRD(ctx context.Context, remoteRestConfig *rest.Config
 }
 
 func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace, clusterName, mode string,
-	clusterType libsveltosv1beta1.ClusterType) string {
+	clusterType libsveltosv1beta1.ClusterType, watchNamespaces []string) string {
 
 	if mode != "do-not-send-updates" {
 		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "do-not-send-updates", "send-updates")
@@ -306,6 +309,13 @@ func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespac
 		strings.ReplaceAll(driftDetectionManagerYAML, "cluster-type=", fmt.Sprintf("cluster-type=%s", clusterType))
 	driftDetectionManagerYAML =
 		strings.ReplaceAll(driftDetectionManagerYAML, "v=5", "v=0")
+
+	// Unlike cluster-namespace/cluster-name/cluster-type above, this substitution is a no-op
+	// (empty in, empty out) when watchNamespaces is empty, keeping today's cluster-wide default.
+	if len(watchNamespaces) > 0 {
+		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "watch-namespaces=",
+			fmt.Sprintf("watch-namespaces=%s", strings.Join(watchNamespaces, ",")))
+	}
 
 	registry := getDriftDetectionRegistry()
 	if registry != "" {
@@ -323,7 +333,8 @@ func replaceRegistry(agentYAML, registry string) string {
 // deployDriftDetectionManagerInManagedCluster deploys the drift-detection-manager component within the managed cluster.
 func deployDriftDetectionManagerInManagedCluster(ctx context.Context,
 	clusterNamespace, clusterName, applicant, featureID, mode string,
-	clusterType libsveltosv1beta1.ClusterType, patches []libsveltosv1beta1.Patch, logger logr.Logger) error {
+	clusterType libsveltosv1beta1.ClusterType, patches []libsveltosv1beta1.Patch, watchNamespaces []string,
+	logger logr.Logger) error {
 
 	// Sveltos resources are deployed using cluster-admin role.
 	cacheMgr := clustercache.GetManager()
@@ -338,7 +349,7 @@ func deployDriftDetectionManagerInManagedCluster(ctx context.Context,
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerYAML())
 
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
-		clusterName, mode, clusterType)
+		clusterName, mode, clusterType, watchNamespaces)
 
 	return deployDriftDetectionManagerResources(ctx, remoteRestConfig, clusterNamespace, clusterName,
 		applicant, featureID, driftDetectionManagerYAML, nil, patches, logger)
@@ -356,14 +367,7 @@ func deployDriftDetectionManagerInManagementCluster(ctx context.Context, restCon
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerInMgmtClusterYAML())
 
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
-		clusterName, mode, clusterType)
-
-	// Unlike cluster-namespace/cluster-name/cluster-type above, this substitution is a no-op
-	// (empty in, empty out) when watchNamespaces is empty, keeping today's cluster-wide default.
-	if len(watchNamespaces) > 0 {
-		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "watch-namespaces=",
-			fmt.Sprintf("watch-namespaces=%s", strings.Join(watchNamespaces, ",")))
-	}
+		clusterName, mode, clusterType, watchNamespaces)
 
 	// Following labels are added on the objects representing the drift-detection-manager
 	// for this cluster.
@@ -671,7 +675,7 @@ func removeDriftDetectionManagerFromManagementCluster(ctx context.Context,
 	// Get YAML containing drift-detection-manager resources
 	driftDetectionManagerYAML := string(driftdetection.GetDriftDetectionManagerInMgmtClusterYAML())
 	driftDetectionManagerYAML = prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace,
-		clusterName, "", clusterType)
+		clusterName, "", clusterType, nil)
 
 	// Addon-controller deploys drift-detection-manager resources for each cluster matching at least
 	// one ClusterProfile with SyncMode set to ContinuousWithDriftDetection.

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 	"unicode/utf8"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -181,8 +182,65 @@ func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryNam
 		}
 		return false
 	}, timeout, pollingInterval).Should(BeTrue(), func() string {
-		return fmt.Sprintf("featureSummary for %s never reached Provisioned: %+v", featureID, lastSeen)
+		msg := fmt.Sprintf("featureSummary for %s never reached Provisioned: %+v", featureID, lastSeen)
+		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
+			msg += "\n" + describeConfigurationGroups(clusterSummaryNamespace, clusterSummaryName, featureID)
+		}
+		return msg
 	})
+}
+
+// describeConfigurationGroups returns a human readable summary of the pull-mode ConfigurationGroup(s)
+// created for clusterSummary/featureID. It is meant to be part of failure messages: it shows whether the
+// agent is still processing (observed generation/hash behind the spec) and, through name and creation time,
+// whether addon-controller recreated the ConfigurationGroup.
+func describeConfigurationGroups(clusterSummaryNamespace, clusterSummaryName string,
+	featureID libsveltosv1beta1.FeatureID) string {
+
+	// Printed for status fields the agent has not set yet
+	const notSet = "<nil>"
+
+	configurationGroups := &libsveltosv1beta1.ConfigurationGroupList{}
+	err := k8sClient.List(context.TODO(), configurationGroups, client.InNamespace(clusterSummaryNamespace))
+	if err != nil {
+		return fmt.Sprintf("failed to list ConfigurationGroups: %v", err)
+	}
+
+	description := ""
+	for i := range configurationGroups.Items {
+		cg := &configurationGroups.Items[i]
+
+		requestorName, err := pullmode.GetRequestorName(cg)
+		if err != nil || requestorName != clusterSummaryName {
+			continue
+		}
+		requestorFeature, err := pullmode.GetRequestorFeature(cg)
+		if err != nil || requestorFeature != string(featureID) {
+			continue
+		}
+
+		deploymentStatus := notSet
+		if cg.Status.DeploymentStatus != nil {
+			deploymentStatus = string(*cg.Status.DeploymentStatus)
+		}
+		failureMessage := notSet
+		if cg.Status.FailureMessage != nil {
+			failureMessage = *cg.Status.FailureMessage
+		}
+
+		description += fmt.Sprintf("ConfigurationGroup %s (created %s): action=%s updatePhase=%s "+
+			"generation=%d observedGeneration=%d requestorHash=%x observedRequestorHash=%x "+
+			"deploymentStatus=%s failureMessage=%s\n",
+			cg.Name, cg.CreationTimestamp.Format(time.RFC3339), cg.Spec.Action, cg.Spec.UpdatePhase,
+			cg.Generation, cg.Status.ObservedGeneration, cg.Spec.RequestorHash, cg.Status.ObservedRequestorHash,
+			deploymentStatus, failureMessage)
+	}
+
+	if description == "" {
+		return "no ConfigurationGroup found"
+	}
+
+	return description
 }
 
 // deleteClusterProfile deletes ClusterProfile and verifies all ClusterSummaries created by this ClusterProfile

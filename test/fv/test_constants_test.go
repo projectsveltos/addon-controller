@@ -93,6 +93,11 @@ const (
 	annotationOkValue   = "ok"
 	annotationTrueValue = "true"
 
+	// JSON6902 patch adding the annotation that excludes a resource from configuration drift evaluation
+	ignoreConfigurationDriftPatch = `- op: add
+  path: /metadata/annotations/projectsveltos.io~1driftDetectionIgnore
+  value: ok`
+
 	// Template strings
 	clusterNameTemplate      = "{{ .Cluster.metadata.name }}"
 	clusterNamespaceTemplate = "{{ .Cluster.metadata.namespace }}"

@@ -68,9 +68,10 @@ const (
 
 var _ = Describe("Feature", func() {
 	const (
-		namePrefix    = "auto-deploy-dependencies-"
-		deplNamespace = "kube-prometheus-stack"
-		deplName      = "kube-prometheus-stack-operator"
+		namePrefix      = "auto-deploy-dependencies-"
+		deplNamespace   = "kube-prometheus-stack"
+		deplName        = "kube-prometheus-stack-operator"
+		tokenSecretName = "kube-prometheus-stack-prometheus-token"
 	)
 
 	// This Helm release contains corev1.List. Verify those are expanded so drift-detection can watch for configuration drift
@@ -91,6 +92,22 @@ var _ = Describe("Feature", func() {
 			},
 		}
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuousWithDriftDetection
+
+		// The chart creates a kubernetes.io/service-account-token Secret. Shortly after it is created, kube-apiserver
+		// adds the kubernetes.io/legacy-token-last-used label to it. Labels are part of what drift detection
+		// evaluates, so this would be reported as configuration drift and trigger a redeploy of the chart.
+		// That has nothing to do with what this test verifies, so ignore the Secret for configuration drift.
+		clusterProfile.Spec.Patches = []libsveltosv1beta1.Patch{
+			{
+				Patch: ignoreConfigurationDriftPatch,
+				Target: &libsveltosv1beta1.PatchSelector{
+					Version:   apiVersionV1,
+					Kind:      kindSecret,
+					Namespace: deplNamespace,
+					Name:      tokenSecretName,
+				},
+			},
+		}
 
 		Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
 

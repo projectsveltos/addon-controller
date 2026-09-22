@@ -709,11 +709,11 @@ var _ = Describe("HandlersUtils", func() {
 			defaultTier, false, false, controllers.NewDeploymentContext(clusterSummary, clusterObjects, nil),
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
-		Expect(err.Error()).To(ContainSubstring("Forbidden"))
+		Expect(err.Error()).To(ContainSubstring("field is immutable"))
 
 		By("Validating the failing resource is still reported, with action Error")
 		validateResourceReports(resourceReports, 0, 0, 0, 0, 1)
-		Expect(resourceReports[0].Message).To(ContainSubstring("Forbidden"))
+		Expect(resourceReports[0].Message).To(ContainSubstring("field is immutable"))
 	})
 
 	It("deployContentOfSecret deploys all policies contained in a ConfigMap", func() {

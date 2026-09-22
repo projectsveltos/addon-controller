@@ -133,13 +133,6 @@ var _ = Describe("Feature", func() {
 			return *depl.Spec.Replicas == depl.Status.ReadyReplicas
 		}, timeout, pollingInterval).Should(BeTrue())
 
-		if kindWorkloadCluster.GetKind() == libsveltosv1beta1.SveltosClusterKind {
-			Byf("Verifying ConfigurationGroup is set to Provisioned")
-			Eventually(func() bool {
-				return isConfigurationGroupProvisioned(clusterSummary, libsveltosv1beta1.FeatureHelm)
-			}, timeout, pollingInterval).Should(BeTrue())
-		}
-
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 

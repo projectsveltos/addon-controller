@@ -4,7 +4,7 @@ go 1.27.1
 
 require (
 	github.com/a8m/envsubst v1.4.3
-	github.com/onsi/ginkgo/v2 v2.32.2
+	github.com/onsi/ginkgo/v2 v2.33.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/tools v0.50.0
 	k8s.io/client-go v0.37.0

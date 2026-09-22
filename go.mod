@@ -8,22 +8,22 @@ require (
 	github.com/TwiN/go-color v1.4.1
 	github.com/dariubs/percent v1.0.0
 	github.com/docker/cli v29.8.1+incompatible
-	github.com/fluxcd/pkg/apis/meta v1.31.0
-	github.com/fluxcd/pkg/http/fetch v0.25.0
+	github.com/fluxcd/pkg/apis/meta v1.32.0
+	github.com/fluxcd/pkg/http/fetch v0.26.0
 	github.com/fluxcd/pkg/tar v1.2.0
 	github.com/fluxcd/source-controller/api v1.9.5
 	github.com/gdexlab/go-render v1.0.1
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-containerregistry v0.22.1
 	github.com/hexops/gotextdiff v1.0.3
-	github.com/onsi/ginkgo/v2 v2.32.2
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/onsi/gomega v1.43.1
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v1.15.1-0.20260917070258-2cea5f03d976
 	github.com/prometheus/client_golang v1.24.1
 	github.com/sigstore/cosign/v3 v3.1.3
-	github.com/sigstore/sigstore v1.10.10
+	github.com/sigstore/sigstore v1.11.0
 	github.com/spf13/pflag v1.0.10
 	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/text v0.42.0
@@ -39,7 +39,7 @@ require (
 	oras.land/oras-go/v2 v2.6.2
 	sigs.k8s.io/cluster-api v1.14.2
 	sigs.k8s.io/cluster-api/api v1.14.2
-	sigs.k8s.io/controller-runtime v0.25.0
+	sigs.k8s.io/controller-runtime v0.25.1
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/kustomize/kyaml v0.21.1
 	sigs.k8s.io/yaml v1.6.0

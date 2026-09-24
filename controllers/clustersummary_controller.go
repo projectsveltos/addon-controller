@@ -1113,6 +1113,11 @@ func (r *ClusterSummaryReconciler) cleanMaps(clusterSummaryScope *scope.ClusterS
 		clusterSummarySet := r.ReferenceMap[i]
 		clusterSummarySet.Erase(clusterSummaryInfo)
 	}
+
+	delete(r.DeletedInstances, types.NamespacedName{
+		Namespace: clusterSummaryScope.Namespace(),
+		Name:      clusterSummaryScope.Name(),
+	})
 }
 
 func (r *ClusterSummaryReconciler) updateMaps(ctx context.Context, clusterSummaryScope *scope.ClusterSummaryScope,

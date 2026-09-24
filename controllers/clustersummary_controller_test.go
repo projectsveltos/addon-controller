@@ -1116,6 +1116,41 @@ var _ = Describe("ClustersummaryController", func() {
 		Expect(result.RequeueAfter).To(BeZero())
 	})
 
+	It("reconcileDelete removes the DeletedInstances entry once the finalizer is removed", func() {
+		// No cluster.
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         textlogger.NewLogger(textlogger.NewConfig()),
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		key := types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}
+		// Simulate a prior delete-reconcile pass having recorded this instance.
+		clusterSummaryReconciler.DeletedInstances[key] = time.Now()
+
+		result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		// Finalizer removal succeeded (RequeueAfter is zero above), so the in-memory
+		// DeletedInstances entry must not outlive the ClusterSummary it tracked.
+		_, ok := clusterSummaryReconciler.DeletedInstances[key]
+		Expect(ok).To(BeFalse())
+	})
+
 	It("reconcileDelete requeues and does not remove finalizer when cluster is present but not ready", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
 		now := metav1.NewTime(time.Now())

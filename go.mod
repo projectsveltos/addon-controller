@@ -17,7 +17,7 @@ require (
 	github.com/google/go-containerregistry v0.22.1
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/onsi/ginkgo/v2 v2.33.0
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/projectsveltos/libsveltos v1.15.1-0.20260922151654-f52afc8eb25c

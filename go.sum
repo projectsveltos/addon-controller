@@ -653,6 +653,8 @@ github.com/projectsveltos/libsveltos v1.15.1-0.20260917070258-2cea5f03d976 h1:4j
 github.com/projectsveltos/libsveltos v1.15.1-0.20260917070258-2cea5f03d976/go.mod h1:YKMqwREDkoQH84WTmixxsB8tN5V0cwOnWQ5hNjrg7xM=
 github.com/projectsveltos/libsveltos v1.15.1-0.20260922151654-f52afc8eb25c h1:RqxXZhbxwZ7FnSHSHJyi3AOwAZ5vOg4UlUr+9G/LzUc=
 github.com/projectsveltos/libsveltos v1.15.1-0.20260922151654-f52afc8eb25c/go.mod h1:dmQn8IkmRLuC+VDQO3JRcZVevltDQuvayNZpDMZI7eA=
+github.com/projectsveltos/libsveltos v1.15.1-0.20260926132809-22ba1d7c00cb h1:Y/4ED/PWS5iv5zl4YdByfqzWVxT8wI008JpLjjXshOI=
+github.com/projectsveltos/libsveltos v1.15.1-0.20260926132809-22ba1d7c00cb/go.mod h1:dmQn8IkmRLuC+VDQO3JRcZVevltDQuvayNZpDMZI7eA=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5 h1:khnc+994UszxZYu69J+R5FKiLA/Nk1JQj0EYAkwTWz0=
 github.com/projectsveltos/lua-utils/glua-json v0.0.0-20251212200258-2b3cdcb7c0f5/go.mod h1:yVL8KQFa9tmcxgwl9nwIMtKgtmIVC1zaFRSCfOwYvPY=
 github.com/projectsveltos/lua-utils/glua-runes v0.0.0-20251212200258-2b3cdcb7c0f5 h1:YbsebwRwTRhV8QacvEAdFqxcxHdeu7JTVtsBovbkgos=

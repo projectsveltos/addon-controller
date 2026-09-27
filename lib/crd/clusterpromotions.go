@@ -1188,6 +1188,9 @@ spec:
                                   "oci://"                — OCI registry artifact whose layers are accepted
                                                             in the same shapes: raw YAML/JSON, gzip-compressed
                                                             YAML/JSON, uncompressed tar, or gzip-compressed tar
+                                URL can be expressed as a template and instantiated using any cluster field,
+                                so a single profile can fetch different content for each matching cluster,
+                                e.g. "oci://registry.example/space/app-{{ .Cluster.metadata.name }}:latest".
                               pattern: ^(https?|oci)://
                               type: string
                           required:
@@ -2663,6 +2666,9 @@ spec:
                                             "oci://"                — OCI registry artifact whose layers are accepted
                                                                       in the same shapes: raw YAML/JSON, gzip-compressed
                                                                       YAML/JSON, uncompressed tar, or gzip-compressed tar
+                                          URL can be expressed as a template and instantiated using any cluster field,
+                                          so a single profile can fetch different content for each matching cluster,
+                                          e.g. "oci://registry.example/space/app-{{ .Cluster.metadata.name }}:latest".
                                         pattern: ^(https?|oci)://
                                         type: string
                                     required:
@@ -3098,6 +3104,9 @@ spec:
                                             "oci://"                — OCI registry artifact whose layers are accepted
                                                                       in the same shapes: raw YAML/JSON, gzip-compressed
                                                                       YAML/JSON, uncompressed tar, or gzip-compressed tar
+                                          URL can be expressed as a template and instantiated using any cluster field,
+                                          so a single profile can fetch different content for each matching cluster,
+                                          e.g. "oci://registry.example/space/app-{{ .Cluster.metadata.name }}:latest".
                                         pattern: ^(https?|oci)://
                                         type: string
                                     required:

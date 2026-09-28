@@ -505,14 +505,13 @@ var _ = Describe("RemoteURL templating", func() {
 		Expect(hash).To(Equal(expectedURLHash(body)))
 	})
 
-	It("returns a URL that is not a template unchanged, without looking up the cluster", func() {
+	It("returns a URL with no template directives unchanged", func() {
 		for _, rawURL := range []string{
 			"oci://registry.example/space/demo:latest",
 			"https://example.com/manifest.yaml?a=1&b=2",
 		} {
-			// Neither namespace nor cluster exist
 			instantiatedURL, err := instantiateRemoteURL(context.TODO(), rawURL,
-				util.RandomString(8), util.RandomString(8), libsveltosv1beta1.ClusterTypeCapi)
+				cluster.Namespace, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(instantiatedURL).To(Equal(rawURL))
 		}

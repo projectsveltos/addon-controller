@@ -21,8 +21,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -31,6 +36,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -658,6 +664,125 @@ var _ = Describe("Hash methods", func() {
 		Expect(string(data)).To(ContainSubstring(fmt.Sprintf("namespace: %s", clusterNamespace)))
 		Expect(string(data)).To(ContainSubstring(fmt.Sprintf("app: nginx-%s", version)))
 		Expect(string(data)).To(ContainSubstring("region: west"))
+	})
+})
+
+var _ = Describe("RemoteKustomizeURL templating", func() {
+	const (
+		kustomizationFileName = "kustomization.yaml"
+		kustomizationContent  = "resources:\n- deployment.yaml\n"
+		missingFieldURL       = "https://example.com/{{ .Cluster.metadata.labels.region }}.tar.gz"
+	)
+
+	var cluster *clusterv1.Cluster
+	var clusterSummary *configv1beta1.ClusterSummary
+	var logger logr.Logger
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig())
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns.Name,
+				Name:      upstreamClusterNamePrefix + randomString(),
+				Labels:    map[string]string{"env": "test"},
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+
+		clusterSummary = &configv1beta1.ClusterSummary{
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	})
+
+	// serveTarGz starts an httptest server returning a gzip-compressed tar built from
+	// entries (name -> content) for every request, and returns its URL and the served
+	// archive bytes, alongside a cleanup func.
+	serveTarGz := func(entries map[string]string) (string, []byte, func()) {
+		tmpFile, err := os.CreateTemp("", "kustomize-remote-*.tar.gz")
+		Expect(err).To(BeNil())
+		Expect(tmpFile.Close()).To(Succeed())
+		defer os.Remove(tmpFile.Name())
+
+		writeTarArchive(tmpFile.Name(), true, entries)
+		archive, err := os.ReadFile(tmpFile.Name())
+		Expect(err).To(BeNil())
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, writeErr := w.Write(archive)
+			Expect(writeErr).ToNot(HaveOccurred())
+		}))
+		return server.URL, archive, server.Close
+	}
+
+	It("prepareFileSystemWithRemoteURL instantiates the URL for the target cluster before fetching", func() {
+		url, _, cleanup := serveTarGz(map[string]string{kustomizationFileName: kustomizationContent})
+		defer cleanup()
+
+		kustomizationRef := &configv1beta1.KustomizationRef{
+			RemoteURL: &configv1beta1.RemoteKustomizeURL{
+				URL: url + `/{{ .Cluster.metadata.name }}.tar.gz`,
+			},
+		}
+
+		tmpDir, err := controllers.PrepareFileSystemWithRemoteURL(context.TODO(), kustomizationRef, clusterSummary, logger)
+		Expect(err).To(BeNil())
+		defer os.RemoveAll(tmpDir)
+
+		data, err := os.ReadFile(filepath.Join(tmpDir, kustomizationFileName))
+		Expect(err).To(BeNil())
+		Expect(string(data)).To(Equal(kustomizationContent))
+	})
+
+	It("getHashFromRemoteKustomizeURL instantiates the URL for the target cluster before hashing", func() {
+		url, archive, cleanup := serveTarGz(map[string]string{kustomizationFileName: kustomizationContent})
+		defer cleanup()
+
+		remoteURL := &configv1beta1.RemoteKustomizeURL{
+			URL: url + `/{{ .Cluster.metadata.name }}.tar.gz`,
+		}
+
+		hash, err := controllers.GetHashFromRemoteKustomizeURL(context.TODO(), remoteURL, clusterSummary, logger)
+		Expect(err).To(BeNil())
+
+		expectedHash := sha256.Sum256(archive)
+		Expect(string(hash)).To(Equal(hex.EncodeToString(expectedHash[:])))
+	})
+
+	It("prepareFileSystemWithRemoteURL reports a template instantiation error when the URL references a missing cluster field", func() {
+		kustomizationRef := &configv1beta1.KustomizationRef{
+			RemoteURL: &configv1beta1.RemoteKustomizeURL{
+				URL: missingFieldURL,
+			},
+		}
+
+		_, err := controllers.PrepareFileSystemWithRemoteURL(context.TODO(), kustomizationRef, clusterSummary, logger)
+		Expect(err).To(HaveOccurred())
+		var templateError *configv1beta1.TemplateInstantiationError
+		Expect(errors.As(err, &templateError)).To(BeTrue())
+	})
+
+	It("getHashFromRemoteKustomizeURL ignores a template instantiation error", func() {
+		remoteURL := &configv1beta1.RemoteKustomizeURL{
+			URL: missingFieldURL,
+		}
+
+		hash, err := controllers.GetHashFromRemoteKustomizeURL(context.TODO(), remoteURL, clusterSummary, logger)
+		Expect(err).To(BeNil())
+		Expect(hash).To(BeNil())
 	})
 })
 

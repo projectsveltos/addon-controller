@@ -500,17 +500,26 @@ func getHashFromKustomizationRef(ctx context.Context, c client.Client, clusterSu
 func getHashFromRemoteKustomizeURL(ctx context.Context, remoteURL *configv1beta1.RemoteKustomizeURL,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) ([]byte, error) {
 
+	instantiatedURL, err := instantiateRemoteURL(ctx, remoteURL.URL, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate remote Kustomize URL %s: %v",
+			remoteURL.URL, err))
+		// Ignore template instantiation error (deployment reports it)
+		return nil, nil
+	}
+
 	opts := remoteFetchOptions{
 		secretRef:             remoteURL.SecretRef,
 		insecureSkipTLSVerify: remoteURL.InsecureSkipTLSVerify,
 		plainHTTP:             remoteURL.PlainHTTP,
 	}
-	body, err := fetchContentForHash(ctx, remoteURL.URL, opts,
+	body, err := fetchContentForHash(ctx, instantiatedURL, opts,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 		clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to fetch remote Kustomize URL %s for hashing: %v",
-			remoteURL.URL, err))
+			instantiatedURL, err))
 		return nil, err
 	}
 
@@ -871,6 +880,14 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 func prepareFileSystemWithRemoteURL(ctx context.Context, kustomizationRef *configv1beta1.KustomizationRef,
 	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) (string, error) {
 
+	instantiatedURL, err := instantiateRemoteURL(ctx, kustomizationRef.RemoteURL.URL,
+		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+	if err != nil {
+		msg := fmt.Sprintf("failed to instantiate URL %s: %v", kustomizationRef.RemoteURL.URL, err)
+		logger.V(logs.LogInfo).Info(msg)
+		return "", &configv1beta1.TemplateInstantiationError{Message: msg}
+	}
+
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("kustomization-%s-%s",
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
 	if err != nil {
@@ -882,7 +899,7 @@ func prepareFileSystemWithRemoteURL(ctx context.Context, kustomizationRef *confi
 		insecureSkipTLSVerify: kustomizationRef.RemoteURL.InsecureSkipTLSVerify,
 		plainHTTP:             kustomizationRef.RemoteURL.PlainHTTP,
 	}
-	err = fetchContentToDir(ctx, kustomizationRef.RemoteURL.URL, opts,
+	err = fetchContentToDir(ctx, instantiatedURL, opts,
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType,
 		tmpDir, logger)
 	if err != nil {
@@ -890,7 +907,7 @@ func prepareFileSystemWithRemoteURL(ctx context.Context, kustomizationRef *confi
 		return "", err
 	}
 
-	logger.V(logs.LogDebug).Info(fmt.Sprintf("fetched remote Kustomize content from %s", kustomizationRef.RemoteURL.URL))
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("fetched remote Kustomize content from %s", instantiatedURL))
 	return tmpDir, nil
 }
 

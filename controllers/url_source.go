@@ -30,14 +30,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	orasremote "oras.land/oras-go/v2/registry/remote"
@@ -46,7 +44,6 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
-	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
@@ -75,45 +72,14 @@ type remoteFetchOptions struct {
 // PolicyRef can be expressed as a Go template and instantiated using any cluster field,
 // with the same template data (.Cluster, .ClusterNamespace, .ClusterName) and functions
 // used for the SecretRef Name/Namespace and for ConfigMap/Secret PolicyRef names.
-// text/template is used rather than html/template so that characters valid in a URL
-// (e.g. '&' or '+') are not HTML-escaped.
-// A URL that is not a template is returned unchanged, without fetching the cluster.
+// RenderClusterTemplateText (text/template) is used rather than GetReferenceResourceName/
+// Namespace (html/template) so that characters valid in a URL (e.g. '&' or '+') are not
+// HTML-escaped.
 func instantiateRemoteURL(ctx context.Context, rawURL, clusterNamespace, clusterName string,
 	clusterType libsveltosv1beta1.ClusterType) (string, error) {
 
-	if !strings.Contains(rawURL, "{{") {
-		return rawURL, nil
-	}
-
-	cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterNamespace, clusterName, clusterType)
-	if err != nil {
-		return "", err
-	}
-
-	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cluster)
-	if err != nil {
-		return "", err
-	}
-
-	tmpl, err := template.New("url").Option("missingkey=error").Funcs(libsveltostemplate.ExtraFuncMap()).Parse(rawURL)
-	if err != nil {
-		return "", err
-	}
-
-	var buffer bytes.Buffer
-	err = tmpl.Execute(&buffer, struct {
-		Cluster                       map[string]interface{}
-		ClusterNamespace, ClusterName string
-	}{
-		Cluster:          u,
-		ClusterNamespace: clusterNamespace,
-		ClusterName:      clusterName,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return buffer.String(), nil
+	return libsveltostemplate.RenderClusterTemplateText(ctx, getManagementClusterClient(),
+		clusterNamespace, clusterName, rawURL, clusterType)
 }
 
 // fetchURL retrieves the raw content from rawURL.

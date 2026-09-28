@@ -128,6 +128,8 @@ var (
 	UndeployKustomizeRefs             = undeployKustomizeRefs
 	KustomizationHash                 = kustomizationHash
 	GetKustomizeReferenceResourceHash = getKustomizeReferenceResourceHash
+	GetHashFromRemoteKustomizeURL     = getHashFromRemoteKustomizeURL
+	PrepareFileSystemWithRemoteURL    = prepareFileSystemWithRemoteURL
 	ExtractTarGz                      = extractTarGz
 	GetHelmChartHash                  = getHelmChartHash
 	//nolint: gocritic // getDataSectionHash is generic and needs instantiation

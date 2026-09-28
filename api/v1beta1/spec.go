@@ -713,6 +713,9 @@ type RemoteKustomizeURL struct {
 	//                             (.tar.gz) of the Kustomize directory
 	//   "oci://"                — OCI registry artifact whose layers are extracted
 	//                             the same way, preserving the directory tree
+	// URL can be expressed as a template and instantiated using any cluster field,
+	// so a single profile can fetch different content for each matching cluster,
+	// e.g. "oci://registry.example/space/app-{{ .Cluster.metadata.name }}:latest".
 	// +kubebuilder:validation:Pattern=`^(https?|oci)://`
 	URL string `json:"url"`
 

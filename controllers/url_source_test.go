@@ -21,7 +21,10 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -31,14 +34,20 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/memory"
 	orasremote "oras.land/oras-go/v2/registry/remote"
 	orasauth "oras.land/oras-go/v2/registry/remote/auth"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 
+	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
@@ -376,5 +385,162 @@ var _ = Describe("pullOCIArtifactLayers (self-signed TLS)", func() {
 		_, err := fetchOCI(context.TODO(), ociURL, remoteFetchOptions{},
 			"", "", libsveltosv1beta1.ClusterTypeCapi, logger)
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+// pushPlainOCIArtifact pushes a single-layer artifact holding layerContent to
+// host/repository:tag on a plain-HTTP OCI registry.
+func pushPlainOCIArtifact(host, repository, tag string, layerContent []byte) {
+	store := memory.New()
+	layerDesc := content.NewDescriptorFromBytes("application/vnd.projectsveltos.yaml", layerContent)
+	Expect(store.Push(context.TODO(), layerDesc, bytes.NewReader(layerContent))).To(Succeed())
+
+	manifestDesc, err := oras.PackManifest(context.TODO(), store, oras.PackManifestVersion1_1,
+		"application/vnd.projectsveltos.manifest", oras.PackManifestOptions{Layers: []ocispec.Descriptor{layerDesc}})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(store.Tag(context.TODO(), manifestDesc, tag)).To(Succeed())
+
+	remoteRepo, err := orasremote.NewRepository(fmt.Sprintf("%s/%s:%s", host, repository, tag))
+	Expect(err).ToNot(HaveOccurred())
+	remoteRepo.PlainHTTP = true
+
+	_, err = oras.Copy(context.TODO(), store, tag, remoteRepo, tag, oras.CopyOptions{})
+	Expect(err).ToNot(HaveOccurred())
+}
+
+var _ = Describe("RemoteURL templating", func() {
+	var logger logr.Logger
+	var cluster *clusterv1.Cluster
+	var clusterSummary *configv1beta1.ClusterSummary
+
+	const tier = int32(100)
+
+	// expectedURLHash mirrors what urlPolicyRefsHash computes for a single PolicyRef.
+	expectedURLHash := func(body []byte) string {
+		h := sha256.Sum256(body)
+		return hex.EncodeToString(h[:]) + fmt.Sprintf("%d", tier) + fmt.Sprintf("%t", false)
+	}
+
+	BeforeEach(func() {
+		logger = logr.Discard()
+		c := getManagementClusterClient()
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "url-" + util.RandomString(8),
+			},
+		}
+		Expect(c.Create(context.TODO(), ns)).To(Succeed())
+
+		cluster = &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:   ns.Name,
+				Name:        "w-" + util.RandomString(8),
+				Labels:      map[string]string{"env": "test"},
+				Annotations: map[string]string{"version": "1.2.3+build"},
+			},
+		}
+		Expect(c.Create(context.TODO(), cluster)).To(Succeed())
+		// Wait for the cluster to be visible through the (cached) management cluster client
+		Eventually(func() error {
+			return c.Get(context.TODO(), client.ObjectKeyFromObject(cluster), &clusterv1.Cluster{})
+		}, "10s", "100ms").Should(Succeed())
+
+		clusterSummary = &configv1beta1.ClusterSummary{
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	})
+
+	It("instantiates a templated OCI URL and fetches the artifact of the matching cluster", func() {
+		server := httptest.NewServer(registry.New())
+		defer server.Close()
+		host := strings.TrimPrefix(server.URL, "http://")
+
+		layerContent := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: " + cluster.Name + "\n")
+		pushPlainOCIArtifact(host, "unit/demo-"+cluster.Name, "v1", layerContent)
+
+		rawURL := fmt.Sprintf("oci://%s/unit/demo-{{ .Cluster.metadata.name }}:v1", host)
+		instantiatedURL, err := instantiateRemoteURL(context.TODO(), rawURL,
+			cluster.Namespace, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(instantiatedURL).To(Equal(fmt.Sprintf("oci://%s/unit/demo-%s:v1", host, cluster.Name)))
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{RemoteURL: &configv1beta1.RemoteURL{URL: rawURL, PlainHTTP: true}, Tier: tier},
+		}
+		hash, err := urlPolicyRefsHash(context.TODO(), clusterSummary, logger)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash).To(Equal(expectedURLHash(layerContent)))
+	})
+
+	It("instantiates a templated HTTP URL without HTML-escaping cluster fields", func() {
+		body := []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: http-templated\n")
+		expectedPath := fmt.Sprintf("/%s/test.yaml", cluster.Namespace)
+		expectedQuery := fmt.Sprintf("cluster=%s&version=1.2.3+build", cluster.Name)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != expectedPath || r.URL.RawQuery != expectedQuery {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			_, _ = w.Write(body)
+		}))
+		defer server.Close()
+
+		rawURL := server.URL + `/{{ .ClusterNamespace }}/{{ index .Cluster.metadata.labels "env" }}.yaml` +
+			`?cluster={{ .ClusterName }}&version={{ index .Cluster.metadata.annotations "version" }}`
+		instantiatedURL, err := instantiateRemoteURL(context.TODO(), rawURL,
+			cluster.Namespace, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(instantiatedURL).To(Equal(server.URL + expectedPath + "?" + expectedQuery))
+
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{RemoteURL: &configv1beta1.RemoteURL{URL: rawURL}, Tier: tier},
+		}
+		hash, err := urlPolicyRefsHash(context.TODO(), clusterSummary, logger)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash).To(Equal(expectedURLHash(body)))
+	})
+
+	It("returns a URL that is not a template unchanged, without looking up the cluster", func() {
+		for _, rawURL := range []string{
+			"oci://registry.example/space/demo:latest",
+			"https://example.com/manifest.yaml?a=1&b=2",
+		} {
+			// Neither namespace nor cluster exist
+			instantiatedURL, err := instantiateRemoteURL(context.TODO(), rawURL,
+				util.RandomString(8), util.RandomString(8), libsveltosv1beta1.ClusterTypeCapi)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(instantiatedURL).To(Equal(rawURL))
+		}
+	})
+
+	It("reports a template instantiation error when the URL references a missing cluster field", func() {
+		rawURL := "oci://registry.example/space/demo-{{ .Cluster.metadata.labels.region }}:latest"
+
+		_, err := instantiateRemoteURL(context.TODO(), rawURL,
+			cluster.Namespace, cluster.Name, libsveltosv1beta1.ClusterTypeCapi)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`map has no entry for key "region"`))
+
+		// Deployment reports it as a TemplateInstantiationError, even for an optional PolicyRef
+		ref := &referencedObject{URL: rawURL, Optional: true}
+		_, err = deployContentOfURL(context.TODO(), false, nil, nil, ref,
+			&deploymentContext{clusterSummary: clusterSummary}, logger)
+		Expect(err).To(HaveOccurred())
+		var templateError *configv1beta1.TemplateInstantiationError
+		Expect(errors.As(err, &templateError)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring(`map has no entry for key "region"`))
+
+		// Hash evaluation skips the URL, same as for ConfigMap/Secret names that cannot be instantiated
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{RemoteURL: &configv1beta1.RemoteURL{URL: rawURL}, Tier: tier},
+		}
+		hash, err := urlPolicyRefsHash(context.TODO(), clusterSummary, logger)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(hash).To(BeEmpty())
 	})
 })

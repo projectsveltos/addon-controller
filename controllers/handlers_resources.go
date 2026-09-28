@@ -637,6 +637,7 @@ func resourcesHash(ctx context.Context, c client.Client, clusterSummary *configv
 
 // urlPolicyRefsHash fetches each URL-based PolicyRef and returns a hash string
 // that covers their content, tier, and template flag.
+// Each URL is instantiated for the cluster before being fetched.
 func urlPolicyRefsHash(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 	logger logr.Logger) (string, error) {
 
@@ -646,18 +647,26 @@ func urlPolicyRefsHash(ctx context.Context, clusterSummary *configv1beta1.Cluste
 		if ref.RemoteURL == nil {
 			continue
 		}
+		instantiatedURL, err := instantiateRemoteURL(ctx, ref.RemoteURL.URL, clusterSummary.Spec.ClusterNamespace,
+			clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType)
+		if err != nil {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to instantiate URL %s: %v",
+				ref.RemoteURL.URL, err))
+			// Ignore template instantiation error (deployment reports it)
+			continue
+		}
 		opts := remoteFetchOptions{
 			secretRef:             ref.RemoteURL.SecretRef,
 			insecureSkipTLSVerify: ref.RemoteURL.InsecureSkipTLSVerify,
 			plainHTTP:             ref.RemoteURL.PlainHTTP,
 		}
-		body, err := fetchContent(ctx, ref.RemoteURL.URL, opts,
+		body, err := fetchContent(ctx, instantiatedURL, opts,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
 			clusterSummary.Spec.ClusterType, logger)
 		if err != nil {
 			if ref.Optional {
 				logger.V(logs.LogInfo).Info(fmt.Sprintf(
-					"optional URL source %s could not be fetched for hashing, ignoring: %v", ref.RemoteURL.URL, err))
+					"optional URL source %s could not be fetched for hashing, ignoring: %v", instantiatedURL, err))
 				continue
 			}
 			return "", err

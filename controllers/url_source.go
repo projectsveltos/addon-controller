@@ -30,12 +30,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/go-logr/logr"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	orasremote "oras.land/oras-go/v2/registry/remote"
@@ -44,6 +46,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	libsveltostemplate "github.com/projectsveltos/libsveltos/lib/template"
 )
@@ -66,6 +69,51 @@ type remoteFetchOptions struct {
 	// plainHTTP uses an insecure HTTP connection instead of HTTPS when
 	// fetching from an OCI registry ("oci://" scheme). Ignored otherwise.
 	plainHTTP bool
+}
+
+// instantiateRemoteURL instantiates rawURL for the target cluster. The URL of a RemoteURL
+// PolicyRef can be expressed as a Go template and instantiated using any cluster field,
+// with the same template data (.Cluster, .ClusterNamespace, .ClusterName) and functions
+// used for the SecretRef Name/Namespace and for ConfigMap/Secret PolicyRef names.
+// text/template is used rather than html/template so that characters valid in a URL
+// (e.g. '&' or '+') are not HTML-escaped.
+// A URL that is not a template is returned unchanged, without fetching the cluster.
+func instantiateRemoteURL(ctx context.Context, rawURL, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) (string, error) {
+
+	if !strings.Contains(rawURL, "{{") {
+		return rawURL, nil
+	}
+
+	cluster, err := clusterproxy.GetCluster(ctx, getManagementClusterClient(), clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		return "", err
+	}
+
+	u, err := runtime.DefaultUnstructuredConverter.ToUnstructured(cluster)
+	if err != nil {
+		return "", err
+	}
+
+	tmpl, err := template.New("url").Option("missingkey=error").Funcs(libsveltostemplate.ExtraFuncMap()).Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	var buffer bytes.Buffer
+	err = tmpl.Execute(&buffer, struct {
+		Cluster                       map[string]interface{}
+		ClusterNamespace, ClusterName string
+	}{
+		Cluster:          u,
+		ClusterNamespace: clusterNamespace,
+		ClusterName:      clusterName,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return buffer.String(), nil
 }
 
 // fetchURL retrieves the raw content from rawURL.
@@ -457,22 +505,32 @@ func gunzipBytes(raw []byte) ([]byte, error) {
 
 // deployContentOfURL fetches YAML/JSON content from a remote source and deploys it
 // to the destination cluster using the same pipeline as ConfigMap/Secret sources.
+// The URL can be expressed as a template and is instantiated for the destination
+// cluster before being fetched.
 func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destConfig *rest.Config,
 	destClient client.Client, ref *referencedObject, dCtx *deploymentContext,
 	logger logr.Logger) ([]libsveltosv1beta1.ResourceReport, error) {
+
+	instantiatedURL, err := instantiateRemoteURL(ctx, ref.URL, dCtx.clusterSummary.Spec.ClusterNamespace,
+		dCtx.clusterSummary.Spec.ClusterName, dCtx.clusterSummary.Spec.ClusterType)
+	if err != nil {
+		msg := fmt.Sprintf("failed to instantiate URL %s: %v", ref.URL, err)
+		logger.V(logs.LogInfo).Info(msg)
+		return nil, &configv1beta1.TemplateInstantiationError{Message: msg}
+	}
 
 	opts := remoteFetchOptions{
 		secretRef:             ref.SecretRef,
 		insecureSkipTLSVerify: ref.InsecureSkipTLSVerify,
 		plainHTTP:             ref.PlainHTTP,
 	}
-	body, err := fetchContent(ctx, ref.URL, opts,
+	body, err := fetchContent(ctx, instantiatedURL, opts,
 		dCtx.clusterSummary.Spec.ClusterNamespace, dCtx.clusterSummary.Spec.ClusterName,
 		dCtx.clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		if ref.Optional {
 			logger.V(logs.LogInfo).Info(fmt.Sprintf(
-				"optional URL source %s could not be fetched, ignoring: %v", ref.URL, err))
+				"optional URL source %s could not be fetched, ignoring: %v", instantiatedURL, err))
 			return nil, nil
 		}
 		return nil, err
@@ -482,7 +540,7 @@ func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destCo
 	// the same way it does for ConfigMap/Secret references.
 	syntheticSource := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ref.URL,
+			Name: instantiatedURL,
 		},
 	}
 	if ref.IsTemplate {
@@ -492,7 +550,7 @@ func deployContentOfURL(ctx context.Context, deployingToMgmtCluster bool, destCo
 	}
 
 	data := map[string]string{"content.yaml": string(body)}
-	l := logger.WithValues("url", ref.URL)
+	l := logger.WithValues("url", instantiatedURL)
 	l.V(logs.LogDebug).Info("deploying URL content")
 
 	return deployContent(ctx, deployingToMgmtCluster, destConfig, destClient, syntheticSource,

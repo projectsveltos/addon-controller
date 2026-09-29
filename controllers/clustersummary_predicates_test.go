@@ -402,4 +402,64 @@ var _ = Describe("Clustersummary Predicates: ClusterSummaryPredicate", func() {
 		result := clusterSummaryPredicate.Update(e)
 		Expect(result).To(BeTrue())
 	})
+
+	It("Update returns true when retrigger annotation changes", func() {
+		clusterSummaryPredicate := controllers.ClusterSummaryPredicate{Logger: logger}
+
+		oldClusterSummary := clusterSummary.DeepCopy()
+
+		clusterSummary.Annotations = map[string]string{"projectsveltos.io/retrigger": randomString()}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result := clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns true when redeploy annotation is added or its value changes", func() {
+		clusterSummaryPredicate := controllers.ClusterSummaryPredicate{Logger: logger}
+
+		oldClusterSummary := clusterSummary.DeepCopy()
+
+		clusterSummary.Annotations = map[string]string{configv1beta1.ProfileRedeployAnnotation: randomString()}
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result := clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeTrue())
+
+		oldClusterSummary = clusterSummary.DeepCopy()
+		clusterSummary.Annotations[configv1beta1.ProfileRedeployAnnotation] = randomString()
+
+		e = event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result = clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeTrue())
+	})
+
+	It("Update returns false when only an unrelated annotation changes", func() {
+		clusterSummaryPredicate := controllers.ClusterSummaryPredicate{Logger: logger}
+
+		clusterSummary.Annotations = map[string]string{configv1beta1.ProfileRedeployAnnotation: "1"}
+		oldClusterSummary := clusterSummary.DeepCopy()
+
+		clusterSummary.Annotations[randomString()] = randomString()
+
+		e := event.UpdateEvent{
+			ObjectNew: clusterSummary,
+			ObjectOld: oldClusterSummary,
+		}
+
+		result := clusterSummaryPredicate.Update(e)
+		Expect(result).To(BeFalse())
+	})
 })

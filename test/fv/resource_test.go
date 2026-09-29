@@ -296,16 +296,27 @@ var _ = Describe("Feature", func() {
 			libsveltosv1beta1.FeatureResources)
 		Expect(lastAppliedTime).ToNot(BeNil())
 
+		redeployValue := randomString()
 		Byf("Setting the redeploy annotation on ClusterProfile %s", clusterProfile.Name)
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			if currentClusterProfile.Annotations == nil {
 				currentClusterProfile.Annotations = map[string]string{}
 			}
-			currentClusterProfile.Annotations[configv1beta1.ProfileRedeployAnnotation] = randomString()
+			currentClusterProfile.Annotations[configv1beta1.ProfileRedeployAnnotation] = redeployValue
 			return k8sClient.Update(context.TODO(), currentClusterProfile)
 		})
 		Expect(err).To(BeNil())
+
+		Byf("Verifying the redeploy annotation is copied to ClusterSummary %s", clusterSummary.Name)
+		Eventually(func() bool {
+			currentClusterSummary := &configv1beta1.ClusterSummary{}
+			err := k8sClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: kindWorkloadCluster.GetNamespace(), Name: clusterSummary.Name},
+				currentClusterSummary)
+			return err == nil &&
+				currentClusterSummary.Annotations[configv1beta1.ProfileRedeployAnnotation] == redeployValue
+		}, timeout, pollingInterval).Should(BeTrue())
 
 		Byf("Verifying ClusterSummary %s Resources feature is redeployed", clusterSummary.Name)
 		Eventually(func() bool {

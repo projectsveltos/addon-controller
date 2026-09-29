@@ -34,6 +34,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,10 +65,11 @@ import (
 )
 
 const (
-	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
-	deploymentTypeAnnotation = "projectsveltos.io/deploymenttype"
-	subresourcesAnnotation   = "projectsveltos.io/subresources"
-	pathAnnotation           = "path"
+	clusterSummaryAnnotation     = "projectsveltos.io/clustersummary"
+	deploymentTypeAnnotation     = "projectsveltos.io/deploymenttype"
+	subresourcesAnnotation       = "projectsveltos.io/subresources"
+	pathAnnotation               = "path"
+	customResourceDefinitionKind = "CustomResourceDefinition"
 )
 
 type referencedObject struct {
@@ -302,6 +304,8 @@ func deployContent(ctx context.Context, deployingToMgmtCluster bool, destConfig 
 		return nil, err
 	}
 
+	resources = partitionCRDsFirst(resources)
+
 	ref := &corev1.ObjectReference{
 		Kind:      referencedObject.GetObjectKind().GroupVersionKind().Kind,
 		Namespace: referencedObject.GetNamespace(),
@@ -391,6 +395,37 @@ func applyPatches(ctx context.Context, clusterSummary *configv1beta1.ClusterSumm
 	}
 
 	return referencedUnstructured, nil
+}
+
+// partitionCRDsFirst stably reorders resources so every CustomResourceDefinition comes before
+// any other resource, preserving relative order within each group.
+//
+// A manifest can list a custom resource before the CRD that defines it (e.g. NVIDIA's GPU
+// Operator chart lists ClusterPolicy before its CRD). Deploying such a manifest in list order
+// then fails on the custom resource, whose type the API server does not know yet. Without
+// ContinueOnError that failure aborts the whole deployment before the CRD, appearing later in
+// the list, is ever applied, so every retry replays the same order and fails the same way
+// forever. Applying CRDs first breaks that stall: the CRD gets applied and persists, and the
+// custom resource succeeds on this pass or, at worst, the next reconcile once the CRD is
+// established.
+func partitionCRDsFirst(resources []*unstructured.Unstructured) []*unstructured.Unstructured {
+	crds := make([]*unstructured.Unstructured, 0, len(resources))
+	others := make([]*unstructured.Unstructured, 0, len(resources))
+
+	for i := range resources {
+		if isCustomResourceDefinition(resources[i]) {
+			crds = append(crds, resources[i])
+		} else {
+			others = append(others, resources[i])
+		}
+	}
+
+	return append(crds, others...)
+}
+
+func isCustomResourceDefinition(resource *unstructured.Unstructured) bool {
+	return resource.GetAPIVersion() == apiextensionsv1.SchemeGroupVersion.String() &&
+		resource.GetKind() == customResourceDefinitionKind
 }
 
 // addStaleResourceScopingAnnotations annotates policy with the information stale-resource

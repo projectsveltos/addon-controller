@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -153,6 +154,15 @@ func updateConfigMapWithPolicy(cm *corev1.ConfigMap, policyStrs ...string) *core
 	}
 
 	return cm
+}
+
+// newTestUnstructured builds a minimal unstructured object with the given apiVersion, kind and name.
+func newTestUnstructured(apiVersion, kind, name string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetAPIVersion(apiVersion)
+	u.SetKind(kind)
+	u.SetName(name)
+	return u
 }
 
 func randomString() string {

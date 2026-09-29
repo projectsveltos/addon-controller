@@ -2598,7 +2598,7 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 	}
 
 	dr, err := k8s_utils.GetDynamicResourceInterface(destConfig,
-		apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"), "")
+		apiextensionsv1.SchemeGroupVersion.WithKind(customResourceDefinitionKind), "")
 	if err != nil {
 		return err
 	}
@@ -5687,7 +5687,7 @@ func splitResources(resources []*unstructured.Unstructured, releaseNamespace str
 	// Separate CRD instances from other resources
 	for _, resource := range resources {
 		if resource.GetAPIVersion() == apiextensionsv1.SchemeGroupVersion.String() &&
-			resource.GetKind() == "CustomResourceDefinition" {
+			resource.GetKind() == customResourceDefinitionKind {
 
 			crdInstances = append(crdInstances, resource)
 		} else if isHookResource(resource, "pre-install") {

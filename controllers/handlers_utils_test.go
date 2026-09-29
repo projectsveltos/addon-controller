@@ -1611,6 +1611,32 @@ stringData:
 		Expect(len(u)).To(Equal(3))
 	})
 
+	It("partitionCRDsFirst moves CustomResourceDefinitions before other resources, preserving relative order", func() {
+		deployment := newTestUnstructured("apps/v1", "Deployment", "sample-app")
+		clusterPolicy := newTestUnstructured("nvidia.com/v1", "ClusterPolicy", "cluster-policy")
+		service := newTestUnstructured("v1", "Service", "sample-app")
+		crd := newTestUnstructured("apiextensions.k8s.io/v1", "CustomResourceDefinition", "clusterpolicies.nvidia.com")
+
+		resources := []*unstructured.Unstructured{deployment, clusterPolicy, service, crd}
+
+		result := controllers.PartitionCRDsFirst(resources)
+		Expect(result).To(HaveLen(4))
+		Expect(result[0]).To(Equal(crd))
+		Expect(result[1]).To(Equal(deployment))
+		Expect(result[2]).To(Equal(clusterPolicy))
+		Expect(result[3]).To(Equal(service))
+	})
+
+	It("partitionCRDsFirst leaves order unchanged when no CustomResourceDefinition is present", func() {
+		deployment := newTestUnstructured("apps/v1", "Deployment", "sample-app")
+		service := newTestUnstructured("v1", "Service", "sample-app")
+
+		resources := []*unstructured.Unstructured{deployment, service}
+
+		result := controllers.PartitionCRDsFirst(resources)
+		Expect(result).To(Equal(resources))
+	})
+
 	It("patchRessource with subresources correctly update instance", func() {
 		namespace := randomString()
 		serviceName := randomString()

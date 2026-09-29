@@ -1097,6 +1097,11 @@ func deployKustomizeResources(ctx context.Context, c client.Client, remoteRestCo
 		return nil, nil, err
 	}
 
+	// Deliberately not calling partitionCRDsFirst here (unlike deployContent for policyRefs): a
+	// kustomization.yaml's resources list already gives users an explicit way to order a CRD
+	// before the custom resources that depend on it, so reordering here would override that
+	// choice instead of fixing an otherwise-unfixable case.
+
 	ref := &corev1.ObjectReference{
 		Kind:      kustomizationRef.Kind,
 		Namespace: kustomizationRef.Namespace,

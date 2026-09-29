@@ -1601,6 +1601,9 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 	config += fmt.Sprintf("%d", clusterProfileSpec.Tier)
 	config += fmt.Sprintf("%t", clusterProfileSpec.ContinueOnConflict)
 
+	// A change to the redeploy annotation forces a redeployment
+	config += clusterSummary.Annotations[configv1beta1.ProfileRedeployAnnotation]
+
 	if clusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection {
 		// Drift detection is now upgraded on its own. v1.0.1 was last release triggering
 		// the upgrade via ClusterSummary redeployment. v1.0.1 is still added here to make

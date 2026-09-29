@@ -289,6 +289,31 @@ var _ = Describe("Feature", func() {
 			return !currentPod.DeletionTimestamp.IsZero()
 		}, timeout, pollingInterval).Should(BeTrue())
 
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Resources feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureResources)
+
+		lastAppliedTime := getFeatureLastAppliedTime(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
+			libsveltosv1beta1.FeatureResources)
+		Expect(lastAppliedTime).ToNot(BeNil())
+
+		Byf("Setting the redeploy annotation on ClusterProfile %s", clusterProfile.Name)
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
+			if currentClusterProfile.Annotations == nil {
+				currentClusterProfile.Annotations = map[string]string{}
+			}
+			currentClusterProfile.Annotations[configv1beta1.ProfileRedeployAnnotation] = randomString()
+			return k8sClient.Update(context.TODO(), currentClusterProfile)
+		})
+		Expect(err).To(BeNil())
+
+		Byf("Verifying ClusterSummary %s Resources feature is redeployed", clusterSummary.Name)
+		Eventually(func() bool {
+			newLastAppliedTime := getFeatureLastAppliedTime(kindWorkloadCluster.GetNamespace(), clusterSummary.Name,
+				libsveltosv1beta1.FeatureResources)
+			return newLastAppliedTime != nil && newLastAppliedTime.After(lastAppliedTime.Time)
+		}, timeout, pollingInterval).Should(BeTrue())
+
 		deleteClusterProfile(clusterProfile)
 
 		currentNs := &corev1.Namespace{}

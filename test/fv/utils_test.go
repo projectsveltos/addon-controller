@@ -158,6 +158,27 @@ func getKindWorkloadClusterKubeconfig() (client.Client, error) {
 	return client.New(restConfig, client.Options{Scheme: scheme})
 }
 
+// getFeatureLastAppliedTime returns the time featureID was last reconciled, nil if not available.
+func getFeatureLastAppliedTime(clusterSummaryNamespace, clusterSummaryName string,
+	featureID libsveltosv1beta1.FeatureID) *metav1.Time {
+
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
+	err := k8sClient.Get(context.TODO(),
+		types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
+		currentClusterSummary)
+	if err != nil {
+		return nil
+	}
+
+	for i := range currentClusterSummary.Status.FeatureSummaries {
+		if currentClusterSummary.Status.FeatureSummaries[i].FeatureID == featureID {
+			return currentClusterSummary.Status.FeatureSummaries[i].LastAppliedTime
+		}
+	}
+
+	return nil
+}
+
 func verifyFeatureStatusIsProvisioned(clusterSummaryNamespace, clusterSummaryName string, featureID libsveltosv1beta1.FeatureID) {
 	var lastSeen *configv1beta1.FeatureSummary
 

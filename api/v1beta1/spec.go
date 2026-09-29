@@ -40,6 +40,14 @@ const (
 	// ProfilePausedAnnotation is the annotation that, when set on a Profile or ClusterProfile,
 	// will pause reconciliation, preventing any changes from being propagated to clusters.
 	ProfilePausedAnnotation = "profile.projectsveltos.io/paused"
+
+	// ProfileRedeployAnnotation is the annotation that, when set on a Profile, ClusterProfile or
+	// ClusterSummary, forces a redeployment when its value changes. Any value is accepted.
+	// When set on a Profile or ClusterProfile, all the ClusterSummary instances it manages are
+	// redeployed. When set on a ClusterSummary, only that instance is redeployed. If set on both,
+	// the value on the Profile/ClusterProfile takes precedence.
+	// Ignored for Profiles/ClusterProfiles with SyncMode OneTime.
+	ProfileRedeployAnnotation = "profile.projectsveltos.io/redeploy"
 )
 
 type DryRunReconciliationError struct{}

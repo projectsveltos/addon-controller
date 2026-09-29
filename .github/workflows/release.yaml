@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write  # upload assets to the GitHub release
+  id-token: write  # keyless OIDC signing via Sigstore
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: docker.io/projectsveltos/addon-controller
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5730b3d9a2f25d8890f7d5d06a7c9b820024d8f # v3.10.0
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
+
+      - name: Build and push image (git variant)
+        id: build-git
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1 # v6.16.0
+        with:
+          file: Dockerfile_WithGit
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE }}-git:${{ github.ref_name }}
+
+      - name: Sign images
+        run: |
+          cosign sign --yes ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          cosign sign --yes ${{ env.IMAGE }}-git@${{ steps.build-git.outputs.digest }}
+
+      - name: Install syft
+        # Pin syft to a specific version. Check for new releases at https://github.com/anchore/syft/releases and bump this version periodically.
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.18.0
+
+      - name: Generate SBOM
+        # Scan the image rather than the source tree so the SBOM reflects what is
+        # actually deployed, including base image packages.
+        run: |
+          syft scan ${{ env.IMAGE }}@${{ steps.build.outputs.digest }} \
+            -o spdx-json=sbom.spdx.json \
+            -o cyclonedx-json=sbom.cyclonedx.json
+
+      - name: Attest SBOM
+        # Stores a signed DSSE attestation in the registry, linked to the image digest.
+        # Consumers can retrieve and verify it with: cosign verify-attestation --type spdxjson IMAGE
+        run: |
+          cosign attest --yes \
+            --predicate sbom.spdx.json \
+            --type spdxjson \
+            ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          cosign attest --yes \
+            --predicate sbom.spdx.json \
+            --type spdxjson \
+            ${{ env.IMAGE }}-git@${{ steps.build-git.outputs.digest }}
+
+      - name: Upload SBOMs to release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          files: |
+            sbom.spdx.json
+            sbom.cyclonedx.json

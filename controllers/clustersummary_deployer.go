@@ -269,21 +269,24 @@ func (r *ClusterSummaryReconciler) handleDeployerError(deployerError error, clus
 			clusterSummary.Spec.ClusterName, deployerError.Error())
 		return true, nil
 	}
+	// A failing health check paces its own retries at HealthErrorRetryTime instead of falling
+	// through to an immediate redeploy below, but it is still a consecutive failure like any
+	// other: once MaxConsecutiveFailures is reached, honor it the same way every other error
+	// type does, instead of retrying forever regardless of the configured limit.
+	//
+	// The caller already recorded this failure as FeatureStatusFailed with this same
+	// deployerError before calling handleDeployerError, so below max there is nothing left to
+	// update here; re-applying the same status would double-count this one failure.
 	var healthCheckError *clusterops.HealthCheckError
 	if errors.As(deployerError, &healthCheckError) {
-		retriableStatus := libsveltosv1beta1.FeatureStatusFailed
-		r.updateFeatureStatus(clusterSummaryScope, f.id, &retriableStatus, currentHash, deployerError, logger)
+		if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
+			r.markMaxConsecutiveFailuresReached(clusterSummaryScope, f, currentHash, logger)
+			return true, nil
+		}
 		return true, healthCheckError
 	}
 	if r.maxNumberOfConsecutiveFailureReached(clusterSummaryScope, f, logger) {
-		nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
-		resultError := errors.New("the maximum number of consecutive errors has been reached")
-		r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
-		r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "FailedNonRetriable",
-			configv1beta1.ClusterSummaryKind,
-			"Feature %s for cluster %s %s/%s will no longer be retried: maximum consecutive failures reached",
-			f.id, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
-			clusterSummary.Spec.ClusterName)
+		r.markMaxConsecutiveFailuresReached(clusterSummaryScope, f, currentHash, logger)
 		return true, nil
 	}
 
@@ -1068,6 +1071,22 @@ func (r *ClusterSummaryReconciler) maxNumberOfConsecutiveFailureReached(clusterS
 	}
 
 	return false
+}
+
+// markMaxConsecutiveFailuresReached transitions a feature to FailedNonRetriable once
+// MaxConsecutiveFailures has been reached, regardless of which error type tripped it.
+func (r *ClusterSummaryReconciler) markMaxConsecutiveFailuresReached(clusterSummaryScope *scope.ClusterSummaryScope,
+	f feature, currentHash []byte, logger logr.Logger) {
+
+	clusterSummary := clusterSummaryScope.ClusterSummary
+	nonRetriableStatus := libsveltosv1beta1.FeatureStatusFailedNonRetriable
+	resultError := errors.New("the maximum number of consecutive errors has been reached")
+	r.updateFeatureStatus(clusterSummaryScope, f.id, &nonRetriableStatus, currentHash, resultError, logger)
+	r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "FailedNonRetriable",
+		configv1beta1.ClusterSummaryKind,
+		"Feature %s for cluster %s %s/%s will no longer be retried: maximum consecutive failures reached",
+		f.id, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName)
 }
 
 func (r *ClusterSummaryReconciler) getMaxConsecutiveFailures(clusterSummaryScope *scope.ClusterSummaryScope) uint {

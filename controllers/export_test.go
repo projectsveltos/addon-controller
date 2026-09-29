@@ -20,9 +20,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/events"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
+
+// SetEventRecorder injects an EventRecorder into a ClusterSummaryReconciler for tests, since the
+// field is only otherwise set by SetupWithManager.
+func SetEventRecorder(r *ClusterSummaryReconciler, recorder events.EventRecorder) {
+	r.eventRecorder = recorder
+}
 
 var (
 	UpdateClusterSummaries                = updateClusterSummaries
@@ -83,6 +90,8 @@ var (
 	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
 	RequeueClusterSummaryForCluster   = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
+	HandleDeployerError               = (*ClusterSummaryReconciler).handleDeployerError
+	GetFeatureSummaryForFeatureID     = getFeatureSummaryForFeatureID
 
 	GetPatchesFrom = getPatchesFrom
 )

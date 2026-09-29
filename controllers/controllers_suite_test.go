@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -173,7 +174,7 @@ var _ = AfterSuite(func() {
 })
 
 func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface) *controllers.ClusterSummaryReconciler {
-	return &controllers.ClusterSummaryReconciler{
+	r := &controllers.ClusterSummaryReconciler{
 		Client:             c,
 		Scheme:             scheme,
 		Deployer:           dep,
@@ -183,6 +184,10 @@ func getClusterSummaryReconciler(c client.Client, dep deployer.DeployerInterface
 		NextReconcileTimes: make(map[types.NamespacedName]controllers.ReconcileCooldown),
 		PolicyMux:          sync.Mutex{},
 	}
+	// Only otherwise set by SetupWithManager; without it, any code path that emits an event
+	// panics on a nil EventRecorder.
+	controllers.SetEventRecorder(r, events.NewFakeRecorder(10))
+	return r
 }
 
 func getClusterProfileReconciler(c client.Client) *controllers.ClusterProfileReconciler {

@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -743,6 +744,73 @@ var _ = Describe("ClustersummaryDeployer", func() {
 		err := controllers.UndeployFeature(reconciler, context.TODO(), clusterSummaryScope, f, textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).ToNot(BeNil())
 		Expect(err.Error()).To(Equal("deploying Resources still in progress. Wait before cleanup"))
+	})
+
+	It("handleDeployerError keeps retrying a health check failure without double-counting it", func() {
+		// proceedDeployingFeature already records this failure as FeatureStatusFailed, with this
+		// same error, before calling handleDeployerError. Reproduce that here so the test catches
+		// handleDeployerError re-applying the same update and counting this one failure twice.
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID:           libsveltosv1beta1.FeatureResources,
+				Status:              libsveltosv1beta1.FeatureStatusFailed,
+				ConsecutiveFailures: 1,
+			},
+		}
+
+		initObjects := []client.Object{clusterSummary, clusterProfile}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+		reconciler := getClusterSummaryReconciler(c, nil)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
+
+		healthErr := &clusterops.HealthCheckError{
+			FeatureID: libsveltosv1beta1.FeatureResources,
+			CheckName: randomString(),
+		}
+
+		shouldReturn, err := controllers.HandleDeployerError(reconciler, healthErr, clusterSummaryScope, f, nil, logger)
+		Expect(shouldReturn).To(BeTrue())
+		var returnedHealthErr *clusterops.HealthCheckError
+		Expect(errors.As(err, &returnedHealthErr)).To(BeTrue())
+
+		fs := controllers.GetFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(fs).ToNot(BeNil())
+		Expect(fs.Status).To(Equal(libsveltosv1beta1.FeatureStatusFailed))
+		Expect(fs.ConsecutiveFailures).To(Equal(uint(1)))
+	})
+
+	It("handleDeployerError honors MaxConsecutiveFailures for a health check that keeps failing", func() {
+		maxConsecutiveFailures := uint(3)
+		clusterSummary.Spec.ClusterProfileSpec.MaxConsecutiveFailures = &maxConsecutiveFailures
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID:           libsveltosv1beta1.FeatureResources,
+				Status:              libsveltosv1beta1.FeatureStatusFailed,
+				ConsecutiveFailures: maxConsecutiveFailures,
+			},
+		}
+
+		initObjects := []client.Object{clusterSummary, clusterProfile}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+		clusterSummaryScope := getClusterSummaryScope(c, logger, clusterProfile, clusterSummary)
+		reconciler := getClusterSummaryReconciler(c, nil)
+		f := controllers.GetHandlersForFeature(libsveltosv1beta1.FeatureResources)
+
+		healthErr := &clusterops.HealthCheckError{
+			FeatureID: libsveltosv1beta1.FeatureResources,
+			CheckName: randomString(),
+		}
+
+		// Once MaxConsecutiveFailures is reached, a health check failure must stop being retried
+		// just like any other error type, instead of retrying forever.
+		shouldReturn, err := controllers.HandleDeployerError(reconciler, healthErr, clusterSummaryScope, f, nil, logger)
+		Expect(shouldReturn).To(BeTrue())
+		Expect(err).To(BeNil())
+
+		fs := controllers.GetFeatureSummaryForFeatureID(clusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(fs).ToNot(BeNil())
+		Expect(fs.Status).To(Equal(libsveltosv1beta1.FeatureStatusFailedNonRetriable))
 	})
 })
 

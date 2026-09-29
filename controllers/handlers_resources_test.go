@@ -595,4 +595,37 @@ var _ = Describe("Hash methods", func() {
 		Expect(err).To(BeNil())
 		Expect(reflect.DeepEqual(continuousBeforeHash, continuousAfterHash)).To(BeTrue())
 	})
+
+	It("resourcesHash changes when the redeploy annotation changes", func() {
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterType: libsveltosv1beta1.ClusterTypeSveltos,
+				ClusterProfileSpec: configv1beta1.Spec{
+					SyncMode: configv1beta1.SyncModeContinuous,
+				},
+			},
+		}
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		noAnnotationHash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummary, logger)
+		Expect(err).To(BeNil())
+
+		clusterSummary.Annotations = map[string]string{configv1beta1.ProfileRedeployAnnotation: "1"}
+		firstHash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummary, logger)
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(noAnnotationHash, firstHash)).To(BeFalse())
+
+		sameHash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummary, logger)
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(firstHash, sameHash)).To(BeTrue())
+
+		clusterSummary.Annotations[configv1beta1.ProfileRedeployAnnotation] = "2"
+		secondHash, err := controllers.ResourcesHash(context.TODO(), testEnv, clusterSummary, logger)
+		Expect(err).To(BeNil())
+		Expect(reflect.DeepEqual(firstHash, secondHash)).To(BeFalse())
+	})
 })

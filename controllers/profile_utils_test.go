@@ -571,6 +571,77 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(reflect.DeepEqual(clusterSummaryList.Items[0].Spec.ClusterProfileSpec, clusterProfile.Spec)).To(BeTrue())
 	})
 
+	It("UpdateClusterSummary preserves redeploy annotation set on ClusterSummary unless ClusterProfile sets it", func() {
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      randomString(),
+				Namespace: randomString(),
+				Labels:    matchingCluster.Labels,
+			},
+		}
+		clusterRef := &corev1.ObjectReference{
+			Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name,
+			Kind: libsveltosv1beta1.SveltosClusterKind, APIVersion: libsveltosv1beta1.GroupVersion.String()}
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind, clusterProfile.Name, sveltosCluster.Name, false),
+				Namespace: sveltosCluster.Namespace,
+				Annotations: map[string]string{
+					configv1beta1.ProfileRedeployAnnotation: "summary-value",
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace:   sveltosCluster.Namespace,
+				ClusterName:        sveltosCluster.Name,
+				ClusterType:        libsveltosv1beta1.ClusterTypeSveltos,
+				ClusterProfileSpec: clusterProfile.Spec,
+			},
+		}
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, sveltosCluster.Name, libsveltosv1beta1.ClusterTypeSveltos)
+
+		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+		clusterSummary.Spec.ClusterProfileSpec = clusterProfile.Spec
+
+		initObjects := []client.Object{clusterProfile, sveltosCluster, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		getProfileScope := func() *scope.ProfileScope {
+			profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+				Client:         c,
+				Logger:         logger,
+				Profile:        clusterProfile,
+				ControllerName: testControllerNameProfile,
+			})
+			Expect(err).To(BeNil())
+			return profileScope
+		}
+
+		// ClusterProfile does not set the annotation: value set on the ClusterSummary is preserved
+		_, err := controllers.UpdateClusterSummary(context.TODO(), c, getProfileScope(), clusterSummary, clusterRef)
+		Expect(err).To(BeNil())
+		current := &configv1beta1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(clusterSummary), current)).To(Succeed())
+		Expect(current.Annotations[configv1beta1.ProfileRedeployAnnotation]).To(Equal("summary-value"))
+
+		// Other ClusterProfile annotations are still copied and redeploy annotation is still preserved
+		clusterProfile.Annotations = map[string]string{
+			configv1beta1.ProfilePausedAnnotation: testTrueValue,
+		}
+		_, err = controllers.UpdateClusterSummary(context.TODO(), c, getProfileScope(), current, clusterRef)
+		Expect(err).To(BeNil())
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(clusterSummary), current)).To(Succeed())
+		Expect(current.Annotations[configv1beta1.ProfileRedeployAnnotation]).To(Equal("summary-value"))
+		Expect(current.Annotations[configv1beta1.ProfilePausedAnnotation]).To(Equal(testTrueValue))
+
+		// ClusterProfile sets the annotation: its value takes precedence
+		clusterProfile.Annotations[configv1beta1.ProfileRedeployAnnotation] = "profile-value"
+		_, err = controllers.UpdateClusterSummary(context.TODO(), c, getProfileScope(), current, clusterRef)
+		Expect(err).To(BeNil())
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(clusterSummary), current)).To(Succeed())
+		Expect(current.Annotations[configv1beta1.ProfileRedeployAnnotation]).To(Equal("profile-value"))
+	})
+
 	It("UpdateClusterSummary does not update ClusterSummary when ClusterProfile syncmode set to one time", func() {
 		clusterProfile.Spec.SyncMode = configv1beta1.SyncModeOneTime
 		clusterProfile.Spec.PolicyRefs = []configv1beta1.PolicyRef{

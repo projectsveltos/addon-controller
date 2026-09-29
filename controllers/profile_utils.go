@@ -469,20 +469,50 @@ func updateClusterSummary(ctx context.Context, c client.Client, profileScope *sc
 		return clusterSummary, nil
 	}
 
+	annotations := getClusterSummaryAnnotations(profileScope.Profile.GetAnnotations(), clusterSummary.Annotations)
+
 	if reflect.DeepEqual(profileScope.GetSpec(), clusterSummary.Spec.ClusterProfileSpec) &&
-		reflect.DeepEqual(profileScope.Profile.GetAnnotations(), clusterSummary.Annotations) {
+		reflect.DeepEqual(annotations, clusterSummary.Annotations) {
 		// Nothing has changed
 		return clusterSummary, nil
 	}
 
-	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
+	clusterSummary.Annotations = annotations
 	clusterSummary.Spec.ClusterProfileSpec = *profileScope.GetSpec()
 	clusterSummary.Spec.ClusterType = clusterproxy.GetClusterType(cluster)
 	addClusterSummaryLabels(clusterSummary, profileScope, cluster)
-	// Copy annotation. Paused annotation might be set on ClusterProfile.
-	clusterSummary.Annotations = profileScope.Profile.GetAnnotations()
 	err := c.Update(ctx, clusterSummary)
 	return clusterSummary, err
+}
+
+// getClusterSummaryAnnotations returns the annotations a ClusterSummary must have given the annotations
+// of the Profile/ClusterProfile that manages it. Profile annotations are copied (paused annotation might
+// be set on ClusterProfile). The redeploy annotation is the exception: it can be set directly on a
+// ClusterSummary to redeploy only that instance, so the ClusterSummary value is preserved unless the
+// profile sets the annotation as well, in which case the profile value takes precedence.
+func getClusterSummaryAnnotations(profileAnnotations, clusterSummaryAnnotations map[string]string,
+) map[string]string {
+
+	var annotations map[string]string
+	if len(profileAnnotations) > 0 {
+		annotations = make(map[string]string, len(profileAnnotations))
+		for k, v := range profileAnnotations {
+			annotations[k] = v
+		}
+	}
+
+	if _, ok := annotations[configv1beta1.ProfileRedeployAnnotation]; ok {
+		return annotations
+	}
+
+	if v, ok := clusterSummaryAnnotations[configv1beta1.ProfileRedeployAnnotation]; ok {
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[configv1beta1.ProfileRedeployAnnotation] = v
+	}
+
+	return annotations
 }
 
 func addClusterSummaryLabels(clusterSummary *configv1beta1.ClusterSummary, profileScope *scope.ProfileScope,

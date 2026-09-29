@@ -28,6 +28,7 @@ var (
 	UpdateClusterSummaries                = updateClusterSummaries
 	CreateClusterSummary                  = createClusterSummary
 	UpdateClusterSummary                  = updateClusterSummary
+	UpdateClusterConfigurations           = updateClusterConfigurations
 	UpdateClusterConfigurationWithProfile = updateClusterConfigurationWithProfile
 	CleanClusterConfiguration             = cleanClusterConfiguration
 	CleanClusterConfigurations            = cleanClusterConfigurations

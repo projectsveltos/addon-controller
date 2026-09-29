@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/retry"
@@ -36,6 +37,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -210,11 +212,12 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
 
-		clusterRef := corev1.ObjectReference{Namespace: matchingCluster.Namespace, Name: matchingCluster.Name,
-			Kind: clusterKind, APIVersion: clusterv1.GroupVersion.String()}
-		Expect(controllers.UpdateClusterConfigurationWithProfile(context.TODO(), c, clusterProfile, &clusterRef)).To(Succeed())
-
 		currentClusterConfiguration := &configv1beta1.ClusterConfiguration{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
+
+		Expect(controllers.UpdateClusterConfigurationWithProfile(context.TODO(), c, clusterProfile, currentClusterConfiguration)).To(Succeed())
+
 		Expect(c.Get(context.TODO(),
 			types.NamespacedName{Namespace: clusterConfiguration.Namespace, Name: clusterConfiguration.Name}, currentClusterConfiguration)).To(Succeed())
 
@@ -223,10 +226,68 @@ var _ = Describe("Profile: Reconciler", func() {
 
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
 
-		Expect(controllers.UpdateClusterConfigurationWithProfile(context.TODO(), c, clusterProfile, &clusterRef)).To(Succeed())
+		Expect(controllers.UpdateClusterConfigurationWithProfile(context.TODO(), c, clusterProfile, currentClusterConfiguration)).To(Succeed())
 
 		Expect(len(currentClusterConfiguration.OwnerReferences)).To(Equal(1))
 		Expect(len(currentClusterConfiguration.Status.ClusterProfileResources)).To(Equal(1))
+	})
+
+	It("updateClusterConfigurations succeeds for a newly matching cluster even when the cache has not "+
+		"observed the just-created ClusterConfiguration yet (regression for stale-cache race)", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}
+
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			{
+				Namespace:  matchingCluster.Namespace,
+				Name:       matchingCluster.Name,
+				Kind:       clusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			},
+		}
+
+		initObjects := []client.Object{
+			clusterProfile,
+			ns,
+		}
+
+		clusterConfigurationName := controllers.GetClusterConfigurationName(matchingCluster.Name, libsveltosv1beta1.ClusterTypeCapi)
+
+		// Simulate the cache lag seen in production: right after ClusterConfiguration is
+		// created, a Get for it (as served from the informer cache) still returns NotFound.
+		// updateClusterConfigurations must not depend on being able to re-Get the object it
+		// just created for a cluster newly starting to match.
+		// ClusterConfiguration is created by the code under test, so it is not among initObjects.
+		// Register it explicitly as having a status subresource, otherwise the fake client
+		// returns NotFound on Status().Update().
+		c := fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(append(initObjects, &configv1beta1.ClusterConfiguration{})...).
+			WithObjects(initObjects...).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Get: func(ctx context.Context, cl client.WithWatch, key client.ObjectKey, obj client.Object,
+					opts ...client.GetOption) error {
+
+					if _, ok := obj.(*configv1beta1.ClusterConfiguration); ok && key.Name == clusterConfigurationName {
+						return apierrors.NewNotFound(
+							schema.GroupResource{Group: configv1beta1.GroupVersion.Group, Resource: "clusterconfigurations"},
+							key.Name)
+					}
+					return cl.Get(ctx, key, obj, opts...)
+				},
+			}).Build()
+
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.UpdateClusterConfigurations(context.TODO(), c, clusterProfileScope)).To(Succeed())
 	})
 
 	It("CleanClusterConfiguration idempotently removes ClusterProfile as OwnerReference and from Status.ClusterProfileResources", func() {

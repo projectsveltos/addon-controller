@@ -118,9 +118,9 @@ func updateClusterConfigurationProfileResources(ctx context.Context, c client.Cl
 	profile client.Object, clusterConfiguration *configv1beta1.ClusterConfiguration) error {
 
 	profileKind := profile.GetObjectKind().GroupVersionKind().Kind
+	fetch := clusterConfigurationFetcher(ctx, c, clusterConfiguration)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterConfiguration, err := getClusterConfiguration(ctx, c,
-			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		currentClusterConfiguration, err := fetch()
 		if err != nil {
 			return err
 		}
@@ -156,6 +156,25 @@ func updateClusterConfigurationProfileResources(ctx context.Context, c client.Cl
 	return err
 }
 
+// clusterConfigurationFetcher returns a function that supplies a ClusterConfiguration to a
+// retry.RetryOnConflict closure: the first call returns the already-known-fresh clusterConfiguration
+// (e.g. the object a preceding Create just returned), avoiding a cached Get that can still return
+// NotFound right after the object was created (the informer cache may not have observed it yet).
+// Any subsequent call (a retry following a genuine Conflict) fetches the latest version instead,
+// since at that point a fresh copy is actually needed.
+func clusterConfigurationFetcher(ctx context.Context, c client.Client,
+	clusterConfiguration *configv1beta1.ClusterConfiguration) func() (*configv1beta1.ClusterConfiguration, error) {
+
+	first := true
+	return func() (*configv1beta1.ClusterConfiguration, error) {
+		if first {
+			first = false
+			return clusterConfiguration, nil
+		}
+		return getClusterConfiguration(ctx, c, clusterConfiguration.Namespace, clusterConfiguration.Name)
+	}
+}
+
 // updateClusterConfigurationOwnerReferences adds profile as owner of ClusterConfiguration
 func updateClusterConfigurationOwnerReferences(ctx context.Context, c client.Client,
 	profile client.Object, clusterConfiguration *configv1beta1.ClusterConfiguration) error {
@@ -176,9 +195,9 @@ func updateClusterConfigurationOwnerReferences(ctx context.Context, c client.Cli
 		Name:       profile.GetName(),
 	}
 
+	fetch := clusterConfigurationFetcher(ctx, c, clusterConfiguration)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		currentClusterConfiguration, err := getClusterConfiguration(ctx, c,
-			clusterConfiguration.Namespace, clusterConfiguration.Name)
+		currentClusterConfiguration, err := fetch()
 		if err != nil {
 			return err
 		}
@@ -196,15 +215,9 @@ func updateClusterConfigurationOwnerReferences(ctx context.Context, c client.Cli
 // - adding ClusterProfile/Profile as one of OwnerReferences for ClusterConfiguration
 // - adding a section in Status.(Cluster)ProfileResources for this (Cluster)Profile
 func updateClusterConfigurationWithProfile(ctx context.Context, c client.Client, profile client.Object,
-	cluster *corev1.ObjectReference) error {
+	clusterConfiguration *configv1beta1.ClusterConfiguration) error {
 
-	clusterConfiguration, err := getClusterConfiguration(ctx, c, cluster.Namespace,
-		getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)))
-	if err != nil {
-		return err
-	}
-
-	err = updateClusterConfigurationOwnerReferences(ctx, c, profile, clusterConfiguration)
+	err := updateClusterConfigurationOwnerReferences(ctx, c, profile, clusterConfiguration)
 	if err != nil {
 		return err
 	}
@@ -218,12 +231,15 @@ func updateClusterConfigurationWithProfile(ctx context.Context, c client.Client,
 }
 
 // createClusterConfiguration creates ClusterConfiguration given a Sveltos/Cluster.
-// If already existing, return nil
-func createClusterConfiguration(ctx context.Context, c client.Client, cluster *corev1.ObjectReference) error {
+// If already existing, fetches and returns the existing one.
+func createClusterConfiguration(ctx context.Context, c client.Client,
+	cluster *corev1.ObjectReference) (*configv1beta1.ClusterConfiguration, error) {
+
+	clusterConfigurationName := getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster))
 	clusterConfiguration := &configv1beta1.ClusterConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: cluster.Namespace,
-			Name:      getClusterConfigurationName(cluster.Name, clusterproxy.GetClusterType(cluster)),
+			Name:      clusterConfigurationName,
 			Labels: map[string]string{
 				configv1beta1.ClusterNameLabel: cluster.Name,
 				configv1beta1.ClusterTypeLabel: string(clusterproxy.GetClusterType(cluster)),
@@ -232,13 +248,15 @@ func createClusterConfiguration(ctx context.Context, c client.Client, cluster *c
 	}
 
 	err := c.Create(ctx, clusterConfiguration)
-	if err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return nil
-		}
+	if err == nil {
+		return clusterConfiguration, nil
 	}
 
-	return err
+	if apierrors.IsAlreadyExists(err) {
+		return getClusterConfiguration(ctx, c, cluster.Namespace, clusterConfigurationName)
+	}
+
+	return nil, err
 }
 
 // updateClusterConfigurations for each Sveltos/Cluster currently matching ClusterProfile/Profile:
@@ -250,14 +268,14 @@ func updateClusterConfigurations(ctx context.Context, c client.Client, profileSc
 		cluster := profileScope.GetStatus().MatchingClusterRefs[i]
 
 		// Create ClusterConfiguration if not already existing.
-		err := createClusterConfiguration(ctx, c, &cluster)
+		clusterConfiguration, err := createClusterConfiguration(ctx, c, &cluster)
 		if err != nil {
 			profileScope.Error(err, fmt.Sprintf("failed to create ClusterConfiguration for cluster %s/%s",
 				cluster.Namespace, cluster.Name))
 			return err
 		}
 		// Update ClusterConfiguration
-		err = updateClusterConfigurationWithProfile(ctx, c, profileScope.Profile, &cluster)
+		err = updateClusterConfigurationWithProfile(ctx, c, profileScope.Profile, clusterConfiguration)
 		if err != nil {
 			profileScope.Error(err, fmt.Sprintf("failed to update ClusterConfiguration for cluster %s/%s",
 				cluster.Namespace, cluster.Name))

@@ -355,20 +355,15 @@ func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
+	// ProfileRedeployAnnotation is part of the hash: a change forces a redeployment, which
+	// can only happen if the ClusterSummary is reconciled
 	newAnnot := newClusterSummary.GetAnnotations()
 	oldAnnot := oldClusterSummary.GetAnnotations()
-
-	var oldVal, newVal string
-	if oldAnnot != nil {
-		oldVal = oldAnnot[retriggerAnnotation]
-	}
-	if newAnnot != nil {
-		newVal = newAnnot[retriggerAnnotation]
-	}
-
-	if oldVal != newVal {
-		log.V(logs.LogVerbose).Info("Retrigger annotation changed. Reconciling ClusterSummary.")
-		return true
+	for _, key := range []string{retriggerAnnotation, configv1beta1.ProfileRedeployAnnotation} {
+		if oldAnnot[key] != newAnnot[key] {
+			log.V(logs.LogVerbose).Info(fmt.Sprintf("Annotation %s changed. Reconciling ClusterSummary.", key))
+			return true
+		}
 	}
 
 	if !reflect.DeepEqual(oldClusterSummary.Spec, newClusterSummary.Spec) {

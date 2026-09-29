@@ -109,6 +109,7 @@ var (
 	GetClusterSummaryAdmin               = getClusterSummaryAdmin
 	CollectContent                       = collectContent
 	CollectReferencedObjects             = collectReferencedObjects
+	PartitionCRDsFirst                   = partitionCRDsFirst
 	PrepareBundleSettersWithResourceInfo = prepareBundleSettersWithResourceInfo
 	PrepareBundleSettersWithHelmInfo     = prepareBundleSettersWithHelmInfo
 	UndeployStaleResources               = undeployStaleResources

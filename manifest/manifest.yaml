@@ -11686,10 +11686,13 @@ rules:
   - ""
   resources:
   - configmaps
+  - secrets
   verbs:
+  - create
   - delete
   - get
   - list
+  - update
   - watch
 - apiGroups:
   - ""
@@ -11698,14 +11701,6 @@ rules:
   verbs:
   - get
   - list
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - '*'
   resources:
@@ -12092,6 +12087,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         image: docker.io/projectsveltos/addon-controller:main
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
           httpGet:
@@ -12150,6 +12146,7 @@ spec:
         - name: IS_INITIALIZATION
           value: "true"
         image: docker.io/projectsveltos/addon-controller:main
+        imagePullPolicy: IfNotPresent
         name: initialization
         securityContext:
           allowPrivilegeEscalation: false

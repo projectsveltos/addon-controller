@@ -151,6 +151,7 @@ const (
 	clusterNameKey = "cluster-name"
 
 	// Annotation values for profile
+	stagingValue             = "staging"
 	productionValue          = "production"
 	promotionNameAnnotation  = "config.projectsveltos.io/promotionname"
 	promotionVerifAnnotation = "config.projectsveltos.io/promotion-verification"

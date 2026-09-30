@@ -88,11 +88,14 @@ var (
 	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 	PrepareForDeployment                 = (*ClusterSummaryReconciler).prepareForDeployment
 
-	ConvertResultStatus               = (*ClusterSummaryReconciler).convertResultStatus
-	RequeueClusterSummaryForReference = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
-	RequeueClusterSummaryForCluster   = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
-	HandleDeployerError               = (*ClusterSummaryReconciler).handleDeployerError
-	GetFeatureSummaryForFeatureID     = getFeatureSummaryForFeatureID
+	ConvertResultStatus                 = (*ClusterSummaryReconciler).convertResultStatus
+	RequeueClusterSummaryForReference   = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
+	RequeueClusterPromotionForReference = (*ClusterPromotionReconciler).requeueClusterPromotionForReference
+	ClusterPromotionUpdateMaps          = (*ClusterPromotionReconciler).updateMaps
+	ClusterPromotionCleanMaps           = (*ClusterPromotionReconciler).cleanMaps
+	RequeueClusterSummaryForCluster     = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster
+	HandleDeployerError                 = (*ClusterSummaryReconciler).handleDeployerError
+	GetFeatureSummaryForFeatureID       = getFeatureSummaryForFeatureID
 
 	GetPatchesFrom = getPatchesFrom
 )

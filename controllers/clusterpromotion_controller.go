@@ -19,7 +19,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sync"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -29,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -37,6 +40,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
 const (
@@ -84,12 +88,18 @@ type ClusterPromotionReconciler struct {
 	Scheme               *runtime.Scheme
 	eventRecorder        events.EventRecorder
 	ConcurrentReconciles int
+
+	PolicyMux    sync.Mutex                                    // use a Mutex to update ReferenceMap as MaxConcurrentReconciles is higher than one
+	ReferenceMap map[corev1.ObjectReference]*libsveltosset.Set // key: Referenced object; value: set of all ClusterPromotions referencing the resource
 }
 
 // +kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterpromotions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterpromotions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterpromotions/finalizers,verbs=update
 // +kubebuilder:rbac:groups=config.projectsveltos.io,resources=clusterprofiles,verbs=get;list;watch;create;update;patch;delete
+// ClusterPromotion creates a copy of the referenced ConfigMaps/Secrets for each stage
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=create;update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;update;delete
 
 func (r *ClusterPromotionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	logger := ctrl.LoggerFrom(ctx)
@@ -121,8 +131,10 @@ func (r *ClusterPromotionReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	if !clusterPromotion.DeletionTimestamp.IsZero() {
 		licenseManagerInstance.RemoveClusterPromotion(req.Namespace, req.Name)
+		r.cleanMaps(clusterPromotion)
 	} else {
 		licenseManagerInstance.AddClusterPromotion(clusterPromotion)
+		r.updateMaps(clusterPromotion)
 	}
 
 	// Always close the scope when exiting this function so we can persist any ClusterPromotion
@@ -212,6 +224,18 @@ func (r *ClusterPromotionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				DependenciesHashChangedPredicate{},
 			),
 		)).
+		Watches(&corev1.ConfigMap{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterPromotionForReference),
+			builder.WithPredicates(
+				ConfigMapPredicates(mgr.GetLogger().WithValues("predicate", "configmappredicate")),
+			),
+		).
+		Watches(&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.requeueClusterPromotionForReference),
+			builder.WithPredicates(
+				SecretPredicates(mgr.GetLogger().WithValues("predicate", "secretpredicate")),
+			),
+		).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: r.ConcurrentReconciles,
 		}).

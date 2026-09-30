@@ -18,7 +18,7 @@ spec:
   - repositoryURL:    https://grafana-community.github.io/helm-charts
     repositoryName:   grafana
     chartName:        grafana/grafana
-    chartVersion:     13.2.5
+    chartVersion:     13.2.7
     releaseName:      grafana
     releaseNamespace: grafana
     helmChartAction:  Install

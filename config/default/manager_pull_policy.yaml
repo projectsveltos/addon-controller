@@ -8,7 +8,7 @@ spec:
     spec:
       initContainers:
       - name: initialization
-        imagePullPolicy: 
+        imagePullPolicy: IfNotPresent 
       containers:
       - name: controller
-        imagePullPolicy: 
+        imagePullPolicy: IfNotPresent

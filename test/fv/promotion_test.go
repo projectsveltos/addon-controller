@@ -109,7 +109,7 @@ end`
 		clusterLabels := map[string]string{key: value}
 		const two = 2
 		stage1 := configv1beta1.Stage{
-			Name: "staging",
+			Name: stagingValue,
 			ClusterSelector: libsveltosv1beta1.Selector{
 				LabelSelector: metav1.LabelSelector{
 					MatchLabels: clusterLabels,

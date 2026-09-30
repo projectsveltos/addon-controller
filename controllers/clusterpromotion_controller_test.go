@@ -26,10 +26,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 )
 
 const (
@@ -129,5 +131,61 @@ var _ = Describe("ClusterPromotionController", func() {
 		clusterProfiles := &configv1beta1.ClusterProfileList{}
 		Expect(c.List(ctx, clusterProfiles, listOptions...)).To(Succeed())
 		Expect(len(clusterProfiles.Items)).To(BeZero())
+	})
+
+	It("requeueClusterPromotionForReference enqueues the ClusterPromotions referencing the ConfigMap/Secret", func() {
+		namespace := randomString()
+		configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: randomString()}}
+		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: randomString()}}
+
+		policyRefPromotion := &configv1beta1.ClusterPromotion{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.ClusterPromotionSpec{ProfileSpec: configv1beta1.ProfileSpec{
+				PolicyRefs: []configv1beta1.PolicyRef{
+					{Namespace: namespace, Name: configMap.Name, Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
+				},
+			}},
+		}
+		valuesFromPromotion := &configv1beta1.ClusterPromotion{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.ClusterPromotionSpec{ProfileSpec: configv1beta1.ProfileSpec{
+				HelmCharts: []configv1beta1.HelmChart{{
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{Namespace: namespace, Name: secret.Name, Kind: string(libsveltosv1beta1.SecretReferencedResourceKind)},
+					},
+				}},
+			}},
+		}
+		// Same name as the ConfigMap but it is a Secret: must not match
+		otherKindPromotion := &configv1beta1.ClusterPromotion{
+			ObjectMeta: metav1.ObjectMeta{Name: randomString()},
+			Spec: configv1beta1.ClusterPromotionSpec{ProfileSpec: configv1beta1.ProfileSpec{
+				PatchesFrom: []configv1beta1.ValueFrom{
+					{Namespace: namespace, Name: configMap.Name, Kind: string(libsveltosv1beta1.SecretReferencedResourceKind)},
+				},
+			}},
+		}
+
+		reconciler := controllers.ClusterPromotionReconciler{}
+		controllers.ClusterPromotionUpdateMaps(&reconciler, policyRefPromotion)
+		controllers.ClusterPromotionUpdateMaps(&reconciler, valuesFromPromotion)
+		controllers.ClusterPromotionUpdateMaps(&reconciler, otherKindPromotion)
+
+		requests := controllers.RequeueClusterPromotionForReference(&reconciler, context.TODO(), configMap)
+		Expect(requests).To(HaveLen(1))
+		Expect(requests[0].Name).To(Equal(policyRefPromotion.Name))
+
+		requests = controllers.RequeueClusterPromotionForReference(&reconciler, context.TODO(), secret)
+		Expect(requests).To(HaveLen(1))
+		Expect(requests[0].Name).To(Equal(valuesFromPromotion.Name))
+
+		By("updating the ClusterPromotion so it does not reference the ConfigMap anymore")
+		policyRefPromotion.Spec.ProfileSpec.PolicyRefs = nil
+		controllers.ClusterPromotionUpdateMaps(&reconciler, policyRefPromotion)
+		Expect(controllers.RequeueClusterPromotionForReference(&reconciler, context.TODO(), configMap)).To(BeEmpty())
+
+		By("cleaning the maps for a deleted ClusterPromotion")
+		controllers.ClusterPromotionCleanMaps(&reconciler, valuesFromPromotion)
+		Expect(controllers.RequeueClusterPromotionForReference(&reconciler, context.TODO(), secret)).To(BeEmpty())
 	})
 })

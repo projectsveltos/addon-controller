@@ -674,6 +674,8 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 			Scheme:               mgr.GetScheme(),
 			Config:               mgr.GetConfig(),
 			ConcurrentReconciles: concurrentReconciles,
+			ReferenceMap:         make(map[corev1.ObjectReference]*libsveltosset.Set),
+			PolicyMux:            sync.Mutex{},
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
 			os.Exit(1)

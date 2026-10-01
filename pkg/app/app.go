@@ -199,6 +199,17 @@ func Run() {
 	}
 }
 
+// addClusterPromotionCopiesSweeper adds the runnable removing the ConfigMaps/Secrets ClusterPromotion
+// creates per stage when the ClusterProfile consuming them is gone
+func addClusterPromotionCopiesSweeper(mgr manager.Manager) {
+	sweeper := controllers.NewClusterPromotionCopiesSweeper(mgr.GetClient(),
+		ctrl.Log.WithName("clusterpromotion-copies-sweeper"))
+	if err := mgr.Add(sweeper); err != nil {
+		setupLog.Error(err, "unable to add runnable", "runnable", "ClusterPromotionCopiesSweeper")
+		os.Exit(1)
+	}
+}
+
 func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]cache.ByObject) {
 	disableFor = []client.Object{}
 	byObject = map[client.Object]cache.ByObject{}
@@ -680,6 +691,8 @@ func startControllersAndWatchers(ctx context.Context, mgr manager.Manager) {
 			setupLog.Error(err, "unable to create controller", "controller", "ClusterPromotion")
 			os.Exit(1)
 		}
+
+		addClusterPromotionCopiesSweeper(mgr)
 
 		// Needs a fleet-wide view of every ClusterSummary to dedup chart keys correctly, so
 		// this only ever runs on the default (unsharded) deployment, same as the reconcilers

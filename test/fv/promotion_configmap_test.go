@@ -43,6 +43,9 @@ var _ = Describe("Stage Promotions with referenced ConfigMap", func() {
 		// every couple of minutes so allow for a whole promotion.
 		restartTimeout = 10 * time.Minute
 
+		// label ClusterPromotion sets on the ConfigMaps/Secrets it creates for a stage
+		clusterProfileNameLabel = "config.projectsveltos.io/clusterprofilename"
+
 		payloadPolicy = `apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -163,6 +166,12 @@ data:
 			content, err := getCopyContent(configMap.Namespace, copyName)
 			Expect(err).To(BeNil())
 			Expect(content).To(Equal(configMap.Data["policy0.yaml"]))
+
+			Byf("Verify the copy is labeled with the name of the ClusterProfile consuming it")
+			copyConfigMap := &corev1.ConfigMap{}
+			Expect(k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: configMap.Namespace, Name: copyName},
+				copyConfigMap)).To(Succeed())
+			Expect(copyConfigMap.Labels).To(HaveKeyWithValue(clusterProfileNameLabel, clusterProfile.Name))
 		}
 
 		Byf("Verify the resource is deployed in the cluster matching stage %s", staging.Name)

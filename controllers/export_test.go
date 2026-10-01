@@ -91,6 +91,7 @@ var (
 	ConvertResultStatus                 = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference   = (*ClusterSummaryReconciler).requeueClusterSummaryForReference
 	RequeueClusterPromotionForReference = (*ClusterPromotionReconciler).requeueClusterPromotionForReference
+	SweepClusterPromotionCopies         = (*ClusterPromotionCopiesSweeper).sweep
 	ClusterPromotionUpdateMaps          = (*ClusterPromotionReconciler).updateMaps
 	ClusterPromotionCleanMaps           = (*ClusterPromotionReconciler).cleanMaps
 	RequeueClusterSummaryForCluster     = (*ClusterSummaryReconciler).requeueClusterSummaryForCluster

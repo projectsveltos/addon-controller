@@ -184,6 +184,43 @@ func addLabelsToClusterSummary(clusterSummary *configv1beta1.ClusterSummary, clu
 	clusterSummary.Labels = labels
 }
 
+// getClusterSummaryWithFinalizer returns a ClusterSummary created by a ClusterProfile/Profile for a CAPI Cluster.
+// The ClusterSummary has a finalizer: when deleted, it stays with a deletionTimestamp, as it happens
+// when the ClusterSummary controller cannot process it (for instance, cluster is paused).
+func getClusterSummaryWithFinalizer(profileKind string, profile client.Object, cluster *clusterv1.Cluster,
+) *configv1beta1.ClusterSummary {
+
+	profileLabelName := clusterops.ClusterProfileLabelName
+	if profileKind == configv1beta1.ProfileKind {
+		profileLabelName = clusterops.ProfileLabelName
+	}
+
+	return &configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterops.GetClusterSummaryName(profileKind, profile.GetName(), cluster.Name, false),
+			Namespace: cluster.Namespace,
+			Labels: map[string]string{
+				profileLabelName:               profile.GetName(),
+				configv1beta1.ClusterTypeLabel: string(libsveltosv1beta1.ClusterTypeCapi),
+				configv1beta1.ClusterNameLabel: cluster.Name,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: configv1beta1.GroupVersion.String(),
+					Kind:       profileKind,
+					Name:       profile.GetName(),
+				},
+			},
+			Finalizers: []string{configv1beta1.ClusterSummaryFinalizer},
+		},
+		Spec: configv1beta1.ClusterSummarySpec{
+			ClusterNamespace: cluster.Namespace,
+			ClusterName:      cluster.Name,
+			ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+		},
+	}
+}
+
 // deleteResources deletes following resources:
 // - clusterProfile
 // - clusterSummary

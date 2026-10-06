@@ -39,6 +39,7 @@ import (
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -286,6 +287,89 @@ var _ = Describe("Profile: Reconciler", func() {
 			err = testEnv.Get(context.TODO(), clusterProfileName, currentClusterProfile)
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("reconcileDelete waits for clusters to be unpaused when ClusterSummaries still present are for paused clusters",
+		func() {
+			paused := true
+			cluster := &clusterv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()},
+				Spec:       clusterv1.ClusterSpec{Paused: &paused},
+			}
+			Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+			clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, cluster)
+
+			initObjects := []client.Object{clusterProfile, cluster, clusterSummary}
+			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+				WithObjects(initObjects...).Build()
+
+			reconciler := &controllers.ClusterProfileReconciler{
+				Client:          c,
+				Scheme:          scheme,
+				ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+				ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+				ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+				Mux:             sync.Mutex{},
+			}
+
+			profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+				Client:         c,
+				Logger:         logger,
+				Profile:        clusterProfile,
+				ControllerName: testControllerNameProfile,
+			})
+			Expect(err).To(BeNil())
+
+			result := controllers.ClusterProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+			Expect(result.RequeueAfter).To(Equal(controllers.PausedClustersRequeueAfter))
+
+			// ClusterProfile is reconciled again when the cluster changes (unpaused)
+			clusterRef := corev1.ObjectReference{
+				Namespace:  cluster.Namespace,
+				Name:       cluster.Name,
+				Kind:       clusterv1.ClusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			}
+			Expect(reconciler.ClusterMap).To(HaveKey(clusterRef))
+			consumers := reconciler.ClusterMap[clusterRef].Items()
+			Expect(consumers).To(HaveLen(1))
+			Expect(consumers[0].Name).To(Equal(clusterProfile.Name))
+			Expect(consumers[0].Kind).To(Equal(configv1beta1.ClusterProfileKind))
+		})
+
+	It("reconcileDelete keeps reconciling when ClusterSummaries still present are for clusters not paused", func() {
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: randomString(), Name: randomString()},
+		}
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+		clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, cluster)
+
+		initObjects := []client.Object{clusterProfile, cluster, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterProfileReconciler{
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
+		}
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		result := controllers.ClusterProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+		Expect(result.RequeueAfter).To(Equal(controllers.DeleteRequeueAfter))
+		Expect(reconciler.ClusterMap).To(BeEmpty())
 	})
 })
 

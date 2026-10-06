@@ -34,6 +34,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
+	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
@@ -220,5 +221,88 @@ var _ = Describe("Profile Controller", func() {
 				APIVersion: set2.Status.SelectedClusterRefs[i].APIVersion,
 			}))
 		}
+	})
+
+	It("reconcileDelete of a Profile waits for clusters to be unpaused when ClusterSummaries still present are for paused clusters",
+		func() {
+			paused := true
+			cluster := &clusterv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Namespace: profile.Namespace, Name: randomString()},
+				Spec:       clusterv1.ClusterSpec{Paused: &paused},
+			}
+			Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+			clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ProfileKind, profile, cluster)
+
+			initObjects := []client.Object{profile, cluster, clusterSummary}
+			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+				WithObjects(initObjects...).Build()
+
+			reconciler := &controllers.ProfileReconciler{
+				Client:        c,
+				Scheme:        scheme,
+				ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+				Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+				ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+				Mux:           sync.Mutex{},
+			}
+
+			profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+				Client:         c,
+				Logger:         logger,
+				Profile:        profile,
+				ControllerName: testControllerNameProfile,
+			})
+			Expect(err).To(BeNil())
+
+			result := controllers.ProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+			Expect(result.RequeueAfter).To(Equal(controllers.PausedClustersRequeueAfter))
+
+			// ClusterProfile is reconciled again when the cluster changes (unpaused)
+			clusterRef := corev1.ObjectReference{
+				Namespace:  cluster.Namespace,
+				Name:       cluster.Name,
+				Kind:       clusterv1.ClusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			}
+			Expect(reconciler.ClusterMap).To(HaveKey(clusterRef))
+			consumers := reconciler.ClusterMap[clusterRef].Items()
+			Expect(consumers).To(HaveLen(1))
+			Expect(consumers[0].Name).To(Equal(profile.Name))
+			Expect(consumers[0].Kind).To(Equal(configv1beta1.ProfileKind))
+		})
+
+	It("reconcileDelete of a Profile keeps reconciling when ClusterSummaries still present are for clusters not paused", func() {
+		cluster := &clusterv1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: profile.Namespace, Name: randomString()},
+		}
+		Expect(addTypeInformationToObject(scheme, cluster)).To(Succeed())
+
+		clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ProfileKind, profile, cluster)
+
+		initObjects := []client.Object{profile, cluster, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ProfileReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+			Mux:           sync.Mutex{},
+		}
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        profile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		result := controllers.ProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+		Expect(result.RequeueAfter).To(Equal(controllers.DeleteRequeueAfter))
+		Expect(reconciler.ClusterMap).To(BeEmpty())
 	})
 })

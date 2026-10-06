@@ -70,6 +70,11 @@ const (
 	// deleteRequeueAfter is how long to wait before checking again during delete
 	deleteRequeueAfter = 10 * time.Second
 
+	// pausedClustersRequeueAfter is how long a ClusterProfile/Profile being deleted waits before checking again
+	// when all its remaining ClusterSummaries are for paused clusters. Unpausing a cluster reconciles the
+	// ClusterProfile/Profile right away: this is only a safety net.
+	pausedClustersRequeueAfter = 10 * time.Minute
+
 	// deleteHandOverRequeueAfter is how long to wait before checking again during an hand over
 	deleteHandOverRequeueAfter = 2 * time.Minute
 

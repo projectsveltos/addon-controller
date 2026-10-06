@@ -70,9 +70,30 @@ func getMatchingClusters(ctx context.Context, c client.Client, namespace string,
 	return matchingCluster, nil
 }
 
-// allClusterSummariesGone returns true if all ClusterSummaries owned by a
-// ClusterProfile/Profile instances are gone.
-func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) bool {
+var (
+	// errClusterSummariesStillPresent is returned when ClusterSummaries that must be removed are still present
+	errClusterSummariesStillPresent = errors.New("clusterSummaries still present")
+)
+
+// WaitingForPausedClustersError is returned when a ClusterProfile/Profile being deleted cannot make
+// progress because all the ClusterSummaries still present are for paused clusters.
+// Those ClusterSummaries are removed only once the clusters are unpaused.
+type WaitingForPausedClustersError struct {
+	Clusters []corev1.ObjectReference
+}
+
+func (e *WaitingForPausedClustersError) Error() string {
+	names := make([]string, len(e.Clusters))
+	for i := range e.Clusters {
+		names[i] = fmt.Sprintf("%s/%s", e.Clusters[i].Namespace, e.Clusters[i].Name)
+	}
+	return fmt.Sprintf("waiting for paused clusters %s to be unpaused before ClusterSummaries can be removed",
+		strings.Join(names, ", "))
+}
+
+// getClusterSummaryListOptions returns the options to list all ClusterSummaries created by a
+// ClusterProfile/Profile instance
+func getClusterSummaryListOptions(profileScope *scope.ProfileScope) []client.ListOption {
 	listOptions := []client.ListOption{}
 
 	// The current Kind being processed (ClusterProfile or Profile)
@@ -89,8 +110,67 @@ func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope 
 			client.InNamespace(profileScope.Profile.GetNamespace()))
 	}
 
+	return listOptions
+}
+
+// getPausedClustersBlockingDeletion returns the clusters for which a ClusterSummary created by
+// ClusterProfile/Profile is still present, when all of them are paused. A ClusterSummary for a paused
+// cluster is not removed until the cluster is unpaused, so there is nothing to do till then.
+// Returns nil if there is no ClusterSummary left, or if at least one of them is for a cluster that is not paused.
+func getPausedClustersBlockingDeletion(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
+) ([]corev1.ObjectReference, error) {
+
 	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
-	if err := c.List(ctx, clusterSummaryList, listOptions...); err != nil {
+	if err := c.List(ctx, clusterSummaryList, getClusterSummaryListOptions(profileScope)...); err != nil {
+		return nil, err
+	}
+
+	pausedClusters := make([]corev1.ObjectReference, 0, len(clusterSummaryList.Items))
+	for i := range clusterSummaryList.Items {
+		cs := &clusterSummaryList.Items[i]
+
+		isPaused, err := clusterproxy.IsClusterPaused(ctx, c, cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
+			cs.Spec.ClusterType)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				// Cluster is gone: its ClusterSummary is removed without waiting for anything
+				return nil, nil
+			}
+			return nil, err
+		}
+		if !isPaused {
+			return nil, nil
+		}
+
+		pausedClusters = append(pausedClusters, *getClusterObjectReferenceFromClusterSummary(cs))
+	}
+
+	return pausedClusters, nil
+}
+
+// getWaitingForPausedClustersError returns a WaitingForPausedClustersError when the ClusterSummaries still
+// present are all for paused clusters. Returns nil otherwise, in which case the caller keeps reconciling.
+func getWaitingForPausedClustersError(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
+	logger logr.Logger) error {
+
+	pausedClusters, err := getPausedClustersBlockingDeletion(ctx, c, profileScope)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to verify if clusters are paused: %v", err))
+		return nil
+	}
+
+	if len(pausedClusters) == 0 {
+		return nil
+	}
+
+	return &WaitingForPausedClustersError{Clusters: pausedClusters}
+}
+
+// allClusterSummariesGone returns true if all ClusterSummaries owned by a
+// ClusterProfile/Profile instances are gone.
+func allClusterSummariesGone(ctx context.Context, c client.Client, profileScope *scope.ProfileScope) bool {
+	clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+	if err := c.List(ctx, clusterSummaryList, getClusterSummaryListOptions(profileScope)...); err != nil {
 		profileScope.V(logs.LogInfo).Info(fmt.Sprintf("failed to list clustersummaries. err %v", err))
 		return false
 	}
@@ -856,7 +936,7 @@ func cleanClusterSummaries(ctx context.Context, c client.Client, profileScope *s
 	}
 
 	if foundClusterSummaries {
-		return fmt.Errorf("clusterSummaries still present")
+		return errClusterSummariesStillPresent
 	}
 	return nil
 }
@@ -1225,6 +1305,11 @@ func reconcileDeleteCommon(ctx context.Context, c client.Client, profileScope *s
 	depManager.UpdateDependencies(profileRef, nil, nil, logger)
 
 	if err := cleanClusterSummaries(ctx, c, profileScope); err != nil {
+		if errors.Is(err, errClusterSummariesStillPresent) {
+			if waitErr := getWaitingForPausedClustersError(ctx, c, profileScope, logger); waitErr != nil {
+				return waitErr
+			}
+		}
 		logger.V(logs.LogInfo).Error(err, "failed to clean ClusterSummaries")
 		return err
 	}

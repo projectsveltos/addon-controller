@@ -180,6 +180,13 @@ func (r *ProfileReconciler) reconcileDelete(
 
 	if err := reconcileDeleteCommon(ctx, r.Client, profileScope,
 		configv1beta1.ProfileFinalizer, logger); err != nil {
+		var waitErr *WaitingForPausedClustersError
+		if errors.As(err, &waitErr) {
+			logger.V(logs.LogInfo).Info(waitErr.Error())
+			// ClusterSummaries are removed only once clusters are unpaused. Be notified when that happens.
+			r.trackClusters(profileScope, waitErr.Clusters)
+			return reconcile.Result{RequeueAfter: pausedClustersRequeueAfter}
+		}
 		return reconcile.Result{RequeueAfter: deleteRequeueAfter}
 	}
 
@@ -359,6 +366,21 @@ func (r *ProfileReconciler) cleanMaps(profileScope *scope.ProfileScope) {
 	for i := range r.SetMap {
 		profileSet := r.SetMap[i]
 		profileSet.Erase(profileInfo)
+	}
+}
+
+// trackClusters makes sure Profile is reconciled when any of the clusters changes.
+// updateMaps does this for the matching clusters, but it is not called for a Profile being
+// deleted (for instance after a restart): a Profile waiting for paused clusters would not
+// be reconciled when those clusters are unpaused.
+func (r *ProfileReconciler) trackClusters(profileScope *scope.ProfileScope, clusters []corev1.ObjectReference) {
+	r.Mux.Lock()
+	defer r.Mux.Unlock()
+
+	profileInfo := getKeyFromObject(r.Scheme, profileScope.Profile)
+
+	for i := range clusters {
+		getConsumersForEntry(r.ClusterMap, &clusters[i]).Insert(profileInfo)
 	}
 }
 

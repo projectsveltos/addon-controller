@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -837,6 +838,94 @@ var _ = Describe("Profile: Reconciler", func() {
 		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
 		Expect(c.List(context.TODO(), clusterSummaryList)).To(BeNil())
 		Expect(len(clusterSummaryList.Items)).To(BeZero())
+	})
+
+	It("reconcileDeleteCommon waits when all ClusterSummaries still present are for paused clusters", func() {
+		paused := true
+		nonMatchingCluster.Spec.Paused = &paused
+
+		clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, nonMatchingCluster)
+
+		initObjects := []client.Object{clusterProfile, nonMatchingCluster, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		err = controllers.ReconcileDeleteCommon(context.TODO(), c, profileScope,
+			configv1beta1.ClusterProfileFinalizer, logger)
+
+		var waitErr *controllers.WaitingForPausedClustersError
+		Expect(errors.As(err, &waitErr)).To(BeTrue())
+		Expect(waitErr.Clusters).To(HaveLen(1))
+		Expect(waitErr.Clusters[0].Namespace).To(Equal(nonMatchingCluster.Namespace))
+		Expect(waitErr.Clusters[0].Name).To(Equal(nonMatchingCluster.Name))
+		Expect(waitErr.Clusters[0].Kind).To(Equal(clusterv1.ClusterKind))
+
+		// ClusterSummary has been marked for deletion
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(c.Get(context.TODO(), client.ObjectKeyFromObject(clusterSummary), currentClusterSummary)).To(Succeed())
+		Expect(currentClusterSummary.DeletionTimestamp.IsZero()).To(BeFalse())
+	})
+
+	It("reconcileDeleteCommon keeps reconciling when a ClusterSummary still present is for a cluster not paused", func() {
+		paused := true
+		nonMatchingCluster.Spec.Paused = &paused
+		// matchingCluster is not paused
+		notPausedCluster := matchingCluster
+
+		pausedClusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, nonMatchingCluster)
+		notPausedClusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, notPausedCluster)
+
+		initObjects := []client.Object{
+			clusterProfile, nonMatchingCluster, notPausedCluster, pausedClusterSummary, notPausedClusterSummary,
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		err = controllers.ReconcileDeleteCommon(context.TODO(), c, profileScope,
+			configv1beta1.ClusterProfileFinalizer, logger)
+		Expect(err).ToNot(BeNil())
+
+		var waitErr *controllers.WaitingForPausedClustersError
+		Expect(errors.As(err, &waitErr)).To(BeFalse())
+		Expect(err.Error()).To(Equal("clusterSummaries still present"))
+	})
+
+	It("reconcileDeleteCommon keeps reconciling when the cluster of a ClusterSummary is not found", func() {
+		// nonMatchingCluster is not in the fake client
+		clusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, clusterProfile, nonMatchingCluster)
+
+		initObjects := []client.Object{clusterProfile, clusterSummary}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		err = controllers.ReconcileDeleteCommon(context.TODO(), c, profileScope,
+			configv1beta1.ClusterProfileFinalizer, logger)
+		Expect(err).ToNot(BeNil())
+
+		var waitErr *controllers.WaitingForPausedClustersError
+		Expect(errors.As(err, &waitErr)).To(BeFalse())
+		Expect(err.Error()).To(Equal("clusterSummaries still present"))
 	})
 
 	It("cleanClusterSummaries in DryRun mode keeps ClusterSummary alive with cleared refs when cluster stops matching", func() {

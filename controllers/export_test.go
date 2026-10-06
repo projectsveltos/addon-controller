@@ -31,7 +31,15 @@ func SetEventRecorder(r *ClusterSummaryReconciler, recorder events.EventRecorder
 	r.eventRecorder = recorder
 }
 
+const (
+	PausedClustersRequeueAfter = pausedClustersRequeueAfter
+	DeleteRequeueAfter         = deleteRequeueAfter
+)
+
 var (
+	ReconcileDeleteCommon                 = reconcileDeleteCommon
+	ClusterProfileReconcileDelete         = (*ClusterProfileReconciler).reconcileDelete
+	ProfileReconcileDelete                = (*ProfileReconciler).reconcileDelete
 	UpdateClusterSummaries                = updateClusterSummaries
 	CreateClusterSummary                  = createClusterSummary
 	UpdateClusterSummary                  = updateClusterSummary

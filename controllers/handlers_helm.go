@@ -212,7 +212,7 @@ func deployHelmCharts(ctx context.Context, c client.Client,
 
 	err = postProcessDeployedHelmCharts(ctx, clusterSummary, kubeconfig, mgmtResources, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to deploy helmCharts")
+		logger.V(logs.LogDebug).Error(err, "failed to deploy helmCharts")
 	}
 	return err
 }

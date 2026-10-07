@@ -99,7 +99,7 @@ func deployResources(ctx context.Context, c client.Client,
 	err = postProcessDeployedResources(ctx, remoteRestConfig, clusterSummary, localResourceReports,
 		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to deploy PolicyRefs")
+		logger.V(logs.LogDebug).Error(err, "failed to deploy PolicyRefs")
 	}
 	return err
 }

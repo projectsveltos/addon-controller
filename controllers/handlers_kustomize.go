@@ -144,7 +144,7 @@ func deployKustomizeRefs(ctx context.Context, c client.Client,
 	err = processKustomizeDeployment(ctx, remoteRestConfig, clusterSummary, localResourceReports,
 		remoteResourceReports, deployError, isPullMode, configurationHash, logger)
 	if err != nil {
-		logger.V(logs.LogInfo).Error(err, "failed to deploy KustomizeRefs")
+		logger.V(logs.LogDebug).Error(err, "failed to deploy KustomizeRefs")
 	}
 	return err
 }

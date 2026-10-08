@@ -838,6 +838,129 @@ var _ = Describe("HandlersHelm", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
+	It("UpdateStatusForReferencedHelmReleases carries the pull mode apply tracking forward", func() {
+		// AppliedContentHash and StagedContentHash are what let pull mode skip a chart already
+		// deployed. Like NeedsRedeploy they must survive the rebuild of HelmReleaseSummaries
+		// that happens on every reconcile, or a chart would never be skipped.
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		applied := []byte(randomString())
+		staged := []byte(randomString())
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:        nginxChart.ReleaseName,
+					ReleaseNamespace:   nginxChart.ReleaseNamespace,
+					Status:             configv1beta1.HelmChartStatusManaging,
+					AppliedContentHash: applied,
+					StagedContentHash:  staged,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		_, conflict, err := controllers.UpdateStatusForReferencedHelmReleases(context.TODO(),
+			testEnv.Client, clusterSummary, nil, textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(conflict).To(BeFalse())
+
+		current := readClusterSummaryUncached(clusterSummary)
+		summary := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(summary.AppliedContentHash).To(Equal(applied))
+		Expect(summary.StagedContentHash).To(Equal(staged))
+	})
+
+	It("UpdateValueHashOnHelmChartSummary records what is staged in pull mode, and keeps the drift flag of a skipped chart", func() {
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+					NeedsRedeploy:    true,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
+
+		By("A chart skipped in this pass keeps its drift flag and has nothing to confirm")
+		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
+			controllers.NewReleaseInfoForApply([]byte(randomString()), true), dCtx,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		current := readClusterSummaryUncached(clusterSummary)
+		summary := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(summary.NeedsRedeploy).To(BeTrue())
+		Expect(summary.StagedContentHash).To(BeEmpty())
+
+		By("A chart staged for apply has its content recorded to be confirmed and its drift flag cleared")
+		hash := []byte(randomString())
+		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
+			controllers.NewReleaseInfoForApply(hash, false), dCtx,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		current = readClusterSummaryUncached(clusterSummary)
+		summary = findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(summary.NeedsRedeploy).To(BeFalse())
+		Expect(summary.StagedContentHash).To(Equal(hash))
+		Expect(summary.AppliedContentHash).To(BeEmpty())
+	})
+
 	It("UpdateStatusForReferencedHelmReleases carries PatchesHash forward instead of recomputing it", func() {
 		// Regression test: buildReferencedHelmReleaseSummaries used to store the freshly computed
 		// PatchesHash directly, on every reconcile, before shouldUpgrade ever ran. That made a
@@ -3144,6 +3267,25 @@ var _ = Describe("prepareBundleSettersWithHelmInfo", func() {
 		}
 
 		Expect(bundleOptions.SkipNamespaceCreation).To(BeFalse())
+	})
+
+	It("asks sveltos-applier not to apply the bundle only when the chart is marked skipApply", func() {
+		currentChart := &configv1beta1.HelmChart{
+			ReleaseName:      randomString(),
+			ReleaseNamespace: randomString(),
+			RepositoryURL:    randomString(),
+		}
+
+		getOptions := func(rInfo *controllers.ReleaseInfo) *pullmode.BundleOptions {
+			bundleOptions := &pullmode.BundleOptions{}
+			for _, setter := range controllers.PrepareBundleSettersWithHelmInfo(currentChart, false, true, rInfo) {
+				setter(bundleOptions)
+			}
+			return bundleOptions
+		}
+
+		Expect(getOptions(controllers.NewReleaseInfoForApply([]byte(randomString()), false)).SkipApply).To(BeFalse())
+		Expect(getOptions(controllers.NewReleaseInfoForApply([]byte(randomString()), true)).SkipApply).To(BeTrue())
 	})
 })
 

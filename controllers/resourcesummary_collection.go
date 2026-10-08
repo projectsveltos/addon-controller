@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -533,6 +534,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					markDriftedHelmCharts(clusterSummary, rs.Status.DriftedHelmCharts, l)
+					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureHelm)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -541,6 +543,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureResources)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -549,6 +552,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
+					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureKustomize)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -570,6 +574,51 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 	return resetResourceSummaryStatus(ctx, clusterClient, rs, logger)
 }
 
+// newDriftRecord builds the record of the drift reported by rs for featureID. rs.Status.DriftedResources
+// is shared by all features, so only the entries of featureID are kept. The detection time is the
+// earliest time reported. When drift-detection did not report any resource (an older version, or a
+// pull mode agent that predates the field), the record has no resources and carries the collection
+// time instead.
+func newDriftRecord(rs *libsveltosv1beta1.ResourceSummary, featureID libsveltosv1beta1.FeatureID,
+) *configv1beta1.DriftRecord {
+
+	record := &configv1beta1.DriftRecord{
+		Truncated: rs.Status.DriftedResourcesTruncated,
+	}
+
+	var earliest *metav1.Time
+	for i := range rs.Status.DriftedResources {
+		drifted := &rs.Status.DriftedResources[i]
+		if drifted.FeatureID != featureID {
+			continue
+		}
+
+		ref := configv1beta1.DriftedResourceRef{
+			Group:     drifted.Group,
+			Kind:      drifted.Kind,
+			Namespace: drifted.Namespace,
+			Name:      drifted.Name,
+		}
+		if drifted.HelmChartRef != nil {
+			ref.HelmReleaseNamespace = drifted.HelmChartRef.ReleaseNamespace
+			ref.HelmReleaseName = drifted.HelmChartRef.ReleaseName
+		}
+		record.Resources = append(record.Resources, ref)
+
+		if earliest == nil || drifted.DetectedTime.Before(earliest) {
+			earliest = &drifted.DetectedTime
+		}
+	}
+
+	if earliest != nil {
+		record.DetectedTime = *earliest
+	} else {
+		record.DetectedTime = metav1.Now()
+	}
+
+	return record
+}
+
 func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
@@ -588,6 +637,10 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	resourceSummary.Status.KustomizeResourcesChanged = false
 	resourceSummary.Status.HelmResourcesChanged = false
 	resourceSummary.Status.DriftedHelmCharts = nil
+	// The drift is now recorded in the ClusterSummary. Drift-detection only appends to this list and skips
+	// a resource already in it, so keeping the entries would pin their detection time to the first drift.
+	resourceSummary.Status.DriftedResources = nil
+	resourceSummary.Status.DriftedResourcesTruncated = false
 	return remoteClient.Status().Update(ctx, resourceSummary)
 }
 

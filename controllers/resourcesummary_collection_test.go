@@ -397,6 +397,45 @@ var _ = Describe("ResourceSummary Collection", func() {
 		}
 	})
 
+	It("markDriftedHelmCharts marks only the reported charts", func() {
+		driftedChart := configv1beta1.HelmChartSummary{ReleaseName: randomString(), ReleaseNamespace: randomString()}
+		otherChart := configv1beta1.HelmChartSummary{ReleaseName: randomString(), ReleaseNamespace: randomString()}
+		clusterSummary := &configv1beta1.ClusterSummary{
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{driftedChart, otherChart},
+			},
+		}
+
+		driftedCharts := []libsveltosv1beta1.HelmChartRef{
+			{ReleaseName: driftedChart.ReleaseName, ReleaseNamespace: driftedChart.ReleaseNamespace},
+		}
+		controllers.MarkDriftedHelmCharts(clusterSummary, driftedCharts, textlogger.NewLogger(textlogger.NewConfig()))
+
+		Expect(clusterSummary.Status.HelmReleaseSummaries[0].NeedsRedeploy).To(BeTrue())
+		Expect(clusterSummary.Status.HelmReleaseSummaries[1].NeedsRedeploy).To(BeFalse())
+	})
+
+	It("markDriftedHelmCharts marks every chart when no reported chart matches a chart of the ClusterSummary", func() {
+		clusterSummary := &configv1beta1.ClusterSummary{
+			Status: configv1beta1.ClusterSummaryStatus{
+				HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+					{ReleaseName: randomString(), ReleaseNamespace: randomString()},
+					{ReleaseName: randomString(), ReleaseNamespace: randomString()},
+				},
+			},
+		}
+
+		// What an agent that does not know the Helm releases reports: a name that is not a release
+		driftedCharts := []libsveltosv1beta1.HelmChartRef{
+			{ReleaseName: randomString(), ReleaseNamespace: randomString()},
+		}
+		controllers.MarkDriftedHelmCharts(clusterSummary, driftedCharts, textlogger.NewLogger(textlogger.NewConfig()))
+
+		for i := range clusterSummary.Status.HelmReleaseSummaries {
+			Expect(clusterSummary.Status.HelmReleaseSummaries[i].NeedsRedeploy).To(BeTrue())
+		}
+	})
+
 	It("isResourceSummaryInstalledCached caches positive result", func() {
 		controllers.ResetResourceSummaryInstalledCache()
 

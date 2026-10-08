@@ -316,6 +316,11 @@ func (r *ClusterSummaryReconciler) handlePullModeProvisioned(ctx context.Context
 				clusterSummary.Spec.ClusterName, configv1beta1.ClusterSummaryKind, clusterSummary.Name, string(f.id), logger)
 			return fmt.Errorf("helm charts yielded to lower-tier profiles; redeploying without yielded charts")
 		}
+
+		// The agent applied what was staged. Record it so unchanged charts are not applied again.
+		if err := confirmAppliedHelmCharts(ctx, r.Client, clusterSummary, logger); err != nil {
+			return err
+		}
 	}
 
 	cluster, _ := clusterproxy.GetCluster(ctx, getManagementClusterClient(),

@@ -34,7 +34,8 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= v1.16.0
+TAG ?= main
+PULL_POLICY ?= IfNotPresent
 
 .PHONY: all
 all: build
@@ -163,6 +164,7 @@ clean: ## Remove all built tools
 manifests: $(CONTROLLER_GEN) $(KUSTOMIZE) $(ENVSUBST) fmt generate ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=controller-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
+	$(MAKE) set-manifest-pull-policy
 	$(KUSTOMIZE) build config/default | $(ENVSUBST) > manifest/manifest.yaml
 	./scripts/extract_deployment-shard.sh manifest/manifest.yaml manifest/deployment-shard.yaml
 	./scripts/extract_deployment-agentless.sh manifest/manifest.yaml manifest/deployment-agentless.yaml

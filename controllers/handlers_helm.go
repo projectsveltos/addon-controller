@@ -133,6 +133,14 @@ type releaseInfo struct {
 	// FullValues is the coalesced result of chart defaults and user-supplied Config values.
 	// Used to check whether Sveltos's desired values are already reflected in the deployed release.
 	FullValues map[string]interface{} `json:"-"`
+
+	// The two fields below are only set in pull mode, when the chart is staged for sveltos-applier.
+	// applyHash is the hash of what is staged for the chart: see getChartApplyHash. Empty when
+	// there is nothing to track (DryRun, uninstall).
+	applyHash []byte
+	// skipApply is true when sveltos-applier has been told not to apply the chart: it is
+	// already deployed with this exact content.
+	skipApply bool
 }
 
 func deployHelmCharts(ctx context.Context, c client.Client,
@@ -546,7 +554,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 					}
 				}
 
-				_, _, err = handleChart(ctx, dCtx, instantiatedChart, "", true, l)
+				_, _, err = handleChart(ctx, dCtx, instantiatedChart, "", true, false, l)
 				if err != nil {
 					l.V(logs.LogInfo).Error(err, "Failed to handle charts after tier adjustment")
 					return err
@@ -568,7 +576,7 @@ func walkAndUndeployHelmChartsInPullMode(ctx context.Context, c client.Client, c
 				requeued = true
 			} else {
 				l.V(logs.LogDebug).Info("prepare delete hook resources")
-				_, _, err = handleChart(ctx, dCtx, instantiatedChart, "", true, l)
+				_, _, err = handleChart(ctx, dCtx, instantiatedChart, "", true, false, l)
 				if err != nil {
 					l.V(logs.LogInfo).Error(err, "Failed to handle chart delete")
 					return err
@@ -1335,7 +1343,9 @@ func deploySingleChart(ctx context.Context, c client.Client, dCtx *deploymentCon
 		}
 	}
 
-	currentRelease, report, err := handleChart(ctx, dCtx, instantiatedChart, kubeconfig, isPullMode, logger)
+	// A chart staged because it yielded to a lower tier profile must always be applied: applying it is
+	// how sveltos-applier updates the owner tier on its resources.
+	currentRelease, report, err := handleChart(ctx, dCtx, instantiatedChart, kubeconfig, isPullMode, !requeued, logger)
 	setHelmFailureMessageOnHelmChartSummary(dCtx.clusterSummary, instantiatedChart, err)
 	if err != nil {
 		err = fmt.Errorf("chart=%s, releaseNamespace=%s, releaseName=%s: %w",
@@ -1780,9 +1790,10 @@ func createRegistryClientOptions(ctx context.Context, clusterSummary *configv1be
 	return registryOptions, nil
 }
 
+// allowSkipApply is only used in pull mode: when false, sveltos-applier is always asked to apply the chart.
 func handleChart(ctx context.Context, dCtx *deploymentContext,
 	instantiatedChart *configv1beta1.HelmChart,
-	kubeconfig string, isPullMode bool, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+	kubeconfig string, isPullMode, allowSkipApply bool, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
 
 	registryOptions, err := createRegistryClientOptions(ctx, dCtx.clusterSummary, instantiatedChart, logger)
 	if err != nil {
@@ -1812,7 +1823,7 @@ func handleChart(ctx context.Context, dCtx *deploymentContext,
 
 	if isPullMode {
 		releaseInfo, releaseReport, err := prepareChartForAgent(ctx, dCtx, instantiatedChart,
-			registryOptions, logger)
+			registryOptions, allowSkipApply, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -3255,6 +3266,11 @@ func buildReferencedHelmReleaseSummaries(ctx context.Context, c client.Client,
 				PatchesHash:   getPatchesHashFromHelmChartSummary(instantiatedChart, clusterSummary),
 				ValuesHash:    getValuesHashFromHelmChartSummary(instantiatedChart, clusterSummary),
 				NeedsRedeploy: getNeedsRedeployFromHelmChartSummary(instantiatedChart, clusterSummary),
+			}
+			// Pull mode apply tracking is carried forward for the same reason as NeedsRedeploy
+			if current := getHelmChartSummary(instantiatedChart, clusterSummary); current != nil {
+				summaries[i].AppliedContentHash = current.AppliedContentHash
+				summaries[i].StagedContentHash = current.StagedContentHash
 			}
 			currentlyReferenced[helmInfo(instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName)] = true
 		} else {
@@ -4778,7 +4794,7 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 
 				rs.ValuesHash = helmChartValuesHash
 				rs.PatchesHash = helmChartPatchesHash
-				rs.NeedsRedeploy = false
+				recordHelmChartApply(rs, currentRelease)
 				if isManager {
 					rs.Status = configv1beta1.HelmChartStatusManaging
 					rs.ConflictMessage = ""
@@ -5535,7 +5551,8 @@ func addExtraAnnotations(policy *unstructured.Unstructured, extraAnnotations map
 // If in pull mode either remove resources or treat it as an upgrade
 func prepareChartForAgent(ctx context.Context, dCtx *deploymentContext,
 	instantiatedChart *configv1beta1.HelmChart,
-	registryOptions *registryClientOptions, logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
+	registryOptions *registryClientOptions, allowSkipApply bool,
+	logger logr.Logger) (*releaseInfo, *configv1beta1.ReleaseReport, error) {
 
 	logger = logger.WithValues("chart", fmt.Sprintf("%s/%s",
 		instantiatedChart.ReleaseNamespace, instantiatedChart.ReleaseName))
@@ -5604,6 +5621,17 @@ func prepareChartForAgent(ctx context.Context, dCtx *deploymentContext,
 	}
 
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
+
+	// Like push mode, which leaves a chart alone unless it changed or drifted, ask sveltos-applier
+	// not to apply a chart already deployed with this exact content.
+	if isApplyTracked(dCtx.clusterSummary, instantiatedChart, helmActionVar == uninstall) {
+		rInfo.applyHash, err = getChartApplyHash(dCtx.clusterSummary, instantiatedChart, rInfo.ChartVersion, resources)
+		if err != nil {
+			return nil, nil, err
+		}
+		rInfo.skipApply = allowSkipApply && shouldSkipApply(dCtx.clusterSummary, instantiatedChart, rInfo.applyHash)
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("skip apply: %t", rInfo.skipApply))
+	}
 
 	err = stageHelmResourcesForDeployment(ctx, dCtx.clusterSummary, instantiatedChart, resources, helmActionVar,
 		rInfo, logger)
@@ -5804,6 +5832,10 @@ func prepareBundleSettersWithHelmInfo(currentChart *configv1beta1.HelmChart, isU
 		pullmode.WithReleaseInfo(currentChart.ReleaseNamespace, currentChart.ReleaseName,
 			currentChart.RepositoryURL, rInfo.ChartVersion, rInfo.Icon, isUninstall, isLast),
 		pullmode.WithResourceInfo("", "", "", 0, skipNamespaceCreation, false))
+
+	if rInfo.skipApply {
+		setters = append(setters, pullmode.WithSkipApply())
+	}
 
 	return setters
 }

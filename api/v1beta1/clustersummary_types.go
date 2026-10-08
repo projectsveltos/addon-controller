@@ -84,6 +84,53 @@ type FeatureSummary struct {
 	// scenario); true means currently deployed; false means removed.
 	// +optional
 	ResourceSummaryDeployed *bool `json:"resourceSummaryDeployed,omitempty"`
+
+	// LastDrift records the last configuration drift detected on the resources this feature
+	// deployed. Only set when SyncMode is ContinuousWithDriftDetection. It is kept after the
+	// drift has been corrected by a redeploy, and replaced when the next drift is detected.
+	// +optional
+	LastDrift *DriftRecord `json:"lastDrift,omitempty"`
+}
+
+// DriftRecord describes a configuration drift detected on the resources deployed by a feature.
+type DriftRecord struct {
+	// DetectedTime is when the drift was detected. When the component that detected it did not
+	// report a time, it is the time the drift was collected.
+	DetectedTime metav1.Time `json:"detectedTime"`
+
+	// Resources lists the resources that drifted. Empty when the component that detected the
+	// drift did not report which resources changed.
+	// +optional
+	Resources []DriftedResourceRef `json:"resources,omitempty"`
+
+	// Truncated is true when more resources drifted than are listed in Resources.
+	// +optional
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+// DriftedResourceRef identifies a resource that drifted.
+type DriftedResourceRef struct {
+	// Group of the resource.
+	Group string `json:"group,omitempty"`
+
+	// Kind of the resource.
+	Kind string `json:"kind"`
+
+	// Namespace of the resource. Empty for cluster scoped resources.
+	Namespace string `json:"namespace,omitempty"`
+
+	// Name of the resource.
+	Name string `json:"name"`
+
+	// HelmReleaseNamespace is the namespace of the Helm release that deployed the resource.
+	// Only set for the Helm feature.
+	// +optional
+	HelmReleaseNamespace string `json:"helmReleaseNamespace,omitempty"`
+
+	// HelmReleaseName is the name of the Helm release that deployed the resource.
+	// Only set for the Helm feature.
+	// +optional
+	HelmReleaseName string `json:"helmReleaseName,omitempty"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing
@@ -173,6 +220,21 @@ type HelmChartSummary struct {
 	// desired values/version changed; cleared once the upgrade succeeds.
 	// +optional
 	NeedsRedeploy bool `json:"needsRedeploy,omitempty"`
+
+	// AppliedContentHash is, in pull mode, the hash of what sveltos-applier last confirmed as applied
+	// for this chart: the rendered resources plus the settings that change how they are applied.
+	// While it matches the hash of the chart about to be applied, and drift-detection has not
+	// reported the chart, sveltos-applier is told not to apply it again.
+	// Not set in push mode.
+	// +optional
+	AppliedContentHash []byte `json:"appliedContentHash,omitempty"`
+
+	// StagedContentHash is, in pull mode, the hash of what has been staged for sveltos-applier and
+	// is not yet confirmed as applied. It becomes AppliedContentHash once sveltos-applier reports
+	// success. While set, the chart is never skipped, so a failed apply is retried.
+	// Not set in push mode.
+	// +optional
+	StagedContentHash []byte `json:"stagedContentHash,omitempty"`
 }
 
 // ClusterSummarySpec defines the desired state of ClusterSummary

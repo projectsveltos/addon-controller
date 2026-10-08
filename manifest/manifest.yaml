@@ -8908,6 +8908,61 @@ spec:
                       description: LastAppliedTime is the time feature was last reconciled
                       format: date-time
                       type: string
+                    lastDrift:
+                      description: |-
+                        LastDrift records the last configuration drift detected on the resources this feature
+                        deployed. Only set when SyncMode is ContinuousWithDriftDetection. It is kept after the
+                        drift has been corrected by a redeploy, and replaced when the next drift is detected.
+                      properties:
+                        detectedTime:
+                          description: |-
+                            DetectedTime is when the drift was detected. When the component that detected it did not
+                            report a time, it is the time the drift was collected.
+                          format: date-time
+                          type: string
+                        resources:
+                          description: |-
+                            Resources lists the resources that drifted. Empty when the component that detected the
+                            drift did not report which resources changed.
+                          items:
+                            description: DriftedResourceRef identifies a resource
+                              that drifted.
+                            properties:
+                              group:
+                                description: Group of the resource.
+                                type: string
+                              helmReleaseName:
+                                description: |-
+                                  HelmReleaseName is the name of the Helm release that deployed the resource.
+                                  Only set for the Helm feature.
+                                type: string
+                              helmReleaseNamespace:
+                                description: |-
+                                  HelmReleaseNamespace is the namespace of the Helm release that deployed the resource.
+                                  Only set for the Helm feature.
+                                type: string
+                              kind:
+                                description: Kind of the resource.
+                                type: string
+                              name:
+                                description: Name of the resource.
+                                type: string
+                              namespace:
+                                description: Namespace of the resource. Empty for
+                                  cluster scoped resources.
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          type: array
+                        truncated:
+                          description: Truncated is true when more resources drifted
+                            than are listed in Resources.
+                          type: boolean
+                      required:
+                      - detectedTime
+                      type: object
                     resourceSummaryDeployed:
                       description: |-
                         ResourceSummaryDeployed tracks whether a ResourceSummary was deployed
@@ -8940,6 +8995,15 @@ spec:
                   directly managed by ClusterProfile.
                 items:
                   properties:
+                    appliedContentHash:
+                      description: |-
+                        AppliedContentHash is, in pull mode, the hash of what sveltos-applier last confirmed as applied
+                        for this chart: the rendered resources plus the settings that change how they are applied.
+                        While it matches the hash of the chart about to be applied, and drift-detection has not
+                        reported the chart, sveltos-applier is told not to apply it again.
+                        Not set in push mode.
+                      format: byte
+                      type: string
                     chartName:
                       description: |-
                         ChartName, RepositoryName, RepoURL, and ChartVersion mirror the fully resolved
@@ -9014,6 +9078,14 @@ spec:
                     repoURL:
                       type: string
                     repositoryName:
+                      type: string
+                    stagedContentHash:
+                      description: |-
+                        StagedContentHash is, in pull mode, the hash of what has been staged for sveltos-applier and
+                        is not yet confirmed as applied. It becomes AppliedContentHash once sveltos-applier reports
+                        success. While set, the chart is never skipped, so a failed apply is retried.
+                        Not set in push mode.
+                      format: byte
                       type: string
                     status:
                       description: |-
@@ -12069,7 +12141,7 @@ spec:
         - --shard-key=
         - --capi-onboard-annotation=
         - --v=5
-        - --version=v1.16.0
+        - --version=main
         - --agent-in-mgmt-cluster=false
         command:
         - /manager
@@ -12086,7 +12158,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/addon-controller:v1.16.0
+        image: docker.io/projectsveltos/addon-controller:main
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -12145,7 +12217,7 @@ spec:
               fieldPath: metadata.namespace
         - name: IS_INITIALIZATION
           value: "true"
-        image: docker.io/projectsveltos/addon-controller:v1.16.0
+        image: docker.io/projectsveltos/addon-controller:main
         imagePullPolicy: IfNotPresent
         name: initialization
         securityContext:

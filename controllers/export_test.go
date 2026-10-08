@@ -259,6 +259,7 @@ var (
 	}
 	ProcessResourceSummary = processResourceSummary
 	MarkDriftedHelmCharts  = markDriftedHelmCharts
+	NewDriftRecord         = newDriftRecord
 )
 
 var (
@@ -338,4 +339,18 @@ func NewDeploymentContext(
 		clusterObjects: clusterObjects,
 		mgmtResources:  mgmtResources,
 	}
+}
+
+var (
+	GetChartApplyHash        = getChartApplyHash
+	ShouldSkipApply          = shouldSkipApply
+	RecordHelmChartApply     = recordHelmChartApply
+	IsApplyTracked           = isApplyTracked
+	ConfirmAppliedHelmCharts = confirmAppliedHelmCharts
+)
+
+// NewReleaseInfoForApply returns what prepareChartForAgent records on the releaseInfo of a chart
+// staged for sveltos-applier.
+func NewReleaseInfoForApply(applyHash []byte, skipApply bool) *releaseInfo {
+	return &releaseInfo{applyHash: applyHash, skipApply: skipApply}
 }

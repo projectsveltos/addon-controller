@@ -647,19 +647,20 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 // markDriftedHelmCharts sets NeedsRedeploy on the HelmReleaseSummaries entries matching
 // driftedCharts (by release name/namespace), so shouldUpgrade can later scope the redeploy
 // to only those charts instead of the whole Helm feature. If driftedCharts is empty (e.g. an
-// older drift-detection-manager that doesn't report chart ownership yet), every chart is
-// marked, same as today's behavior, so drift is never silently missed.
+// older drift-detection-manager that doesn't report chart ownership yet), or none of the reported
+// charts is a chart of this ClusterSummary (e.g. an older sveltos-applier that reports the
+// ConfigurationGroup instead of the Helm releases), every chart is marked, so drift is never
+// silently missed.
 func markDriftedHelmCharts(clusterSummary *configv1beta1.ClusterSummary,
 	driftedCharts []libsveltosv1beta1.HelmChartRef, logger logr.Logger) {
 
 	if len(driftedCharts) == 0 {
 		logger.V(logs.LogDebug).Info("no chart-scoped drift info available, marking all charts for redeploy")
-		for i := range clusterSummary.Status.HelmReleaseSummaries {
-			clusterSummary.Status.HelmReleaseSummaries[i].NeedsRedeploy = true
-		}
+		markAllHelmChartsForRedeploy(clusterSummary)
 		return
 	}
 
+	matched := false
 	for i := range clusterSummary.Status.HelmReleaseSummaries {
 		summary := &clusterSummary.Status.HelmReleaseSummaries[i]
 		for j := range driftedCharts {
@@ -667,9 +668,21 @@ func markDriftedHelmCharts(clusterSummary *configv1beta1.ClusterSummary,
 				summary.ReleaseNamespace == driftedCharts[j].ReleaseNamespace {
 
 				summary.NeedsRedeploy = true
+				matched = true
 				break
 			}
 		}
+	}
+
+	if !matched {
+		logger.V(logs.LogDebug).Info("reported drifted charts do not match any chart, marking all charts for redeploy")
+		markAllHelmChartsForRedeploy(clusterSummary)
+	}
+}
+
+func markAllHelmChartsForRedeploy(clusterSummary *configv1beta1.ClusterSummary) {
+	for i := range clusterSummary.Status.HelmReleaseSummaries {
+		clusterSummary.Status.HelmReleaseSummaries[i].NeedsRedeploy = true
 	}
 }
 

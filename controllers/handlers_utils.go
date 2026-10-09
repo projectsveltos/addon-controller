@@ -1206,16 +1206,24 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 				continue
 			}
 
-			// Only rely on the clustersummary annotation as a protective signal: skip a
-			// resource here when it is explicitly annotated for a *different* ClusterSummary
-			// (relevant when this ClusterSummary's remote cluster is the self-managed
-			// management cluster, and another ClusterSummary deployed there via
+			// The management cluster pass only removes what this very ClusterSummary deployed
+			// there via deploymentType: Local, so the resource must carry the clustersummary
+			// annotation of this ClusterSummary. That annotation has always been set on Local
+			// deploys. A resource without it was not deployed locally by this ClusterSummary:
+			// for instance, the management cluster can itself be a managed cluster of another
+			// Sveltos instance, which deployed resources owned by a (Cluster)Profile with the
+			// very same name. Those must never be removed here.
+			//
+			// The managed cluster pass is lenient: the annotation is only a protective signal.
+			// Skip a resource here when it is explicitly annotated for a *different*
+			// ClusterSummary (relevant when this ClusterSummary's remote cluster is the
+			// self-managed management cluster, and another ClusterSummary deployed there via
 			// deploymentType: Local). A resource missing the annotation entirely predates it
 			// being set on every deploy, and must still fall through to the normal
 			// canDelete/isResourceOwner checks below, or upgraded ClusterSummaries would never
 			// detect their own pre-existing resources as stale again.
 			var skipAnnotationKey, skipAnnotationValue string
-			if _, ok := r.GetAnnotations()[clusterSummaryAnnotation]; ok {
+			if _, ok := r.GetAnnotations()[clusterSummaryAnnotation]; ok || isMgmtCluster {
 				skipAnnotationKey = clusterSummaryAnnotation
 				skipAnnotationValue = ownClusterSummaryValue
 			}

@@ -252,6 +252,7 @@ var (
 	CollectResourceSummariesFromCluster   = collectResourceSummariesFromCluster
 	CollectAndProcessAllResourceSummaries = collectAndProcessAllResourceSummaries
 	IsResourceSummaryInstalledCached      = isResourceSummaryInstalledCached
+	SkipCollecting                        = skipCollecting
 	ResetResourceSummaryInstalledCache    = func() {
 		resourceSummaryInstalledCacheMu.Lock()
 		resourceSummaryInstalledCache = make(map[corev1.ObjectReference]bool)

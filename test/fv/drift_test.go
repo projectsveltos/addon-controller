@@ -332,15 +332,15 @@ hpa:
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		Byf("Verifying ClusterSummary %s records podinfo-excluded as the drifted resource", clusterSummary.Name)
-		firstDrift := verifyHelmLastDrift(clusterSummary, firstDriftStart)
-		Expect(driftRecordHasHelmDeployment(firstDrift, podinfoExcludedRelease)).To(BeTrue())
+		firstDrift := verifyHelmDriftHistory(clusterSummary, firstDriftStart)
+		Expect(driftHistoryHasHelmResource(firstDrift, appsGroupName, kindDeployment, podinfoExcludedRelease)).To(BeTrue())
 		By("podinfo-ignored did not drift as far as Sveltos is concerned")
-		Expect(driftRecordHasHelmDeployment(firstDrift, podinfoIgnoredRelease)).To(BeFalse())
+		Expect(driftHistoryHasHelmResource(firstDrift, appsGroupName, kindDeployment, podinfoIgnoredRelease)).To(BeFalse())
 
 		// Drift-detection must have the new hash of the reverted Deployment before it can see a second drift
 		time.Sleep(sleepTime * time.Second)
 
-		By("Change podinfo-excluded's image again: lastDrift must carry the time of this second drift")
+		By("Change podinfo-excluded's image again: the history must carry the time of this second drift")
 		secondDriftStart := metav1.NewTime(time.Now().Truncate(time.Second))
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(workloadClient.Get(context.TODO(),
@@ -360,10 +360,41 @@ hpa:
 		}, timeout, pollingInterval).Should(BeTrue())
 		By("podinfo-excluded image is reset to the baseline tag again")
 
-		secondDrift := verifyHelmLastDrift(clusterSummary, secondDriftStart)
-		Expect(driftRecordHasHelmDeployment(secondDrift, podinfoExcludedRelease)).To(BeTrue())
-		Expect(firstDrift.DetectedTime.Before(&secondDrift.DetectedTime)).To(BeTrue(),
-			"lastDrift.detectedTime %s was not updated by the second drift", firstDrift.DetectedTime)
+		secondDrift := verifyHelmDriftHistory(clusterSummary, secondDriftStart)
+		Expect(driftHistoryHasHelmResource(secondDrift, appsGroupName, kindDeployment, podinfoExcludedRelease)).To(BeTrue())
+		Expect(firstDrift.LastDetectedTime.Before(&secondDrift.LastDetectedTime)).To(BeTrue(),
+			"driftHistory.lastDetectedTime %s was not updated by the second drift", firstDrift.LastDetectedTime)
+		By("The Deployment drifted twice but is listed once")
+		Expect(countHelmResourceInDriftHistory(secondDrift, appsGroupName, kindDeployment, podinfoExcludedRelease)).To(Equal(1))
+
+		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
+		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
+
+		// Drift-detection must have the new hash of the reverted Deployment before it can see a third drift
+		time.Sleep(sleepTime * time.Second)
+
+		By("Delete podinfo-excluded's Service: the history must list it, the most recent first, next to the Deployment")
+		thirdDriftStart := metav1.NewTime(time.Now().Truncate(time.Second))
+		service := &corev1.Service{}
+		Expect(workloadClient.Get(context.TODO(),
+			types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, service)).To(Succeed())
+		deletedServiceUID := service.UID
+		Expect(workloadClient.Delete(context.TODO(), service)).To(Succeed())
+
+		Eventually(func() bool {
+			recreated := &corev1.Service{}
+			err = workloadClient.Get(context.TODO(),
+				types.NamespacedName{Namespace: podinfoDriftNamespace, Name: podinfoExcludedRelease}, recreated)
+			return err == nil && recreated.UID != deletedServiceUID
+		}, timeout, pollingInterval).Should(BeTrue())
+		By("podinfo-excluded's Service is recreated")
+
+		thirdDrift := verifyHelmDriftHistory(clusterSummary, thirdDriftStart)
+		Expect(thirdDrift.Resources).ToNot(BeEmpty())
+		Expect(thirdDrift.Resources[0].Kind).To(Equal(kindService))
+		Expect(countHelmResourceInDriftHistory(thirdDrift, "", kindService, podinfoExcludedRelease)).To(Equal(1))
+		By("The earlier drift of the Deployment is still in the history")
+		Expect(countHelmResourceInDriftHistory(thirdDrift, appsGroupName, kindDeployment, podinfoExcludedRelease)).To(Equal(1))
 
 		Byf("Verifying ClusterSummary %s status is set to Deployed for Helm feature", clusterSummary.Name)
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
@@ -504,12 +535,12 @@ hpa:
 	})
 })
 
-// verifyHelmLastDrift waits for the Helm feature of the ClusterSummary to record a drift detected
-// at or after notBefore, and returns that record.
-func verifyHelmLastDrift(clusterSummary *configv1beta1.ClusterSummary, notBefore metav1.Time,
-) *configv1beta1.DriftRecord {
+// verifyHelmDriftHistory waits for the Helm feature of the ClusterSummary to record a drift detected
+// at or after notBefore, and returns the drift history.
+func verifyHelmDriftHistory(clusterSummary *configv1beta1.ClusterSummary, notBefore metav1.Time,
+) *configv1beta1.DriftHistory {
 
-	var record *configv1beta1.DriftRecord
+	var history *configv1beta1.DriftHistory
 	Eventually(func() bool {
 		current := &configv1beta1.ClusterSummary{}
 		err := k8sClient.Get(context.TODO(),
@@ -519,35 +550,42 @@ func verifyHelmLastDrift(clusterSummary *configv1beta1.ClusterSummary, notBefore
 		}
 		for i := range current.Status.FeatureSummaries {
 			featureSummary := &current.Status.FeatureSummaries[i]
-			if featureSummary.FeatureID != libsveltosv1beta1.FeatureHelm || featureSummary.LastDrift == nil {
+			if featureSummary.FeatureID != libsveltosv1beta1.FeatureHelm || featureSummary.DriftHistory == nil {
 				continue
 			}
-			if featureSummary.LastDrift.DetectedTime.Before(&notBefore) {
+			if featureSummary.DriftHistory.LastDetectedTime.Before(&notBefore) {
 				return false
 			}
-			record = featureSummary.LastDrift
+			history = featureSummary.DriftHistory
 			return true
 		}
 		return false
 	}, timeout, pollingInterval).Should(BeTrue())
 
-	return record
+	return history
 }
 
-// driftRecordHasHelmDeployment returns true when the record lists the Deployment deployed by the Helm
-// release of the same name in the podinfo drift namespace.
-func driftRecordHasHelmDeployment(record *configv1beta1.DriftRecord, name string) bool {
-	for i := range record.Resources {
-		resource := &record.Resources[i]
-		if resource.Group == appsGroupName && resource.Kind == kindDeployment &&
+// countHelmResourceInDriftHistory returns how many times the history lists the resource of the given
+// group, kind and name deployed by the Helm release of the same name in the podinfo drift namespace.
+func countHelmResourceInDriftHistory(history *configv1beta1.DriftHistory, group, kind, name string) int {
+	count := 0
+	for i := range history.Resources {
+		resource := &history.Resources[i]
+		if resource.Group == group && resource.Kind == kind &&
 			resource.Namespace == podinfoDriftNamespace && resource.Name == name &&
 			resource.HelmReleaseName == name && resource.HelmReleaseNamespace == podinfoDriftNamespace {
 
-			return true
+			count++
 		}
 	}
 
-	return false
+	return count
+}
+
+// driftHistoryHasHelmResource returns true when the history lists the resource of the given group, kind
+// and name deployed by the Helm release of the same name in the podinfo drift namespace.
+func driftHistoryHasHelmResource(history *configv1beta1.DriftHistory, group, kind, name string) bool {
+	return countHelmResourceInDriftHistory(history, group, kind, name) > 0
 }
 
 func isAgentLessMode() bool {

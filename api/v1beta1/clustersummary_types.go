@@ -85,25 +85,28 @@ type FeatureSummary struct {
 	// +optional
 	ResourceSummaryDeployed *bool `json:"resourceSummaryDeployed,omitempty"`
 
-	// LastDrift records the last configuration drift detected on the resources this feature
-	// deployed. Only set when SyncMode is ContinuousWithDriftDetection. It is kept after the
-	// drift has been corrected by a redeploy, and replaced when the next drift is detected.
+	// DriftHistory records the configuration drifts detected on the resources this feature
+	// deployed. Only set when SyncMode is ContinuousWithDriftDetection. It is kept after a
+	// drift has been corrected by a redeploy, and every new drift is added to it.
 	// +optional
-	LastDrift *DriftRecord `json:"lastDrift,omitempty"`
+	DriftHistory *DriftHistory `json:"driftHistory,omitempty"`
 }
 
-// DriftRecord describes a configuration drift detected on the resources deployed by a feature.
-type DriftRecord struct {
-	// DetectedTime is when the drift was detected. When the component that detected it did not
-	// report a time, it is the time the drift was collected.
-	DetectedTime metav1.Time `json:"detectedTime"`
+// DriftHistory describes the configuration drifts detected on the resources deployed by a feature.
+type DriftHistory struct {
+	// LastDetectedTime is when the most recent drift was detected. When the component that
+	// detected it did not report a time, it is the time the drift was collected.
+	LastDetectedTime metav1.Time `json:"lastDetectedTime"`
 
-	// Resources lists the resources that drifted. Empty when the component that detected the
-	// drift did not report which resources changed.
+	// Resources lists the resources that drifted, the most recently drifted first. A resource
+	// that drifts again is listed once, with the time of its latest drift. When more than
+	// MaxDriftedResources resources drifted, the oldest ones are dropped. Empty when the
+	// component that detected the drift did not report which resources changed.
 	// +optional
 	Resources []DriftedResourceRef `json:"resources,omitempty"`
 
-	// Truncated is true when more resources drifted than are listed in Resources.
+	// Truncated is true when the most recent drift involved more resources than the component
+	// that detected it could report, so some of the resources that drifted are not listed.
 	// +optional
 	Truncated bool `json:"truncated,omitempty"`
 }
@@ -131,6 +134,9 @@ type DriftedResourceRef struct {
 	// Only set for the Helm feature.
 	// +optional
 	HelmReleaseName string `json:"helmReleaseName,omitempty"`
+
+	// DetectedTime is when the latest drift of this resource was detected.
+	DetectedTime metav1.Time `json:"detectedTime"`
 }
 
 // HelChartStatus specifies whether ClusterSummary is successfully managing

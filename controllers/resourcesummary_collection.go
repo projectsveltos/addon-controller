@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -534,7 +535,8 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					markDriftedHelmCharts(clusterSummary, rs.Status.DriftedHelmCharts, l)
-					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureHelm)
+					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
+						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureHelm)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -543,7 +545,8 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
-					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureResources)
+					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
+						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureResources)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -552,7 +555,8 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					l.V(logs.LogDebug).Info("redeploy kustomization resources")
 					clusterSummary.Status.FeatureSummaries[i].Hash = nil
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
-					clusterSummary.Status.FeatureSummaries[i].LastDrift = newDriftRecord(rs, libsveltosv1beta1.FeatureKustomize)
+					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
+						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureKustomize)
 					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
 						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
 				}
@@ -574,19 +578,52 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 	return resetResourceSummaryStatus(ctx, clusterClient, rs, logger)
 }
 
-// newDriftRecord builds the record of the drift reported by rs for featureID. rs.Status.DriftedResources
-// is shared by all features, so only the entries of featureID are kept. The detection time is the
-// earliest time reported. When drift-detection did not report any resource (an older version, or a
-// pull mode agent that predates the field), the record has no resources and carries the collection
-// time instead.
-func newDriftRecord(rs *libsveltosv1beta1.ResourceSummary, featureID libsveltosv1beta1.FeatureID,
-) *configv1beta1.DriftRecord {
+// newDriftHistory returns the drift history of featureID once the drift reported by rs is added to
+// history. rs.Status.DriftedResources is shared by all features, so only the entries of featureID are
+// used. A resource that drifted before keeps a single entry, with the time of its latest drift, so
+// processing the same ResourceSummary twice gives the same history. The most recently drifted resources
+// come first and only the libsveltosv1beta1.MaxDriftedResources most recent are kept. When drift-detection
+// did not report any resource (an older version, or a pull mode agent that predates the field), the
+// listed resources are unchanged and the collection time is the time of the last drift.
+func newDriftHistory(history *configv1beta1.DriftHistory, rs *libsveltosv1beta1.ResourceSummary,
+	featureID libsveltosv1beta1.FeatureID) *configv1beta1.DriftHistory {
 
-	record := &configv1beta1.DriftRecord{
-		Truncated: rs.Status.DriftedResourcesTruncated,
+	var previous []configv1beta1.DriftedResourceRef
+	if history != nil {
+		previous = history.Resources
 	}
 
-	var earliest *metav1.Time
+	reported := getReportedDriftedResources(rs, featureID)
+
+	return &configv1beta1.DriftHistory{
+		LastDetectedTime: getLastDetectedTime(reported),
+		Resources:        mergeDriftedResources(reported, previous),
+		Truncated:        rs.Status.DriftedResourcesTruncated,
+	}
+}
+
+// getLastDetectedTime returns the most recent detection time among reported, or the current time
+// when no resource was reported
+func getLastDetectedTime(reported []configv1beta1.DriftedResourceRef) metav1.Time {
+	if len(reported) == 0 {
+		return metav1.Now()
+	}
+
+	last := reported[0].DetectedTime
+	for i := range reported {
+		if last.Before(&reported[i].DetectedTime) {
+			last = reported[i].DetectedTime
+		}
+	}
+
+	return last
+}
+
+// getReportedDriftedResources returns the resources of featureID reported by rs as drifted
+func getReportedDriftedResources(rs *libsveltosv1beta1.ResourceSummary, featureID libsveltosv1beta1.FeatureID,
+) []configv1beta1.DriftedResourceRef {
+
+	reported := make([]configv1beta1.DriftedResourceRef, 0, len(rs.Status.DriftedResources))
 	for i := range rs.Status.DriftedResources {
 		drifted := &rs.Status.DriftedResources[i]
 		if drifted.FeatureID != featureID {
@@ -594,29 +631,65 @@ func newDriftRecord(rs *libsveltosv1beta1.ResourceSummary, featureID libsveltosv
 		}
 
 		ref := configv1beta1.DriftedResourceRef{
-			Group:     drifted.Group,
-			Kind:      drifted.Kind,
-			Namespace: drifted.Namespace,
-			Name:      drifted.Name,
+			Group:        drifted.Group,
+			Kind:         drifted.Kind,
+			Namespace:    drifted.Namespace,
+			Name:         drifted.Name,
+			DetectedTime: drifted.DetectedTime,
 		}
 		if drifted.HelmChartRef != nil {
 			ref.HelmReleaseNamespace = drifted.HelmChartRef.ReleaseNamespace
 			ref.HelmReleaseName = drifted.HelmChartRef.ReleaseName
 		}
-		record.Resources = append(record.Resources, ref)
+		reported = append(reported, ref)
+	}
 
-		if earliest == nil || drifted.DetectedTime.Before(earliest) {
-			earliest = &drifted.DetectedTime
+	return reported
+}
+
+// mergeDriftedResources returns reported followed by the resources in previous that were not reported
+// again, the most recently drifted first and at most libsveltosv1beta1.MaxDriftedResources of them.
+func mergeDriftedResources(reported, previous []configv1beta1.DriftedResourceRef,
+) []configv1beta1.DriftedResourceRef {
+
+	merged := make([]configv1beta1.DriftedResourceRef, 0, len(reported)+len(previous))
+	merged = append(merged, reported...)
+	for i := range previous {
+		if !containsDriftedResource(reported, &previous[i]) {
+			merged = append(merged, previous[i])
 		}
 	}
 
-	if earliest != nil {
-		record.DetectedTime = *earliest
-	} else {
-		record.DetectedTime = metav1.Now()
+	// Stable, so resources detected at the same time keep the order in which they are reported
+	sort.SliceStable(merged, func(i, j int) bool {
+		return merged[j].DetectedTime.Before(&merged[i].DetectedTime)
+	})
+
+	if len(merged) > libsveltosv1beta1.MaxDriftedResources {
+		merged = merged[:libsveltosv1beta1.MaxDriftedResources]
 	}
 
-	return record
+	if len(merged) == 0 {
+		return nil
+	}
+
+	return merged
+}
+
+func containsDriftedResource(resources []configv1beta1.DriftedResourceRef, resource *configv1beta1.DriftedResourceRef,
+) bool {
+
+	for i := range resources {
+		if resources[i].Group == resource.Group && resources[i].Kind == resource.Kind &&
+			resources[i].Namespace == resource.Namespace && resources[i].Name == resource.Name &&
+			resources[i].HelmReleaseNamespace == resource.HelmReleaseNamespace &&
+			resources[i].HelmReleaseName == resource.HelmReleaseName {
+
+			return true
+		}
+	}
+
+	return false
 }
 
 func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,

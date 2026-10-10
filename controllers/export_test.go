@@ -259,7 +259,7 @@ var (
 	}
 	ProcessResourceSummary = processResourceSummary
 	MarkDriftedHelmCharts  = markDriftedHelmCharts
-	NewDriftRecord         = newDriftRecord
+	NewDriftHistory        = newDriftHistory
 )
 
 var (

@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -41,9 +42,24 @@ import (
 )
 
 const (
-	driftedConfigMapName  = "settings"
-	driftedDeploymentName = "kyverno-admission"
+	driftedConfigMapName      = "settings"
+	driftedDeploymentName     = "kyverno-admission"
+	driftedServiceAccountName = "kyverno-sa"
 )
+
+func driftedResource(featureID libsveltosv1beta1.FeatureID, name string, detected metav1.Time,
+) libsveltosv1beta1.DriftedResource {
+
+	return libsveltosv1beta1.DriftedResource{
+		Kind: testKindConfigMap, Namespace: copyNamespace, Name: name, FeatureID: featureID, DetectedTime: detected,
+	}
+}
+
+func getDriftedResourceSummary(drifted ...libsveltosv1beta1.DriftedResource) *libsveltosv1beta1.ResourceSummary {
+	return &libsveltosv1beta1.ResourceSummary{
+		Status: libsveltosv1beta1.ResourceSummaryStatus{DriftedResources: drifted},
+	}
+}
 
 var _ = Describe("ResourceSummary Collection", func() {
 	It("collectResourceSummariesFromCluster collects and processes ResourceSummaries from clusters", func() {
@@ -252,7 +268,7 @@ var _ = Describe("ResourceSummary Collection", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
-	It("processResourceSummary records the drifted resources of each feature in LastDrift", func() {
+	It("processResourceSummary records the drifted resources of each feature in DriftHistory", func() {
 		cluster := prepareCluster()
 
 		helmChart := libsveltosv1beta1.HelmChartRef{
@@ -331,30 +347,34 @@ var _ = Describe("ResourceSummary Collection", func() {
 			err := testEnv.Get(context.TODO(),
 				types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
 				currentClusterSummary)
-			return err == nil && currentClusterSummary.Status.FeatureSummaries[0].LastDrift != nil
+			return err == nil && currentClusterSummary.Status.FeatureSummaries[0].DriftHistory != nil
 		}, timeout, pollingInterval).Should(BeTrue())
 
 		By("Helm feature records only its own resource, with the Helm release")
-		helmDrift := currentClusterSummary.Status.FeatureSummaries[0].LastDrift
-		Expect(helmDrift.Resources).To(Equal([]configv1beta1.DriftedResourceRef{
-			{
-				Group: testAppsGroup, Kind: testKindDeployment, Namespace: testReleaseNameKyverno, Name: driftedDeploymentName,
-				HelmReleaseNamespace: helmChart.ReleaseNamespace, HelmReleaseName: helmChart.ReleaseName,
-			},
-		}))
+		helmDrift := currentClusterSummary.Status.FeatureSummaries[0].DriftHistory
+		Expect(helmDrift.Resources).To(HaveLen(1))
+		Expect(helmDrift.Resources[0].Group).To(Equal(testAppsGroup))
+		Expect(helmDrift.Resources[0].Kind).To(Equal(testKindDeployment))
+		Expect(helmDrift.Resources[0].Namespace).To(Equal(testReleaseNameKyverno))
+		Expect(helmDrift.Resources[0].Name).To(Equal(driftedDeploymentName))
+		Expect(helmDrift.Resources[0].HelmReleaseNamespace).To(Equal(helmChart.ReleaseNamespace))
+		Expect(helmDrift.Resources[0].HelmReleaseName).To(Equal(helmChart.ReleaseName))
+		Expect(helmDrift.Resources[0].DetectedTime.Time).To(BeTemporally("~", later.Time, time.Second))
 		Expect(helmDrift.Truncated).To(BeTrue())
-		Expect(helmDrift.DetectedTime.Time).To(BeTemporally("~", later.Time, time.Second))
+		Expect(helmDrift.LastDetectedTime.Time).To(BeTemporally("~", later.Time, time.Second))
 
 		By("Resources feature records only its own resource")
-		resourcesDrift := currentClusterSummary.Status.FeatureSummaries[1].LastDrift
+		resourcesDrift := currentClusterSummary.Status.FeatureSummaries[1].DriftHistory
 		Expect(resourcesDrift).ToNot(BeNil())
-		Expect(resourcesDrift.Resources).To(Equal([]configv1beta1.DriftedResourceRef{
-			{Kind: testKindConfigMap, Namespace: copyNamespace, Name: driftedConfigMapName},
-		}))
-		Expect(resourcesDrift.DetectedTime.Time).To(BeTemporally("~", earlier.Time, time.Second))
+		Expect(resourcesDrift.Resources).To(HaveLen(1))
+		Expect(resourcesDrift.Resources[0].Kind).To(Equal(testKindConfigMap))
+		Expect(resourcesDrift.Resources[0].Namespace).To(Equal(copyNamespace))
+		Expect(resourcesDrift.Resources[0].Name).To(Equal(driftedConfigMapName))
+		Expect(resourcesDrift.Resources[0].HelmReleaseName).To(BeEmpty())
+		Expect(resourcesDrift.LastDetectedTime.Time).To(BeTemporally("~", earlier.Time, time.Second))
 
 		By("Kustomize feature did not drift, so it has no record")
-		Expect(currentClusterSummary.Status.FeatureSummaries[2].LastDrift).To(BeNil())
+		Expect(currentClusterSummary.Status.FeatureSummaries[2].DriftHistory).To(BeNil())
 
 		By("The reported drift is cleared from the ResourceSummary, so the next drift gets its own detection time")
 		Eventually(func() bool {
@@ -367,17 +387,108 @@ var _ = Describe("ResourceSummary Collection", func() {
 		Expect(currentResourceSummary.Status.DriftedHelmCharts).To(BeEmpty())
 	})
 
-	It("newDriftRecord has no resources and uses the collection time when none were reported", func() {
+	It("newDriftHistory has no resources and uses the collection time when none were reported", func() {
 		resourceSummary := &libsveltosv1beta1.ResourceSummary{
 			Status: libsveltosv1beta1.ResourceSummaryStatus{ResourcesChanged: true},
 		}
 
 		before := metav1.Now()
-		record := controllers.NewDriftRecord(resourceSummary, libsveltosv1beta1.FeatureResources)
+		history := controllers.NewDriftHistory(nil, resourceSummary, libsveltosv1beta1.FeatureResources)
 
-		Expect(record.Resources).To(BeEmpty())
-		Expect(record.Truncated).To(BeFalse())
-		Expect(record.DetectedTime.Time).To(BeTemporally(">=", before.Add(-time.Second)))
+		Expect(history.Resources).To(BeEmpty())
+		Expect(history.Truncated).To(BeFalse())
+		Expect(history.LastDetectedTime.Time).To(BeTemporally(">=", before.Add(-time.Second)))
+	})
+
+	It("newDriftHistory keeps the listed resources when a later drift reports none", func() {
+		first := metav1.NewTime(metav1.Now().Add(-time.Hour))
+		history := controllers.NewDriftHistory(nil,
+			getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureResources, driftedConfigMapName, first)),
+			libsveltosv1beta1.FeatureResources)
+
+		resourceSummary := &libsveltosv1beta1.ResourceSummary{
+			Status: libsveltosv1beta1.ResourceSummaryStatus{ResourcesChanged: true},
+		}
+		history = controllers.NewDriftHistory(history, resourceSummary, libsveltosv1beta1.FeatureResources)
+
+		Expect(history.Resources).To(HaveLen(1))
+		Expect(history.Resources[0].Name).To(Equal(driftedConfigMapName))
+		Expect(history.LastDetectedTime.Time).To(BeTemporally(">", first.Time))
+	})
+
+	It("newDriftHistory adds a new drift to the previous ones, the most recent first", func() {
+		first := metav1.NewTime(metav1.Now().Add(-time.Hour))
+		second := metav1.Now()
+
+		history := controllers.NewDriftHistory(nil,
+			getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureHelm, driftedDeploymentName, first)),
+			libsveltosv1beta1.FeatureHelm)
+		history = controllers.NewDriftHistory(history,
+			getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureHelm, driftedServiceAccountName, second)),
+			libsveltosv1beta1.FeatureHelm)
+
+		Expect(history.Resources).To(HaveLen(2))
+		Expect(history.Resources[0].Name).To(Equal(driftedServiceAccountName))
+		Expect(history.Resources[0].DetectedTime.Time).To(BeTemporally("~", second.Time, time.Second))
+		Expect(history.Resources[1].Name).To(Equal(driftedDeploymentName))
+		Expect(history.Resources[1].DetectedTime.Time).To(BeTemporally("~", first.Time, time.Second))
+		Expect(history.LastDetectedTime.Time).To(BeTemporally("~", second.Time, time.Second))
+	})
+
+	It("newDriftHistory lists a resource that drifts again once, with the time of its latest drift", func() {
+		first := metav1.NewTime(metav1.Now().Add(-time.Hour))
+		second := metav1.Now()
+
+		history := controllers.NewDriftHistory(nil,
+			getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureResources, driftedConfigMapName, first)),
+			libsveltosv1beta1.FeatureResources)
+		history = controllers.NewDriftHistory(history,
+			getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureResources, driftedConfigMapName, second)),
+			libsveltosv1beta1.FeatureResources)
+
+		Expect(history.Resources).To(HaveLen(1))
+		Expect(history.Resources[0].DetectedTime.Time).To(BeTemporally("~", second.Time, time.Second))
+	})
+
+	It("newDriftHistory gives the same history when the same drift is processed twice", func() {
+		detected := metav1.Now()
+		resourceSummary := getDriftedResourceSummary(
+			driftedResource(libsveltosv1beta1.FeatureHelm, driftedDeploymentName, detected),
+			driftedResource(libsveltosv1beta1.FeatureHelm, driftedServiceAccountName, detected))
+
+		history := controllers.NewDriftHistory(nil, resourceSummary, libsveltosv1beta1.FeatureHelm)
+		again := controllers.NewDriftHistory(history, resourceSummary, libsveltosv1beta1.FeatureHelm)
+
+		Expect(again).To(Equal(history))
+	})
+
+	It("newDriftHistory keeps the most recent MaxDriftedResources and drops the oldest", func() {
+		start := metav1.NewTime(metav1.Now().Add(-time.Hour))
+
+		var history *configv1beta1.DriftHistory
+		total := libsveltosv1beta1.MaxDriftedResources + 5
+		for i := 0; i < total; i++ {
+			detected := metav1.NewTime(start.Add(time.Duration(i) * time.Minute))
+			history = controllers.NewDriftHistory(history,
+				getDriftedResourceSummary(driftedResource(libsveltosv1beta1.FeatureHelm, fmt.Sprintf("res-%d", i), detected)),
+				libsveltosv1beta1.FeatureHelm)
+		}
+
+		Expect(history.Resources).To(HaveLen(libsveltosv1beta1.MaxDriftedResources))
+		Expect(history.Resources[0].Name).To(Equal(fmt.Sprintf("res-%d", total-1)))
+		Expect(history.Resources[libsveltosv1beta1.MaxDriftedResources-1].Name).To(Equal("res-5"))
+	})
+
+	It("newDriftHistory ignores the resources of other features", func() {
+		detected := metav1.Now()
+		resourceSummary := getDriftedResourceSummary(
+			driftedResource(libsveltosv1beta1.FeatureHelm, driftedDeploymentName, detected),
+			driftedResource(libsveltosv1beta1.FeatureKustomize, driftedConfigMapName, detected))
+
+		history := controllers.NewDriftHistory(nil, resourceSummary, libsveltosv1beta1.FeatureKustomize)
+
+		Expect(history.Resources).To(HaveLen(1))
+		Expect(history.Resources[0].Name).To(Equal(driftedConfigMapName))
 	})
 
 	It("markDriftedHelmCharts marks every chart when no chart-scoped drift info is available", func() {

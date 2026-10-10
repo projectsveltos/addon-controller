@@ -705,6 +705,45 @@ var _ = Describe("ResourceSummary Collection", func() {
 			return currentSveltosRS.Status.HelmResourcesChanged
 		}, "2s", pollingInterval).Should(BeTrue())
 	})
+
+	It("skipCollecting skips a SveltosCluster whose connection is down, even when it is marked ready", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Status: libsveltosv1beta1.SveltosClusterStatus{
+				Ready:            true,
+				ConnectionStatus: libsveltosv1beta1.ConnectionDown,
+			},
+		}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(sveltosCluster).Build()
+
+		clusterRef := &corev1.ObjectReference{
+			Namespace:  sveltosCluster.Namespace,
+			Name:       sveltosCluster.Name,
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		skip, err := controllers.SkipCollecting(context.TODO(), c, clusterRef, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeTrue())
+
+		// Once the connection is back, collection is not skipped anymore
+		currentSveltosCluster := &libsveltosv1beta1.SveltosCluster{}
+		Expect(c.Get(context.TODO(),
+			types.NamespacedName{Namespace: sveltosCluster.Namespace, Name: sveltosCluster.Name},
+			currentSveltosCluster)).To(Succeed())
+		currentSveltosCluster.Status.ConnectionStatus = libsveltosv1beta1.ConnectionHealthy
+		Expect(c.Update(context.TODO(), currentSveltosCluster)).To(Succeed())
+
+		skip, err = controllers.SkipCollecting(context.TODO(), c, clusterRef, logger)
+		Expect(err).To(BeNil())
+		Expect(skip).To(BeFalse())
+	})
 })
 
 // getResourceSummary returns a bare ResourceSummary. None of the tests in this file need it

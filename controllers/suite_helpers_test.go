@@ -35,6 +35,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -219,6 +220,53 @@ func getClusterSummaryWithFinalizer(profileKind string, profile client.Object, c
 			ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
 		},
 	}
+}
+
+// profileMetricLabels returns the labels identifying a ClusterProfile/Profile in the projectsveltos metrics.
+func profileMetricLabels(profileKind, profileNamespace, profileName string) map[string]string {
+	return map[string]string{
+		"profile_kind":      profileKind,
+		"profile_namespace": profileNamespace,
+		"profile_name":      profileName,
+	}
+}
+
+// clusterSummaryMetricLabels returns the labels identifying, in the projectsveltos metrics, the ClusterSummary
+// created by the ClusterProfile/Profile for a cluster.
+func clusterSummaryMetricLabels(clusterSummary *configv1beta1.ClusterSummary,
+	profileKind, profileNamespace, profileName string) map[string]string {
+
+	labels := profileMetricLabels(profileKind, profileNamespace, profileName)
+	labels["cluster_type"] = string(clusterSummary.Spec.ClusterType)
+	labels["cluster_namespace"] = clusterSummary.Spec.ClusterNamespace
+	labels["cluster_name"] = clusterSummary.Spec.ClusterName
+	return labels
+}
+
+// hasMetricSeries returns true if the metric called name has a series, in the controller-runtime
+// registry, whose labels include all of labels.
+func hasMetricSeries(name string, labels map[string]string) bool {
+	families, err := metrics.Registry.Gather()
+	Expect(err).To(BeNil())
+
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			matched := 0
+			for _, label := range metric.GetLabel() {
+				if value, ok := labels[label.GetName()]; ok && value == label.GetValue() {
+					matched++
+				}
+			}
+			if matched == len(labels) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // deleteResources deletes following resources:

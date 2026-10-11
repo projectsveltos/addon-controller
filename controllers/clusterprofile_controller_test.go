@@ -371,6 +371,47 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(result.RequeueAfter).To(Equal(controllers.DeleteRequeueAfter))
 		Expect(reconciler.ClusterMap).To(BeEmpty())
 	})
+
+	It("reconcileDelete removes the matching clusters metric of the ClusterProfile once the finalizer is removed", func() {
+		controllerutil.AddFinalizer(clusterProfile, configv1beta1.ClusterProfileFinalizer)
+
+		initObjects := []client.Object{clusterProfile}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ClusterProfileReconciler{
+			Client:          c,
+			Scheme:          scheme,
+			ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+			ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+			ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+			Mux:             sync.Mutex{},
+		}
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		// A Profile with the same name: its metric must stay.
+		profileNamespace := randomString()
+		controllers.TrackMatchingClusters(configv1beta1.ClusterProfileKind, "", clusterProfile.Name, 2, logger)
+		controllers.TrackMatchingClusters(configv1beta1.ProfileKind, profileNamespace, clusterProfile.Name, 1, logger)
+
+		clusterProfileLabels := profileMetricLabels(configv1beta1.ClusterProfileKind, "", clusterProfile.Name)
+		profileLabels := profileMetricLabels(configv1beta1.ProfileKind, profileNamespace, clusterProfile.Name)
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", clusterProfileLabels)).To(BeTrue())
+
+		result := controllers.ClusterProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+		Expect(result.RequeueAfter).To(BeZero())
+		Expect(controllerutil.ContainsFinalizer(clusterProfile, configv1beta1.ClusterProfileFinalizer)).To(BeFalse())
+
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", clusterProfileLabels)).To(BeFalse())
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", profileLabels)).To(BeTrue())
+	})
 })
 
 var _ = Describe("ClusterProfileReconciler: requeue methods", func() {

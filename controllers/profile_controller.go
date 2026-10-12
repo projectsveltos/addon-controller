@@ -191,6 +191,8 @@ func (r *ProfileReconciler) reconcileDelete(
 	}
 
 	r.cleanMaps(profileScope)
+	clearProfileMetrics(configv1beta1.ProfileKind, profileScope.Profile.GetNamespace(), profileScope.Profile.GetName(),
+		logger)
 
 	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}

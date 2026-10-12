@@ -27,6 +27,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -304,5 +305,49 @@ var _ = Describe("Profile Controller", func() {
 		result := controllers.ProfileReconcileDelete(reconciler, context.TODO(), profileScope)
 		Expect(result.RequeueAfter).To(Equal(controllers.DeleteRequeueAfter))
 		Expect(reconciler.ClusterMap).To(BeEmpty())
+	})
+
+	It("reconcileDelete of a Profile removes its matching clusters metric once the finalizer is removed", func() {
+		controllerutil.AddFinalizer(profile, configv1beta1.ProfileFinalizer)
+
+		initObjects := []client.Object{profile}
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).
+			WithObjects(initObjects...).Build()
+
+		reconciler := &controllers.ProfileReconciler{
+			Client:        c,
+			Scheme:        scheme,
+			ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+			Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+			ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+			Mux:           sync.Mutex{},
+		}
+
+		profileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        profile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		// A ClusterProfile, and a Profile in another namespace, with the same name: their metric must stay.
+		otherNamespace := randomString()
+		controllers.TrackMatchingClusters(configv1beta1.ProfileKind, profile.Namespace, profile.Name, 2, logger)
+		controllers.TrackMatchingClusters(configv1beta1.ClusterProfileKind, "", profile.Name, 1, logger)
+		controllers.TrackMatchingClusters(configv1beta1.ProfileKind, otherNamespace, profile.Name, 1, logger)
+
+		profileLabels := profileMetricLabels(configv1beta1.ProfileKind, profile.Namespace, profile.Name)
+		clusterProfileLabels := profileMetricLabels(configv1beta1.ClusterProfileKind, "", profile.Name)
+		otherProfileLabels := profileMetricLabels(configv1beta1.ProfileKind, otherNamespace, profile.Name)
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", profileLabels)).To(BeTrue())
+
+		result := controllers.ProfileReconcileDelete(reconciler, context.TODO(), profileScope)
+		Expect(result.RequeueAfter).To(BeZero())
+		Expect(controllerutil.ContainsFinalizer(profile, configv1beta1.ProfileFinalizer)).To(BeFalse())
+
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", profileLabels)).To(BeFalse())
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", clusterProfileLabels)).To(BeTrue())
+		Expect(hasMetricSeries("projectsveltos_matching_clusters", otherProfileLabels)).To(BeTrue())
 	})
 })

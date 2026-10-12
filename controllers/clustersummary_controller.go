@@ -478,6 +478,8 @@ func (r *ClusterSummaryReconciler) postFinalizerCleanup(ctx context.Context,
 
 	r.cleanMaps(clusterSummaryScope)
 
+	clearClusterSummaryMetrics(clusterSummaryScope.ClusterSummary, logger)
+
 	cs := clusterSummaryScope.ClusterSummary
 	if err := sharding.UnregisterClusterShard(ctx, r.Client, libsveltosv1beta1.ComponentAddonManager,
 		getSveltosNamespace(), string(libsveltosv1beta1.FeatureHelm), cs.Spec.ClusterNamespace, cs.Spec.ClusterName,

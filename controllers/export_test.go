@@ -295,6 +295,11 @@ var (
 )
 
 var (
+	TrackDrifts           = trackDrifts
+	TrackMatchingClusters = trackMatchingClusters
+)
+
+var (
 	NeedsCosignVerification     = needsCosignVerification
 	NeedsProvenanceVerification = needsProvenanceVerification
 	LoadCosignPublicKey         = loadCosignPublicKey

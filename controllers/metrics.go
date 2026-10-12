@@ -309,6 +309,19 @@ func trackMatchingClusters(profileKind, profileNamespace, profileName string, co
 		profileKind, profileNamespace, profileName, count))
 }
 
+// clearProfileMetrics removes the series recorded for a ClusterProfile/Profile, in matchingClustersGauge.
+// Call it once the ClusterProfile/Profile is gone, so the gauge does not keep reporting its last count.
+func clearProfileMetrics(profileKind, profileNamespace, profileName string, logger logr.Logger) {
+	matchingClustersGauge.Delete(prometheus.Labels{
+		metricProfileKindLabel:      profileKind,
+		metricProfileNamespaceLabel: profileNamespace,
+		metricProfileNameLabel:      profileName,
+	})
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared matching clusters for %s %s/%s",
+		profileKind, profileNamespace, profileName))
+}
+
 // trackConsecutiveFailures records the current consecutive-failure streak for a feature on a cluster,
 // read from ClusterSummary.status.featureSummaries[].consecutiveFailures after SetFeatureStatus has
 // updated it. Called on every terminal outcome (success resets it to 0, failure increments it).
@@ -403,4 +416,42 @@ func trackLastSuccess(clusterNamespace, clusterName, featureID string, clusterTy
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Tracking last success for %s %s/%s %s: %s",
 		clusterType, clusterNamespace, clusterName, featureID, timestamp))
+}
+
+// clearClusterSummaryMetrics removes the series of reconcileOutcomeCounter, driftCounter,
+// reconcileConsecutiveFailuresGauge and reconcileLastSuccessTimestampGauge recorded for clusterSummary. Call it
+// once the ClusterSummary is gone: nothing updates those series anymore, so the gauges would keep reporting their
+// last value. reconcileDurationHistogram and reconciliationCounter are not labeled by profile: their series are
+// shared by every ClusterSummary of the cluster, so they are left alone.
+func clearClusterSummaryMetrics(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
+	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
+
+	for _, featureID := range []libsveltosv1beta1.FeatureID{
+		libsveltosv1beta1.FeatureHelm,
+		libsveltosv1beta1.FeatureResources,
+		libsveltosv1beta1.FeatureKustomize,
+	} {
+		labels := prometheus.Labels{
+			metricClusterTypeLabel:      string(clusterSummary.Spec.ClusterType),
+			metricClusterNamespaceLabel: clusterSummary.Spec.ClusterNamespace,
+			metricClusterNameLabel:      clusterSummary.Spec.ClusterName,
+			metricFeatureLabel:          string(featureID),
+			metricProfileKindLabel:      profileKind,
+			metricProfileNamespaceLabel: profileNamespace,
+			metricProfileNameLabel:      profileName,
+		}
+
+		driftCounter.Delete(labels)
+		reconcileConsecutiveFailuresGauge.Delete(labels)
+		reconcileLastSuccessTimestampGauge.Delete(labels)
+
+		// reconcileOutcomeCounter also has the outcome label.
+		for _, status := range []string{statusSuccess, statusFailure} {
+			labels[metricStatusLabel] = status
+			reconcileOutcomeCounter.Delete(labels)
+		}
+	}
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared metric series for %s %s/%s",
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
 }

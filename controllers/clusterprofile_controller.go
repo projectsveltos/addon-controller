@@ -161,7 +161,7 @@ func (r *ClusterProfileReconciler) reconcileDelete(
 	}
 
 	r.cleanMaps(profileScope)
-	clearMatchingClusters(configv1beta1.ClusterProfileKind, "", profileScope.Profile.GetName(), logger)
+	clearProfileMetrics(configv1beta1.ClusterProfileKind, "", profileScope.Profile.GetName(), logger)
 
 	logger.V(logs.LogDebug).Info("Reconcile delete success")
 	return reconcile.Result{}

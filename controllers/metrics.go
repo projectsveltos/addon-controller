@@ -309,9 +309,9 @@ func trackMatchingClusters(profileKind, profileNamespace, profileName string, co
 		profileKind, profileNamespace, profileName, count))
 }
 
-// clearMatchingClusters removes the matchingClustersGauge series of a ClusterProfile/Profile. Call it once
-// the ClusterProfile/Profile is gone, so the gauge does not keep reporting its last count.
-func clearMatchingClusters(profileKind, profileNamespace, profileName string, logger logr.Logger) {
+// clearProfileMetrics removes the series recorded for a ClusterProfile/Profile, in matchingClustersGauge.
+// Call it once the ClusterProfile/Profile is gone, so the gauge does not keep reporting its last count.
+func clearProfileMetrics(profileKind, profileNamespace, profileName string, logger logr.Logger) {
 	matchingClustersGauge.Delete(prometheus.Labels{
 		metricProfileKindLabel:      profileKind,
 		metricProfileNamespaceLabel: profileNamespace,

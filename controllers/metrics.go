@@ -426,21 +426,32 @@ func trackLastSuccess(clusterNamespace, clusterName, featureID string, clusterTy
 func clearClusterSummaryMetrics(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
 	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
 
-	// No feature (and no status) label, so every series of this ClusterSummary matches.
-	labels := prometheus.Labels{
-		metricClusterTypeLabel:      string(clusterSummary.Spec.ClusterType),
-		metricClusterNamespaceLabel: clusterSummary.Spec.ClusterNamespace,
-		metricClusterNameLabel:      clusterSummary.Spec.ClusterName,
-		metricProfileKindLabel:      profileKind,
-		metricProfileNamespaceLabel: profileNamespace,
-		metricProfileNameLabel:      profileName,
+	for _, featureID := range []libsveltosv1beta1.FeatureID{
+		libsveltosv1beta1.FeatureHelm,
+		libsveltosv1beta1.FeatureResources,
+		libsveltosv1beta1.FeatureKustomize,
+	} {
+		labels := prometheus.Labels{
+			metricClusterTypeLabel:      string(clusterSummary.Spec.ClusterType),
+			metricClusterNamespaceLabel: clusterSummary.Spec.ClusterNamespace,
+			metricClusterNameLabel:      clusterSummary.Spec.ClusterName,
+			metricFeatureLabel:          string(featureID),
+			metricProfileKindLabel:      profileKind,
+			metricProfileNamespaceLabel: profileNamespace,
+			metricProfileNameLabel:      profileName,
+		}
+
+		driftCounter.Delete(labels)
+		reconcileConsecutiveFailuresGauge.Delete(labels)
+		reconcileLastSuccessTimestampGauge.Delete(labels)
+
+		// reconcileOutcomeCounter also has the outcome label.
+		for _, status := range []string{statusSuccess, statusFailure} {
+			labels[metricStatusLabel] = status
+			reconcileOutcomeCounter.Delete(labels)
+		}
 	}
 
-	removed := reconcileOutcomeCounter.DeletePartialMatch(labels) +
-		driftCounter.DeletePartialMatch(labels) +
-		reconcileConsecutiveFailuresGauge.DeletePartialMatch(labels) +
-		reconcileLastSuccessTimestampGauge.DeletePartialMatch(labels)
-
-	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared %d metric series for %s %s/%s",
-		removed, clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared metric series for %s %s/%s",
+		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
 }

@@ -1179,8 +1179,8 @@ var _ = Describe("ClustersummaryController", func() {
 		failed := libsveltosv1beta1.FeatureStatusFailed
 		provisioned := libsveltosv1beta1.FeatureStatusProvisioned
 
-		// recordMetrics records the metrics of a failed Helm deployment, a provisioned Resources
-		// deployment and a drift for cs, and returns the labels identifying cs in those metrics.
+		// recordMetrics records, for cs, a failed Helm deployment, provisioned Resources and Kustomize
+		// deployments and a drift for each feature, and returns the labels identifying cs in those metrics.
 		recordMetrics := func(cs *configv1beta1.ClusterSummary, profileKind, profileNamespace string,
 		) (*scope.ClusterSummaryScope, map[string]string) {
 
@@ -1194,11 +1194,21 @@ var _ = Describe("ClustersummaryController", func() {
 
 			controllers.UpdateFeatureStatus(clusterSummaryReconciler, clusterSummaryScope, libsveltosv1beta1.FeatureHelm,
 				&failed, nil, fmt.Errorf("failed to install chart"), logger)
-			controllers.UpdateFeatureStatus(clusterSummaryReconciler, clusterSummaryScope,
-				libsveltosv1beta1.FeatureResources, &provisioned, nil, nil, logger)
-			controllers.TrackDrifts(cs.Spec.ClusterNamespace, cs.Spec.ClusterName,
-				string(libsveltosv1beta1.FeatureResources), string(cs.Spec.ClusterType), profileKind, profileNamespace,
-				clusterProfile.Name, logger)
+			for _, featureID := range []libsveltosv1beta1.FeatureID{
+				libsveltosv1beta1.FeatureResources,
+				libsveltosv1beta1.FeatureKustomize,
+			} {
+				controllers.UpdateFeatureStatus(clusterSummaryReconciler, clusterSummaryScope, featureID, &provisioned,
+					nil, nil, logger)
+			}
+			for _, featureID := range []libsveltosv1beta1.FeatureID{
+				libsveltosv1beta1.FeatureHelm,
+				libsveltosv1beta1.FeatureResources,
+				libsveltosv1beta1.FeatureKustomize,
+			} {
+				controllers.TrackDrifts(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, string(featureID),
+					string(cs.Spec.ClusterType), profileKind, profileNamespace, clusterProfile.Name, logger)
+			}
 
 			return clusterSummaryScope, clusterSummaryMetricLabels(cs, profileKind, profileNamespace, clusterProfile.Name)
 		}

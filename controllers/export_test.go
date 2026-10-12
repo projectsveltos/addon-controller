@@ -76,6 +76,7 @@ var (
 	IsFeatureFailedWithNonRetriableError = (*ClusterSummaryReconciler).isFeatureFailedWithNonRetriableError
 	GetHash                              = (*ClusterSummaryReconciler).getHash
 	UpdateFeatureStatus                  = (*ClusterSummaryReconciler).updateFeatureStatus
+	UpdateStatusWithMissingLicenseError  = (*ClusterSummaryReconciler).updateStatusWithMissingLicenseError
 	DeployFeature                        = (*ClusterSummaryReconciler).deployFeature
 	UndeployFeature                      = (*ClusterSummaryReconciler).undeployFeature
 	GetCurrentReferences                 = (*ClusterSummaryReconciler).getCurrentReferences

@@ -57,6 +57,7 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	"github.com/projectsveltos/libsveltos/lib/deployer"
+	"github.com/projectsveltos/libsveltos/lib/eventreasons"
 	license "github.com/projectsveltos/libsveltos/lib/licenses"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 	predicates "github.com/projectsveltos/libsveltos/lib/predicates"
@@ -607,23 +608,13 @@ func (r *ClusterSummaryReconciler) prepareForDeployment(ctx context.Context,
 func (r *ClusterSummaryReconciler) proceedDeployingClusterSummary(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) (reconcile.Result, error) {
 
-	// Snapshot existing failure messages before deploying so we can detect
-	// new conflicts vs. ongoing ones and avoid re-raising an event every retry.
-	preDeployFailures := collectFailureMessages(clusterSummaryScope.ClusterSummary)
-
 	err := r.deploy(ctx, clusterSummaryScope, logger)
 	if err != nil {
 		var conflictErr *deployer.ConflictError
 		ok := errors.As(err, &conflictErr)
 		if ok {
+			// The ProfileConflict event is recorded by updateFeatureStatus, when the conflict is persisted
 			logger.V(logs.LogInfo).Error(err, "failed to deploy because of conflict")
-			if _, alreadyKnown := preDeployFailures[conflictErr.Error()]; !alreadyKnown {
-				clusterSummary := clusterSummaryScope.ClusterSummary
-				r.eventRecorder.Eventf(clusterSummary, nil, corev1.EventTypeWarning, "Conflict",
-					configv1beta1.ClusterSummaryKind, "Conflict detected for cluster %s %s/%s: %s",
-					clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace,
-					clusterSummary.Spec.ClusterName, conflictErr.Error())
-			}
 			r.setNextReconcileTime(clusterSummaryScope, r.ConflictRetryTime)
 			return reconcile.Result{RequeueAfter: r.ConflictRetryTime}, nil
 		}
@@ -2143,14 +2134,23 @@ func grantsPullModeEligibility(result *license.LicenseVerificationResult,
 func (r *ClusterSummaryReconciler) updateStatusWithMissingLicenseError(
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) {
 
-	notEligibleError := errors.New("license is required to manage SveltosCluster in pull mode")
+	// All features fail for the same reason: one event, recorded the first time
+	_, previousMessage := getFeatureFailure(clusterSummaryScope.ClusterSummary, libsveltosv1beta1.FeatureHelm)
+
 	failed := libsveltosv1beta1.FeatureStatusFailed
 	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureHelm, &failed, nil,
-		notEligibleError, logger)
+		errPullModeLicenseRequired, logger)
 	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureKustomize, &failed, nil,
-		notEligibleError, logger)
+		errPullModeLicenseRequired, logger)
 	r.updateFeatureStatus(clusterSummaryScope, libsveltosv1beta1.FeatureResources, &failed, nil,
-		notEligibleError, logger)
+		errPullModeLicenseRequired, logger)
+
+	if previousMessage == nil || *previousMessage != errPullModeLicenseRequired.Error() {
+		clusterSummary := clusterSummaryScope.ClusterSummary
+		recordEventf(r.eventRecorder, clusterSummary, nil, corev1.EventTypeWarning, eventreasons.LicenseInvalid,
+			eventreasons.ActionDeploying, "Cluster %s %s/%s: %s", clusterSummary.Spec.ClusterType,
+			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, errPullModeLicenseRequired.Error())
+	}
 }
 
 // removeFinalizer removes the finalizer
@@ -2271,17 +2271,4 @@ func getClusterSummaryWithInstantiatedCharts(ctx context.Context, cs *configv1be
 	}
 
 	return &csCopy, nil
-}
-
-// collectFailureMessages returns the set of FailureMessages currently recorded
-// across all FeatureSummaries. Used to detect whether a conflict is new (not
-// yet in the status) versus ongoing (already reported in a previous reconcile).
-func collectFailureMessages(cs *configv1beta1.ClusterSummary) map[string]struct{} {
-	msgs := make(map[string]struct{}, len(cs.Status.FeatureSummaries))
-	for i := range cs.Status.FeatureSummaries {
-		if msg := cs.Status.FeatureSummaries[i].FailureMessage; msg != nil {
-			msgs[*msg] = struct{}{}
-		}
-	}
-	return msgs
 }

@@ -65,7 +65,18 @@ import (
 )
 
 const (
-	clusterSummaryAnnotation     = "projectsveltos.io/clustersummary"
+	// clusterAnnotation identifies the managed cluster a resource was deployed for. Its value is
+	// <cluster type prefix>/<cluster namespace>/<cluster name>: "/" cannot be part of a Kubernetes
+	// name, so two different clusters never get the same value.
+	clusterAnnotation = "projectsveltos.io/cluster"
+
+	// clusterSummaryAnnotation is the annotation older versions set to identify the managed cluster a
+	// resource was deployed for (despite the name, its value is not the name of a ClusterSummary). Its
+	// value is <cluster type prefix>-<cluster namespace>-<cluster name>, so it can be the same for
+	// two different clusters. It is no longer set: it is only read, to detect stale resources which
+	// were deployed before clusterAnnotation was introduced.
+	clusterSummaryAnnotation = "projectsveltos.io/clustersummary"
+
 	deploymentTypeAnnotation     = "projectsveltos.io/deploymenttype"
 	subresourcesAnnotation       = "projectsveltos.io/subresources"
 	pathAnnotation               = "path"
@@ -87,6 +98,15 @@ type referencedObject struct {
 	PlainHTTP             bool
 }
 
+// getClusterAnnotationValue returns the value of clusterAnnotation for the cluster the ClusterSummary
+// deploys to.
+func getClusterAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
+	prefix := clusterops.GetPrefix(clusterSummary.Spec.ClusterType)
+	return fmt.Sprintf("%s/%s/%s", prefix, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName)
+}
+
+// getClusterSummaryAnnotationValue returns the value older versions set in clusterSummaryAnnotation.
 func getClusterSummaryAnnotationValue(clusterSummary *configv1beta1.ClusterSummary) string {
 	prefix := clusterops.GetPrefix(clusterSummary.Spec.ClusterType)
 	return fmt.Sprintf("%s-%s-%s", prefix, clusterSummary.Spec.ClusterNamespace,
@@ -429,8 +449,8 @@ func isCustomResourceDefinition(resource *unstructured.Unstructured) bool {
 }
 
 // addStaleResourceScopingAnnotations annotates policy with the information stale-resource
-// cleanup needs to scope its scan to resources this exact ClusterSummary/deploymentType pair
-// deployed, rather than to everything present in the cluster.
+// cleanup needs to scope its scan to resources deployed for this managed cluster with this
+// deploymentType, rather than to everything present in the cluster.
 //
 // Just setting (Cluster)Profile as OwnerReference is not enough: a SveltosCluster can be
 // self-managed (its remote client/config resolve back to the management cluster), in which
@@ -441,14 +461,33 @@ func isCustomResourceDefinition(resource *unstructured.Unstructured) bool {
 func addStaleResourceScopingAnnotations(policy *unstructured.Unstructured, deployingToMgmtCluster bool,
 	clusterSummary *configv1beta1.ClusterSummary) {
 
-	value := getClusterSummaryAnnotationValue(clusterSummary)
-	deployer.AddAnnotation(policy, clusterSummaryAnnotation, value)
+	deployer.AddAnnotation(policy, clusterAnnotation, getClusterAnnotationValue(clusterSummary))
 
 	deploymentTypeValue := string(configv1beta1.DeploymentTypeRemote)
 	if deployingToMgmtCluster {
 		deploymentTypeValue = string(configv1beta1.DeploymentTypeLocal)
 	}
 	deployer.AddAnnotation(policy, deploymentTypeAnnotation, deploymentTypeValue)
+}
+
+// getClusterScopingAnnotation returns the annotation key and value a resource must be compared with
+// to know whether it was deployed for the managed cluster clusterSummary deploys to. The key is empty
+// when the resource must not be skipped because of the managed cluster it was deployed for.
+// Resources deployed by an older version only have clusterSummaryAnnotation. The cluster annotation is
+// preferred as soon as the resource has it.
+func getClusterScopingAnnotation(resource *unstructured.Unstructured, isMgmtCluster bool,
+	clusterSummary *configv1beta1.ClusterSummary) (key, value string) {
+
+	annotations := resource.GetAnnotations()
+	if _, ok := annotations[clusterAnnotation]; ok {
+		return clusterAnnotation, getClusterAnnotationValue(clusterSummary)
+	}
+
+	if _, ok := annotations[clusterSummaryAnnotation]; ok || isMgmtCluster {
+		return clusterSummaryAnnotation, getClusterSummaryAnnotationValue(clusterSummary)
+	}
+
+	return "", ""
 }
 
 // deployUnstructured deploys referencedUnstructured objects.
@@ -1184,7 +1223,6 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 
 		leavePolicies := isLeavePolicies(clusterSummary, logger)
 		isDryRun := clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun
-		ownClusterSummaryValue := getClusterSummaryAnnotationValue(clusterSummary)
 
 		expectedDeploymentType := string(configv1beta1.DeploymentTypeRemote)
 		if isMgmtCluster {
@@ -1194,7 +1232,7 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 		for j := range items {
 			r := items[j]
 
-			// Protective signal, same reasoning as the clustersummary annotation check below:
+			// Protective signal, same reasoning as the cluster annotation check below:
 			// skip a resource here when it is explicitly annotated for the *other* deployment
 			// type (relevant when this ClusterSummary's remote cluster is the self-managed
 			// management cluster: the Local and Remote cleanup passes then scan the same
@@ -1206,27 +1244,23 @@ func processDeployedGVKs(ctx context.Context, isMgmtCluster bool, remoteConfig *
 				continue
 			}
 
-			// The management cluster pass only removes what this very ClusterSummary deployed
-			// there via deploymentType: Local, so the resource must carry the clustersummary
-			// annotation of this ClusterSummary. That annotation has always been set on Local
-			// deploys. A resource without it was not deployed locally by this ClusterSummary:
-			// for instance, the management cluster can itself be a managed cluster of another
+			// The management cluster pass only removes what was deployed there, via deploymentType:
+			// Local, for this managed cluster, so the resource must carry the cluster annotation of
+			// this managed cluster (or, if deployed by an older version, the clustersummary
+			// annotation). A resource without any of them was not deployed locally for this managed
+			// cluster: for instance, the management cluster can itself be a managed cluster of another
 			// Sveltos instance, which deployed resources owned by a (Cluster)Profile with the
 			// very same name. Those must never be removed here.
 			//
 			// The managed cluster pass is lenient: the annotation is only a protective signal.
-			// Skip a resource here when it is explicitly annotated for a *different*
-			// ClusterSummary (relevant when this ClusterSummary's remote cluster is the
-			// self-managed management cluster, and another ClusterSummary deployed there via
-			// deploymentType: Local). A resource missing the annotation entirely predates it
+			// Skip a resource here when it is explicitly annotated for a *different* managed
+			// cluster (relevant when this ClusterSummary's remote cluster is the self-managed
+			// management cluster, and a ClusterSummary of another cluster deployed there via
+			// deploymentType: Local). A resource missing the annotations entirely predates them
 			// being set on every deploy, and must still fall through to the normal
 			// canDelete/isResourceOwner checks below, or upgraded ClusterSummaries would never
 			// detect their own pre-existing resources as stale again.
-			var skipAnnotationKey, skipAnnotationValue string
-			if _, ok := r.GetAnnotations()[clusterSummaryAnnotation]; ok || isMgmtCluster {
-				skipAnnotationKey = clusterSummaryAnnotation
-				skipAnnotationValue = ownClusterSummaryValue
-			}
+			skipAnnotationKey, skipAnnotationValue := getClusterScopingAnnotation(&r, isMgmtCluster, clusterSummary)
 
 			rr, err := deployer.UndeployStaleResource(ctx, skipAnnotationKey, skipAnnotationValue, localClient,
 				profile, leavePolicies, isDryRun, r, currentPolicies, logger)

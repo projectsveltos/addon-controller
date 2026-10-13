@@ -140,6 +140,9 @@ var (
 	GetSecret                            = getSecret
 	ReadFiles                            = readFiles
 	GetClusterSummaryAnnotationValue     = getClusterSummaryAnnotationValue
+	GetClusterAnnotationValue            = getClusterAnnotationValue
+	GetClusterScopingAnnotation          = getClusterScopingAnnotation
+	AddStaleResourceScopingAnnotations   = addStaleResourceScopingAnnotations
 
 	AddExtraLabels      = addExtraLabels
 	AddExtraAnnotations = addExtraAnnotations
@@ -222,6 +225,7 @@ const (
 	HelmActionDowngrade = downgrade
 	HelmActionUninstall = uninstall
 
+	ClusterAnnotation        = clusterAnnotation
 	ClusterSummaryAnnotation = clusterSummaryAnnotation
 	DeploymentTypeAnnotation = deploymentTypeAnnotation
 )

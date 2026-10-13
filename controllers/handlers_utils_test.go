@@ -1144,6 +1144,104 @@ var _ = Describe("HandlersUtils", func() {
 		}, timeout, pollingInterval).Should(BeNil())
 	})
 
+	It(`undeployStaleResources scopes deletion with the cluster annotation, and still honors the clustersummary one`, func() {
+		newClusterRole := func(annotations map[string]string) *rbacv1.ClusterRole {
+			base := map[string]string{
+				deployer.ReferenceKindAnnotation:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+				deployer.ReferenceNamespaceAnnotation: randomString(),
+				deployer.ReferenceNameAnnotation:      randomString(),
+			}
+			for k, v := range annotations {
+				base[k] = v
+			}
+			return &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: randomString(),
+					Labels: map[string]string{
+						deployer.ReasonLabel: string(libsveltosv1beta1.FeatureResources),
+					},
+					Annotations: base,
+				},
+			}
+		}
+
+		// Deployed for this managed cluster by a version which sets the cluster annotation
+		ownClusterRole := newClusterRole(map[string]string{
+			controllers.ClusterAnnotation: controllers.GetClusterAnnotationValue(clusterSummary),
+		})
+		// Deployed (Local) by the same profile for another managed cluster, with the cluster annotation
+		otherClusterRole := newClusterRole(map[string]string{
+			controllers.ClusterAnnotation: randomString(),
+		})
+		// Deployed for this managed cluster by an older version, which only sets the clustersummary annotation
+		legacyOwnClusterRole := newClusterRole(map[string]string{
+			controllers.ClusterSummaryAnnotation: controllers.GetClusterSummaryAnnotationValue(clusterSummary),
+		})
+		// Deployed for another managed cluster by an older version
+		legacyOtherClusterRole := newClusterRole(map[string]string{
+			controllers.ClusterSummaryAnnotation: randomString(),
+		})
+
+		clusterRoles := []*rbacv1.ClusterRole{ownClusterRole, otherClusterRole, legacyOwnClusterRole, legacyOtherClusterRole}
+
+		currentClusterProfile := &configv1beta1.ClusterProfile{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Name: clusterProfile.Name},
+			currentClusterProfile)).To(Succeed())
+
+		for _, clusterRole := range clusterRoles {
+			Expect(testEnv.Create(context.TODO(), clusterRole)).To(Succeed())
+			Expect(waitForObject(ctx, testEnv.Client, clusterRole)).To(Succeed())
+			addOwnerReference(context.TODO(), testEnv.Client, clusterRole, currentClusterProfile)
+		}
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			},
+		}
+		currentClusterSummary.Status.DeployedGVKs = []libsveltosv1beta1.FeatureDeploymentInfo{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				DeployedGroupVersionKind: []string{
+					testClusterRoleKindV1,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		deployedGKVs := controllers.GetDeployedGroupVersionKinds(currentClusterSummary, libsveltosv1beta1.FeatureResources)
+		Expect(deployedGKVs).ToNot(BeEmpty())
+
+		// Management cluster pass: none of the ClusterRoles is in currentPolicies (nil), so all are candidates
+		// for deletion were it not for the annotations scoping.
+		_, err := controllers.UndeployStaleResources(context.TODO(), true, testEnv.Config, testEnv.Client,
+			libsveltosv1beta1.FeatureResources, currentClusterSummary, deployedGKVs, nil,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		for _, clusterRole := range []*rbacv1.ClusterRole{ownClusterRole, legacyOwnClusterRole} {
+			Eventually(func() bool {
+				currentClusterRole := &rbacv1.ClusterRole{}
+				err = testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)
+				return err != nil && apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		}
+
+		// Resources deployed for another managed cluster must never be touched.
+		for _, clusterRole := range []*rbacv1.ClusterRole{otherClusterRole, legacyOtherClusterRole} {
+			Consistently(func() error {
+				currentClusterRole := &rbacv1.ClusterRole{}
+				return testEnv.Get(context.TODO(), types.NamespacedName{Name: clusterRole.Name}, currentClusterRole)
+			}, timeout, pollingInterval).Should(BeNil())
+		}
+	})
+
 	It(`undeployStaleResources honors agent.projectsveltos.io/watch-namespaces, ignoring stale resources outside the configured namespaces`, func() {
 		watchedNamespace := randomString()
 		otherNamespace := randomString()
@@ -2214,3 +2312,102 @@ func validateResourceReports(resourceReports []libsveltosv1beta1.ResourceReport,
 	Expect(foundConflict).To(Equal(conflict))
 	Expect(foundErrored).To(Equal(errored))
 }
+
+var _ = Describe("Annotations scoping stale resources to a managed cluster", func() {
+	var clusterSummary *configv1beta1.ClusterSummary
+
+	newResource := func(annotations map[string]string) *unstructured.Unstructured {
+		resource := &unstructured.Unstructured{}
+		resource.SetAnnotations(annotations)
+		return resource
+	}
+
+	newClusterSummary := func(clusterNamespace, clusterName string) *configv1beta1.ClusterSummary {
+		return &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: randomString()},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      clusterName,
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+	}
+
+	BeforeEach(func() {
+		clusterSummary = newClusterSummary(randomString(), randomString())
+	})
+
+	It("addStaleResourceScopingAnnotations sets the cluster annotation and not the clustersummary one", func() {
+		resource := newResource(nil)
+		controllers.AddStaleResourceScopingAnnotations(resource, true, clusterSummary)
+
+		annotations := resource.GetAnnotations()
+		Expect(annotations).To(HaveKeyWithValue(controllers.ClusterAnnotation,
+			"capi/"+clusterSummary.Spec.ClusterNamespace+"/"+clusterSummary.Spec.ClusterName))
+		Expect(annotations).To(HaveKeyWithValue(controllers.DeploymentTypeAnnotation,
+			string(configv1beta1.DeploymentTypeLocal)))
+		Expect(annotations).ToNot(HaveKey(controllers.ClusterSummaryAnnotation))
+	})
+
+	It("the cluster annotation is different for clusters whose namespace and name make the same legacy value", func() {
+		// Namespace "a-b" with cluster "c" and namespace "a" with cluster "b-c" gave the same
+		// clustersummary annotation value
+		first := newClusterSummary("a-b", "c")
+		second := newClusterSummary("a", "b-c")
+
+		Expect(controllers.GetClusterSummaryAnnotationValue(first)).To(
+			Equal(controllers.GetClusterSummaryAnnotationValue(second)))
+		Expect(controllers.GetClusterAnnotationValue(first)).ToNot(
+			Equal(controllers.GetClusterAnnotationValue(second)))
+	})
+
+	It("getClusterScopingAnnotation compares the cluster annotation when the resource has it", func() {
+		resource := newResource(map[string]string{
+			controllers.ClusterAnnotation: controllers.GetClusterAnnotationValue(clusterSummary),
+		})
+
+		for _, isMgmtCluster := range []bool{true, false} {
+			key, value := controllers.GetClusterScopingAnnotation(resource, isMgmtCluster, clusterSummary)
+			Expect(key).To(Equal(controllers.ClusterAnnotation))
+			Expect(value).To(Equal(controllers.GetClusterAnnotationValue(clusterSummary)))
+		}
+	})
+
+	It("getClusterScopingAnnotation prefers the cluster annotation over the clustersummary one", func() {
+		resource := newResource(map[string]string{
+			controllers.ClusterAnnotation:        controllers.GetClusterAnnotationValue(clusterSummary),
+			controllers.ClusterSummaryAnnotation: randomString(),
+		})
+
+		key, value := controllers.GetClusterScopingAnnotation(resource, true, clusterSummary)
+		Expect(key).To(Equal(controllers.ClusterAnnotation))
+		Expect(value).To(Equal(controllers.GetClusterAnnotationValue(clusterSummary)))
+	})
+
+	It("getClusterScopingAnnotation falls back to the clustersummary annotation of a resource deployed by an older version", func() {
+		resource := newResource(map[string]string{
+			controllers.ClusterSummaryAnnotation: controllers.GetClusterSummaryAnnotationValue(clusterSummary),
+		})
+
+		for _, isMgmtCluster := range []bool{true, false} {
+			key, value := controllers.GetClusterScopingAnnotation(resource, isMgmtCluster, clusterSummary)
+			Expect(key).To(Equal(controllers.ClusterSummaryAnnotation))
+			Expect(value).To(Equal(controllers.GetClusterSummaryAnnotationValue(clusterSummary)))
+		}
+	})
+
+	It("getClusterScopingAnnotation skips a resource with no annotation in the management cluster pass only", func() {
+		resource := newResource(nil)
+
+		// Management cluster pass: a resource which does not say it was deployed for this cluster is never removed.
+		// The key is the legacy one, which the resource does not have: UndeployStaleResource skips it.
+		key, value := controllers.GetClusterScopingAnnotation(resource, true, clusterSummary)
+		Expect(key).To(Equal(controllers.ClusterSummaryAnnotation))
+		Expect(value).To(Equal(controllers.GetClusterSummaryAnnotationValue(clusterSummary)))
+
+		// Managed cluster pass is lenient: nothing to compare, the ownership checks decide
+		key, value = controllers.GetClusterScopingAnnotation(resource, false, clusterSummary)
+		Expect(key).To(BeEmpty())
+		Expect(value).To(BeEmpty())
+	})
+})

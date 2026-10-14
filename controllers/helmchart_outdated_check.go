@@ -90,22 +90,32 @@ var (
 )
 
 // outdatedHelmChartPassState accumulates, across the concurrent workers of one
-// checkOutdatedHelmCharts pass, which metric label combinations were actually re-checked this
-// pass and which of those came back outdated. Both are needed to reconcile the gauge correctly:
-// a combination that was outdated last pass but wasn't re-checked this pass (its fetch failed)
-// must be left alone, not cleared — clearing it would be reporting "confirmed fixed" when
-// really nothing was learned.
+// checkOutdatedHelmCharts pass, which metric label combinations a ClusterSummary still references,
+// which were actually re-checked this pass and which of those came back outdated. All are needed
+// to reconcile the gauge correctly: a combination that was outdated last pass but wasn't
+// re-checked this pass (its fetch failed) must be left alone, not cleared — clearing it would be
+// reporting "confirmed fixed" when really nothing was learned. A combination no ClusterSummary
+// references anymore will never be re-checked, so it is cleared instead.
 type outdatedHelmChartPassState struct {
 	mu                sync.Mutex
+	referenced        map[outdatedHelmChartMetricKey]struct{}
 	currentlyOutdated map[outdatedHelmChartMetricKey]struct{}
 	checkedThisPass   map[outdatedHelmChartMetricKey]struct{}
 }
 
 func newOutdatedHelmChartPassState() *outdatedHelmChartPassState {
 	return &outdatedHelmChartPassState{
+		referenced:        map[outdatedHelmChartMetricKey]struct{}{},
 		currentlyOutdated: map[outdatedHelmChartMetricKey]struct{}{},
 		checkedThisPass:   map[outdatedHelmChartMetricKey]struct{}{},
 	}
+}
+
+func (s *outdatedHelmChartPassState) markReferenced(key *outdatedHelmChartMetricKey) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.referenced[*key] = struct{}{}
 }
 
 func (s *outdatedHelmChartPassState) markChecked(key *outdatedHelmChartMetricKey, outdated bool) {
@@ -150,6 +160,12 @@ func checkOutdatedHelmCharts(ctx context.Context, c client.Client, logger logr.L
 	}
 
 	passState := newOutdatedHelmChartPassState()
+	for key, keyRefs := range refs {
+		for i := range keyRefs {
+			metricKey := metricKeyForRef(&keyRefs[i], key.chartName)
+			passState.markReferenced(&metricKey)
+		}
+	}
 
 	var wg sync.WaitGroup
 	for range numWorkers {
@@ -168,7 +184,8 @@ func checkOutdatedHelmCharts(ctx context.Context, c client.Client, logger logr.L
 }
 
 // reconcileOutdatedHelmChartMetric updates previouslyOutdatedHelmCharts for the next pass and
-// clears the gauge series for every combination confirmed, this pass, to no longer be outdated.
+// clears the gauge series for every combination confirmed, this pass, to no longer be outdated,
+// or no longer referenced by any ClusterSummary.
 // Deliberately never calls outdatedHelmChartGauge.Reset(): doing so up front would make every
 // still-outdated chart briefly vanish from /metrics while later workers in this same pass are
 // still catching up to it, producing a false "not outdated" reading for the gap. Combinations
@@ -184,12 +201,15 @@ func reconcileOutdatedHelmChartMetric(passState *outdatedHelmChartPassState) {
 		if _, stillOutdated := passState.currentlyOutdated[key]; stillOutdated {
 			continue // already carried forward above
 		}
-		if _, checked := passState.checkedThisPass[key]; !checked {
+		_, referenced := passState.referenced[key]
+		if _, checked := passState.checkedThisPass[key]; !checked && referenced {
 			// Could not re-verify this pass (its chart key's fetch failed) -- leave state
 			// unchanged rather than guessing, and retry on the next pass.
 			next[key] = struct{}{}
 			continue
 		}
+		// Either confirmed no longer outdated, or no ClusterSummary references the release
+		// anymore (it was deleted, or the chart was removed from its profile).
 		clearOutdatedHelmChart(key.profileKind, key.profileNamespace, key.profileName,
 			key.clusterType, key.clusterNamespace, key.clusterName,
 			key.chartName, key.releaseNamespace, key.releaseName)

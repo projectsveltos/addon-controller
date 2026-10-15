@@ -151,9 +151,9 @@ var (
 	)
 
 	// outdatedHelmChartGauge is 1 when a ClusterSummary's managed HelmChart release is behind
-	// the latest version published upstream. Reset() once per checkOutdatedHelmCharts pass and
-	// re-Set(1) only for entries found outdated that pass, so stale series (charts that became
-	// up to date, or are no longer referenced) don't linger. Version strings are deliberately
+	// the latest version published upstream. Set(1) for entries found outdated, and deleted by
+	// reconcileOutdatedHelmChartMetric once they are up to date or no longer referenced, so
+	// stale series don't linger. Version strings are deliberately
 	// not labels here (high cardinality/churn) — they live only on HelmChartSummary.
 	outdatedHelmChartGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{

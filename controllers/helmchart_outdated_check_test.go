@@ -22,10 +22,16 @@ package controllers
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
@@ -232,5 +238,181 @@ func TestSetResolvedHelmChartIdentity_KeepsOutdatedVersionInfoWhenVersionUnchang
 	}
 	if rs.LastCheckedTime == nil {
 		t.Errorf("expected LastCheckedTime to be left untouched, got nil")
+	}
+}
+
+// outdatedChartKey is the outdated_helm_chart series of the release clusterSummaryManagingChart manages.
+func outdatedChartKey() outdatedHelmChartMetricKey {
+	return outdatedHelmChartMetricKey{
+		profileKind: configv1beta1.ClusterProfileKind, profileName: testProfileName,
+		clusterType: testClusterType, clusterNamespace: testClusterNamespace, clusterName: testClusterName,
+		chartName: testChartName, releaseNamespace: testReleaseNamespace, releaseName: testReleaseName,
+	}
+}
+
+// clusterSummaryManagingChart returns the ClusterSummary of the ClusterProfile testProfileName that
+// manages version testChartVersion of testChartName, from repoURL.
+func clusterSummaryManagingChart(repoURL string) *configv1beta1.ClusterSummary {
+	return &configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testProfileName + "-" + testClusterName,
+			Namespace: testClusterNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: configv1beta1.GroupVersion.String(), Kind: configv1beta1.ClusterProfileKind, Name: testProfileName},
+			},
+		},
+		Spec: configv1beta1.ClusterSummarySpec{
+			ClusterNamespace: testClusterNamespace, ClusterName: testClusterName, ClusterType: testClusterType,
+		},
+		Status: configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      testReleaseName,
+					ReleaseNamespace: testReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+					ChartName:        testChartName,
+					RepoURL:          repoURL,
+					ChartVersion:     testChartVersion,
+				},
+			},
+		},
+	}
+}
+
+// markOutdatedByPreviousPass leaves the checker as a previous pass does when it finds key outdated,
+// and restores the checker when t ends.
+func markOutdatedByPreviousPass(t *testing.T, key *outdatedHelmChartMetricKey) {
+	t.Helper()
+
+	saved := previouslyOutdatedHelmCharts
+	t.Cleanup(func() {
+		previouslyOutdatedHelmCharts = saved
+		clearOutdatedHelmChart(key.profileKind, key.profileNamespace, key.profileName, key.clusterType,
+			key.clusterNamespace, key.clusterName, key.chartName, key.releaseNamespace, key.releaseName)
+	})
+
+	previouslyOutdatedHelmCharts = map[outdatedHelmChartMetricKey]struct{}{*key: {}}
+	trackOutdatedHelmChart(key.profileKind, key.profileNamespace, key.profileName, key.clusterType,
+		key.clusterNamespace, key.clusterName, key.chartName, key.releaseNamespace, key.releaseName, logr.Discard())
+}
+
+// runCheckerPass runs one checkOutdatedHelmCharts pass against a fake client holding objs.
+func runCheckerPass(t *testing.T, objs ...client.Object) {
+	t.Helper()
+
+	scheme := runtime.NewScheme()
+	if err := configv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("AddToScheme() = %v", err)
+	}
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(objs...).Build()
+
+	checkOutdatedHelmCharts(context.Background(), c, logr.Discard())
+}
+
+// outdatedHelmChartState returns whether the checker still tracks key as outdated, and whether its
+// outdated_helm_chart series is still exposed.
+func outdatedHelmChartState(t *testing.T, key *outdatedHelmChartMetricKey) (tracked, exposed bool) {
+	t.Helper()
+
+	_, tracked = previouslyOutdatedHelmCharts[*key]
+
+	want := map[string]string{
+		metricProfileKindLabel: key.profileKind, metricProfileNamespaceLabel: key.profileNamespace,
+		metricProfileNameLabel: key.profileName, metricClusterTypeLabel: key.clusterType,
+		metricClusterNamespaceLabel: key.clusterNamespace, metricClusterNameLabel: key.clusterName,
+		metricChartNameLabel: key.chartName, metricReleaseNamespaceLabel: key.releaseNamespace,
+		metricReleaseNameLabel: key.releaseName,
+	}
+
+	families, err := metrics.Registry.Gather()
+	if err != nil {
+		t.Fatalf("Gather() = %v", err)
+	}
+	for _, family := range families {
+		if family.GetName() != metricNamespace+"_outdated_helm_chart" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			matched := 0
+			for _, label := range metric.GetLabel() {
+				if value, ok := want[label.GetName()]; ok && value == label.GetValue() {
+					matched++
+				}
+			}
+			if matched == len(want) {
+				return tracked, true
+			}
+		}
+	}
+
+	return tracked, false
+}
+
+// A deleted ClusterSummary is never checked again, so its series must not be carried forward the
+// way the series of a chart that could not be fetched is.
+func TestCheckOutdatedHelmCharts_ClearsChartOfDeletedClusterSummary(t *testing.T) {
+	key := outdatedChartKey()
+	markOutdatedByPreviousPass(t, &key)
+
+	runCheckerPass(t)
+
+	if tracked, exposed := outdatedHelmChartState(t, &key); tracked || exposed {
+		t.Errorf("chart of a deleted ClusterSummary: tracked = %v, exposed = %v, want false, false", tracked, exposed)
+	}
+}
+
+func TestCheckOutdatedHelmCharts_ClearsChartRemovedFromProfile(t *testing.T) {
+	key := outdatedChartKey()
+	markOutdatedByPreviousPass(t, &key)
+
+	clusterSummary := clusterSummaryManagingChart(testRepoURL)
+	clusterSummary.Status.HelmReleaseSummaries = nil
+
+	runCheckerPass(t, clusterSummary)
+
+	if tracked, exposed := outdatedHelmChartState(t, &key); tracked || exposed {
+		t.Errorf("chart removed from its profile: tracked = %v, exposed = %v, want false, false", tracked, exposed)
+	}
+}
+
+// A failed fetch says nothing about the chart, so its series stays until a pass can check it.
+func TestCheckOutdatedHelmCharts_KeepsChartItCouldNotCheck(t *testing.T) {
+	key := outdatedChartKey()
+	markOutdatedByPreviousPass(t, &key)
+
+	// Nothing listens on port 1, so fetching the index fails right away.
+	runCheckerPass(t, clusterSummaryManagingChart("http://127.0.0.1:1/charts"))
+
+	if tracked, exposed := outdatedHelmChartState(t, &key); !tracked || !exposed {
+		t.Errorf("chart that could not be checked: tracked = %v, exposed = %v, want true, true", tracked, exposed)
+	}
+}
+
+func TestCheckOutdatedHelmCharts_ClearsChartThatIsUpToDate(t *testing.T) {
+	key := outdatedChartKey()
+	markOutdatedByPreviousPass(t, &key)
+
+	index := []byte(`apiVersion: v1
+entries:
+  nginx:
+  - apiVersion: v2
+    name: nginx
+    version: 1.0.0
+    urls:
+    - nginx-1.0.0.tgz
+`)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/index.yaml" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(index)
+	}))
+	defer server.Close()
+
+	runCheckerPass(t, clusterSummaryManagingChart(server.URL))
+
+	if tracked, exposed := outdatedHelmChartState(t, &key); tracked || exposed {
+		t.Errorf("chart that is up to date: tracked = %v, exposed = %v, want false, false", tracked, exposed)
 	}
 }

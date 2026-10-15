@@ -333,6 +333,13 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 
 	r.updateDeletedInstancs(clusterSummaryScope)
 
+	// HealthCheck and ClusterHealthCheck live in the management cluster: they can be removed
+	// whatever the state of the managed cluster is.
+	if err := r.removeHealthMonitoring(ctx, clusterSummaryScope.ClusterSummary, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to remove health monitoring resources")
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
+	}
+
 	isReady, err := r.isReady(ctx, clusterSummaryScope.ClusterSummary, logger)
 	if err != nil {
 		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
@@ -505,6 +512,14 @@ func (r *ClusterSummaryReconciler) reconcileNormal(ctx context.Context,
 			logger.V(logs.LogInfo).Error(err, "failed to add finalizer")
 			return reconcile.Result{}, err
 		}
+	}
+
+	// Health monitoring is independent from deployment: it must be reconciled even when
+	// the ClusterSummary has nothing left to deploy (see shouldReconcile)
+	if err := r.reconcileHealthMonitoring(ctx, clusterSummaryScope.ClusterSummary, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to reconcile health monitoring")
+		r.setNextReconcileTime(clusterSummaryScope, normalRequeueAfter)
+		return reconcile.Result{RequeueAfter: normalRequeueAfter}, nil
 	}
 
 	if !r.shouldReconcile(clusterSummaryScope, logger) {

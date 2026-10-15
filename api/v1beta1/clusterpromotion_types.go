@@ -170,6 +170,13 @@ type ProfileSpec struct {
 	// +optional
 	ValidateHealths []libsveltosv1beta1.ValidateHealth `json:"validateHealths,omitempty"`
 
+	// HealthMonitoring, when enabled, continuously monitors the health of the resources
+	// this profile deploys in each matching cluster. Unlike ValidateHealths, which are
+	// evaluated once during deployment, these checks run for as long as the profile
+	// is deployed. Results are available as HealthCheckReports.
+	// +optional
+	HealthMonitoring *HealthMonitoring `json:"healthMonitoring,omitempty"`
+
 	// Define additional Kustomize inline Patches applied for all resources on this profile
 	// Within the Patch Spec you can use templating
 	// +listType=atomic

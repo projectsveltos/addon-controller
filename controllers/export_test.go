@@ -17,12 +17,16 @@ limitations under the License.
 package controllers
 
 import (
+	"context"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/events"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 )
@@ -397,4 +401,148 @@ func RenderHealthMonitoringLua(ownerKind, ownerName string, releases []helmRelea
 	return renderHealthMonitoringLua(&healthMonitoringLuaConfig{
 		ownerKind: ownerKind, ownerName: ownerName, helmReleases: releases,
 	})
+}
+
+// CollectedHelmChartKey identifies a chart the outdated Helm chart check fetches the versions of
+type CollectedHelmChartKey struct {
+	ChartName      string
+	RepositoryName string
+	RepositoryURL  string
+}
+
+// CollectHelmChartRefs returns, for each chart the ClusterSummaries reference, the names of the
+// ClusterSummaries referencing it
+func CollectHelmChartRefs(clusterSummaries ...*configv1beta1.ClusterSummary) map[CollectedHelmChartKey][]string {
+	refs := map[helmChartKey][]helmChartRef{}
+	for i := range clusterSummaries {
+		collectHelmChartRefs(clusterSummaries[i], refs, logr.Discard())
+	}
+
+	result := map[CollectedHelmChartKey][]string{}
+	for key, keyRefs := range refs {
+		collectedKey := CollectedHelmChartKey{
+			ChartName: key.chartName, RepositoryName: key.repositoryName, RepositoryURL: key.repositoryURL,
+		}
+		for i := range keyRefs {
+			result[collectedKey] = append(result[collectedKey], keyRefs[i].clusterSummaryName)
+		}
+	}
+
+	return result
+}
+
+// HelmChartVersionDiff returns the latest version and the latest patch version of the same minor, as
+// strings, empty when there is none
+func HelmChartVersionDiff(current string, available []string) (latest, latestPatch string, err error) {
+	latestVersion, latestPatchVersion, err := helmChartVersionDiff(current, available)
+	if err != nil {
+		return "", "", err
+	}
+
+	if latestVersion != nil {
+		latest = latestVersion.String()
+	}
+	if latestPatchVersion != nil {
+		latestPatch = latestPatchVersion.String()
+	}
+
+	return latest, latestPatch, nil
+}
+
+// SetResolvedHelmChartIdentity updates the HelmChartSummary of a release after a deployment of
+// deployedChartVersion
+func SetResolvedHelmChartIdentity(clusterSummary *configv1beta1.ClusterSummary, helmChartSummary *configv1beta1.HelmChartSummary,
+	requestedChart *configv1beta1.HelmChart, deployedChartVersion string) {
+
+	currentRelease := &releaseInfo{ChartVersion: deployedChartVersion}
+	setResolvedHelmChartIdentity(context.TODO(), nil, clusterSummary, helmChartSummary, requestedChart, currentRelease,
+		logr.Discard())
+}
+
+// OutdatedHelmChart identifies the outdated_helm_chart series of one Helm release
+type OutdatedHelmChart struct {
+	ProfileKind      string
+	ProfileNamespace string
+	ProfileName      string
+	ClusterType      string
+	ClusterNamespace string
+	ClusterName      string
+	ChartName        string
+	ReleaseNamespace string
+	ReleaseName      string
+}
+
+func (o *OutdatedHelmChart) metricKey() outdatedHelmChartMetricKey {
+	return outdatedHelmChartMetricKey{
+		profileKind: o.ProfileKind, profileNamespace: o.ProfileNamespace, profileName: o.ProfileName,
+		clusterType: o.ClusterType, clusterNamespace: o.ClusterNamespace, clusterName: o.ClusterName,
+		chartName: o.ChartName, releaseNamespace: o.ReleaseNamespace, releaseName: o.ReleaseName,
+	}
+}
+
+func (o *OutdatedHelmChart) clear() {
+	clearOutdatedHelmChart(o.ProfileKind, o.ProfileNamespace, o.ProfileName, o.ClusterType, o.ClusterNamespace,
+		o.ClusterName, o.ChartName, o.ReleaseNamespace, o.ReleaseName)
+}
+
+// SetOutdatedByPreviousPass leaves the outdated Helm chart check as a previous pass does when it found
+// the chart outdated. It returns the function restoring the check.
+func SetOutdatedByPreviousPass(chart *OutdatedHelmChart) (restore func()) {
+	saved := previouslyOutdatedHelmCharts
+
+	previouslyOutdatedHelmCharts = map[outdatedHelmChartMetricKey]struct{}{chart.metricKey(): {}}
+	trackOutdatedHelmChart(chart.ProfileKind, chart.ProfileNamespace, chart.ProfileName, chart.ClusterType,
+		chart.ClusterNamespace, chart.ClusterName, chart.ChartName, chart.ReleaseNamespace, chart.ReleaseName,
+		logr.Discard())
+
+	return func() {
+		previouslyOutdatedHelmCharts = saved
+		chart.clear()
+	}
+}
+
+// CheckOutdatedHelmCharts runs one pass of the outdated Helm chart check
+func CheckOutdatedHelmCharts(ctx context.Context, c client.Client) {
+	checkOutdatedHelmCharts(ctx, c, logr.Discard())
+}
+
+// IsOutdatedHelmChartTracked returns true if the outdated Helm chart check still tracks the chart as outdated
+func IsOutdatedHelmChartTracked(chart *OutdatedHelmChart) bool {
+	_, tracked := previouslyOutdatedHelmCharts[chart.metricKey()]
+	return tracked
+}
+
+// IsOutdatedHelmChartExposed returns true if the outdated_helm_chart series of the chart is still exposed
+func IsOutdatedHelmChartExposed(chart *OutdatedHelmChart) (bool, error) {
+	want := map[string]string{
+		metricProfileKindLabel: chart.ProfileKind, metricProfileNamespaceLabel: chart.ProfileNamespace,
+		metricProfileNameLabel: chart.ProfileName, metricClusterTypeLabel: chart.ClusterType,
+		metricClusterNamespaceLabel: chart.ClusterNamespace, metricClusterNameLabel: chart.ClusterName,
+		metricChartNameLabel: chart.ChartName, metricReleaseNamespaceLabel: chart.ReleaseNamespace,
+		metricReleaseNameLabel: chart.ReleaseName,
+	}
+
+	families, err := metrics.Registry.Gather()
+	if err != nil {
+		return false, err
+	}
+
+	for _, family := range families {
+		if family.GetName() != metricNamespace+"_outdated_helm_chart" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			matched := 0
+			for _, label := range metric.GetLabel() {
+				if value, ok := want[label.GetName()]; ok && value == label.GetValue() {
+					matched++
+				}
+			}
+			if matched == len(want) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }

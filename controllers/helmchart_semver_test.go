@@ -14,12 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package-internal (not controllers_test): helmChartVersionDiff is a pure, dependency-free
-// function, so it is table-tested directly with the standard library rather than through the
-// Ginkgo/envtest suite used by the rest of this package's tests.
-package controllers
+package controllers_test
 
-import "testing"
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/projectsveltos/addon-controller/controllers"
+)
 
 const (
 	v1_0_0      = "1.0.0"
@@ -32,96 +34,33 @@ const (
 	notAVersion = "not-a-version"
 )
 
-func TestHelmChartVersionDiff(t *testing.T) {
-	tests := []struct {
-		name            string
-		current         string
-		available       []string
-		wantLatest      string // "" means expect nil
-		wantLatestPatch string // "" means expect nil
-		wantErr         bool
-	}{
-		{
-			name:            "newer minor and same-minor patch both found",
-			current:         v1_2_3,
-			available:       []string{v1_2_3, v1_2_4, "1.3.0", v2_0_0},
-			wantLatest:      v2_0_0,
-			wantLatestPatch: v1_2_4,
+var _ = Describe("Helm chart version diff", func() {
+	// An empty wantLatest or wantLatestPatch means no version is expected
+	DescribeTable("helmChartVersionDiff",
+		func(current string, available []string, wantLatest, wantLatestPatch string) {
+			latest, latestPatch, err := controllers.HelmChartVersionDiff(current, available)
+			Expect(err).To(BeNil())
+			Expect(latest).To(Equal(wantLatest))
+			Expect(latestPatch).To(Equal(wantLatestPatch))
 		},
-		{
-			name:            "only a same-minor patch found",
-			current:         v1_2_3,
-			available:       []string{v1_2_3, v1_2_4, v1_2_5},
-			wantLatest:      v1_2_5,
-			wantLatestPatch: v1_2_5,
-		},
-		{
-			name:      "already the latest",
-			current:   v2_0_0,
-			available: []string{v1_2_3, v1_9_9, v2_0_0},
-		},
-		{
-			name:      "current not in available list but nothing newer",
-			current:   v2_0_0,
-			available: []string{v1_9_9},
-		},
-		{
-			name:      "unparseable current version",
-			current:   notAVersion,
-			available: []string{v1_0_0},
-			wantErr:   true,
-		},
-		{
-			name:            "unparseable entries in available list are skipped",
-			current:         v1_0_0,
-			available:       []string{notAVersion, v1_1_0, "also-bad"},
-			wantLatest:      v1_1_0,
-			wantLatestPatch: "",
-		},
-		{
-			name:       "stable current excludes prereleases",
-			current:    v1_0_0,
-			available:  []string{"1.1.0-rc.1"},
-			wantLatest: "",
-		},
-		{
-			name:            "prerelease current includes prereleases",
-			current:         "1.0.0-rc.1",
-			available:       []string{"1.0.0-rc.2", v1_0_0},
-			wantLatest:      v1_0_0,
-			wantLatestPatch: v1_0_0,
-		},
-	}
+		Entry("newer minor and same-minor patch both found",
+			v1_2_3, []string{v1_2_3, v1_2_4, "1.3.0", v2_0_0}, v2_0_0, v1_2_4),
+		Entry("only a same-minor patch found",
+			v1_2_3, []string{v1_2_3, v1_2_4, v1_2_5}, v1_2_5, v1_2_5),
+		Entry("already the latest",
+			v2_0_0, []string{v1_2_3, v1_9_9, v2_0_0}, "", ""),
+		Entry("current not in available list but nothing newer",
+			v2_0_0, []string{v1_9_9}, "", ""),
+		Entry("unparseable entries in available list are skipped",
+			v1_0_0, []string{notAVersion, v1_1_0, "also-bad"}, v1_1_0, ""),
+		Entry("stable current excludes prereleases",
+			v1_0_0, []string{"1.1.0-rc.1"}, "", ""),
+		Entry("prerelease current includes prereleases",
+			"1.0.0-rc.1", []string{"1.0.0-rc.2", v1_0_0}, v1_0_0, v1_0_0),
+	)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			latest, latestPatch, err := helmChartVersionDiff(tt.current, tt.available)
-
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected an error, got none")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if tt.wantLatest == "" {
-				if latest != nil {
-					t.Errorf("expected nil latest, got %v", latest)
-				}
-			} else if latest == nil || latest.String() != tt.wantLatest {
-				t.Errorf("expected latest %q, got %v", tt.wantLatest, latest)
-			}
-
-			if tt.wantLatestPatch == "" {
-				if latestPatch != nil {
-					t.Errorf("expected nil latestPatch, got %v", latestPatch)
-				}
-			} else if latestPatch == nil || latestPatch.String() != tt.wantLatestPatch {
-				t.Errorf("expected latestPatch %q, got %v", tt.wantLatestPatch, latestPatch)
-			}
-		})
-	}
-}
+	It("fails when the current version cannot be parsed", func() {
+		_, _, err := controllers.HelmChartVersionDiff(notAVersion, []string{v1_0_0})
+		Expect(err).ToNot(BeNil())
+	})
+})

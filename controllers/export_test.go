@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/rest"
@@ -34,6 +36,7 @@ func SetEventRecorder(r *ClusterSummaryReconciler, recorder events.EventRecorder
 const (
 	PausedClustersRequeueAfter = pausedClustersRequeueAfter
 	DeleteRequeueAfter         = deleteRequeueAfter
+	NormalRequeueAfter         = normalRequeueAfter
 )
 
 var (
@@ -87,6 +90,7 @@ var (
 	ShouldRedeploy                       = (*ClusterSummaryReconciler).shouldRedeploy
 	CanRemoveFinalizer                   = (*ClusterSummaryReconciler).canRemoveFinalizer
 	ReconcileDelete                      = (*ClusterSummaryReconciler).reconcileDelete
+	ReconcileNormal                      = (*ClusterSummaryReconciler).reconcileNormal
 	CleanupBeforeFinalizerRemoval        = (*ClusterSummaryReconciler).cleanupBeforeFinalizerRemoval
 	AreDependenciesDeployed              = (*ClusterSummaryReconciler).areDependenciesDeployed
 	AreDependentsRemoved                 = (*ClusterSummaryReconciler).areDependentsRemoved
@@ -364,4 +368,33 @@ var (
 // staged for sveltos-applier.
 func NewReleaseInfoForApply(applyHash []byte, skipApply bool) *releaseInfo {
 	return &releaseInfo{applyHash: applyHash, skipApply: skipApply}
+}
+
+var (
+	GetHealthMonitoringName            = getHealthMonitoringName
+	GetMonitoringResourceSelectors     = getMonitoringResourceSelectors
+	BuildMonitoringHealthCheck         = buildMonitoringHealthCheck
+	BuildMonitoringClusterHealthCheck  = buildMonitoringClusterHealthCheck
+	QuoteLuaString                     = quoteLuaString
+	ReconcileHealthMonitoring          = (*ClusterSummaryReconciler).reconcileHealthMonitoring
+	RemoveHealthMonitoring             = (*ClusterSummaryReconciler).removeHealthMonitoring
+	DefaultHealthCheckLivenessName     = defaultHealthCheckLivenessName
+	HealthMonitoringFlappingEvaluation = healthMonitoringFlappingEvaluations
+)
+
+// NewHelmReleases returns helm releases for tests, from "<namespace>/<name>" strings
+func NewHelmReleases(namespaceAndNames ...string) []helmRelease {
+	releases := make([]helmRelease, 0, len(namespaceAndNames))
+	for _, namespaceAndName := range namespaceAndNames {
+		parts := strings.SplitN(namespaceAndName, "/", 2)
+		releases = append(releases, helmRelease{namespace: parts[0], name: parts[1]})
+	}
+	return releases
+}
+
+// RenderHealthMonitoringLua renders the health monitoring script for tests
+func RenderHealthMonitoringLua(ownerKind, ownerName string, releases []helmRelease) string {
+	return renderHealthMonitoringLua(&healthMonitoringLuaConfig{
+		ownerKind: ownerKind, ownerName: ownerName, helmReleases: releases,
+	})
 }

@@ -958,6 +958,55 @@ type Clusters struct {
 	Clusters []corev1.ObjectReference `json:"clusters,omitempty"`
 }
 
+const (
+	// HealthMonitoringClusterSummaryUIDLabel is set, with the UID of the ClusterSummary as value, on the
+	// HealthCheck and ClusterHealthCheck instances created for a ClusterSummary when health monitoring is enabled.
+	HealthMonitoringClusterSummaryUIDLabel = "projectsveltos.io/health-monitoring-clustersummary-uid"
+
+	// HealthMonitoringClusterSummaryNamespaceAnnotation and HealthMonitoringClusterSummaryNameAnnotation
+	// are set on the same instances to identify the ClusterSummary they have been created for.
+	HealthMonitoringClusterSummaryNamespaceAnnotation = "projectsveltos.io/health-monitoring-clustersummary-namespace"
+	HealthMonitoringClusterSummaryNameAnnotation      = "projectsveltos.io/health-monitoring-clustersummary-name"
+)
+
+// HealthMonitoring configures the continuous health monitoring of the resources a profile deploys.
+// Both ClusterProfile and Profile can enable it with the default checks. Referencing additional
+// HealthChecks (healthChecks) is reserved to ClusterProfile: see the field.
+//
+// +kubebuilder:validation:XValidation:rule="self.enabled || !has(self.healthChecks) || size(self.healthChecks) == 0",message="healthChecks can only be set when enabled is true"
+// +kubebuilder:validation:XValidation:rule="!self.enabled || !has(self.defaultChecks) || self.defaultChecks || (has(self.healthChecks) && size(self.healthChecks) > 0)",message="defaultChecks cannot be false when healthChecks is empty: there would be nothing to monitor"
+//
+//nolint:lll // kubebuilder marker
+type HealthMonitoring struct {
+	// Enabled turns health monitoring on for the resources deployed by this profile.
+	// When true, Sveltos creates a HealthCheck and a ClusterHealthCheck for each
+	// matching cluster once the profile is provisioned there, and removes them
+	// when monitoring is disabled or the cluster does not match anymore.
+	Enabled bool `json:"enabled"`
+
+	// DefaultChecks, when true (default), monitors the Deployments, StatefulSets, DaemonSets,
+	// Jobs and PersistentVolumeClaims deployed by this profile (raw resources and Helm charts).
+	// Set it to false to monitor only the HealthChecks listed in HealthChecks.
+	// +kubebuilder:default:=true
+	// +optional
+	DefaultChecks *bool `json:"defaultChecks,omitempty"`
+
+	// HealthChecks is a list of names of HealthCheck instances to monitor in addition
+	// to the default checks. Those are deployed as they are: selecting only the
+	// resources deployed by this profile is up to the HealthCheck.
+	//
+	// Only a ClusterProfile can set it. It is ignored for a (namespaced) Profile, which gets the
+	// default checks only. A HealthCheck is a cluster-scoped resource referenced by name, and the
+	// report it produces is shared by every profile that references it on a given cluster, with
+	// no filtering by namespace. Allowing a Profile to reference one would let a tenant name
+	// a HealthCheck it does not own, and learn about resources outside its namespace through
+	// the shared report. The default checks are safe for a Profile: they select only the
+	// resources that profile deployed.
+	// +listType=set
+	// +optional
+	HealthChecks []string `json:"healthChecks,omitempty"`
+}
+
 type Spec struct {
 	// ClusterSelector identifies clusters to associate to.
 	// +optional
@@ -1109,6 +1158,13 @@ type Spec struct {
 	// +listType=atomic
 	// +optional
 	ValidateHealths []libsveltosv1beta1.ValidateHealth `json:"validateHealths,omitempty"`
+
+	// HealthMonitoring, when enabled, continuously monitors the health of the resources
+	// this profile deploys in each matching cluster. Unlike ValidateHealths, which are
+	// evaluated once during deployment, these checks run for as long as the profile
+	// is deployed. Results are available as HealthCheckReports.
+	// +optional
+	HealthMonitoring *HealthMonitoring `json:"healthMonitoring,omitempty"`
 
 	// Define additional Kustomize inline Patches applied for all resources on this profile
 	// Within the Patch Spec you can use templating

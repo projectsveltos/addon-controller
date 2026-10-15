@@ -373,6 +373,14 @@ func (p ClusterSummaryPredicate) Update(e event.UpdateEvent) bool {
 		return true
 	}
 
+	// Feature summaries are compared by hash below, so a feature becoming Provisioned does not
+	// trigger a reconciliation. Health monitoring starts when all features are provisioned and
+	// depends on the Helm releases deployed: reconcile when any of those changes.
+	if isHealthMonitoringEnabled(newClusterSummary) && healthMonitoringInputsChanged(oldClusterSummary, newClusterSummary) {
+		log.V(logs.LogVerbose).Info("ClusterSummary state relevant to health monitoring changed. Reconciling ClusterSummary.")
+		return true
+	}
+
 	oldFS := getFeatureSummaryForFeatureID(oldClusterSummary, libsveltosv1beta1.FeatureHelm)
 	newFS := getFeatureSummaryForFeatureID(newClusterSummary, libsveltosv1beta1.FeatureHelm)
 	if !isFeatureSummarySame(oldFS, newFS) {

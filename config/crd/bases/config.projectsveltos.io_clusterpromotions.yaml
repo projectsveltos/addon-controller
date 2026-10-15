@@ -136,6 +136,55 @@ spec:
                       type: object
                     type: array
                     x-kubernetes-list-type: atomic
+                  healthMonitoring:
+                    description: |-
+                      HealthMonitoring, when enabled, continuously monitors the health of the resources
+                      this profile deploys in each matching cluster. Unlike ValidateHealths, which are
+                      evaluated once during deployment, these checks run for as long as the profile
+                      is deployed. Results are available as HealthCheckReports.
+                    properties:
+                      defaultChecks:
+                        default: true
+                        description: |-
+                          DefaultChecks, when true (default), monitors the Deployments, StatefulSets, DaemonSets,
+                          Jobs and PersistentVolumeClaims deployed by this profile (raw resources and Helm charts).
+                          Set it to false to monitor only the HealthChecks listed in HealthChecks.
+                        type: boolean
+                      enabled:
+                        description: |-
+                          Enabled turns health monitoring on for the resources deployed by this profile.
+                          When true, Sveltos creates a HealthCheck and a ClusterHealthCheck for each
+                          matching cluster once the profile is provisioned there, and removes them
+                          when monitoring is disabled or the cluster does not match anymore.
+                        type: boolean
+                      healthChecks:
+                        description: |-
+                          HealthChecks is a list of names of HealthCheck instances to monitor in addition
+                          to the default checks. Those are deployed as they are: selecting only the
+                          resources deployed by this profile is up to the HealthCheck.
+
+                          Only a ClusterProfile can set it. It is ignored for a (namespaced) Profile, which gets the
+                          default checks only. A HealthCheck is a cluster-scoped resource referenced by name, and the
+                          report it produces is shared by every profile that references it on a given cluster, with
+                          no filtering by namespace. Allowing a Profile to reference one would let a tenant name
+                          a HealthCheck it does not own, and learn about resources outside its namespace through
+                          the shared report. The default checks are safe for a Profile: they select only the
+                          resources that profile deployed.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: set
+                    required:
+                    - enabled
+                    type: object
+                    x-kubernetes-validations:
+                    - message: healthChecks can only be set when enabled is true
+                      rule: self.enabled || !has(self.healthChecks) || size(self.healthChecks)
+                        == 0
+                    - message: 'defaultChecks cannot be false when healthChecks is
+                        empty: there would be nothing to monitor'
+                      rule: '!self.enabled || !has(self.defaultChecks) || self.defaultChecks
+                        || (has(self.healthChecks) && size(self.healthChecks) > 0)'
                   helmCharts:
                     description: Helm charts is a list of helm charts that need to
                       be deployed

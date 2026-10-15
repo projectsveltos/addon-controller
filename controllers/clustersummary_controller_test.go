@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -1114,6 +1116,111 @@ var _ = Describe("ClustersummaryController", func() {
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 		Expect(result.RequeueAfter).To(BeZero())
+	})
+
+	It("reconcileDelete removes the health monitoring resources, even when the cluster is not found", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HealthMonitoring = &configv1beta1.HealthMonitoring{Enabled: true}
+		clusterSummary.Spec.ClusterProfileSpec.PolicyRefs = []configv1beta1.PolicyRef{
+			{Namespace: randomString(), Name: randomString(), Kind: string(libsveltosv1beta1.ConfigMapReferencedResourceKind)},
+		}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureResources, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+
+		// No cluster.
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		Expect(controllers.ReconcileHealthMonitoring(clusterSummaryReconciler, context.TODO(), clusterSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+		key := types.NamespacedName{Name: controllers.GetHealthMonitoringName(clusterSummary)}
+		Expect(c.Get(context.TODO(), key, &libsveltosv1beta1.HealthCheck{})).To(Succeed())
+		Expect(c.Get(context.TODO(), key, &libsveltosv1beta1.ClusterHealthCheck{})).To(Succeed())
+
+		clusterSummaryScope := getClusterSummaryScope(c, textlogger.NewLogger(textlogger.NewConfig()),
+			clusterProfile, clusterSummary)
+		_, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+
+		err = c.Get(context.TODO(), key, &libsveltosv1beta1.HealthCheck{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		err = c.Get(context.TODO(), key, &libsveltosv1beta1.ClusterHealthCheck{})
+		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+	})
+
+	It("reconcileNormal reconciles health monitoring even when there is nothing to deploy", func() {
+		// OneTime, with nothing to deploy: shouldReconcile is false. Helm releases are still managed.
+		clusterSummary.Spec.ClusterProfileSpec.SyncMode = configv1beta1.SyncModeOneTime
+		clusterSummary.Spec.ClusterProfileSpec.HealthMonitoring = &configv1beta1.HealthMonitoring{Enabled: true}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseNamespace: randomString(), ReleaseName: randomString(), Status: configv1beta1.HelmChartStatusManaging},
+		}
+
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope := getClusterSummaryScope(c, textlogger.NewLogger(textlogger.NewConfig()),
+			clusterProfile, clusterSummary)
+		result, err := controllers.ReconcileNormal(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		key := types.NamespacedName{Name: controllers.GetHealthMonitoringName(clusterSummary)}
+		Expect(c.Get(context.TODO(), key, &libsveltosv1beta1.ClusterHealthCheck{})).To(Succeed())
+	})
+
+	It("reconcileNormal requeues, without failing, when health monitoring cannot be reconciled", func() {
+		clusterSummary.Spec.ClusterProfileSpec.HealthMonitoring = &configv1beta1.HealthMonitoring{Enabled: true}
+		clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioned},
+		}
+		clusterSummary.Status.HelmReleaseSummaries = []configv1beta1.HelmChartSummary{
+			{ReleaseNamespace: randomString(), ReleaseName: randomString(), Status: configv1beta1.HelmChartStatusManaging},
+		}
+
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).
+			WithInterceptorFuncs(interceptor.Funcs{
+				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+					if _, ok := obj.(*libsveltosv1beta1.HealthCheck); ok {
+						return errors.New("create failure")
+					}
+					return c.Create(ctx, obj, opts...)
+				},
+			}).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		clusterSummaryScope := getClusterSummaryScope(c, textlogger.NewLogger(textlogger.NewConfig()),
+			clusterProfile, clusterSummary)
+		result, err := controllers.ReconcileNormal(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(Equal(controllers.NormalRequeueAfter))
 	})
 
 	It("reconcileDelete removes the DeletedInstances entry once the finalizer is removed", func() {

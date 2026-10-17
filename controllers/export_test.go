@@ -321,6 +321,7 @@ var (
 
 var (
 	IsCRDEstablished     = isCRDEstablished
+	GetCRDObjects        = getCRDObjects
 	GetHelmUpgradeClient = getHelmUpgradeClient
 )
 

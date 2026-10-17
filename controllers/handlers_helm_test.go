@@ -32,6 +32,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/common"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
 	"helm.sh/helm/v4/pkg/cli"
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
@@ -3217,6 +3219,77 @@ var _ = Describe("getHelmUpgradeClient Force", func() {
 		Expect(upgradeClient.ForceReplace).To(BeFalse())
 		Expect(upgradeClient.ServerSideApply).To(Equal("true"))
 		Expect(upgradeClient.ForceConflicts).To(BeTrue())
+	})
+})
+
+var _ = Describe("getCRDObjects", func() {
+	newChartWithFiles := func(name string, fileNames ...string) *chart.Chart {
+		files := make([]*common.File, 0, len(fileNames))
+		for _, fileName := range fileNames {
+			files = append(files, &common.File{Name: fileName, Data: []byte(fileName)})
+		}
+		return &chart.Chart{
+			Metadata: &chart.Metadata{Name: name, Version: "0.1.0"},
+			Files:    files,
+		}
+	}
+
+	crdNames := func(crds []chart.CRD) []string {
+		names := make([]string, 0, len(crds))
+		for i := range crds {
+			names = append(names, crds[i].File.Name)
+		}
+		return names
+	}
+
+	It("returns the CRDs in the top level crds/ directory", func() {
+		top := newChartWithFiles("top", "crds/top.yaml")
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/top.yaml"))
+	})
+
+	It("ignores files outside the crds/ directory", func() {
+		top := newChartWithFiles("top", "crds/top.yaml", "values.yaml", "README.md")
+		sub := newChartWithFiles("sub", "values.yaml", "docs/crds/notes.yaml")
+		top.AddDependency(sub)
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/top.yaml"))
+	})
+
+	It("returns the CRDs shipped in a subchart", func() {
+		top := newChartWithFiles("top", "crds/top.yaml")
+		sub := newChartWithFiles("sub", "crds/sub.yaml")
+		top.AddDependency(sub)
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/top.yaml", "crds/sub.yaml"))
+	})
+
+	It("returns the CRDs shipped in a subchart when the top level chart has none", func() {
+		top := newChartWithFiles("top")
+		sub := newChartWithFiles("sub", "crds/sub.yaml")
+		top.AddDependency(sub)
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/sub.yaml"))
+	})
+
+	It("returns the CRDs shipped in nested subcharts", func() {
+		top := newChartWithFiles("top", "crds/top.yaml")
+		sub := newChartWithFiles("sub", "crds/sub.yaml")
+		nested := newChartWithFiles("nested", "crds/nested.yaml")
+		sub.AddDependency(nested)
+		top.AddDependency(sub)
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(
+			ConsistOf("crds/top.yaml", "crds/sub.yaml", "crds/nested.yaml"))
+	})
+
+	It("returns the CRDs of every subchart", func() {
+		top := newChartWithFiles("top")
+		first := newChartWithFiles("first", "crds/first.yaml")
+		second := newChartWithFiles("second", "crds/second.yaml")
+		top.AddDependency(first, second)
+
+		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/first.yaml", "crds/second.yaml"))
 	})
 })
 

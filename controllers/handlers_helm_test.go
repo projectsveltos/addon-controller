@@ -26,6 +26,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
@@ -37,18 +38,21 @@ import (
 	"helm.sh/helm/v4/pkg/cli"
 	releasecommon "helm.sh/helm/v4/pkg/release/common"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2/textlogger"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/yaml"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -57,6 +61,7 @@ import (
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
+	"github.com/projectsveltos/libsveltos/lib/k8s_utils"
 	"github.com/projectsveltos/libsveltos/lib/pullmode"
 )
 
@@ -3290,6 +3295,307 @@ var _ = Describe("getCRDObjects", func() {
 		top.AddDependency(first, second)
 
 		Expect(crdNames(controllers.GetCRDObjects(top))).To(ConsistOf("crds/first.yaml", "crds/second.yaml"))
+	})
+})
+
+var _ = Describe("getExistingCRDsPolicy", func() {
+	It("defaults to Skip when no options are set", func() {
+		Expect(controllers.GetExistingCRDsPolicy(nil)).To(Equal(configv1beta1.ExistingCRDsPolicySkip))
+	})
+
+	It("defaults to Skip when the policy is not set", func() {
+		Expect(controllers.GetExistingCRDsPolicy(&configv1beta1.HelmOptions{})).To(
+			Equal(configv1beta1.ExistingCRDsPolicySkip))
+	})
+
+	It("returns the configured policy", func() {
+		options := &configv1beta1.HelmOptions{
+			InstallOptions: configv1beta1.HelmInstallOptions{ExistingCRDs: configv1beta1.ExistingCRDsPolicyFail},
+		}
+		Expect(controllers.GetExistingCRDsPolicy(options)).To(Equal(configv1beta1.ExistingCRDsPolicyFail))
+	})
+})
+
+const topCRDFile = "crds/top.yaml"
+
+func crdResourceInterface() dynamic.ResourceInterface {
+	dr, err := k8s_utils.GetDynamicResourceInterface(testEnv.Config,
+		apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"), "")
+	Expect(err).To(BeNil())
+	return dr
+}
+
+var _ = Describe("installMissingCRDs", func() {
+	const (
+		topCRD = "tops"
+		subCRD = "subs"
+	)
+
+	var (
+		dr     dynamic.ResourceInterface
+		group  string
+		logger = textlogger.NewLogger(textlogger.NewConfig())
+	)
+
+	crdName := func(plural string) string {
+		return plural + "." + group
+	}
+
+	// crdManifest returns a CRD whose spec has one string property for each of the given properties
+	crdManifest := func(plural string, properties ...string) string {
+		manifest := fmt.Sprintf(`apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: %s
+spec:
+  group: %s
+  scope: Namespaced
+  names:
+    kind: %s
+    plural: %s
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+`, crdName(plural), group, strings.ToUpper(plural[:1])+plural[1:], plural)
+		for _, property := range properties {
+			manifest += fmt.Sprintf("              %s: {type: string}\n", property)
+		}
+		return manifest
+	}
+
+	chartCRD := func(fileName, manifest string) chart.CRD {
+		file := &common.File{Name: fileName, Data: []byte(manifest)}
+		return chart.CRD{Name: fileName, File: file}
+	}
+
+	createExistingCRD := func(plural string, properties ...string) {
+		crd := &unstructured.Unstructured{}
+		Expect(yaml.Unmarshal([]byte(crdManifest(plural, properties...)), &crd.Object)).To(Succeed())
+		_, err := dr.Create(ctx, crd, metav1.CreateOptions{})
+		Expect(err).To(BeNil())
+	}
+
+	// crdProperties returns the names of the properties of the CRD spec found in the cluster
+	crdProperties := func(plural string) []string {
+		crd, err := dr.Get(ctx, crdName(plural), metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		versions, found, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		Expect(err).To(BeNil())
+		Expect(found).To(BeTrue())
+		properties, _, err := unstructured.NestedMap(versions[0].(map[string]interface{}),
+			"schema", "openAPIV3Schema", "properties", "spec", "properties")
+		Expect(err).To(BeNil())
+		names := make([]string, 0, len(properties))
+		for name := range properties {
+			names = append(names, name)
+		}
+		return names
+	}
+
+	crdExists := func(plural string) bool {
+		_, err := dr.Get(ctx, crdName(plural), metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return false
+		}
+		Expect(err).To(BeNil())
+		return true
+	}
+
+	BeforeEach(func() {
+		dr = crdResourceInterface()
+		group = strings.ToLower(randomString()) + ".io"
+	})
+
+	AfterEach(func() {
+		for _, plural := range []string{topCRD, subCRD} {
+			err := dr.Delete(ctx, crdName(plural), metav1.DeleteOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				Expect(err).To(BeNil())
+			}
+		}
+	})
+
+	It("creates the CRDs missing from the cluster", func() {
+		crds := []chart.CRD{
+			chartCRD(topCRDFile, crdManifest(topCRD, "a")),
+			chartCRD("crds/sub.yaml", crdManifest(subCRD, "a")),
+		}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)).To(Succeed())
+
+		Expect(crdProperties(topCRD)).To(ConsistOf("a"))
+		Expect(crdProperties(subCRD)).To(ConsistOf("a"))
+	})
+
+	It("leaves an existing identical CRD alone", func() {
+		createExistingCRD(topCRD, "a")
+		crds := []chart.CRD{chartCRD(topCRDFile, crdManifest(topCRD, "a"))}
+
+		for _, policy := range []configv1beta1.ExistingCRDsPolicy{
+			configv1beta1.ExistingCRDsPolicySkip, configv1beta1.ExistingCRDsPolicyFail} {
+
+			Expect(controllers.InstallMissingCRDs(ctx, dr, policy, crds, logger)).To(Succeed())
+		}
+
+		Expect(crdProperties(topCRD)).To(ConsistOf("a"))
+	})
+
+	It("with Skip leaves an existing CRD newer than the chart's alone and creates the missing ones", func() {
+		createExistingCRD(topCRD, "a", "b")
+		crds := []chart.CRD{
+			chartCRD(topCRDFile, crdManifest(topCRD, "a")),
+			chartCRD("crds/sub.yaml", crdManifest(subCRD, "a")),
+		}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)).To(Succeed())
+
+		Expect(crdProperties(topCRD)).To(ConsistOf("a", "b"))
+		Expect(crdProperties(subCRD)).To(ConsistOf("a"))
+	})
+
+	It("with Skip leaves an existing CRD older than the chart's alone", func() {
+		createExistingCRD(topCRD, "a")
+		crds := []chart.CRD{chartCRD(topCRDFile, crdManifest(topCRD, "a", "b"))}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)).To(Succeed())
+
+		Expect(crdProperties(topCRD)).To(ConsistOf("a"))
+	})
+
+	It("with Fail returns an error naming the CRDs that differ and creates nothing", func() {
+		createExistingCRD(topCRD, "a", "b")
+		crds := []chart.CRD{
+			chartCRD(topCRDFile, crdManifest(topCRD, "a")),
+			chartCRD("crds/sub.yaml", crdManifest(subCRD, "a")),
+		}
+
+		err := controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicyFail, crds, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring(crdName(topCRD)))
+		Expect(err.Error()).ToNot(ContainSubstring(crdName(subCRD)))
+
+		Expect(crdProperties(topCRD)).To(ConsistOf("a", "b"))
+		Expect(crdExists(subCRD)).To(BeFalse())
+	})
+
+	It("with Fail creates the missing CRDs when no existing CRD differs", func() {
+		createExistingCRD(topCRD, "a")
+		crds := []chart.CRD{
+			chartCRD(topCRDFile, crdManifest(topCRD, "a")),
+			chartCRD("crds/sub.yaml", crdManifest(subCRD, "a")),
+		}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicyFail, crds, logger)).To(Succeed())
+
+		Expect(crdProperties(subCRD)).To(ConsistOf("a"))
+	})
+
+	It("reads every CRD of a file with several documents", func() {
+		crds := []chart.CRD{
+			chartCRD("crds/all.yaml", crdManifest(topCRD, "a")+"---\n"+crdManifest(subCRD, "a")),
+		}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)).To(Succeed())
+
+		Expect(crdExists(topCRD)).To(BeTrue())
+		Expect(crdExists(subCRD)).To(BeTrue())
+	})
+
+	It("ignores files without a manifest extension", func() {
+		crds := []chart.CRD{
+			chartCRD("crds/README.md", "# not a manifest: {"),
+			chartCRD(topCRDFile, crdManifest(topCRD, "a")),
+		}
+
+		Expect(controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)).To(Succeed())
+
+		Expect(crdExists(topCRD)).To(BeTrue())
+	})
+
+	It("returns an error when crds/ contains something other than a CRD", func() {
+		crds := []chart.CRD{chartCRD("crds/cm.yaml", "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n")}
+
+		err := controllers.InstallMissingCRDs(ctx, dr, configv1beta1.ExistingCRDsPolicySkip, crds, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("ConfigMap"))
+	})
+})
+
+var _ = Describe("installChartCRDs", func() {
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+
+	newHelmChart := func(options *configv1beta1.HelmOptions) *configv1beta1.HelmChart {
+		return &configv1beta1.HelmChart{ReleaseName: randomString(), ReleaseNamespace: randomString(), Options: options}
+	}
+
+	crds := []chart.CRD{{
+		Name: topCRDFile,
+		File: &common.File{Name: topCRDFile, Data: []byte("not used: the cluster is never reached")},
+	}}
+
+	It("leaves the CRDs to Helm when skipCRDs is set", func() {
+		helmChart := newHelmChart(&configv1beta1.HelmOptions{SkipCRDs: true})
+
+		handled, err := controllers.InstallChartCRDs(ctx, helmChart, "no-such-kubeconfig", crds, logger)
+		Expect(err).To(BeNil())
+		Expect(handled).To(BeFalse())
+	})
+
+	It("leaves the CRDs to Helm when the policy is Overwrite", func() {
+		helmChart := newHelmChart(&configv1beta1.HelmOptions{
+			InstallOptions: configv1beta1.HelmInstallOptions{ExistingCRDs: configv1beta1.ExistingCRDsPolicyOverwrite},
+		})
+
+		handled, err := controllers.InstallChartCRDs(ctx, helmChart, "no-such-kubeconfig", crds, logger)
+		Expect(err).To(BeNil())
+		Expect(handled).To(BeFalse())
+	})
+
+	It("does nothing when the chart has no CRDs", func() {
+		handled, err := controllers.InstallChartCRDs(ctx, newHelmChart(nil), "no-such-kubeconfig", nil, logger)
+		Expect(err).To(BeNil())
+		Expect(handled).To(BeFalse())
+	})
+
+	It("installs the CRDs itself and tells Helm to skip them by default", func() {
+		group := strings.ToLower(randomString()) + ".io"
+		manifest := fmt.Sprintf(`apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tops.%s
+spec:
+  group: %s
+  scope: Namespaced
+  names:
+    kind: Top
+    plural: tops
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+`, group, group)
+		topCRD := []chart.CRD{{Name: topCRDFile, File: &common.File{Name: topCRDFile, Data: []byte(manifest)}}}
+
+		restConfigCtx := controllers.WithRestConfig(ctx, testEnv.Config)
+		handled, err := controllers.InstallChartCRDs(restConfigCtx, newHelmChart(nil), "", topCRD, logger)
+		Expect(err).To(BeNil())
+		Expect(handled).To(BeTrue())
+
+		dr := crdResourceInterface()
+		_, err = dr.Get(ctx, "tops."+group, metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		Expect(dr.Delete(ctx, "tops."+group, metav1.DeleteOptions{})).To(Succeed())
 	})
 })
 

@@ -34,7 +34,8 @@ import (
 type State string
 
 const (
-	// StateNotEnabled means no profile has health monitoring enabled.
+	// StateNotEnabled means nothing is monitored: no profile has health monitoring enabled
+	// and no HealthCheckReport exists for the cluster.
 	StateNotEnabled State = "NotEnabled"
 
 	// StateNoData means monitoring is enabled but no report has been received yet.
@@ -85,7 +86,8 @@ type ClusterHealth struct {
 	// Profiles has one entry per ClusterSummary with health monitoring enabled.
 	Profiles []ProfileHealth
 
-	// Resources are the resources not Healthy, one entry per resource, worst status first.
+	// Resources are the resources not Healthy, one entry per resource: the ones owned by a
+	// profile first, then the ones no profile owns. Within each group worst status first.
 	Resources []UnhealthyResource
 }
 
@@ -114,12 +116,18 @@ type UnhealthyResource struct {
 //   - A summary owns its generated HealthCheck and the ones its profile lists.
 //   - A report is attributed to every enabled summary owning its HealthCheck. A report
 //     nobody owns is "unclaimed" and its resources carry the HealthCheck name instead of profiles.
+//     Unclaimed reports are listed even when no profile has monitoring enabled.
+//   - A resource reported by several checks is listed once. When a profile owns one of the reports,
+//     the status and message come from the reports owned by profiles; otherwise from the
+//     unclaimed ones. Among reports of the same kind the worst status wins.
 //   - A profile has no data until a report of one of its checks exists. A report with
 //     no unhealthy resources makes it Healthy.
-//   - The cluster state is the worst state among the profiles and the listed resources.
+//   - The cluster state is the worst state among the profiles and the listed resources. It is
+//     Healthy when a report exists and nothing is unhealthy.
+//   - NotEnabled is returned only when no profile has monitoring enabled and there is no report.
 func Evaluate(summaries []SummaryInput, reports []ReportInput) ClusterHealth {
 	enabled := enabledSummaries(summaries)
-	if len(enabled) == 0 {
+	if len(enabled) == 0 && len(reports) == 0 {
 		return ClusterHealth{State: StateNotEnabled}
 	}
 
@@ -130,14 +138,14 @@ func Evaluate(summaries []SummaryInput, reports []ReportInput) ClusterHealth {
 
 	owners := ownersByCheck(enabled)
 	collector := newResourceCollector()
-	for i := range reports {
-		owning := owners[reports[i].HealthCheckName]
+	for _, report := range sortedByHealthCheckName(reports) {
+		owning := owners[report.HealthCheckName]
 		reportState := StateHealthy
-		for j := range reports[i].Resources {
-			resource := &reports[i].Resources[j]
+		for j := range report.Resources {
+			resource := &report.Resources[j]
 			reportState = WorstState(reportState, StateOf(resource.Status))
 			if resource.Status != libsveltosv1beta1.HealthStatusHealthy {
-				collector.add(resource, owningProfiles(profiles, owning), reports[i].HealthCheckName)
+				collector.add(resource, owningProfiles(profiles, owning), report.HealthCheckName)
 			}
 		}
 		for _, index := range owning {
@@ -147,6 +155,9 @@ func Evaluate(summaries []SummaryInput, reports []ReportInput) ClusterHealth {
 
 	resources := collector.sorted()
 	state := StateNoData
+	if len(reports) > 0 {
+		state = StateHealthy
+	}
 	for i := range profiles {
 		state = WorstState(state, profiles[i].State)
 	}
@@ -155,6 +166,16 @@ func Evaluate(summaries []SummaryInput, reports []ReportInput) ClusterHealth {
 	}
 
 	return ClusterHealth{State: state, Profiles: profiles, Resources: resources}
+}
+
+// sortedByHealthCheckName returns a copy of the reports ordered by HealthCheck name, so that the
+// outcome does not depend on the order the caller lists them in (a map in ui-backend).
+func sortedByHealthCheckName(reports []ReportInput) []ReportInput {
+	sorted := append([]ReportInput{}, reports...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].HealthCheckName < sorted[j].HealthCheckName
+	})
+	return sorted
 }
 
 // StateOf converts the status of a resource into a State.
@@ -332,8 +353,9 @@ func newResourceCollector() *resourceCollector {
 	return &resourceCollector{byKey: make(map[resourceKey]*UnhealthyResource)}
 }
 
-// add records an unhealthy resource. If the resource is already known, the profiles are merged
-// and the worst status, with its message, is kept.
+// add records an unhealthy resource. If the resource is already known, the entry keeps the status and
+// message of the reports owned by a profile over the ones of unclaimed reports, whatever the order they
+// are added in. Among reports of the same kind the worst status wins and, on a tie, the first one added.
 func (c *resourceCollector) add(resource *ResourceInput, profiles []corev1.ObjectReference, healthCheckName string) {
 	key := resourceKey{
 		apiVersion: resource.ObjectRef.APIVersion,
@@ -344,35 +366,50 @@ func (c *resourceCollector) add(resource *ResourceInput, profiles []corev1.Objec
 
 	existing, ok := c.byKey[key]
 	if !ok {
-		entry := &UnhealthyResource{
-			ObjectRef: resource.ObjectRef,
-			Status:    resource.Status,
-			Message:   resource.Message,
-			Profiles:  profiles,
-		}
-		if len(profiles) == 0 {
-			entry.HealthCheckName = healthCheckName
-		}
-		c.byKey[key] = entry
+		c.byKey[key] = newUnhealthyResource(resource, profiles, healthCheckName)
 		c.order = append(c.order, key)
 		return
 	}
 
-	if severity(StateOf(resource.Status)) > severity(StateOf(existing.Status)) {
+	existingOwned := len(existing.Profiles) > 0
+	owned := len(profiles) > 0
+	switch {
+	case owned && !existingOwned:
+		*existing = *newUnhealthyResource(resource, profiles, healthCheckName)
+	case !owned && existingOwned:
+		// A profile already owns the resource: its status and message stay
+	case severity(StateOf(resource.Status)) > severity(StateOf(existing.Status)):
 		existing.Status = resource.Status
 		existing.Message = resource.Message
+		if !owned {
+			existing.HealthCheckName = healthCheckName
+		}
 	}
+
 	for i := range profiles {
 		if !containsRef(existing.Profiles, &profiles[i]) {
 			existing.Profiles = append(existing.Profiles, profiles[i])
 		}
 	}
-	if len(existing.Profiles) > 0 {
-		existing.HealthCheckName = ""
-	}
 }
 
-// sorted returns the collected resources, worst status first, then by kind, namespace and name.
+func newUnhealthyResource(resource *ResourceInput, profiles []corev1.ObjectReference,
+	healthCheckName string) *UnhealthyResource {
+
+	entry := &UnhealthyResource{
+		ObjectRef: resource.ObjectRef,
+		Status:    resource.Status,
+		Message:   resource.Message,
+		Profiles:  profiles,
+	}
+	if len(profiles) == 0 {
+		entry.HealthCheckName = healthCheckName
+	}
+	return entry
+}
+
+// sorted returns the collected resources: the ones owned by a profile first, then the others. Within
+// each group worst status first, then by kind, namespace and name.
 func (c *resourceCollector) sorted() []UnhealthyResource {
 	resources := make([]UnhealthyResource, 0, len(c.order))
 	for _, key := range c.order {
@@ -380,6 +417,10 @@ func (c *resourceCollector) sorted() []UnhealthyResource {
 	}
 
 	sort.SliceStable(resources, func(i, j int) bool {
+		ownedI, ownedJ := len(resources[i].Profiles) > 0, len(resources[j].Profiles) > 0
+		if ownedI != ownedJ {
+			return ownedI
+		}
 		si, sj := severity(StateOf(resources[i].Status)), severity(StateOf(resources[j].Status))
 		if si != sj {
 			return si > sj

@@ -32,6 +32,9 @@ const (
 	testNamespace      = "ns"
 	generatedCheckName = "hm-1"
 	listedCheck        = "mine"
+	userCheck          = "user-check"
+	checkA             = "check-a"
+	checkB             = "check-b"
 	testUID            = "uid"
 	summaryName        = "summary"
 	resourceNamespace  = "d"
@@ -60,18 +63,44 @@ func resourceInput(kind, name string, status libsveltosv1beta1.HealthStatus,
 }
 
 var _ = Describe("Evaluate", func() {
-	It("returns NotEnabled when no summary has monitoring enabled", func() {
+	It("returns NotEnabled when no summary has monitoring enabled and there is no report", func() {
 		summaries := []healthmonitoring.SummaryInput{
 			summaryInput("s1", "p1", false, generatedCheckName),
 		}
-		reports := []healthmonitoring.ReportInput{{HealthCheckName: generatedCheckName}}
 
-		result := healthmonitoring.Evaluate(summaries, reports)
+		result := healthmonitoring.Evaluate(summaries, nil)
 		Expect(result.State).To(Equal(healthmonitoring.StateNotEnabled))
 		Expect(result.Profiles).To(BeEmpty())
 		Expect(result.Resources).To(BeEmpty())
 
 		Expect(healthmonitoring.Evaluate(nil, nil).State).To(Equal(healthmonitoring.StateNotEnabled))
+	})
+
+	It("lists the resources of the reports as unclaimed when no summary has monitoring enabled", func() {
+		summaries := []healthmonitoring.SummaryInput{
+			summaryInput("s1", "p1", false, generatedCheckName),
+		}
+		reports := []healthmonitoring.ReportInput{
+			{HealthCheckName: userCheck, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusDegraded, "bad"),
+				resourceInput("Deployment", "ok", libsveltosv1beta1.HealthStatusHealthy, ""),
+			}},
+		}
+
+		result := healthmonitoring.Evaluate(summaries, reports)
+		Expect(result.State).To(Equal(healthmonitoring.StateDegraded))
+		Expect(result.Profiles).To(BeEmpty())
+		Expect(result.Resources).To(HaveLen(1))
+		Expect(result.Resources[0].Profiles).To(BeEmpty())
+		Expect(result.Resources[0].HealthCheckName).To(Equal(userCheck))
+	})
+
+	It("returns Healthy when no summary has monitoring enabled and the reports have no unhealthy resources", func() {
+		reports := []healthmonitoring.ReportInput{{HealthCheckName: userCheck}}
+
+		result := healthmonitoring.Evaluate(nil, reports)
+		Expect(result.State).To(Equal(healthmonitoring.StateHealthy))
+		Expect(result.Resources).To(BeEmpty())
 	})
 
 	It("returns NoData for a profile and the cluster when no report exists", func() {
@@ -94,7 +123,8 @@ var _ = Describe("Evaluate", func() {
 
 		result := healthmonitoring.Evaluate(summaries, reports)
 		Expect(result.Profiles[0].State).To(Equal(healthmonitoring.StateNoData))
-		Expect(result.State).To(Equal(healthmonitoring.StateNoData))
+		// the report is data for the cluster, not for the profile
+		Expect(result.State).To(Equal(healthmonitoring.StateHealthy))
 	})
 
 	It("returns Healthy for a profile whose report has no unhealthy resources", func() {
@@ -158,7 +188,7 @@ var _ = Describe("Evaluate", func() {
 		}
 		reports := []healthmonitoring.ReportInput{
 			{HealthCheckName: generatedCheckName},
-			{HealthCheckName: "user-check", Resources: []healthmonitoring.ResourceInput{
+			{HealthCheckName: userCheck, Resources: []healthmonitoring.ResourceInput{
 				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusSuspended, "paused"),
 			}},
 		}
@@ -167,7 +197,7 @@ var _ = Describe("Evaluate", func() {
 		Expect(result.Profiles[0].State).To(Equal(healthmonitoring.StateHealthy))
 		Expect(result.Resources).To(HaveLen(1))
 		Expect(result.Resources[0].Profiles).To(BeEmpty())
-		Expect(result.Resources[0].HealthCheckName).To(Equal("user-check"))
+		Expect(result.Resources[0].HealthCheckName).To(Equal(userCheck))
 		Expect(result.State).To(Equal(healthmonitoring.StateSuspended))
 	})
 
@@ -239,6 +269,99 @@ var _ = Describe("Evaluate", func() {
 			names = append(names, result.Resources[i].ObjectRef.Kind+"/"+result.Resources[i].ObjectRef.Name)
 		}
 		Expect(names).To(Equal([]string{"Deployment/c", "StatefulSet/a", "Deployment/a", "Deployment/b"}))
+	})
+
+	It("takes the status and message from the report a profile owns over an unclaimed one", func() {
+		summaries := []healthmonitoring.SummaryInput{
+			summaryInput("s1", "p1", true, generatedCheckName),
+		}
+		profileReport := healthmonitoring.ReportInput{
+			HealthCheckName: generatedCheckName, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusProgressing, "rolling"),
+			}}
+		unclaimedReport := healthmonitoring.ReportInput{
+			HealthCheckName: "a-user-check", Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusDegraded, "crashing"),
+			}}
+
+		// Whatever the order the reports are passed in
+		for _, reports := range [][]healthmonitoring.ReportInput{
+			{profileReport, unclaimedReport}, {unclaimedReport, profileReport},
+		} {
+			result := healthmonitoring.Evaluate(summaries, reports)
+			Expect(result.Resources).To(HaveLen(1))
+			Expect(result.Resources[0].Status).To(Equal(libsveltosv1beta1.HealthStatusProgressing))
+			Expect(result.Resources[0].Message).To(Equal("rolling"))
+			Expect(result.Resources[0].Profiles).To(HaveLen(1))
+			Expect(result.Resources[0].HealthCheckName).To(BeEmpty())
+			// the cluster state follows the listed resource
+			Expect(result.State).To(Equal(healthmonitoring.StateProgressing))
+		}
+	})
+
+	It("keeps the worst status among unclaimed reports and the name of the check reporting it", func() {
+		reports := []healthmonitoring.ReportInput{
+			{HealthCheckName: checkA, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusProgressing, "rolling"),
+			}},
+			{HealthCheckName: checkB, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusDegraded, "crashing"),
+			}},
+		}
+
+		result := healthmonitoring.Evaluate(nil, reports)
+		Expect(result.Resources).To(HaveLen(1))
+		Expect(result.Resources[0].Status).To(Equal(libsveltosv1beta1.HealthStatusDegraded))
+		Expect(result.Resources[0].Message).To(Equal("crashing"))
+		Expect(result.Resources[0].HealthCheckName).To(Equal(checkB))
+	})
+
+	It("breaks a tie between reports by HealthCheck name, whatever the order they are passed in", func() {
+		reportA := healthmonitoring.ReportInput{
+			HealthCheckName: checkA, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusDegraded, "from a"),
+			}}
+		reportB := healthmonitoring.ReportInput{
+			HealthCheckName: checkB, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "web", libsveltosv1beta1.HealthStatusDegraded, "from b"),
+			}}
+
+		for _, reports := range [][]healthmonitoring.ReportInput{{reportA, reportB}, {reportB, reportA}} {
+			result := healthmonitoring.Evaluate(nil, reports)
+			Expect(result.Resources).To(HaveLen(1))
+			Expect(result.Resources[0].Message).To(Equal("from a"))
+			Expect(result.Resources[0].HealthCheckName).To(Equal(checkA))
+		}
+	})
+
+	It("lists the resources owned by a profile before the unclaimed ones, whatever their status", func() {
+		summaries := []healthmonitoring.SummaryInput{
+			summaryInput("s1", "p1", true, generatedCheckName),
+		}
+		reports := []healthmonitoring.ReportInput{
+			{HealthCheckName: generatedCheckName, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "owned-suspended", libsveltosv1beta1.HealthStatusSuspended, ""),
+				resourceInput("Deployment", "owned-degraded", libsveltosv1beta1.HealthStatusDegraded, ""),
+			}},
+			{HealthCheckName: userCheck, Resources: []healthmonitoring.ResourceInput{
+				resourceInput("Deployment", "unclaimed-degraded", libsveltosv1beta1.HealthStatusDegraded, ""),
+			}},
+		}
+
+		result := healthmonitoring.Evaluate(summaries, reports)
+		names := make([]string, 0, len(result.Resources))
+		for i := range result.Resources {
+			names = append(names, result.Resources[i].ObjectRef.Name)
+		}
+		Expect(names).To(Equal([]string{"owned-degraded", "owned-suspended", "unclaimed-degraded"}))
+	})
+
+	It("does not change the reports passed in", func() {
+		reports := []healthmonitoring.ReportInput{{HealthCheckName: "b"}, {HealthCheckName: "a"}}
+
+		healthmonitoring.Evaluate(nil, reports)
+		Expect(reports[0].HealthCheckName).To(Equal("b"))
+		Expect(reports[1].HealthCheckName).To(Equal("a"))
 	})
 
 	It("evaluates 100 summaries and reports", func() {

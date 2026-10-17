@@ -66,6 +66,7 @@ import (
 	"helm.sh/helm/v4/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -2059,6 +2060,11 @@ func installRelease(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, getTimeoutValue(requestedChart.Options).Duration)
 	defer cancel()
 
+	if err := prepareCRDsForInstall(ctxWithTimeout, clusterSummary, requestedChart, installClient,
+		chartRequested, kubeconfig, templateOnly, logger); err != nil {
+		return nil, err
+	}
+
 	r, err := installClient.RunWithContext(ctxWithTimeout, chartRequested, values)
 	if err != nil {
 		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to install: %v", err))
@@ -2599,17 +2605,7 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 
 	logger.V(logs.LogDebug).Info("upgrade crds")
 
-	destConfig := restConfigFromContext(ctx)
-	if destConfig == nil {
-		var err error
-		destConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			return err
-		}
-	}
-
-	dr, err := k8s_utils.GetDynamicResourceInterface(destConfig,
-		apiextensionsv1.SchemeGroupVersion.WithKind(customResourceDefinitionKind), "")
+	dr, err := getCRDResourceInterface(ctx, kubeconfig)
 	if err != nil {
 		return err
 	}
@@ -2631,6 +2627,219 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 	}
 	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs upgraded: %d", len(appliedCRDs)))
 	return nil
+}
+
+// getCRDResourceInterface returns a dynamic client for the CustomResourceDefinitions of the managed cluster.
+func getCRDResourceInterface(ctx context.Context, kubeconfig string) (dynamic.ResourceInterface, error) {
+	destConfig := restConfigFromContext(ctx)
+	if destConfig == nil {
+		var err error
+		destConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return k8s_utils.GetDynamicResourceInterface(destConfig,
+		apiextensionsv1.SchemeGroupVersion.WithKind(customResourceDefinitionKind), "")
+}
+
+// prepareCRDsForInstall installs the CRDs of the chart ahead of the Helm release, honoring the
+// ExistingCRDs policy, and tells Helm to skip them when they have been dealt with.
+// No action in DryRun mode or when only templating.
+func prepareCRDsForInstall(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+	requestedChart *configv1beta1.HelmChart, installClient *action.Install, chartRequested chartbase.Charter,
+	kubeconfig string, templateOnly bool, logger logr.Logger) error {
+
+	if templateOnly || clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
+		return nil
+	}
+
+	crdsInstalled, err := installChartCRDs(ctx, requestedChart, kubeconfig, getCRDObjects(chartRequested), logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to install crds: %v", err))
+		return err
+	}
+
+	// Helm must not apply again the CRDs already dealt with
+	if crdsInstalled {
+		installClient.SkipCRDs = true
+	}
+
+	return nil
+}
+
+// installChartCRDs installs the CRDs of a chart before the Helm release is installed, honoring the
+// ExistingCRDs policy. It returns true when the CRDs have been dealt with and Helm must skip them.
+// It returns false when Helm has to deal with the CRDs itself: SkipCRDs is set (Helm skips them
+// anyway), the policy is Overwrite, or the chart has no CRDs.
+func installChartCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, kubeconfig string,
+	crds []chart.CRD, logger logr.Logger) (bool, error) {
+
+	if getSkipCRDsHelmValue(requestedChart.Options) || len(crds) == 0 {
+		return false, nil
+	}
+
+	policy := getExistingCRDsPolicy(requestedChart.Options)
+	if policy == configv1beta1.ExistingCRDsPolicyOverwrite {
+		return false, nil
+	}
+
+	dr, err := getCRDResourceInterface(ctx, kubeconfig)
+	if err != nil {
+		return false, err
+	}
+
+	if err := installMissingCRDs(ctx, dr, policy, crds, logger); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// installMissingCRDs creates the CRDs of the chart that do not exist in the cluster.
+// A CRD that already exists is never modified. If it differs from the one in the chart,
+// it is logged (Skip policy) or the whole operation fails before anything is created (Fail policy).
+func installMissingCRDs(ctx context.Context, dr dynamic.ResourceInterface,
+	policy configv1beta1.ExistingCRDsPolicy, crds []chart.CRD, logger logr.Logger) error {
+
+	chartCRDs, err := getChartCRDs(crds, logger)
+	if err != nil {
+		return err
+	}
+
+	var missing []*unstructured.Unstructured
+	var differing []string
+
+	for _, chartCRD := range chartCRDs {
+		existing, err := dr.Get(ctx, chartCRD.GetName(), metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			missing = append(missing, chartCRD)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		changed, err := wouldChangeCRD(ctx, dr, existing, chartCRD)
+		if err != nil {
+			return err
+		}
+		if changed {
+			differing = append(differing, chartCRD.GetName())
+		}
+	}
+
+	if len(differing) > 0 {
+		if policy == configv1beta1.ExistingCRDsPolicyFail {
+			return fmt.Errorf("CRDs already exist with a different definition: %s. "+
+				"Set installOptions.existingCRDs to Skip to keep them or to Overwrite to replace them",
+				strings.Join(differing, ", "))
+		}
+		for _, name := range differing {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf(
+				"CRD %s already exists with a different definition. Skipping it", name))
+		}
+	}
+
+	return createCRDs(ctx, dr, missing, logger)
+}
+
+// getChartCRDs returns the CRDs defined in the crds/ files of a chart.
+// Like Helm, only files with a manifest extension (.yaml, .yml, .json) are considered.
+func getChartCRDs(crds []chart.CRD, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	var chartCRDs []*unstructured.Unstructured
+
+	for i := range crds {
+		file := crds[i].File
+		if file == nil || !hasManifestExtension(file.Name) {
+			continue
+		}
+
+		objects, err := deployer.GetUnstructured(file.Data, logger)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", file.Name, err)
+		}
+
+		for _, object := range objects {
+			if object.GetKind() != customResourceDefinitionKind {
+				return nil, fmt.Errorf("%s contains a %s. Only CustomResourceDefinitions are expected in crds/",
+					file.Name, object.GetKind())
+			}
+			chartCRDs = append(chartCRDs, object)
+		}
+	}
+
+	return chartCRDs, nil
+}
+
+func hasManifestExtension(fileName string) bool {
+	extension := filepath.Ext(fileName)
+	return strings.EqualFold(extension, ".yaml") || strings.EqualFold(extension, ".yml") ||
+		strings.EqualFold(extension, ".json")
+}
+
+// wouldChangeCRD returns true when applying the CRD of the chart would change the existing CRD.
+// The apply is a server side dry run, so defaulting done by the API server is taken into account.
+func wouldChangeCRD(ctx context.Context, dr dynamic.ResourceInterface,
+	existing, chartCRD *unstructured.Unstructured) (bool, error) {
+
+	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, chartCRD)
+	if err != nil {
+		return false, err
+	}
+
+	forceConflict := true
+	options := metav1.PatchOptions{
+		FieldManager: applyPatchFieldManager,
+		Force:        &forceConflict,
+		DryRun:       []string{metav1.DryRunAll},
+	}
+
+	result, err := dr.Patch(ctx, chartCRD.GetName(), types.ApplyPatchType, data, options)
+	if err != nil {
+		// The API server refuses the change (for instance a change to an immutable field)
+		if apierrors.IsInvalid(err) {
+			return true, nil
+		}
+		return false, err
+	}
+
+	return !haveSameDefinition(existing, result), nil
+}
+
+// haveSameDefinition compares the parts of a CRD that an apply can change.
+func haveSameDefinition(first, second *unstructured.Unstructured) bool {
+	return apiequality.Semantic.DeepEqual(first.Object["spec"], second.Object["spec"]) &&
+		apiequality.Semantic.DeepEqual(first.GetLabels(), second.GetLabels()) &&
+		apiequality.Semantic.DeepEqual(first.GetAnnotations(), second.GetAnnotations())
+}
+
+// createCRDs creates the CRDs and waits for them to be established.
+func createCRDs(ctx context.Context, dr dynamic.ResourceInterface, crds []*unstructured.Unstructured,
+	logger logr.Logger) error {
+
+	var createdCRDs []string
+
+	for _, crd := range crds {
+		_, err := dr.Create(ctx, crd, metav1.CreateOptions{FieldManager: applyPatchFieldManager})
+		if apierrors.IsAlreadyExists(err) {
+			// Created by somebody else after the check was done. Never modify it.
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		createdCRDs = append(createdCRDs, crd.GetName())
+	}
+
+	if len(createdCRDs) == 0 {
+		return nil
+	}
+
+	logger.V(logs.LogDebug).Info(fmt.Sprintf("CRDs created: %d", len(createdCRDs)))
+	return waitForCRDsEstablished(ctx, dr, createdCRDs, logger)
 }
 
 func getRegistryClient(namespace string, registryOptions *registryClientOptions, enableClientCache bool,
@@ -4182,6 +4391,14 @@ func getTakeOwnershipHelmValue(options *configv1beta1.HelmOptions, isUpgrade boo
 	}
 
 	return options.InstallOptions.TakeOwnership
+}
+
+func getExistingCRDsPolicy(options *configv1beta1.HelmOptions) configv1beta1.ExistingCRDsPolicy {
+	if options == nil || options.InstallOptions.ExistingCRDs == "" {
+		return configv1beta1.ExistingCRDsPolicySkip
+	}
+
+	return options.InstallOptions.ExistingCRDs
 }
 
 func getCreateNamespaceHelmValue(options *configv1beta1.HelmOptions) bool {

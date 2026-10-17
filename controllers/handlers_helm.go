@@ -6045,5 +6045,11 @@ func getCRDObjects(ch chartbase.Charter) []chart.CRD {
 			})
 		}
 	}
+
+	// CRDs shipped in subcharts must be upgraded too
+	for _, dep := range ac.Dependencies() {
+		crds = append(crds, getCRDObjects(dep)...)
+	}
+
 	return crds
 }

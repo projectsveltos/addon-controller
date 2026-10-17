@@ -180,6 +180,24 @@ const (
 	PostRenderStrategyNoHooks = PostRenderStrategy("nohooks")
 )
 
+// ExistingCRDsPolicy controls what happens when a Helm chart is installed and one of the
+// CRDs in the chart's crds/ directory already exists in the cluster with a different definition.
+// +kubebuilder:validation:Enum:=Skip;Fail;Overwrite
+type ExistingCRDsPolicy string
+
+const (
+	// ExistingCRDsPolicySkip leaves the existing CRD as it is and carries on with the
+	// remaining CRDs of the chart. CRDs not yet in the cluster are created.
+	ExistingCRDsPolicySkip = ExistingCRDsPolicy("Skip")
+
+	// ExistingCRDsPolicyFail fails the installation, reporting the CRDs that differ.
+	// No CRD of the chart is created or changed.
+	ExistingCRDsPolicyFail = ExistingCRDsPolicy("Fail")
+
+	// ExistingCRDsPolicyOverwrite applies the CRD of the chart over the existing one.
+	ExistingCRDsPolicyOverwrite = ExistingCRDsPolicy("Overwrite")
+)
+
 type HelmOptions struct {
 	// SkipCRDs controls whether CRDs should be installed during install/upgrade operation.
 	// By default, CRDs are installed if not already present.
@@ -306,6 +324,17 @@ type HelmInstallOptions struct {
 	// +kubebuilder:default:=false
 	// +optional
 	TakeOwnership bool `json:"takeOwnership,omitempty"`
+
+	// ExistingCRDs controls what happens when a CRD in the chart's crds/ directory (subcharts
+	// included) already exists in the cluster with a different definition. CRDs not yet in the
+	// cluster are always created. Ignored when SkipCRDs is true.
+	// Skip leaves the existing CRD as it is, logs it and carries on with the rest of the chart.
+	// Fail fails the installation and reports the CRDs that differ. No CRD is created or changed.
+	// Overwrite applies the CRD of the chart over the existing one.
+	// Default to Skip
+	// +kubebuilder:default:=Skip
+	// +optional
+	ExistingCRDs ExistingCRDsPolicy `json:"existingCRDs,omitempty"`
 
 	// RecoverAfterConsecutiveFailures is the number of consecutive install failures for this
 	// chart after which Sveltos uninstalls any existing release under this name before

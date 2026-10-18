@@ -37,7 +37,10 @@
 
 # Sveltos: Kubernetes add-on controller
 
-<img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/logo.png" width="200">
+  <img src="https://raw.githubusercontent.com/projectsveltos/sveltos/main/docs/assets/mascott/admiral-sveltopus-fleet-whitebg.png" width="220" alt="Admiral Sveltopus, the Sveltos mascot">
+</p>
 
 # What is the Projectsveltos?
 Sveltos is a Kubernetes add-on controller that simplifies the deployment and management of add-ons and applications across multiple clusters. It runs in the management cluster and can programmatically deploy and manage add-ons and applications on any cluster in the fleet, including the management cluster itself. Sveltos supports a variety of add-on formats, including Helm charts, raw YAML, Kustomize, Carvel ytt, and Jsonnet.

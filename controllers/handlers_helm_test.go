@@ -3299,20 +3299,20 @@ var _ = Describe("getCRDObjects", func() {
 })
 
 var _ = Describe("getExistingCRDsPolicy", func() {
-	It("defaults to Skip when no options are set", func() {
-		Expect(controllers.GetExistingCRDsPolicy(nil)).To(Equal(configv1beta1.ExistingCRDsPolicySkip))
+	It("defaults to Fail when no options are set", func() {
+		Expect(controllers.GetExistingCRDsPolicy(nil)).To(Equal(configv1beta1.ExistingCRDsPolicyFail))
 	})
 
-	It("defaults to Skip when the policy is not set", func() {
+	It("defaults to Fail when the policy is not set", func() {
 		Expect(controllers.GetExistingCRDsPolicy(&configv1beta1.HelmOptions{})).To(
-			Equal(configv1beta1.ExistingCRDsPolicySkip))
+			Equal(configv1beta1.ExistingCRDsPolicyFail))
 	})
 
 	It("returns the configured policy", func() {
 		options := &configv1beta1.HelmOptions{
-			InstallOptions: configv1beta1.HelmInstallOptions{ExistingCRDs: configv1beta1.ExistingCRDsPolicyFail},
+			InstallOptions: configv1beta1.HelmInstallOptions{ExistingCRDs: configv1beta1.ExistingCRDsPolicySkip},
 		}
-		Expect(controllers.GetExistingCRDsPolicy(options)).To(Equal(configv1beta1.ExistingCRDsPolicyFail))
+		Expect(controllers.GetExistingCRDsPolicy(options)).To(Equal(configv1beta1.ExistingCRDsPolicySkip))
 	})
 })
 
@@ -3565,8 +3565,7 @@ var _ = Describe("installChartCRDs", func() {
 		Expect(handled).To(BeFalse())
 	})
 
-	It("installs the CRDs itself and tells Helm to skip them by default", func() {
-		group := strings.ToLower(randomString()) + ".io"
+	crdManifest := func(group string, properties ...string) string {
 		manifest := fmt.Sprintf(`apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -3584,7 +3583,51 @@ spec:
     schema:
       openAPIV3Schema:
         type: object
+        properties:
+          spec:
+            type: object
+            properties:
 `, group, group)
+		for _, property := range properties {
+			manifest += fmt.Sprintf("              %s: {type: string}\n", property)
+		}
+		return manifest
+	}
+
+	It("fails by default when an existing CRD differs from the chart's", func() {
+		group := strings.ToLower(randomString()) + ".io"
+		restConfigCtx := controllers.WithRestConfig(ctx, testEnv.Config)
+
+		existing := []chart.CRD{{Name: topCRDFile, File: &common.File{Name: topCRDFile,
+			Data: []byte(crdManifest(group, "a", "b"))}}}
+		handled, err := controllers.InstallChartCRDs(restConfigCtx, newHelmChart(nil), "", existing, logger)
+		Expect(err).To(BeNil())
+		Expect(handled).To(BeTrue())
+
+		dr := crdResourceInterface()
+		DeferCleanup(func() { _ = dr.Delete(ctx, "tops."+group, metav1.DeleteOptions{}) })
+
+		older := []chart.CRD{{Name: topCRDFile, File: &common.File{Name: topCRDFile,
+			Data: []byte(crdManifest(group, "a"))}}}
+		handled, err = controllers.InstallChartCRDs(restConfigCtx, newHelmChart(nil), "", older, logger)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring("tops." + group))
+		Expect(handled).To(BeFalse())
+
+		By("Verifying the existing CRD has not been changed")
+		current, err := dr.Get(ctx, "tops."+group, metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		versions, _, err := unstructured.NestedSlice(current.Object, "spec", "versions")
+		Expect(err).To(BeNil())
+		properties, _, err := unstructured.NestedMap(versions[0].(map[string]interface{}),
+			"schema", "openAPIV3Schema", "properties", "spec", "properties")
+		Expect(err).To(BeNil())
+		Expect(properties).To(HaveKey("b"))
+	})
+
+	It("installs the CRDs itself and tells Helm to skip them by default", func() {
+		group := strings.ToLower(randomString()) + ".io"
+		manifest := crdManifest(group, "a")
 		topCRD := []chart.CRD{{Name: topCRDFile, File: &common.File{Name: topCRDFile, Data: []byte(manifest)}}}
 
 		restConfigCtx := controllers.WithRestConfig(ctx, testEnv.Config)

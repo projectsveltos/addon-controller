@@ -4395,7 +4395,7 @@ func getTakeOwnershipHelmValue(options *configv1beta1.HelmOptions, isUpgrade boo
 
 func getExistingCRDsPolicy(options *configv1beta1.HelmOptions) configv1beta1.ExistingCRDsPolicy {
 	if options == nil || options.InstallOptions.ExistingCRDs == "" {
-		return configv1beta1.ExistingCRDsPolicySkip
+		return configv1beta1.ExistingCRDsPolicyFail
 	}
 
 	return options.InstallOptions.ExistingCRDs

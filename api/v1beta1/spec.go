@@ -328,11 +328,11 @@ type HelmInstallOptions struct {
 	// ExistingCRDs controls what happens when a CRD in the chart's crds/ directory (subcharts
 	// included) already exists in the cluster with a different definition. CRDs not yet in the
 	// cluster are always created. Ignored when SkipCRDs is true.
-	// Skip leaves the existing CRD as it is, logs it and carries on with the rest of the chart.
 	// Fail fails the installation and reports the CRDs that differ. No CRD is created or changed.
+	// Skip leaves the existing CRD as it is, logs it and carries on with the rest of the chart.
 	// Overwrite applies the CRD of the chart over the existing one.
-	// Default to Skip
-	// +kubebuilder:default:=Skip
+	// Default to Fail
+	// +kubebuilder:default:=Fail
 	// +optional
 	ExistingCRDs ExistingCRDsPolicy `json:"existingCRDs,omitempty"`
 

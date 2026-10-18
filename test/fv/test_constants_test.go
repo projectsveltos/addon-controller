@@ -105,6 +105,24 @@ const (
 	// Resource types
 	resourceTypeSecrets = "secrets"
 
+	// Envoy Gateway chart details. Up to v1.7.x the CRDs are in the chart's crds/ directory,
+	// from v1.9.x they are all in the crds subchart (charts/crds/crds/)
+	envoyGatewayURL             = "oci://docker.io/envoyproxy"
+	envoyGatewayRepoName        = "envoyproxy"
+	envoyGatewayChartName       = "gateway-helm"
+	envoyGatewayRelease         = "eg"
+	envoyGatewayNamespace       = "envoy-gateway-system"
+	envoyGatewayVersion174      = "v1.7.4"
+	envoyGatewayVersion192      = "v1.9.2"
+	gatewayAPIBundleVersionKey  = "gateway.networking.k8s.io/bundle-version"
+	gatewayAPIBundleVersion141  = "v1.4.1"
+	gatewayAPIBundleVersion161  = "v1.6.1"
+	gatewayClassesCRDName       = "gatewayclasses.gateway.networking.k8s.io"
+	gatewayListenerSetsCRDName  = "listenersets.gateway.networking.k8s.io"
+	gatewayAPIGroup             = "gateway.networking.k8s.io"
+	gatewayAPIExperimentalGroup = "gateway.networking.x-k8s.io"
+	envoyGatewayGroup           = "gateway.envoyproxy.io"
+
 	// MariaDB chart details
 	mariadbOperatorURL     = "https://helm.mariadb.com/mariadb-operator"
 	mariadbOperatorName    = "mariadb-operator"

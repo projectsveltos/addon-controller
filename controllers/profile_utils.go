@@ -718,7 +718,7 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 			continue
 		}
 
-		tmpSkippedUpdate, err := updateClusterSummaryInstanceForCluster(ctx, c, cluster, profileScope,
+		outcome, err := updateClusterSummaryInstanceForCluster(ctx, c, cluster, profileScope,
 			updatingClusters, logger)
 		if err != nil {
 			var clusterSummaryDeletedError *ClusterSummaryDeletedError
@@ -729,8 +729,13 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 			return err
 		}
 
-		if tmpSkippedUpdate {
+		if outcome == updateThrottled {
 			skippedUpdate = true
+			continue
+		}
+
+		// Nothing was done for this cluster: it must not hold one of the maxUpdate slots
+		if outcome == updateIgnored {
 			continue
 		}
 
@@ -762,20 +767,36 @@ func updateClusterSummaries(ctx context.Context, c client.Client, profileScope *
 	return nil
 }
 
+// updateOutcome is what updateClusterSummaryInstanceForCluster did for a cluster
+type updateOutcome int
+
+const (
+	// updateDone: the ClusterSummary was created or patched. The cluster counts as being updated.
+	updateDone updateOutcome = iota
+
+	// updateThrottled: maxUpdate clusters are already being updated. The cluster must wait.
+	updateThrottled
+
+	// updateIgnored: nothing was done for the cluster, for instance because it is paused or not ready.
+	// The cluster is not counted as being updated. ClusterProfile/Profile reconciles again when the
+	// cluster changes.
+	updateIgnored
+)
+
 func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client, cluster *corev1.ObjectReference,
 	profileScope *scope.ProfileScope, updatingClusters *libsveltosset.Set, logger logr.Logger,
-) (bool, error) {
+) (updateOutcome, error) {
 
 	ready, err := clusterproxy.IsClusterReadyToBeConfigured(ctx, c, cluster, logger)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return false, nil
+			return updateIgnored, nil
 		}
-		return false, err
+		return updateDone, err
 	}
 	if !ready {
 		logger.V(logs.LogDebug).Info("Cluster is not ready yet")
-		return false, nil
+		return updateIgnored, nil
 	}
 
 	maxUpdate := getMaxUpdate(profileScope)
@@ -787,19 +808,19 @@ func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client
 			cluster.Name, clusterproxy.GetClusterType(cluster))
 		if err != nil {
 			logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to verify if cluster is paused: %v", err))
-			return false, err
+			return updateDone, err
 		}
 		if isClusterPaused {
-			// No need to set skippedUpdated. Profile will react to a cluster switching from paused to unpaused
+			// Profile will react to a cluster switching from paused to unpaused
 			logger.V(logs.LogDebug).Info("Cluster is paused and maxUpdate is set. Ignore this cluster.")
-			return false, nil
+			return updateIgnored, nil
 		}
 	}
 
 	// if maxUpdate is set no more than maxUpdate clusters can be updated in parallel by ClusterProfile
 	if maxUpdate != 0 && !updatingClusters.Has(cluster) && updatingClusters.Len() >= int(maxUpdate) {
 		logger.V(logs.LogDebug).Info(fmt.Sprintf("Already %d being updating", updatingClusters.Len()))
-		return true, nil
+		return updateThrottled, nil
 	}
 
 	// ClusterProfile does not look at whether Cluster is paused or not.
@@ -812,7 +833,7 @@ func updateClusterSummaryInstanceForCluster(ctx context.Context, c client.Client
 	} else {
 		profileScope.ClearFailedClusters(cluster)
 	}
-	return false, err
+	return updateDone, err
 }
 
 func patchClusterSummary(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,

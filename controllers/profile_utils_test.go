@@ -1178,6 +1178,61 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(len(clusterSummaryList.Items)).To(Equal(0))
 	})
 
+	It("updateClusterSummaries does not let a paused cluster hold the only maxUpdate slot", func() {
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: 1}
+		// The paused cluster comes first: it must not take the slot of the cluster which is not paused
+		clusterProfile.Status.MatchingClusterRefs = []corev1.ObjectReference{
+			{
+				Namespace:  matchingCluster.Namespace,
+				Name:       matchingCluster.Name,
+				Kind:       clusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			},
+			{
+				Namespace:  nonMatchingCluster.Namespace,
+				Name:       nonMatchingCluster.Name,
+				Kind:       clusterKind,
+				APIVersion: clusterv1.GroupVersion.String(),
+			},
+		}
+
+		initialized := true
+		paused := true
+		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		matchingCluster.Spec.Paused = &paused
+		nonMatchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized
+		nonMatchingCluster.Status.Conditions = matchingCluster.Status.Conditions
+
+		initObjects := []client.Object{
+			clusterProfile,
+			nonMatchingCluster,
+			matchingCluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.UpdateClusterSummaries(context.TODO(), c, clusterProfileScope)).To(Succeed())
+
+		// Only the cluster which is not paused gets a ClusterSummary
+		clusterSummaryList := &configv1beta1.ClusterSummaryList{}
+		Expect(c.List(context.TODO(), clusterSummaryList)).To(Succeed())
+		Expect(clusterSummaryList.Items).To(HaveLen(1))
+		Expect(clusterSummaryList.Items[0].Spec.ClusterName).To(Equal(nonMatchingCluster.Name))
+
+		// The paused cluster is not tracked: nothing was done for it
+		for _, cluster := range clusterProfile.Status.UpdatingClusters.Clusters {
+			Expect(cluster.Name).ToNot(Equal(matchingCluster.Name))
+		}
+	})
+
 	It("updateClusterSummaries creates ClusterSummary for each matching CAPI Cluster", func() {
 		initialized := true
 		matchingCluster.Status.Initialization.ControlPlaneInitialized = &initialized

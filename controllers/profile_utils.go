@@ -1225,6 +1225,9 @@ func getUpdatedAndUpdatingClusters(profileScope *scope.ProfileScope,
 // reviseUpdatingClusterList walks over list of clusters in updating state.
 // If all features are marked as provisioned, cluster is moved to updated list.
 // Otherwise it is left in the updating list.
+// When MaxUpdate is set, a paused cluster is removed from the updating list: its ClusterSummary
+// is not reconciled while the cluster is paused, so it would never be provisioned and would hold
+// one of the MaxUpdate slots forever.
 func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScope *scope.ProfileScope,
 	currentHash []byte) error {
 
@@ -1244,6 +1247,7 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 	// - if hash is same and cluster is provisioned, moved to UpdatedClusters. Remove from UpdatingClusters
 	// - if hash is different, update ClusterSummary and leave it in UpdatingClusters
 	clusterSummaryDeletedOutOfBand := false
+	maxUpdate := getMaxUpdate(profileScope)
 
 	updatingClusters := []corev1.ObjectReference{}
 	for i := range profileScope.GetStatus().UpdatingClusters.Clusters {
@@ -1266,6 +1270,19 @@ func reviseUpdatingClusterList(ctx context.Context, c client.Client, profileScop
 					append(profileScope.GetStatus().UpdatedClusters.Clusters, cluster)
 			}
 		} else {
+			if maxUpdate != 0 {
+				isClusterPaused, err := clusterproxy.IsClusterPaused(ctx, c, cluster.Namespace, cluster.Name, clusterType)
+				if err != nil && !apierrors.IsNotFound(err) {
+					return err
+				}
+				if err == nil && isClusterPaused {
+					// Profile will react to a cluster switching from paused to unpaused
+					profileScope.Logger.V(logs.LogDebug).Info(fmt.Sprintf(
+						"Cluster %s:%s/%s is paused and maxUpdate is set. Not counting it as updating.",
+						cluster.Kind, cluster.Namespace, cluster.Name))
+					continue
+				}
+			}
 			updatingClusters = append(updatingClusters, cluster)
 		}
 	}

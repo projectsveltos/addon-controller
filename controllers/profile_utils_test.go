@@ -1894,4 +1894,74 @@ var _ = Describe("Profile: Reconciler", func() {
 		// The cluster must have been dropped from UpdatingClusters so the main loop recreates its ClusterSummary.
 		Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(BeEmpty())
 	})
+
+	It("reviseUpdatingClusterList drops a paused cluster from UpdatingClusters when MaxUpdate is set", func() {
+		currentHash := []byte(randomString())
+
+		sveltosCluster := &libsveltosv1beta1.SveltosCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: randomString(),
+				Name:      randomString(),
+			},
+			Spec: libsveltosv1beta1.SveltosClusterSpec{
+				Paused: true,
+			},
+		}
+
+		cluster := corev1.ObjectReference{
+			Namespace:  sveltosCluster.Namespace,
+			Name:       sveltosCluster.Name,
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+
+		// ClusterSummary of the paused cluster is not provisioned (helm chart requested but no
+		// FeatureSummary reported) and, being paused, will never be
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterops.GetClusterSummaryName(configv1beta1.ClusterProfileKind, clusterProfile.Name, cluster.Name, false),
+				Namespace: cluster.Namespace,
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: cluster.Namespace,
+				ClusterName:      cluster.Name,
+				ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+				ClusterProfileSpec: configv1beta1.Spec{
+					HelmCharts: []configv1beta1.HelmChart{
+						{RepositoryURL: randomString(), ChartName: randomString(), ChartVersion: randomString(),
+							ReleaseName: randomString(), ReleaseNamespace: randomString()},
+					},
+				},
+			},
+		}
+		addLabelsToClusterSummary(clusterSummary, clusterProfile.Name, cluster.Name, libsveltosv1beta1.ClusterTypeSveltos)
+
+		clusterProfile.Spec.MaxUpdate = &intstr.IntOrString{Type: intstr.Int, IntVal: 1}
+		clusterProfile.Status.UpdatingClusters = configv1beta1.Clusters{
+			Hash:     currentHash,
+			Clusters: []corev1.ObjectReference{cluster},
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(clusterProfile, sveltosCluster, clusterSummary).Build()
+
+		clusterProfileScope, err := scope.NewProfileScope(scope.ProfileScopeParams{
+			Client:         c,
+			Logger:         logger,
+			Profile:        clusterProfile,
+			ControllerName: testControllerNameProfile,
+		})
+		Expect(err).To(BeNil())
+
+		Expect(controllers.ReviseUpdatingClusterList(context.TODO(), c, clusterProfileScope, currentHash)).To(Succeed())
+
+		// The paused cluster must not hold a MaxUpdate slot, nor be reported as updated
+		Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(BeEmpty())
+		Expect(clusterProfile.Status.UpdatedClusters.Clusters).To(BeEmpty())
+
+		// Without MaxUpdate the cluster is left in UpdatingClusters
+		clusterProfile.Spec.MaxUpdate = nil
+		clusterProfile.Status.UpdatingClusters.Clusters = []corev1.ObjectReference{cluster}
+		Expect(controllers.ReviseUpdatingClusterList(context.TODO(), c, clusterProfileScope, currentHash)).To(Succeed())
+		Expect(clusterProfile.Status.UpdatingClusters.Clusters).To(HaveLen(1))
+	})
 })

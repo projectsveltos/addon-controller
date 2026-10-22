@@ -191,6 +191,7 @@ var (
 	HandleCharts                             = handleCharts
 	GetHelmChartValuesHash                   = getHelmChartValuesHash
 	GetHelmChartPatchesHash                  = getHelmChartPatchesHash
+	GetHelmChartHashes                       = getHelmChartHashes
 	GetPatchesHash                           = getPatchesHash
 	UpdateValueHashOnHelmChartSummary        = updateValueHashOnHelmChartSummary
 	DesiredValuesAreSubset                   = desiredValuesAreSubset

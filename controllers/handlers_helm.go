@@ -1344,9 +1344,20 @@ func deploySingleChart(ctx context.Context, c client.Client, dCtx *deploymentCon
 		}
 	}
 
-	// A chart staged because it yielded to a lower tier profile must always be applied: applying it is
-	// how sveltos-applier updates the owner tier on its resources.
-	currentRelease, report, err := handleChart(ctx, dCtx, instantiatedChart, kubeconfig, isPullMode, !requeued, logger)
+	// The hashes recorded in the status are taken before handleChart reads the values and patches it
+	// deploys. If a ConfigMap or Secret changes while the upgrade is running, the stored hashes are
+	// then older than the current ones and the next reconciliation upgrades again. Taking them after
+	// the deployment would record a hash for values the release never received, and that change
+	// would be lost.
+	valueHash, patchesHash, err := getHelmChartHashes(ctx, instantiatedChart, dCtx, logger)
+
+	var currentRelease *releaseInfo
+	var report *configv1beta1.ReleaseReport
+	if err == nil {
+		// A chart staged because it yielded to a lower tier profile must always be applied: applying it is
+		// how sveltos-applier updates the owner tier on its resources.
+		currentRelease, report, err = handleChart(ctx, dCtx, instantiatedChart, kubeconfig, isPullMode, !requeued, logger)
+	}
 	setHelmFailureMessageOnHelmChartSummary(dCtx.clusterSummary, instantiatedChart, err)
 	if err != nil {
 		err = fmt.Errorf("chart=%s, releaseNamespace=%s, releaseName=%s: %w",
@@ -1357,7 +1368,7 @@ func deploySingleChart(ctx context.Context, c client.Client, dCtx *deploymentCon
 		return nil, err
 	}
 
-	valueHash, err := updateValueHashOnHelmChartSummary(ctx, instantiatedChart, currentRelease, dCtx, logger)
+	err = updateValueHashOnHelmChartSummary(ctx, instantiatedChart, currentRelease, valueHash, patchesHash, dCtx, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -4962,35 +4973,49 @@ func getHelmChartValuesHash(ctx context.Context, c client.Client, instantiatedCh
 	return h.Sum(nil), nil
 }
 
+// getHelmChartHashes returns the hash of the values and the hash of the patches of the chart.
+// They must be computed before the chart is deployed, so that they describe what the deployment
+// reads and not what the values and patches have become by the time it completes.
+func getHelmChartHashes(ctx context.Context, requestedChart *configv1beta1.HelmChart,
+	dCtx *deploymentContext, logger logr.Logger) (valuesHash, patchesHash []byte, err error) {
+
+	valuesHash, err = getHelmChartValuesHash(ctx, getManagementClusterClient(), requestedChart,
+		dCtx.clusterSummary, dCtx.mgmtResources, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	patchesHash, err = getHelmChartPatchesHash(ctx, dCtx.clusterSummary, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return valuesHash, patchesHash, nil
+}
+
+// updateValueHashOnHelmChartSummary stores valuesHash and patchesHash in the status of the chart.
+// They are advanced here, on a successful deploy. buildReferencedHelmReleaseSummaries only ever
+// carries the stored hashes forward, it never recomputes them, so this is the only place they catch
+// up to what was actually just applied. The hashes are computed by the caller (getHelmChartHashes)
+// before deploying and are not recomputed here: a values change made while the chart was being
+// deployed must still be seen as a difference by the next reconciliation.
 func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *configv1beta1.HelmChart,
-	currentRelease *releaseInfo, dCtx *deploymentContext, logger logr.Logger) ([]byte, error) {
+	currentRelease *releaseInfo, valuesHash, patchesHash []byte, dCtx *deploymentContext,
+	logger logr.Logger) error {
 
 	c := getManagementClusterClient()
 
-	helmChartValuesHash, err := getHelmChartValuesHash(ctx, c, requestedChart, dCtx.clusterSummary, dCtx.mgmtResources, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Advanced here, on a successful deploy, same as ValuesHash. buildReferencedHelmReleaseSummaries
-	// only ever carries the stored PatchesHash forward, it never recomputes it, so this is the only
-	// place PatchesHash catches up to the patches that were actually just applied.
-	helmChartPatchesHash, err := getHelmChartPatchesHash(ctx, dCtx.clusterSummary, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	chartManager, err := chartmanager.GetChartManagerInstance(ctx, c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		currentClusterSummary := &configv1beta1.ClusterSummary{}
-		err = c.Get(ctx,
+		getErr := c.Get(ctx,
 			types.NamespacedName{Namespace: dCtx.clusterSummary.Namespace, Name: dCtx.clusterSummary.Name}, currentClusterSummary)
-		if err != nil {
-			return err
+		if getErr != nil {
+			return getErr
 		}
 
 		// Correct a Conflict left over from the start of this pass, but only while this
@@ -5009,8 +5034,8 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 			if rs.ReleaseName == requestedChart.ReleaseName &&
 				rs.ReleaseNamespace == requestedChart.ReleaseNamespace {
 
-				rs.ValuesHash = helmChartValuesHash
-				rs.PatchesHash = helmChartPatchesHash
+				rs.ValuesHash = valuesHash
+				rs.PatchesHash = patchesHash
 				recordHelmChartApply(rs, currentRelease)
 				if isManager {
 					rs.Status = configv1beta1.HelmChartStatusManaging
@@ -5022,8 +5047,6 @@ func updateValueHashOnHelmChartSummary(ctx context.Context, requestedChart *conf
 
 		return c.Status().Update(ctx, currentClusterSummary)
 	})
-
-	return helmChartValuesHash, err
 }
 
 // setResolvedHelmChartIdentity records, on rs, the fully resolved (post-template) chart

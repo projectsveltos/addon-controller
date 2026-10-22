@@ -942,8 +942,8 @@ var _ = Describe("HandlersHelm", func() {
 		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
 
 		By("A chart skipped in this pass keeps its drift flag and has nothing to confirm")
-		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
-			controllers.NewReleaseInfoForApply([]byte(randomString()), true), dCtx,
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
+			controllers.NewReleaseInfoForApply([]byte(randomString()), true), nil, nil, dCtx,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -955,8 +955,8 @@ var _ = Describe("HandlersHelm", func() {
 
 		By("A chart staged for apply has its content recorded to be confirmed and its drift flag cleared")
 		hash := []byte(randomString())
-		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
-			controllers.NewReleaseInfoForApply(hash, false), dCtx,
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
+			controllers.NewReleaseInfoForApply(hash, false), nil, nil, dCtx,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -966,6 +966,108 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(summary.NeedsRedeploy).To(BeFalse())
 		Expect(summary.StagedContentHash).To(Equal(hash))
 		Expect(summary.AppliedContentHash).To(BeEmpty())
+	})
+
+	It("A values change made while a chart is being deployed is picked up by the next reconciliation", func() {
+		// Regression test: the hash stored after a successful deployment used to be recomputed
+		// once the deployment completed. A ConfigMap listed in valuesFrom that changed while the
+		// upgrade was running was then reflected in the stored hash but not in the release, and
+		// shouldUpgrade, comparing stored and current hash, never upgraded the release again.
+		// The hashes must be the ones taken before the deployment read the values.
+		valuesKey := randomString()
+		configMap := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: defaultNamespace,
+				Name:      randomString(),
+			},
+			Data: map[string]string{
+				valuesKey: "replicaCount: 1",
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), configMap)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, configMap)).To(Succeed())
+
+		nginxChart := &configv1beta1.HelmChart{
+			RepositoryURL:    testRepoURLNginxStable,
+			RepositoryName:   testRepoNameNginxStable,
+			ChartName:        testChartNameNginxIngress,
+			ChartVersion:     testChartVersion100,
+			ReleaseName:      testReleaseNameNginxLatest,
+			ReleaseNamespace: testNginxRepo,
+			HelmChartAction:  configv1beta1.HelmChartActionInstall,
+			ValuesFrom: []configv1beta1.ValueFrom{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: configMap.Namespace,
+					Name:      configMap.Name,
+				},
+			},
+		}
+
+		clusterSummary.Spec.ClusterProfileSpec = configv1beta1.Spec{
+			HelmCharts: []configv1beta1.HelmChart{*nginxChart},
+		}
+		clusterSummary.Namespace = defaultNamespace
+		clusterSummary.Spec.ClusterNamespace = defaultNamespace
+
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		clusterSummary.Status = configv1beta1.ClusterSummaryStatus{
+			HelmReleaseSummaries: []configv1beta1.HelmChartSummary{
+				{
+					ReleaseName:      nginxChart.ReleaseName,
+					ReleaseNamespace: nginxChart.ReleaseNamespace,
+					Status:           configv1beta1.HelmChartStatusManaging,
+				},
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+		createClusterForClusterSummary(clusterSummary)
+
+		manager, err := chartmanager.GetChartManagerInstance(context.TODO(), testEnv.Client)
+		Expect(err).To(BeNil())
+		manager.RegisterClusterSummaryForCharts(clusterSummary)
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
+
+		By("The hashes are taken before the chart is deployed")
+		valuesHash, patchesHash, err := controllers.GetHelmChartHashes(context.TODO(), nginxChart, dCtx, logger)
+		Expect(err).To(BeNil())
+
+		By("The ConfigMap changes while the chart is being deployed")
+		currentConfigMap := &corev1.ConfigMap{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: configMap.Namespace, Name: configMap.Name}, currentConfigMap)).To(Succeed())
+		currentConfigMap.Data[valuesKey] = "replicaCount: 2"
+		Expect(testEnv.Update(context.TODO(), currentConfigMap)).To(Succeed())
+
+		Eventually(func() bool {
+			hash, err := controllers.GetHelmChartValuesHash(context.TODO(), testEnv, nginxChart,
+				clusterSummary, nil, logger)
+			return err == nil && !bytes.Equal(hash, valuesHash)
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		By("The deployment completes and records the hashes taken before it started")
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart,
+			controllers.NewReleaseInfoForApply([]byte(randomString()), false), valuesHash, patchesHash, dCtx, logger)
+		Expect(err).To(BeNil())
+
+		current := readClusterSummaryUncached(clusterSummary)
+		summary := findHelmChartSummary(current, nginxChart.ReleaseNamespace, nginxChart.ReleaseName)
+		Expect(summary).ToNot(BeNil())
+		Expect(bytes.Equal(summary.ValuesHash, valuesHash)).To(BeTrue())
+
+		By("The next reconciliation upgrades the release with the latest values")
+		currentRelease := &controllers.ReleaseInfo{
+			Status:       releasecommon.StatusDeployed.String(),
+			ChartVersion: testChartVersion100,
+			FullValues:   map[string]interface{}{testReplicaCountKey: 1},
+		}
+		Expect(controllers.ShouldUpgrade(context.TODO(), currentRelease, nginxChart,
+			controllers.NewDeploymentContext(current, nil, nil), logger)).To(BeTrue())
 	})
 
 	It("UpdateStatusForReferencedHelmReleases carries PatchesHash forward instead of recomputing it", func() {
@@ -1101,7 +1203,7 @@ var _ = Describe("HandlersHelm", func() {
 		manager.RegisterClusterSummaryForCharts(clusterSummary)
 
 		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
-		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, nil, nil, dCtx,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -1177,7 +1279,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(manager.CanManageChart(clusterSummary, nginxChart)).To(BeFalse())
 
 		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
-		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, nil, nil, dCtx,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 
@@ -1233,7 +1335,7 @@ var _ = Describe("HandlersHelm", func() {
 		Expect(manager.CanManageChart(clusterSummary, nginxChart)).To(BeTrue())
 
 		dCtx := controllers.NewDeploymentContext(clusterSummary, nil, nil)
-		_, err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, dCtx,
+		err = controllers.UpdateValueHashOnHelmChartSummary(context.TODO(), nginxChart, nil, nil, nil, dCtx,
 			textlogger.NewLogger(textlogger.NewConfig()))
 		Expect(err).To(BeNil())
 

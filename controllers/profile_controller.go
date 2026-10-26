@@ -326,6 +326,17 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 				hc.RegistryCredentialsConfig.CASecretRef.Namespace = profile.Namespace
 			}
 		}
+		for j := range hc.ValuesFrom {
+			hc.ValuesFrom[j].Namespace = profile.Namespace
+		}
+	}
+
+	for i := range profile.Spec.PatchesFrom {
+		profile.Spec.PatchesFrom[i].Namespace = profile.Namespace
+	}
+
+	for i := range profile.Spec.TemplateResourceRefs {
+		profile.Spec.TemplateResourceRefs[i].Resource.Namespace = profile.Namespace
 	}
 }
 

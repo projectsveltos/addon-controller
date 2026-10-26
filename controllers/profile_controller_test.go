@@ -105,6 +105,66 @@ var _ = Describe("Profile Controller", func() {
 					Kind:      sourcev1.GitRepositoryKind,
 					Namespace: randomString(),
 					Name:      randomString(),
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: randomString(),
+							Name:      randomString(),
+						},
+					},
+				},
+			},
+			HelmCharts: []configv1beta1.HelmChart{
+				{
+					RepositoryURL: randomString(),
+					ChartName:     randomString(),
+					ValuesFrom: []configv1beta1.ValueFrom{
+						{
+							Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+							Namespace: randomString(),
+							Name:      randomString(),
+						},
+						{
+							Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
+							Namespace: randomString(),
+							Name:      randomString(),
+						},
+					},
+				},
+				{
+					RepositoryURL: randomString(),
+					ChartName:     randomString(),
+				},
+			},
+			PatchesFrom: []configv1beta1.ValueFrom{
+				{
+					Kind:      string(libsveltosv1beta1.ConfigMapReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+				{
+					Kind:      string(libsveltosv1beta1.SecretReferencedResourceKind),
+					Namespace: randomString(),
+					Name:      randomString(),
+				},
+			},
+			TemplateResourceRefs: []configv1beta1.TemplateResourceRef{
+				{
+					Resource: corev1.ObjectReference{
+						Kind:       testKindSecret,
+						APIVersion: testV1APIVersion,
+						Namespace:  randomString(),
+						Name:       randomString(),
+					},
+					Identifier: randomString(),
+				},
+				{
+					Resource: corev1.ObjectReference{
+						Kind:       testKindConfigMap,
+						APIVersion: testV1APIVersion,
+						Name:       randomString(),
+					},
+					Identifier: randomString(),
 				},
 			},
 		}
@@ -136,6 +196,23 @@ var _ = Describe("Profile Controller", func() {
 
 		for i := range profile.Spec.KustomizationRefs {
 			Expect(profile.Spec.KustomizationRefs[i].Namespace).To(Equal(profile.Namespace))
+			for j := range profile.Spec.KustomizationRefs[i].ValuesFrom {
+				Expect(profile.Spec.KustomizationRefs[i].ValuesFrom[j].Namespace).To(Equal(profile.Namespace))
+			}
+		}
+
+		for i := range profile.Spec.HelmCharts {
+			for j := range profile.Spec.HelmCharts[i].ValuesFrom {
+				Expect(profile.Spec.HelmCharts[i].ValuesFrom[j].Namespace).To(Equal(profile.Namespace))
+			}
+		}
+
+		for i := range profile.Spec.PatchesFrom {
+			Expect(profile.Spec.PatchesFrom[i].Namespace).To(Equal(profile.Namespace))
+		}
+
+		for i := range profile.Spec.TemplateResourceRefs {
+			Expect(profile.Spec.TemplateResourceRefs[i].Resource.Namespace).To(Equal(profile.Namespace))
 		}
 	})
 

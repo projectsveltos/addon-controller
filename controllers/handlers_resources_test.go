@@ -304,7 +304,7 @@ var _ = Describe("HandlersResource", func() {
 		// created in BeforeEach - keeps working. That is what lets this test tell the two passes
 		// apart: the local pass must fail while the remote pass succeeds.
 		brokenConfig := rest.CopyConfig(testEnv.Config)
-		brokenConfig.Host = "https://127.0.0.1:1"
+		brokenConfig.Host = unreachableHost
 		brokenConfig.Timeout = 2 * time.Second
 		oldConfig := controllers.SetManagementClusterConfigForTest(brokenConfig)
 		defer controllers.SetManagementClusterConfigForTest(oldConfig)

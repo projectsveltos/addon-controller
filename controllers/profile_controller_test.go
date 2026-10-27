@@ -130,10 +130,23 @@ var _ = Describe("Profile Controller", func() {
 							Name:      randomString(),
 						},
 					},
+					SignatureVerification: &configv1beta1.CosignVerification{
+						Provider: configv1beta1.CosignProviderPublicKey,
+						SecretRef: &corev1.SecretReference{
+							Namespace: randomString(),
+							Name:      randomString(),
+						},
+					},
 				},
 				{
 					RepositoryURL: randomString(),
 					ChartName:     randomString(),
+					ProvenanceVerification: &configv1beta1.ProvenanceVerification{
+						KeyringSecretRef: corev1.SecretReference{
+							Namespace: randomString(),
+							Name:      randomString(),
+						},
+					},
 				},
 			},
 			PatchesFrom: []configv1beta1.ValueFrom{
@@ -204,6 +217,12 @@ var _ = Describe("Profile Controller", func() {
 		for i := range profile.Spec.HelmCharts {
 			for j := range profile.Spec.HelmCharts[i].ValuesFrom {
 				Expect(profile.Spec.HelmCharts[i].ValuesFrom[j].Namespace).To(Equal(profile.Namespace))
+			}
+			if sv := profile.Spec.HelmCharts[i].SignatureVerification; sv != nil {
+				Expect(sv.SecretRef.Namespace).To(Equal(profile.Namespace))
+			}
+			if pv := profile.Spec.HelmCharts[i].ProvenanceVerification; pv != nil {
+				Expect(pv.KeyringSecretRef.Namespace).To(Equal(profile.Namespace))
 			}
 		}
 

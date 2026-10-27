@@ -333,7 +333,12 @@ var (
 type (
 	ReferencedObject      = referencedObject
 	RegistryClientOptions = registryClientOptions
+	RestConfigGetter      = restConfigGetter
 )
+
+func NewRestConfigGetter(cfg *rest.Config, namespace string) *RestConfigGetter {
+	return &restConfigGetter{config: cfg, namespace: namespace}
+}
 
 var (
 	UpdateClusterSummaryHelmHashes = updateClusterSummaryHelmHashes

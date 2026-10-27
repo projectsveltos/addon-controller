@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -49,9 +50,23 @@ func restConfigFromContext(ctx context.Context) *rest.Config {
 // *rest.Config. It replaces genericclioptions.NewConfigFlags in actionConfigInit
 // so that the cached rest.Config from clustercache is reused instead of
 // re-parsing the kubeconfig file on every Helm action.
+//
+// Helm asks for the discovery client and the REST mapper many times during a single action,
+// and a new one would otherwise do its own /api and /apis discovery each time. Both are
+// therefore built once per restConfigGetter, which lives as long as one action.Configuration,
+// the same freshness kubectl's ConfigFlags gives. Helm itself invalidates the discovery
+// cache and resets the mapper when it needs to see new CRDs.
 type restConfigGetter struct {
 	config    *rest.Config
 	namespace string
+
+	discoveryOnce   sync.Once
+	discoveryClient discovery.CachedDiscoveryInterface
+	discoveryErr    error
+
+	mapperOnce sync.Once
+	mapper     meta.RESTMapper
+	mapperErr  error
 }
 
 func (r *restConfigGetter) ToRESTConfig() (*rest.Config, error) {
@@ -61,6 +76,13 @@ func (r *restConfigGetter) ToRESTConfig() (*rest.Config, error) {
 }
 
 func (r *restConfigGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
+	r.discoveryOnce.Do(func() {
+		r.discoveryClient, r.discoveryErr = r.newDiscoveryClient()
+	})
+	return r.discoveryClient, r.discoveryErr
+}
+
+func (r *restConfigGetter) newDiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
 	cfg, err := r.ToRESTConfig()
 	if err != nil {
 		return nil, err
@@ -72,12 +94,18 @@ func (r *restConfigGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterfa
 	return diskcached.NewMemCacheClient(dc), nil
 }
 
+// ToRESTMapper returns a mapper backed by the same discovery client ToDiscoveryClient returns,
+// so a discovery already done for capabilities is reused by the mapper.
 func (r *restConfigGetter) ToRESTMapper() (meta.RESTMapper, error) {
-	dc, err := r.ToDiscoveryClient()
-	if err != nil {
-		return nil, err
-	}
-	return restmapper.NewDeferredDiscoveryRESTMapper(dc), nil
+	r.mapperOnce.Do(func() {
+		dc, err := r.ToDiscoveryClient()
+		if err != nil {
+			r.mapperErr = err
+			return
+		}
+		r.mapper = restmapper.NewDeferredDiscoveryRESTMapper(dc)
+	})
+	return r.mapper, r.mapperErr
 }
 
 func (r *restConfigGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {

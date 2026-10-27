@@ -338,6 +338,12 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 		for j := range hc.ValuesFrom {
 			hc.ValuesFrom[j].Namespace = profile.Namespace
 		}
+		if hc.SignatureVerification != nil && hc.SignatureVerification.SecretRef != nil {
+			hc.SignatureVerification.SecretRef.Namespace = profile.Namespace
+		}
+		if hc.ProvenanceVerification != nil {
+			hc.ProvenanceVerification.KeyringSecretRef.Namespace = profile.Namespace
+		}
 	}
 
 	for i := range profile.Spec.PatchesFrom {

@@ -42,7 +42,7 @@ jobs:
       env:
         UT: true
   FV:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,7 +55,7 @@ jobs:
       env:
         FV: true
   NEW_FV:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,7 +68,7 @@ jobs:
       env:
         FV: true
   FV_SHARDING:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,7 +81,7 @@ jobs:
       env:
         FV: true
   FV_AGENTLESS:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -94,7 +94,7 @@ jobs:
       env:
         FV: true
   FV_OIDC:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,7 +107,7 @@ jobs:
       env:
         FV: true
   FV_PULLMODE:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -120,7 +120,7 @@ jobs:
       env:
         FV: true
   NEW_FV_PULLMODE:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -133,7 +133,7 @@ jobs:
       env:
         FV: true
   FV-NAMESPACE:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

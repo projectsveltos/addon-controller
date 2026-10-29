@@ -706,6 +706,51 @@ var _ = Describe("ResourceSummary Collection", func() {
 		}, "2s", pollingInterval).Should(BeTrue())
 	})
 
+	It("collectAndProcessAllResourceSummaries processes a ResourceSummary without labels for a cluster in pull mode", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		cluster, clusterSummary := prepareSveltosClusterWithDriftedResourceSummary(true)
+		clusterRef := getSveltosClusterRef(cluster)
+
+		Expect(controllers.CollectAndProcessAllResourceSummaries(context.TODO(), testEnv.Client,
+			[]corev1.ObjectReference{*clusterRef}, map[corev1.ObjectReference]bool{*clusterRef: true},
+			logger)).To(Succeed())
+
+		// The ClusterSummary hash must be cleared: drift was processed.
+		Eventually(func() bool {
+			return isHelmHashCleared(clusterSummary)
+		}, timeout, pollingInterval).Should(BeTrue())
+	})
+
+	It("collectAndProcessAllResourceSummaries ignores a ResourceSummary without labels for a cluster not in pull mode", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		cluster, clusterSummary := prepareSveltosClusterWithDriftedResourceSummary(false)
+		clusterRef := getSveltosClusterRef(cluster)
+
+		Expect(controllers.CollectAndProcessAllResourceSummaries(context.TODO(), testEnv.Client,
+			[]corev1.ObjectReference{*clusterRef}, map[corev1.ObjectReference]bool{*clusterRef: true},
+			logger)).To(Succeed())
+
+		// The ClusterSummary hash must not be cleared: only clusters in pull mode are expected to have
+		// ResourceSummaries without labels.
+		Consistently(func() bool {
+			return isHelmHashCleared(clusterSummary)
+		}, "2s", pollingInterval).Should(BeFalse())
+	})
+
+	It("collectAndProcessAllResourceSummaries ignores a ResourceSummary without labels whose ClusterSummary does not exist", func() {
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		cluster, clusterSummary := prepareSveltosClusterWithDriftedResourceSummary(true)
+		Expect(testEnv.Delete(context.TODO(), clusterSummary)).To(Succeed())
+		clusterRef := getSveltosClusterRef(cluster)
+
+		Expect(controllers.CollectAndProcessAllResourceSummaries(context.TODO(), testEnv.Client,
+			[]corev1.ObjectReference{*clusterRef}, map[corev1.ObjectReference]bool{*clusterRef: true},
+			logger)).To(Succeed())
+	})
+
 	It("skipCollecting skips a SveltosCluster whose connection is down, even when it is marked ready", func() {
 		logger := textlogger.NewLogger(textlogger.NewConfig())
 
@@ -755,4 +800,129 @@ func getResourceSummary() *libsveltosv1beta1.ResourceSummary {
 			Namespace: sveltosNamespace,
 		},
 	}
+}
+
+// prepareSveltosClusterWithDriftedResourceSummary creates a ready SveltosCluster, a ClusterSummary for it with a
+// provisioned Helm feature, and a ResourceSummary reporting drifted Helm resources. The ResourceSummary has only the
+// ClusterSummary annotations, no labels: that is how sveltos-applier creates it in the management cluster
+// for a cluster in pull mode.
+func prepareSveltosClusterWithDriftedResourceSummary(pullMode bool,
+) (*libsveltosv1beta1.SveltosCluster, *configv1beta1.ClusterSummary) {
+
+	namespace := randomString()
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
+	Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+	cluster := &libsveltosv1beta1.SveltosCluster{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: randomString()},
+		Spec:       libsveltosv1beta1.SveltosClusterSpec{PullMode: pullMode},
+	}
+	Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+	cluster.Status = libsveltosv1beta1.SveltosClusterStatus{
+		Ready:            true,
+		ConnectionStatus: libsveltosv1beta1.ConnectionHealthy,
+	}
+	Expect(testEnv.Status().Update(context.TODO(), cluster)).To(Succeed())
+
+	clusterSummary := &configv1beta1.ClusterSummary{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      clusterProfileNamePrefix + randomString(),
+			Labels:    map[string]string{clusterops.ClusterProfileLabelName: randomString()},
+		},
+		Spec: configv1beta1.ClusterSummarySpec{
+			ClusterNamespace: cluster.Namespace,
+			ClusterName:      cluster.Name,
+			ClusterType:      libsveltosv1beta1.ClusterTypeSveltos,
+		},
+	}
+	Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+	clusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+		{
+			FeatureID: libsveltosv1beta1.FeatureHelm,
+			Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+			Hash:      []byte(randomString()),
+		},
+	}
+	Expect(testEnv.Status().Update(context.TODO(), clusterSummary)).To(Succeed())
+
+	resourceSummary := getResourceSummary()
+	resourceSummary.Namespace = namespace
+	resourceSummary.Annotations = map[string]string{
+		libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
+		libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: namespace,
+	}
+	Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
+	Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())
+	resourceSummary.Status.HelmResourcesChanged = true
+	Expect(testEnv.Status().Update(context.TODO(), resourceSummary)).To(Succeed())
+
+	// waitForObject only waits for an object to be in the cache, not for its status. The function under test
+	// reads everything from the cache and gives up on a cluster when it finds it not ready, without retrying.
+	Eventually(func() bool {
+		return isStatusInCache(cluster, clusterSummary, resourceSummary)
+	}, timeout, pollingInterval).Should(BeTrue())
+
+	return cluster, clusterSummary
+}
+
+// isStatusInCache returns true when the testEnv client cache has the status set by
+// prepareSveltosClusterWithDriftedResourceSummary
+func isStatusInCache(cluster *libsveltosv1beta1.SveltosCluster, clusterSummary *configv1beta1.ClusterSummary,
+	resourceSummary *libsveltosv1beta1.ResourceSummary) bool {
+
+	currentCluster := &libsveltosv1beta1.SveltosCluster{}
+	if err := testEnv.Get(context.TODO(),
+		types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, currentCluster); err != nil {
+		return false
+	}
+	if !currentCluster.Status.Ready {
+		return false
+	}
+
+	currentClusterSummary := &configv1beta1.ClusterSummary{}
+	if err := testEnv.Get(context.TODO(),
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+		currentClusterSummary); err != nil {
+		return false
+	}
+	if len(currentClusterSummary.Status.FeatureSummaries) == 0 {
+		return false
+	}
+
+	currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+	if err := testEnv.Get(context.TODO(),
+		types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+		currentResourceSummary); err != nil {
+		return false
+	}
+	return currentResourceSummary.Status.HelmResourcesChanged
+}
+
+func getSveltosClusterRef(cluster *libsveltosv1beta1.SveltosCluster) *corev1.ObjectReference {
+	return &corev1.ObjectReference{
+		Namespace:  cluster.Namespace,
+		Name:       cluster.Name,
+		Kind:       libsveltosv1beta1.SveltosClusterKind,
+		APIVersion: libsveltosv1beta1.GroupVersion.String(),
+	}
+}
+
+// isHelmHashCleared returns true when the Helm feature of the ClusterSummary has no hash anymore,
+// which is what triggers a new deployment after drift is detected.
+func isHelmHashCleared(clusterSummary *configv1beta1.ClusterSummary) bool {
+	current := &configv1beta1.ClusterSummary{}
+	if err := testEnv.Get(context.TODO(),
+		types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name}, current); err != nil {
+		return false
+	}
+	for i := range current.Status.FeatureSummaries {
+		if current.Status.FeatureSummaries[i].FeatureID == libsveltosv1beta1.FeatureHelm {
+			return current.Status.FeatureSummaries[i].Hash == nil
+		}
+	}
+	return false
 }

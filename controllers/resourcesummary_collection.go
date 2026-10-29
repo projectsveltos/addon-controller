@@ -101,6 +101,73 @@ func collectAndProcessResourceSummaries(ctx context.Context, c client.Client,
 	}
 }
 
+// clusterKey identifies a cluster by namespace, name and type (lowercase, as in the ResourceSummary labels),
+// to correctly distinguish a SveltosCluster from a CAPI Cluster that share the same namespace and name.
+type clusterKey struct{ ns, name, clusterType string }
+
+// getClusterKeyForResourceSummary returns the cluster the ResourceSummary was created for.
+// The ResourceSummary carries the cluster name and type as labels when it was created by
+// addon-controller for a drift-detection-manager running in the management cluster.
+// A ResourceSummary created in the management cluster by sveltos-applier, to report the drift detected
+// in a cluster in pull mode, only carries the ClusterSummary annotations. For those the cluster is
+// read from the ClusterSummary, and only if the cluster is in pull mode: any other ResourceSummary
+// without labels is not expected, and is ignored.
+func getClusterKeyForResourceSummary(ctx context.Context, rs *libsveltosv1beta1.ResourceSummary,
+	logger logr.Logger) (clusterKey, bool) {
+
+	clusterName := rs.Labels[sveltos_upgrade.ClusterNameLabel]
+	clusterType := rs.Labels[sveltos_upgrade.ClusterTypeLabel]
+	if clusterName != "" && clusterType != "" {
+		clusterNamespace, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+		if !ok {
+			return clusterKey{}, false
+		}
+		return clusterKey{ns: clusterNamespace, name: clusterName, clusterType: clusterType}, true
+	}
+
+	return getClusterKeyOfPullModeCluster(ctx, rs, logger)
+}
+
+// getClusterKeyOfPullModeCluster returns the cluster the ClusterSummary referenced by the ResourceSummary
+// annotations is for. It returns false if the ClusterSummary does not exist or its cluster is not in pull mode.
+func getClusterKeyOfPullModeCluster(ctx context.Context, rs *libsveltosv1beta1.ResourceSummary,
+	logger logr.Logger) (clusterKey, bool) {
+
+	clusterSummaryName, ok := getClusterSummaryNameFromResourceSummary(rs, logger)
+	if !ok {
+		return clusterKey{}, false
+	}
+	clusterSummaryNamespace, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+	if !ok {
+		return clusterKey{}, false
+	}
+
+	mgmtClient := getManagementClusterClient()
+	clusterSummary := &configv1beta1.ClusterSummary{}
+	err := mgmtClient.Get(ctx, types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName},
+		clusterSummary)
+	if err != nil {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("failed to get ClusterSummary %s/%s for ResourceSummary %s/%s: %v",
+			clusterSummaryNamespace, clusterSummaryName, rs.Namespace, rs.Name, err))
+		return clusterKey{}, false
+	}
+
+	isPullMode, err := clusterproxy.IsClusterInPullMode(ctx, mgmtClient, clusterSummary.Spec.ClusterNamespace,
+		clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
+	if err != nil || !isPullMode {
+		logger.V(logs.LogDebug).Info(fmt.Sprintf(
+			"ResourceSummary %s/%s has no cluster labels and its cluster is not in pull mode. Ignoring it",
+			rs.Namespace, rs.Name))
+		return clusterKey{}, false
+	}
+
+	return clusterKey{
+		ns:          clusterSummary.Spec.ClusterNamespace,
+		name:        clusterSummary.Spec.ClusterName,
+		clusterType: strings.ToLower(string(clusterSummary.Spec.ClusterType)),
+	}, true
+}
+
 // collectAndProcessAllResourceSummaries is used in agentless mode. It fetches all
 // ResourceSummaries from the management cluster in a single List call, groups the
 // changed ones by cluster, and processes only those clusters — skipping the N
@@ -112,7 +179,6 @@ func collectAndProcessAllResourceSummaries(ctx context.Context, c client.Client,
 	// Build a lookup of shard-local clusters that have drift detection deployed,
 	// keyed by namespace/name/clusterType to correctly distinguish a SveltosCluster
 	// from a CAPI Cluster that share the same namespace and name.
-	type clusterKey struct{ ns, name, clusterType string }
 	localClustersWithDD := make(map[clusterKey]corev1.ObjectReference, len(clusterList))
 	for i := range clusterList {
 		ref := clusterList[i]
@@ -137,19 +203,10 @@ func collectAndProcessAllResourceSummaries(ctx context.Context, c client.Client,
 		if !rs.Status.ResourcesChanged && !rs.Status.HelmResourcesChanged && !rs.Status.KustomizeResourcesChanged {
 			continue
 		}
-		clusterNamespace, ok := getClusterSummaryNamespaceFromResourceSummary(rs, logger)
+		key, ok := getClusterKeyForResourceSummary(ctx, rs, logger)
 		if !ok {
 			continue
 		}
-		if rs.Labels == nil {
-			continue
-		}
-		clusterName := rs.Labels[sveltos_upgrade.ClusterNameLabel]
-		clusterType := rs.Labels[sveltos_upgrade.ClusterTypeLabel]
-		if clusterName == "" || clusterType == "" {
-			continue
-		}
-		key := clusterKey{clusterNamespace, clusterName, clusterType}
 		if _, ok := localClustersWithDD[key]; !ok {
 			continue
 		}

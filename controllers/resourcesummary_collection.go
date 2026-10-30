@@ -749,18 +749,14 @@ func containsDriftedResource(resources []configv1beta1.DriftedResourceRef, resou
 	return false
 }
 
+// resetResourceSummaryStatus clears the drift recorded in rs, the ResourceSummary that has been processed.
+// The update carries the resourceVersion of rs, so if drift-detection-manager reported a drift after rs was
+// read, the update fails with a Conflict instead of clearing a drift that was never processed. The next
+// collection reads the ResourceSummary again and processes it.
 func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	rs *libsveltosv1beta1.ResourceSummary, logger logr.Logger) error {
 
-	resourceSummary := &libsveltosv1beta1.ResourceSummary{}
-
-	err := remoteClient.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}, resourceSummary)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
+	resourceSummary := rs.DeepCopy()
 
 	logger.V(logs.LogDebug).Info("reset resourceSummary status")
 	resourceSummary.Status.ResourcesChanged = false
@@ -771,7 +767,12 @@ func resetResourceSummaryStatus(ctx context.Context, remoteClient client.Client,
 	// a resource already in it, so keeping the entries would pin their detection time to the first drift.
 	resourceSummary.Status.DriftedResources = nil
 	resourceSummary.Status.DriftedResourcesTruncated = false
-	return remoteClient.Status().Update(ctx, resourceSummary)
+
+	err := remoteClient.Status().Update(ctx, resourceSummary)
+	if err != nil && apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // markDriftedHelmCharts sets NeedsRedeploy on the HelmReleaseSummaries entries matching

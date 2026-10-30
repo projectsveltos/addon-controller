@@ -268,6 +268,86 @@ var _ = Describe("ResourceSummary Collection", func() {
 		}, timeout, pollingInterval).Should(BeTrue())
 	})
 
+	It("processResourceSummary does not clear a drift reported after the ResourceSummary was listed", func() {
+		cluster := prepareCluster()
+
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: cluster.Namespace,
+				Name:      clusterProfileNamePrefix + randomString(),
+				Labels:    map[string]string{clusterops.ClusterProfileLabelName: randomString()},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterType: libsveltosv1beta1.ClusterTypeCapi,
+			},
+		}
+		Expect(testEnv.Create(context.TODO(), clusterSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, clusterSummary)).To(Succeed())
+
+		currentClusterSummary := &configv1beta1.ClusterSummary{}
+		Expect(testEnv.Get(context.TODO(),
+			types.NamespacedName{Namespace: clusterSummary.Namespace, Name: clusterSummary.Name},
+			currentClusterSummary)).To(Succeed())
+		currentClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{
+				FeatureID: libsveltosv1beta1.FeatureResources,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+				Hash:      []byte(randomString()),
+			},
+			{
+				FeatureID: libsveltosv1beta1.FeatureHelm,
+				Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+				Hash:      []byte(randomString()),
+			},
+		}
+		Expect(testEnv.Status().Update(context.TODO(), currentClusterSummary)).To(Succeed())
+
+		resourceSummary := getResourceSummary()
+		resourceSummary.Annotations = map[string]string{
+			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
+			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummary.Namespace,
+		}
+		Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
+		Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())
+
+		resourceSummaryKey := types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name}
+
+		// The copy the collector listed: only resourcesChanged is set
+		listedResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+		Expect(testEnv.Get(context.TODO(), resourceSummaryKey, listedResourceSummary)).To(Succeed())
+		listedResourceSummary.Status.ResourcesChanged = true
+		Expect(testEnv.Status().Update(context.TODO(), listedResourceSummary)).To(Succeed())
+
+		// drift-detection-manager reports a Helm drift after the ResourceSummary was listed
+		// Eventual loop so testEnv Cache is synced and the update below does not use a stale resourceVersion
+		latestResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+		Eventually(func() bool {
+			err := testEnv.Get(context.TODO(), resourceSummaryKey, latestResourceSummary)
+			return err == nil && latestResourceSummary.Status.ResourcesChanged
+		}, timeout, pollingInterval).Should(BeTrue())
+		latestResourceSummary.Status.HelmResourcesChanged = true
+		Expect(testEnv.Status().Update(context.TODO(), latestResourceSummary)).To(Succeed())
+
+		// Processing the stale copy must not reset the ResourceSummary: the Helm drift was never processed
+		err := controllers.ProcessResourceSummary(context.TODO(), testEnv.Client, listedResourceSummary,
+			textlogger.NewLogger(textlogger.NewConfig()))
+		Expect(err).ToNot(BeNil())
+		Expect(apierrors.IsConflict(err)).To(BeTrue())
+
+		// Eventual loop so testEnv Cache is synced
+		Eventually(func() bool {
+			currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+			err := testEnv.Get(context.TODO(), resourceSummaryKey, currentResourceSummary)
+			return err == nil && currentResourceSummary.Status.HelmResourcesChanged
+		}, timeout, pollingInterval).Should(BeTrue())
+
+		Consistently(func() bool {
+			currentResourceSummary := &libsveltosv1beta1.ResourceSummary{}
+			err := testEnv.Get(context.TODO(), resourceSummaryKey, currentResourceSummary)
+			return err == nil && currentResourceSummary.Status.HelmResourcesChanged
+		}, 2*time.Second, pollingInterval).Should(BeTrue())
+	})
+
 	It("processResourceSummary records the drifted resources of each feature in DriftHistory", func() {
 		cluster := prepareCluster()
 

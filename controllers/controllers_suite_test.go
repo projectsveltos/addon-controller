@@ -51,6 +51,9 @@ import (
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
 
+// clusterSummariesResource is the resource name of ClusterSummary, used to build API errors in tests
+const clusterSummariesResource = "clustersummaries"
+
 var (
 	testEnv          *helpers.TestEnvironment
 	cancel           context.CancelFunc

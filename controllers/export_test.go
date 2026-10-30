@@ -357,6 +357,14 @@ func SetManagementClusterConfigForTest(config *rest.Config) *rest.Config {
 	return old
 }
 
+// SetManagementClusterClientForTest overrides the management cluster client, leaving the rest of the
+// management cluster access untouched, and returns the previous value so a test can restore it.
+func SetManagementClusterClientForTest(c client.Client) client.Client {
+	old := managementClusterClient
+	managementClusterClient = c
+	return old
+}
+
 // NewDeploymentContext constructs a deploymentContext for use in tests.
 func NewDeploymentContext(
 	clusterSummary *configv1beta1.ClusterSummary,

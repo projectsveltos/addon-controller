@@ -1511,7 +1511,7 @@ var _ = Describe("HandlersHelm", func() {
 						if subResourceName == testStatusField && conflictCount == 0 {
 							conflictCount++
 							return apierrors.NewConflict(
-								schema.GroupResource{Group: configv1beta1.GroupVersion.Group, Resource: "clustersummaries"},
+								schema.GroupResource{Group: configv1beta1.GroupVersion.Group, Resource: clusterSummariesResource},
 								obj.GetName(),
 								fmt.Errorf("the object has been modified; please apply your changes to the latest version and try again"))
 						}

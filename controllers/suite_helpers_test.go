@@ -269,6 +269,36 @@ func hasMetricSeries(name string, labels map[string]string) bool {
 	return false
 }
 
+// getMetricValue returns the value of the counter or gauge called name, in the controller-runtime registry,
+// for the series whose labels include all of labels. It returns 0 when there is no such series.
+func getMetricValue(name string, labels map[string]string) float64 {
+	families, err := metrics.Registry.Gather()
+	Expect(err).To(BeNil())
+
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			matched := 0
+			for _, label := range metric.GetLabel() {
+				if value, ok := labels[label.GetName()]; ok && value == label.GetValue() {
+					matched++
+				}
+			}
+			if matched != len(labels) {
+				continue
+			}
+			if metric.GetCounter() != nil {
+				return metric.GetCounter().GetValue()
+			}
+			return metric.GetGauge().GetValue()
+		}
+	}
+
+	return 0
+}
+
 // deleteResources deletes following resources:
 // - clusterProfile
 // - clusterSummary

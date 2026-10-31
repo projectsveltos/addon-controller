@@ -18,6 +18,7 @@ package controllers_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -29,10 +30,13 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers"
@@ -346,6 +350,75 @@ var _ = Describe("ResourceSummary Collection", func() {
 			err := testEnv.Get(context.TODO(), resourceSummaryKey, currentResourceSummary)
 			return err == nil && currentResourceSummary.Status.HelmResourcesChanged
 		}, 2*time.Second, pollingInterval).Should(BeTrue())
+	})
+
+	It("processResourceSummary counts a drift once when updating the ClusterSummary conflicts", func() {
+		clusterNamespace := randomString()
+		clusterSummary := &configv1beta1.ClusterSummary{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterNamespace,
+				Name:      clusterProfileNamePrefix + randomString(),
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: configv1beta1.GroupVersion.String(),
+						Kind:       configv1beta1.ClusterProfileKind,
+						Name:       randomString(),
+						UID:        types.UID(randomString()),
+					},
+				},
+			},
+			Spec: configv1beta1.ClusterSummarySpec{
+				ClusterNamespace: clusterNamespace,
+				ClusterName:      randomString(),
+				ClusterType:      libsveltosv1beta1.ClusterTypeCapi,
+			},
+			Status: configv1beta1.ClusterSummaryStatus{
+				FeatureSummaries: []configv1beta1.FeatureSummary{
+					{
+						FeatureID: libsveltosv1beta1.FeatureResources,
+						Status:    libsveltosv1beta1.FeatureStatusProvisioned,
+						Hash:      []byte(randomString()),
+					},
+				},
+			},
+		}
+
+		resourceSummary := getResourceSummary()
+		resourceSummary.Annotations = map[string]string{
+			libsveltosv1beta1.ClusterSummaryNameAnnotation:      clusterSummary.Name,
+			libsveltosv1beta1.ClusterSummaryNamespaceAnnotation: clusterSummary.Namespace,
+		}
+		resourceSummary.Status.ResourcesChanged = true
+
+		// The first update of the ClusterSummary status conflicts, the retry succeeds
+		conflicts := 0
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(clusterSummary, resourceSummary).
+			WithStatusSubresource(clusterSummary, resourceSummary).
+			WithInterceptorFuncs(interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, cl client.Client, subResourceName string, obj client.Object,
+					opts ...client.SubResourceUpdateOption) error {
+
+					if _, ok := obj.(*configv1beta1.ClusterSummary); ok && conflicts == 0 {
+						conflicts++
+						return apierrors.NewConflict(schema.GroupResource{Resource: clusterSummariesResource}, obj.GetName(),
+							errors.New("the object has been modified"))
+					}
+					return cl.SubResource(subResourceName).Update(ctx, obj, opts...)
+				},
+			}).Build()
+
+		oldClient := controllers.SetManagementClusterClientForTest(c)
+		defer controllers.SetManagementClusterClientForTest(oldClient)
+
+		labels := clusterSummaryMetricLabels(clusterSummary, configv1beta1.ClusterProfileKind, "",
+			clusterSummary.OwnerReferences[0].Name)
+		Expect(getMetricValue("projectsveltos_total_drifts", labels)).To(BeZero())
+
+		Expect(controllers.ProcessResourceSummary(context.TODO(), c, resourceSummary.DeepCopy(),
+			textlogger.NewLogger(textlogger.NewConfig()))).To(Succeed())
+
+		Expect(conflicts).To(Equal(1))
+		Expect(getMetricValue("projectsveltos_total_drifts", labels)).To(Equal(float64(1)))
 	})
 
 	It("processResourceSummary records the drifted resources of each feature in DriftHistory", func() {

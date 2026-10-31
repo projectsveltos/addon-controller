@@ -565,7 +565,15 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 		return nil
 	}
 
+	// The closure below runs again on every Conflict. Drifts are counted only once the ClusterSummary
+	// status is updated, so one drift is never counted more than once.
+	var updatedClusterSummary *configv1beta1.ClusterSummary
+	var driftedFeatures []libsveltosv1beta1.FeatureID
+
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		updatedClusterSummary = nil
+		driftedFeatures = nil
+
 		clusterSummary := &configv1beta1.ClusterSummary{}
 		err := getManagementClusterClient().Get(ctx,
 			types.NamespacedName{Namespace: clusterSummaryNamespace, Name: clusterSummaryName}, clusterSummary)
@@ -583,7 +591,6 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 		}
 
 		l := logger.WithValues("clusterSummary", clusterSummary.Name)
-		profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, l)
 		for i := range clusterSummary.Status.FeatureSummaries {
 			switch clusterSummary.Status.FeatureSummaries[i].FeatureID {
 			case libsveltosv1beta1.FeatureHelm:
@@ -594,8 +601,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					markDriftedHelmCharts(clusterSummary, rs.Status.DriftedHelmCharts, l)
 					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
 						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureHelm)
-					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
+					driftedFeatures = append(driftedFeatures, clusterSummary.Status.FeatureSummaries[i].FeatureID)
 				}
 			case libsveltosv1beta1.FeatureResources:
 				if rs.Status.ResourcesChanged {
@@ -604,8 +610,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
 						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureResources)
-					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
+					driftedFeatures = append(driftedFeatures, clusterSummary.Status.FeatureSummaries[i].FeatureID)
 				}
 			case libsveltosv1beta1.FeatureKustomize:
 				if rs.Status.KustomizeResourcesChanged {
@@ -614,8 +619,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 					clusterSummary.Status.FeatureSummaries[i].Status = libsveltosv1beta1.FeatureStatusProvisioning
 					clusterSummary.Status.FeatureSummaries[i].DriftHistory = newDriftHistory(
 						clusterSummary.Status.FeatureSummaries[i].DriftHistory, rs, libsveltosv1beta1.FeatureKustomize)
-					trackDrifts(clusterSummaryNamespace, clusterSummary.Spec.ClusterName, string(clusterSummary.Status.FeatureSummaries[i].FeatureID),
-						string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
+					driftedFeatures = append(driftedFeatures, clusterSummary.Status.FeatureSummaries[i].FeatureID)
 				}
 			}
 		}
@@ -625,6 +629,7 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 			logger.V(logs.LogInfo).Error(err, "failed to update ClusterSummary status")
 			return err
 		}
+		updatedClusterSummary = clusterSummary
 		return nil
 	})
 
@@ -632,7 +637,25 @@ func processResourceSummary(ctx context.Context, clusterClient client.Client,
 		return err
 	}
 
+	trackDriftedFeatures(updatedClusterSummary, driftedFeatures, logger)
+
 	return resetResourceSummaryStatus(ctx, clusterClient, rs, logger)
+}
+
+// trackDriftedFeatures counts one drift for each of driftedFeatures. clusterSummary is nil when there was
+// nothing to update (ClusterSummary not found or marked for deletion): nothing is counted then.
+func trackDriftedFeatures(clusterSummary *configv1beta1.ClusterSummary, driftedFeatures []libsveltosv1beta1.FeatureID,
+	logger logr.Logger) {
+
+	if clusterSummary == nil {
+		return
+	}
+
+	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
+	for _, featureID := range driftedFeatures {
+		trackDrifts(clusterSummary.Namespace, clusterSummary.Spec.ClusterName, string(featureID),
+			string(clusterSummary.Spec.ClusterType), profileKind, profileNamespace, profileName, logger)
+	}
 }
 
 // newDriftHistory returns the drift history of featureID once the drift reported by rs is added to

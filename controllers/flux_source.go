@@ -41,7 +41,9 @@ const (
 	bucketScheme        = "bucket"
 )
 
-func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger) (string, error) {
+func prepareFileSystemWithFluxSource(ctx context.Context, source sourcev1.Source, logger logr.Logger,
+) (string, error) {
+
 	if source.GetArtifact() == nil {
 		msg := "Source is not ready, artifact not found"
 		logger.V(logs.LogInfo).Info(msg)
@@ -69,7 +71,7 @@ func prepareFileSystemWithFluxSource(source sourcev1.Source, logger logr.Logger)
 		fetch.WithHostnameOverwrite(os.Getenv("SOURCE_CONTROLLER_LOCALHOST")))
 
 	// Download artifact and extract files to the tmp dir.
-	err = artifactFetcher.Fetch(source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)
+	err = artifactFetcher.FetchWithContext(ctx, source.GetArtifact().URL, source.GetArtifact().Digest, tmpDir)
 	if err != nil {
 		return "", err
 	}

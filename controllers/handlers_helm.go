@@ -5387,7 +5387,7 @@ func getHelmChartAndRepoName(ctx context.Context, clusterSummary *configv1beta1.
 		}
 
 		s := source.(sourcev1.Source)
-		tmpDir, err = prepareFileSystemWithFluxSource(s, logger)
+		tmpDir, err = prepareFileSystemWithFluxSource(ctx, s, logger)
 		if err != nil {
 			return "", "", "", err
 		}

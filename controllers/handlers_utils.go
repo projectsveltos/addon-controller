@@ -160,7 +160,7 @@ func deployContentOfSource(ctx context.Context, deployingToMgmtCluster bool, des
 
 	s := source.(sourcev1.Source)
 
-	tmpDir, err := prepareFileSystemWithFluxSource(s, logger)
+	tmpDir, err := prepareFileSystemWithFluxSource(ctx, s, logger)
 	if err != nil {
 		return nil, err
 	}

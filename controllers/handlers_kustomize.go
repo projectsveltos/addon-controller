@@ -871,7 +871,7 @@ func prepareFileSystem(ctx context.Context, c client.Client,
 	}
 
 	s := source.(sourcev1.Source)
-	return prepareFileSystemWithFluxSource(s, logger)
+	return prepareFileSystemWithFluxSource(ctx, s, logger)
 }
 
 // prepareFileSystemWithRemoteURL fetches the Kustomize directory content referenced by

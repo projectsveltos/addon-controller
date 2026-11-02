@@ -57,7 +57,7 @@ Sveltos provides precise control over add-on deployment order. Add-ons within a 
 
 ## Sveltos Dashboard Demo
 
-[![Sveltos Dashboard](https://img.youtube.com/vi/GspTTGAmQwk/0.jpg)](https://www.youtube.com/watch?v=GspTTGAmQwk)
+[![Sveltos Dashboard](https://img.youtube.com/vi/L3bSYYvclJU/0.jpg)](https://www.youtube.com/watch?v=L3bSYYvclJU)
 
 ## Profiles vs. ClusterProfiles
 

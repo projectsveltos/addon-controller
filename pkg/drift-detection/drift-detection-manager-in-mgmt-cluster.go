@@ -45,7 +45,7 @@ spec:
         - --watch-namespaces=
         - --current-cluster=management-cluster
         - --run-mode=do-not-send-updates
-        - --version=v1.17.0
+        - --version=main
         command:
         - /manager
         env:
@@ -61,7 +61,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        image: docker.io/projectsveltos/drift-detection-manager@sha256:9c3315dc26228d8644a3e64e41d7865d3abb3453aa5a2cc04ff59f492be99688
+        image: docker.io/projectsveltos/drift-detection-manager@sha256:7cafb5353b4e2081ede138f064fce853ac1d70c8cd713eb5c19ae3c2a28ba4bf
         livenessProbe:
           failureThreshold: 3
           httpGet:

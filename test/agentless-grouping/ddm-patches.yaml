@@ -1,0 +1,18 @@
+# Global patch for drift-detection-manager used by create-cluster-agentless-grouping: runs the
+# image supporting groups (GROUPING_DDM_IMAGE). Rendered with envsubst.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drift-detection-patches
+  namespace: projectsveltos
+data:
+  image: |
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: ${GROUPING_DDM_IMAGE}
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+    target:
+      kind: Deployment

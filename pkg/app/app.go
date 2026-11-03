@@ -83,6 +83,7 @@ var (
 	workers                      int
 	concurrentReconciles         int
 	agentInMgmtCluster           bool
+	agentClustersPerInstance     int
 	reportMode                   controllers.ReportMode
 	tmpReportMode                int
 	restConfigQPS                float32
@@ -144,14 +145,7 @@ func Run() {
 
 	ctx := ctrl.SetupSignalHandler()
 
-	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
-	controllers.SetLuaConfigMap(luaConfigMap)
-	controllers.SetLuaCallStackSize(luaCallStackSize)
-	controllers.SetLuaRegistrySize(luaRegistrySize)
-	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
-	controllers.SetDriftDetectionRegistry(registry)
-	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
-	controllers.SetSveltosNamespace(sveltosNamespace)
+	setControllersConfiguration(sveltosNamespace)
 
 	if isInitContainer() {
 		runInitContainerWork(ctx, restConfig, scheme)
@@ -171,6 +165,8 @@ func Run() {
 	}
 	// Setup the context that's going to be used in controllers and for the manager.
 	controllers.SetManagementClusterAccess(mgr.GetClient(), mgr.GetConfig(), dc)
+	// Not served from the cache: used to decide in which group of drift-detection-manager a cluster goes
+	controllers.SetManagementClusterAPIReader(mgr.GetAPIReader())
 
 	// Start dependency manager
 	dependencymanager.InitializeManagerInstance(ctx, mgr.GetClient(), autoDeployDependencies, ctrl.Log.WithName("dependency_manager"))
@@ -235,12 +231,36 @@ func getCacheConfig() (disableFor []client.Object, byObject map[client.Object]ca
 	return
 }
 
+// setControllersConfiguration hands the values of the flags to the controllers package
+func setControllersConfiguration(sveltosNamespace string) {
+	controllers.SetDriftdetectionConfigMap(driftDetectionConfigMap)
+	controllers.SetLuaConfigMap(luaConfigMap)
+	controllers.SetLuaCallStackSize(luaCallStackSize)
+	controllers.SetLuaRegistrySize(luaRegistrySize)
+	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
+	controllers.SetDriftDetectionRegistry(registry)
+	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetAgentClustersPerInstance(agentClustersPerInstance)
+	controllers.SetSveltosNamespace(sveltosNamespace)
+}
+
+// initAgentFlags defines the flags about where drift-detection-manager runs
+func initAgentFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
+		"When set, indicates drift-detection-manager needs to be started in the management cluster")
+
+	fs.IntVar(&agentClustersPerInstance, "agent-clusters-per-instance", 1,
+		"Agentless mode only (requires --agent-in-mgmt-cluster). How many clusters one drift-detection-manager "+
+			"serves. 1 (the default) starts one drift-detection-manager per cluster. A higher value groups clusters "+
+			"of the same namespace and shard, and requires a Sveltos Enterprise license granting AgentGrouping "+
+			"(enforced by drift-detection-manager).")
+}
+
 func initFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&tmpReportMode, "report-mode", defaulReportMode,
 		"Indicates how ReportSummaries need to be collected")
 
-	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
-		"When set, indicates drift-detection-manager needs to be started in the management cluster")
+	initAgentFlags(fs)
 
 	fs.BoolVar(&disableCaching, "disable-secret-caching", false,
 		"When set, disable caching secrets and configmaps")

@@ -202,6 +202,16 @@ func upgradeDriftDetectionDeploymentsInMgmtCluster(ctx context.Context, logger l
 				continue
 			}
 
+			if isDriftDetectionGroupDeployment(&driftDetectionDeployments.Items[i]) {
+				err = upgradeDriftDetectionGroupDeployment(ctx, config, mgmtClient,
+					&driftDetectionDeployments.Items[i], globalPatches, logger)
+				if err != nil {
+					logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to upgrade driftDetection group deployment: %v", err))
+					allProcessed = false
+				}
+				continue
+			}
+
 			var patches []libsveltosv1beta1.Patch
 			var watchNamespaces []string
 			clusterNamespace, clusterName, clusterType, found :=

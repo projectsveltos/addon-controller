@@ -31,19 +31,22 @@ import (
 
 var (
 	managementClusterClient client.Client
+	// managementClusterAPIReader reads from the API server, never from a cache
+	managementClusterAPIReader client.Reader
 
 	managementClusterConfig          *rest.Config
 	managementClusterMapper          *restmapper.DeferredDiscoveryRESTMapper
 	managementClusterCachedDiscovery discovery.CachedDiscoveryInterface
 
-	sveltosNamespace        string
-	driftdetectionConfigMap string
-	luaConfigMap            string
-	capiOnboardAnnotation   string
-	driftDetectionRegistry  string
-	agentInMgmtCluster      bool
-	luaCallStackSize        int
-	luaRegistrySize         int
+	sveltosNamespace         string
+	driftdetectionConfigMap  string
+	luaConfigMap             string
+	capiOnboardAnnotation    string
+	driftDetectionRegistry   string
+	agentInMgmtCluster       bool
+	agentClustersPerInstance int
+	luaCallStackSize         int
+	luaRegistrySize          int
 )
 
 func SetManagementClusterAccess(c client.Client, config *rest.Config, dc *discovery.DiscoveryClient) {
@@ -52,6 +55,14 @@ func SetManagementClusterAccess(c client.Client, config *rest.Config, dc *discov
 
 	managementClusterCachedDiscovery = memory.NewMemCacheClient(dc)
 	managementClusterMapper = restmapper.NewDeferredDiscoveryRESTMapper(managementClusterCachedDiscovery)
+}
+
+// SetManagementClusterAPIReader sets the reader, not served from a cache, used to decide in which
+// drift-detection-manager group a cluster is placed. Without it the client passed to the
+// functions managing the groups is used.
+func SetManagementClusterAPIReader(reader client.Reader) {
+	managementClusterAPIReader = reader
+	resetDriftDetectionAssigner()
 }
 
 func SetDriftdetectionConfigMap(name string) {
@@ -80,6 +91,12 @@ func SetDriftDetectionRegistry(reg string) {
 
 func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
+}
+
+// SetAgentClustersPerInstance sets how many clusters one agent instance serves in agentless mode.
+// A value lower than 2 keeps one instance per cluster.
+func SetAgentClustersPerInstance(clustersPerInstance int) {
+	agentClustersPerInstance = clustersPerInstance
 }
 
 func SetSveltosNamespace(namespace string) {
@@ -120,6 +137,10 @@ func getCAPIOnboardAnnotation() string {
 
 func getDriftDetectionRegistry() string {
 	return driftDetectionRegistry
+}
+
+func getAgentClustersPerInstance() int {
+	return agentClustersPerInstance
 }
 
 func getAgentInMgmtCluster() bool {

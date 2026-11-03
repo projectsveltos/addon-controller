@@ -2035,6 +2035,14 @@ func (r *ClusterSummaryReconciler) handleDeletedCluster(ctx context.Context,
 		return err
 	}
 
+	// A cluster served by a group leaves it: the group drift-detection-manager is removed only when
+	// it was the last cluster of the group. Idempotent: a no-op for a cluster not in any group.
+	err = removeClusterFromDriftDetectionManagerGroups(ctx, getManagementClusterClient(), getManagementClusterConfig(),
+		cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
+	if err != nil {
+		return err
+	}
+
 	err = removeDriftDetectionManagerFromManagementCluster(ctx,
 		cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Spec.ClusterType, logger)
 	if err != nil {

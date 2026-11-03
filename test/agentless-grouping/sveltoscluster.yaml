@@ -1,0 +1,10 @@
+# SveltosCluster registering one of the managed kind clusters in agentless mode.
+# Rendered with envsubst. The kubeconfig Secret is <name>-sveltos-kubeconfig.
+apiVersion: lib.projectsveltos.io/v1beta1
+kind: SveltosCluster
+metadata:
+  name: ${CLUSTER_NAME}
+  namespace: default
+  labels:
+    agentless-grouping: "true"
+spec: {}

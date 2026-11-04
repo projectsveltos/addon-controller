@@ -418,6 +418,13 @@ func removeStaleDriftDetectionResources(ctx context.Context, logger logr.Logger)
 			for i := range driftDetectionDeployments.Items {
 				depl := &driftDetectionDeployments.Items[i]
 
+				if isDriftDetectionGroupDeployment(depl) {
+					// A group serves several clusters: only the members that do not exist anymore
+					// are removed, the Deployment goes away with the last one.
+					removeStaleGroupMembers(ctx, c, getManagementClusterConfig(), depl, logger)
+					continue
+				}
+
 				exist, clusterNs, clusterName, clusterType := deplAssociatedClusterExist(ctx, c, depl, logger)
 				if !exist {
 					// find resourceSummaries from this cluster and remove those.

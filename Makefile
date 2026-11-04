@@ -340,11 +340,9 @@ create-cluster-agentless-grouping: $(KIND) $(KUBECTL) $(ENVSUBST) $(KUSTOMIZE) #
 			--from-file=licenseData=$(GROUPING_LICENSE_DATA_FILE) --from-file=licenseSignature=$(GROUPING_LICENSE_SIGNATURE_FILE); \
 	fi
 	$(KUBECTL) apply -f manifest/deployment-agentless.yaml
-	$(KUBECTL) patch deployment addon-controller -n projectsveltos --type json -p '[ \
-		{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agent-clusters-per-instance=$(GROUPING_CLUSTERS_PER_INSTANCE)"}]'
+	$(KUBECTL) patch deployment addon-controller -n projectsveltos --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--agent-clusters-per-instance=$(GROUPING_CLUSTERS_PER_INSTANCE)"}]'
 	if [ -n "$(GROUPING_DDM_IMAGE)" ]; then \
-		$(KUBECTL) patch deployment addon-controller -n projectsveltos --type json -p '[ \
-		{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--drift-detection-config=drift-detection-patches"}]'; \
+		$(KUBECTL) patch deployment addon-controller -n projectsveltos --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--drift-detection-config=drift-detection-patches"}]'; \
 	fi
 	$(KUBECTL) rollout status deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
 

@@ -16,6 +16,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2/textlogger"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +33,7 @@ import (
 	"github.com/projectsveltos/addon-controller/controllers"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/agentgroup"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 const groupDriftDetectionComponent = "drift-detection"
@@ -291,5 +294,119 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 			return apierrors.IsNotFound(err)
 		}, timeout, pollingInterval).Should(BeTrue())
 		Expect(groupsOf(clusterNamespace)).To(BeEmpty())
+	})
+
+	Context("clusters deleted while they are in a group", func() {
+		// createClusterNamespace creates the namespace of the clusters and returns its name.
+		createClusterNamespace := func() string {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: randomString()}}
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+			return ns.Name
+		}
+
+		createSveltosCluster := func(clusterNamespace, clusterName string) {
+			cluster := &libsveltosv1beta1.SveltosCluster{
+				ObjectMeta: metav1.ObjectMeta{Namespace: clusterNamespace, Name: clusterName},
+			}
+			Expect(testEnv.Create(context.TODO(), cluster)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, cluster)).To(Succeed())
+		}
+
+		createResourceSummary := func(clusterNamespace, clusterName string) *libsveltosv1beta1.ResourceSummary {
+			resourceSummary := &libsveltosv1beta1.ResourceSummary{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: clusterNamespace,
+					Name:      randomString(),
+					Labels: map[string]string{
+						sveltos_upgrade.ClusterNameLabel:              clusterName,
+						sveltos_upgrade.ClusterTypeLabel:              strings.ToLower(string(libsveltosv1beta1.ClusterTypeSveltos)),
+						"projectsveltos.io/cluster-summary-namespace": clusterNamespace,
+					},
+				},
+			}
+			Expect(testEnv.Create(context.TODO(), resourceSummary)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, resourceSummary)).To(Succeed())
+			return resourceSummary
+		}
+
+		removeStaleMembers := func(groupName string) {
+			deployment, err := getGroupDeployment(groupName)
+			Expect(err).To(BeNil())
+			controllers.RemoveStaleGroupMembers(context.TODO(), testEnv.Client, testEnv.Config, deployment, logger)
+		}
+
+		memberNames := func(clusterNamespace string) []string {
+			names := []string{}
+			for _, group := range groupsOf(clusterNamespace) {
+				for _, member := range group.Members {
+					names = append(names, member.Name)
+				}
+			}
+			return names
+		}
+
+		It("a cluster that does not exist anymore leaves its group, the others stay", func() {
+			controllers.SetAgentClustersPerInstance(3)
+
+			clusterNamespace := createClusterNamespace()
+			existing, deleted := randomString(), randomString()
+			createSveltosCluster(clusterNamespace, existing)
+
+			deployInGroup(clusterNamespace, existing)
+			deployInGroup(clusterNamespace, deleted)
+			groupName := groupsOf(clusterNamespace)[0].Name
+
+			removeStaleMembers(groupName)
+
+			Expect(memberNames(clusterNamespace)).To(ConsistOf(existing))
+			_, err := getGroupDeployment(groupName)
+			Expect(err).To(BeNil())
+		})
+
+		It("the Deployment is removed with the last cluster of the group", func() {
+			controllers.SetAgentClustersPerInstance(3)
+
+			clusterNamespace := createClusterNamespace()
+			deleted1, deleted2 := randomString(), randomString()
+
+			deployInGroup(clusterNamespace, deleted1)
+			deployInGroup(clusterNamespace, deleted2)
+			groupName := groupsOf(clusterNamespace)[0].Name
+
+			removeStaleMembers(groupName)
+
+			Expect(groupsOf(clusterNamespace)).To(BeEmpty())
+			Eventually(func() bool {
+				_, err := getGroupDeployment(groupName)
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
+
+		It("the cluster stays in the group until its ResourceSummaries are gone", func() {
+			controllers.SetAgentClustersPerInstance(3)
+
+			clusterNamespace := createClusterNamespace()
+			deleted := randomString()
+
+			deployInGroup(clusterNamespace, deleted)
+			groupName := groupsOf(clusterNamespace)[0].Name
+			resourceSummary := createResourceSummary(clusterNamespace, deleted)
+
+			// The ResourceSummary is deleted, and the cluster is not removed yet: the
+			// drift-detection-manager serving the group is the one removing its finalizer.
+			removeStaleMembers(groupName)
+			Expect(memberNames(clusterNamespace)).To(ConsistOf(deleted))
+
+			Eventually(func() bool {
+				err := testEnv.Get(context.TODO(),
+					types.NamespacedName{Namespace: resourceSummary.Namespace, Name: resourceSummary.Name},
+					&libsveltosv1beta1.ResourceSummary{})
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			removeStaleMembers(groupName)
+			Expect(groupsOf(clusterNamespace)).To(BeEmpty())
+		})
 	})
 })

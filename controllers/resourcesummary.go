@@ -115,18 +115,10 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	logger = logger.WithValues("cluster", fmt.Sprintf("%s:%s/%s", clusterType, clusterNamespace, clusterName))
 	logger.V(logs.LogDebug).Info("deploy drift detection manager: do not send updates mode")
 
-	// Attempt to retrieve configuration overrides specific to this cluster.
-	// If no cluster-specific overrides are found (patches == nil), fall back
-	// to checking for globally configured overrides.
-	patches, err := getPerClusterDriftDetectionManagerPatches(ctx, c, clusterNamespace, clusterName,
-		clusterType, logger)
+	patches, err := getDriftDetectionManagerPatches(ctx, c, clusterNamespace, clusterName, clusterType,
+		startInMgmtCluster && !isPullMode, logger)
 	if err != nil {
 		return err
-	} else if patches == nil {
-		patches, err = getGlobalDriftDetectionManagerPatches(ctx, c, logger)
-		if err != nil {
-			return err
-		}
 	}
 
 	watchNamespaces, err := getAgentWatchNamespaces(ctx, c, clusterNamespace, clusterName,
@@ -145,7 +137,15 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 	// Deploy DriftDetectionManager
 	if startInMgmtCluster && !isPullMode {
 		restConfig := getManagementClusterConfig()
-		return deployDriftDetectionManagerInManagementCluster(ctx, restConfig, clusterNamespace, clusterName,
+		if isDriftDetectionGroupingEnabled() {
+			shardKey, err := getClusterShardKey(ctx, c, clusterNamespace, clusterName, clusterType)
+			if err != nil {
+				return err
+			}
+			return deployDriftDetectionManagerInGroup(ctx, c, restConfig, clusterNamespace, clusterName,
+				"do-not-send-updates", clusterType, shardKey, watchNamespaces, patches, logger)
+		}
+		return deployDriftDetectionManagerOfCluster(ctx, c, restConfig, clusterNamespace, clusterName,
 			"do-not-send-updates", clusterType, patches, watchNamespaces, logger)
 	}
 
@@ -157,6 +157,48 @@ func deployDriftDetectionManagerInCluster(ctx context.Context, c client.Client,
 
 	return deployDriftDetectionManagerInManagedCluster(ctx, clusterNamespace, clusterName,
 		applicant, featureID, "do-not-send-updates", clusterType, patches, watchNamespaces, logger)
+}
+
+// getDriftDetectionManagerPatches returns the patches to apply to the drift-detection-manager of
+// the cluster: the ones configured for the cluster, falling back to the global ones. When
+// drift-detection-manager serves a group of clusters (grouped), only the global ones apply.
+func getDriftDetectionManagerPatches(ctx context.Context, c client.Client,
+	clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType, inMgmtCluster bool,
+	logger logr.Logger) ([]libsveltosv1beta1.Patch, error) {
+
+	// Attempt to retrieve configuration overrides specific to this cluster.
+	// If no cluster-specific overrides are found (patches == nil), fall back
+	// to checking for globally configured overrides.
+	patches, err := getPerClusterDriftDetectionManagerPatches(ctx, c, clusterNamespace, clusterName,
+		clusterType, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	if patches != nil && inMgmtCluster && isDriftDetectionGroupingEnabled() {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf(
+			"%s is ignored: drift-detection-manager serves a group of clusters, only global patches apply",
+			driftDetectionOverrideAnnotation))
+		patches = nil
+	}
+
+	if patches == nil {
+		return getGlobalDriftDetectionManagerPatches(ctx, c, logger)
+	}
+
+	return patches, nil
+}
+
+// getClusterShardKey returns the shard the cluster belongs to ("" if it is not sharded).
+func getClusterShardKey(ctx context.Context, c client.Client, clusterNamespace, clusterName string,
+	clusterType libsveltosv1beta1.ClusterType) (string, error) {
+
+	cluster, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, clusterName, clusterType)
+	if err != nil {
+		return "", err
+	}
+
+	return cluster.GetAnnotations()[libsveltosv1beta1.ShardAnnotation], nil
 }
 
 // getAgentWatchNamespaces reads agentWatchNamespacesAnnotation off the Cluster/SveltosCluster
@@ -297,8 +339,8 @@ func deployResourceSummaryCRD(ctx context.Context, remoteRestConfig *rest.Config
 func prepareDriftDetectionManagerYAML(driftDetectionManagerYAML, clusterNamespace, clusterName, mode string,
 	clusterType libsveltosv1beta1.ClusterType, watchNamespaces []string) string {
 
-	if mode != "do-not-send-updates" {
-		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, "do-not-send-updates", "send-updates")
+	if mode != doNotSendUpdatesMode {
+		driftDetectionManagerYAML = strings.ReplaceAll(driftDetectionManagerYAML, doNotSendUpdatesMode, "send-updates")
 	}
 
 	driftDetectionManagerYAML =

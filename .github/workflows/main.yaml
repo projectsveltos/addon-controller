@@ -145,3 +145,22 @@ jobs:
       run: make create-cluster-infra fv-namespace
       env:
         FV: true
+  FV_AGENTLESS_GROUPING:
+    # Post-merge only: the job needs the license in SVELTOS_FV_LICENSE, and environment secrets
+    # are never released to pull_request runs from a fork, so on a PR it would just fail.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    # Required so the SVELTOS_FV_LICENSE environment secret (below) is injected into this job.
+    environment: SVELTOS_FV_LICENSE
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: 1.27.3
+    - name: fv-agentless-grouping
+      run: make create-cluster-agentless-grouping fv-agentless-grouping
+      env:
+        FV: true
+        SVELTOS_FV_LICENSE: ${{ secrets.SVELTOS_FV_LICENSE }}

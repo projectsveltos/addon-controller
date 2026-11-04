@@ -256,6 +256,13 @@ var (
 	GetGlobalDriftDetectionManagerPatches            = getGlobalDriftDetectionManagerPatches
 	GetAgentWatchNamespaces                          = getAgentWatchNamespaces
 	PrepareDriftDetectionManagerYAML                 = prepareDriftDetectionManagerYAML
+	PrepareDriftDetectionManagerGroupYAML            = prepareDriftDetectionManagerGroupYAML
+	DeployDriftDetectionManagerInGroup               = deployDriftDetectionManagerInGroup
+	DeployDriftDetectionManagerOfCluster             = deployDriftDetectionManagerOfCluster
+	RemoveClusterFromDriftDetectionManagerGroups     = removeClusterFromDriftDetectionManagerGroups
+	GetDriftDetectionManagerPatches                  = getDriftDetectionManagerPatches
+	IsDriftDetectionGroupingEnabled                  = isDriftDetectionGroupingEnabled
+	IsDriftDetectionGroupDeployment                  = isDriftDetectionGroupDeployment
 )
 
 const (

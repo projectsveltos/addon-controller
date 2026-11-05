@@ -263,6 +263,7 @@ var (
 	GetDriftDetectionManagerPatches                  = getDriftDetectionManagerPatches
 	IsDriftDetectionGroupingEnabled                  = isDriftDetectionGroupingEnabled
 	IsDriftDetectionGroupDeployment                  = isDriftDetectionGroupDeployment
+	RemoveStaleGroupMembers                          = removeStaleGroupMembers
 )
 
 const (

@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -31,7 +32,9 @@ import (
 	driftdetection "github.com/projectsveltos/addon-controller/pkg/drift-detection"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	"github.com/projectsveltos/libsveltos/lib/agentgroup"
+	"github.com/projectsveltos/libsveltos/lib/clusterproxy"
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
+	"github.com/projectsveltos/libsveltos/lib/sveltos_upgrade"
 )
 
 const (
@@ -312,4 +315,77 @@ func upgradeDriftDetectionGroupDeployment(ctx context.Context, restConfig *rest.
 
 	logger.V(logs.LogInfo).Info(fmt.Sprintf("group %s has no ConfigMap anymore: removing orphan Deployment", deployment.Name))
 	return c.Delete(ctx, deployment)
+}
+
+// removeStaleGroupMembers removes from the group served by the Deployment the clusters that do not
+// exist anymore. It is the equivalent, for a group, of what removeStaleDriftDetectionResources
+// does for the Deployment of a single cluster. The Deployment itself is deleted only when the last
+// member leaves the group. A failure leaves the cluster in the group: it is retried at the next run.
+func removeStaleGroupMembers(ctx context.Context, c client.Client, restConfig *rest.Config,
+	deployment *appsv1.Deployment, logger logr.Logger) {
+
+	clusterNamespace := deployment.GetLabels()[agentgroup.ClusterNamespaceLabel]
+	groups, err := agentgroup.ListGroups(ctx, c, getSveltosNamespace(), driftDetectionComponent, clusterNamespace)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to list drift-detection-manager groups: %v", err))
+		return
+	}
+
+	for i := range groups {
+		if groups[i].Name != deployment.Name {
+			continue
+		}
+		for _, member := range groups[i].Members {
+			if !isGroupMemberStale(ctx, c, groups[i].ClusterNamespace, member, logger) {
+				continue
+			}
+			removeStaleGroupMember(ctx, c, restConfig, groups[i].ClusterNamespace, member, logger)
+		}
+	}
+}
+
+// isGroupMemberStale returns true only when the cluster is known not to exist. Any other error
+// (cluster API not installed, API server unreachable) keeps the cluster in the group.
+func isGroupMemberStale(ctx context.Context, c client.Client, clusterNamespace string,
+	member agentgroup.Member, logger logr.Logger) bool {
+
+	_, err := clusterproxy.GetCluster(ctx, c, clusterNamespace, member.Name, member.ClusterType)
+	if err == nil {
+		return false
+	}
+	if apierrors.IsNotFound(err) {
+		return true
+	}
+	if !meta.IsNoMatchError(err) {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get cluster %s:%s/%s: %v",
+			member.ClusterType, clusterNamespace, member.Name, err))
+	}
+	return false
+}
+
+// removeStaleGroupMember cleans up after a cluster that does not exist anymore. The order matters:
+// the ResourceSummaries are deleted while the cluster is still in the group, because the
+// drift-detection-manager serving the group is the one removing their finalizer. Only when they
+// are gone, the cluster leaves the group.
+func removeStaleGroupMember(ctx context.Context, c client.Client, restConfig *rest.Config, clusterNamespace string,
+	member agentgroup.Member, logger logr.Logger) {
+
+	err := removeStaleResourceSummary(ctx, clusterNamespace, member.Name, member.ClusterType, logger)
+	if err != nil {
+		return
+	}
+
+	logger.V(logs.LogInfo).Info(fmt.Sprintf("removing stale cluster %s:%s/%s from its drift-detection-manager group",
+		member.ClusterType, clusterNamespace, member.Name))
+	err = removeClusterFromDriftDetectionManagerGroups(ctx, c, restConfig, clusterNamespace, member.Name,
+		member.ClusterType, logger)
+	if err != nil {
+		return
+	}
+
+	err = sveltos_upgrade.DeleteDriftDetectionVersion(ctx, c, getSveltosNamespace(), clusterNamespace, member.Name,
+		member.ClusterType, true, logger)
+	if err != nil {
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to delete driftDetection version configMap: %v", err))
+	}
 }

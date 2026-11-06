@@ -3876,3 +3876,183 @@ func findHelmChartSummary(clusterSummary *configv1beta1.ClusterSummary,
 
 	return nil
 }
+
+var _ = Describe("upgradeCRDs", func() {
+	const (
+		firstCRD  = "firsts"
+		secondCRD = "seconds"
+	)
+
+	var (
+		dr            dynamic.ResourceInterface
+		group         string
+		restConfigCtx context.Context
+		logger        = textlogger.NewLogger(textlogger.NewConfig())
+	)
+
+	crdName := func(plural string) string {
+		return plural + "." + group
+	}
+
+	// crdManifest returns a CRD with one string property for each of the given properties.
+	// It has the given versions, the last one is the storage version.
+	crdManifest := func(plural string, properties []string, versions ...string) string {
+		manifest := fmt.Sprintf(`apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: %s
+spec:
+  group: %s
+  scope: Namespaced
+  names:
+    kind: %s
+    plural: %s
+  versions:
+`, crdName(plural), group, strings.ToUpper(plural[:1])+plural[1:], plural)
+		for i, version := range versions {
+			manifest += fmt.Sprintf(`  - name: %s
+    served: true
+    storage: %t
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+`, version, i == len(versions)-1)
+			for _, property := range properties {
+				manifest += fmt.Sprintf("              %s: {type: string}\n", property)
+			}
+		}
+		return manifest
+	}
+
+	chartCRD := func(fileName, manifest string) chart.CRD {
+		return chart.CRD{Name: fileName, File: &common.File{Name: fileName, Data: []byte(manifest)}}
+	}
+
+	upgradeChart := func(crds ...chart.CRD) error {
+		helmChart := &configv1beta1.HelmChart{
+			ReleaseName: randomString(), ReleaseNamespace: randomString(),
+			Options: &configv1beta1.HelmOptions{
+				UpgradeOptions: configv1beta1.HelmUpgradeOptions{UpgradeCRDs: true},
+			},
+		}
+		return controllers.UpgradeCRDs(restConfigCtx, helmChart, "", crds, logger)
+	}
+
+	// crdVersions returns the names of the versions of the CRD found in the cluster
+	crdVersions := func(plural string) []string {
+		crd, err := dr.Get(ctx, crdName(plural), metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		Expect(err).To(BeNil())
+		names := make([]string, 0, len(versions))
+		for i := range versions {
+			name, _, err := unstructured.NestedString(versions[i].(map[string]interface{}), "name")
+			Expect(err).To(BeNil())
+			names = append(names, name)
+		}
+		return names
+	}
+
+	// crdProperties returns the names of the properties of the first version of the CRD found in the cluster
+	crdProperties := func(plural string) []string {
+		crd, err := dr.Get(ctx, crdName(plural), metav1.GetOptions{})
+		Expect(err).To(BeNil())
+		versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		Expect(err).To(BeNil())
+		properties, _, err := unstructured.NestedMap(versions[0].(map[string]interface{}),
+			"schema", "openAPIV3Schema", "properties", "spec", "properties")
+		Expect(err).To(BeNil())
+		names := make([]string, 0, len(properties))
+		for name := range properties {
+			names = append(names, name)
+		}
+		return names
+	}
+
+	BeforeEach(func() {
+		dr = crdResourceInterface()
+		group = strings.ToLower(randomString()) + ".io"
+		restConfigCtx = controllers.WithRestConfig(ctx, testEnv.Config)
+	})
+
+	AfterEach(func() {
+		for _, plural := range []string{firstCRD, secondCRD} {
+			err := dr.Delete(ctx, crdName(plural), metav1.DeleteOptions{})
+			if err != nil && !apierrors.IsNotFound(err) {
+				Expect(err).To(BeNil())
+			}
+		}
+	})
+
+	It("applies the CRDs of the chart", func() {
+		Expect(upgradeChart(chartCRD("crds/first.yaml", crdManifest(firstCRD, []string{"a"}, "v1")))).To(Succeed())
+		Expect(crdProperties(firstCRD)).To(ConsistOf("a"))
+
+		Expect(upgradeChart(chartCRD("crds/first.yaml", crdManifest(firstCRD, []string{"a", "b"}, "v1")))).To(Succeed())
+		Expect(crdProperties(firstCRD)).To(ConsistOf("a", "b"))
+	})
+
+	It("applies no CRD when the API server refuses any of them", func() {
+		newer := []chart.CRD{
+			chartCRD("crds/first.yaml", crdManifest(firstCRD, []string{"a", "b"}, "v1")),
+			chartCRD("crds/second.yaml", crdManifest(secondCRD, []string{"a"}, "v1", "v2")),
+		}
+		Expect(upgradeChart(newer...)).To(Succeed())
+
+		By("Upgrading with the CRDs of an older chart: second can not drop v2, it is still a stored version")
+		older := []chart.CRD{
+			chartCRD("crds/first.yaml", crdManifest(firstCRD, []string{"a"}, "v1")),
+			chartCRD("crds/second.yaml", crdManifest(secondCRD, []string{"a"}, "v1")),
+		}
+		err := upgradeChart(older...)
+		Expect(err).ToNot(BeNil())
+		Expect(err.Error()).To(ContainSubstring(crdName(secondCRD)))
+
+		By("Verifying first has not been downgraded")
+		Expect(crdProperties(firstCRD)).To(ConsistOf("a", "b"))
+		Expect(crdVersions(secondCRD)).To(ConsistOf("v1", "v2"))
+	})
+})
+
+var _ = Describe("findRemovedCRDVersions", func() {
+	newCRD := func(versions ...string) *unstructured.Unstructured {
+		// each entry is "<name>" or "<name>:unserved"
+		const nameKey = "name"
+		crd := &unstructured.Unstructured{Object: map[string]interface{}{}}
+		var list []interface{}
+		for _, version := range versions {
+			name, served := strings.TrimSuffix(version, ":unserved"), !strings.HasSuffix(version, ":unserved")
+			list = append(list, map[string]interface{}{nameKey: name, "served": served})
+		}
+		Expect(unstructured.SetNestedSlice(crd.Object, list, "spec", "versions")).To(Succeed())
+		return crd
+	}
+
+	It("returns nothing when the versions are unchanged or added", func() {
+		Expect(controllers.FindRemovedCRDVersions(newCRD("v1"), newCRD("v1"))).To(BeEmpty())
+		Expect(controllers.FindRemovedCRDVersions(newCRD("v1"), newCRD("v1", "v2"))).To(BeEmpty())
+	})
+
+	It("reports a version that is dropped", func() {
+		removals := controllers.FindRemovedCRDVersions(newCRD("v1", "v2"), newCRD("v1"))
+		Expect(removals).To(HaveLen(1))
+		Expect(removals[0]).To(ContainSubstring("v2"))
+		Expect(removals[0]).To(ContainSubstring("removed"))
+	})
+
+	It("reports a version that is no longer served", func() {
+		removals := controllers.FindRemovedCRDVersions(newCRD("v1", "v2"), newCRD("v1", "v2:unserved"))
+		Expect(removals).To(HaveLen(1))
+		Expect(removals[0]).To(ContainSubstring("v2"))
+		Expect(removals[0]).To(ContainSubstring("no longer be served"))
+	})
+
+	It("does not report a version that was not served before", func() {
+		Expect(controllers.FindRemovedCRDVersions(newCRD("v1", "v2:unserved"), newCRD("v1", "v2:unserved"))).To(BeEmpty())
+		Expect(controllers.FindRemovedCRDVersions(newCRD("v1", "v2:unserved"), newCRD("v1", "v2"))).To(BeEmpty())
+	})
+})

@@ -329,13 +329,15 @@ var (
 )
 
 var (
-	IsCRDEstablished      = isCRDEstablished
-	GetCRDObjects         = getCRDObjects
-	GetExistingCRDsPolicy = getExistingCRDsPolicy
-	InstallMissingCRDs    = installMissingCRDs
-	InstallChartCRDs      = installChartCRDs
-	WithRestConfig        = withRestConfig
-	GetHelmUpgradeClient  = getHelmUpgradeClient
+	IsCRDEstablished       = isCRDEstablished
+	GetCRDObjects          = getCRDObjects
+	GetExistingCRDsPolicy  = getExistingCRDsPolicy
+	InstallMissingCRDs     = installMissingCRDs
+	InstallChartCRDs       = installChartCRDs
+	UpgradeCRDs            = upgradeCRDs
+	FindRemovedCRDVersions = findRemovedCRDVersions
+	WithRestConfig         = withRestConfig
+	GetHelmUpgradeClient   = getHelmUpgradeClient
 )
 
 type (

@@ -2512,10 +2512,27 @@ func prepareChartAndDependencies(
 	return chartRequested, nil
 }
 
-func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartFile *common.File,
-	logger logr.Logger) ([]string, error) {
+// getCRDsToUpgrade returns the CRDs defined in the crds/ files of the chart.
+func getCRDsToUpgrade(crds []chart.CRD, logger logr.Logger) ([]*unstructured.Unstructured, error) {
+	var chartCRDs []*unstructured.Unstructured
 
-	crds, err := deployer.GetUnstructured(chartFile.Data, logger)
+	for i := range crds {
+		objects, err := deployer.GetUnstructured(crds[i].File.Data, logger)
+		if err != nil {
+			return nil, err
+		}
+		chartCRDs = append(chartCRDs, objects...)
+	}
+
+	return chartCRDs, nil
+}
+
+// applyCRD applies the CRD with server side apply. With dryRun set, nothing is persisted and the
+// CRD as it would be stored is returned.
+func applyCRD(ctx context.Context, dr dynamic.ResourceInterface, crd *unstructured.Unstructured,
+	dryRun bool) (*unstructured.Unstructured, error) {
+
+	crdData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, crd)
 	if err != nil {
 		return nil, err
 	}
@@ -2525,17 +2542,21 @@ func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartF
 		FieldManager: applyPatchFieldManager,
 		Force:        &forceConflict,
 	}
+	if dryRun {
+		options.DryRun = []string{metav1.DryRunAll}
+	}
+
+	return dr.Patch(ctx, crd.GetName(), types.ApplyPatchType, crdData, options)
+}
+
+// applyCRDs applies the CRDs and returns the names of the ones applied. It stops at the first error.
+func applyCRDs(ctx context.Context, dr dynamic.ResourceInterface,
+	crds []*unstructured.Unstructured) ([]string, error) {
 
 	var appliedCRDs []string
 
 	for i := range crds {
-		crdData, err := runtime.Encode(unstructured.UnstructuredJSONScheme, crds[i])
-		if err != nil {
-			return appliedCRDs, err
-		}
-
-		_, err = dr.Patch(ctx, crds[i].GetName(), types.ApplyPatchType, crdData, options)
-		if err != nil {
+		if _, err := applyCRD(ctx, dr, crds[i], false); err != nil {
 			return appliedCRDs, err
 		}
 
@@ -2543,6 +2564,85 @@ func upgradeCRDsInFile(ctx context.Context, dr dynamic.ResourceInterface, chartF
 	}
 
 	return appliedCRDs, nil
+}
+
+// preflightCRDs applies all the CRDs with a server side dry run before any of them is really applied.
+// If the API server refuses any of them, an error is returned and no CRD has been modified, so the
+// cluster is never left with only some of the CRDs of the chart upgraded.
+// For each CRD that would drop or stop serving a version, a message is logged. Removed schema fields
+// are not detected.
+func preflightCRDs(ctx context.Context, dr dynamic.ResourceInterface, crds []*unstructured.Unstructured,
+	logger logr.Logger) error {
+
+	for _, crd := range crds {
+		proposed, err := applyCRD(ctx, dr, crd, true)
+		if err != nil {
+			return fmt.Errorf("CRD %s can not be applied. No CRD has been modified: %w", crd.GetName(), err)
+		}
+
+		existing, err := dr.Get(ctx, crd.GetName(), metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		for _, removal := range findRemovedCRDVersions(existing, proposed) {
+			logger.V(logs.LogInfo).Info(fmt.Sprintf("CRD %s: %s", crd.GetName(), removal))
+		}
+	}
+
+	return nil
+}
+
+type crdVersion struct {
+	name   string
+	served bool
+}
+
+// getCRDVersions returns the versions of a CRD in the order they are defined.
+func getCRDVersions(crd *unstructured.Unstructured) []crdVersion {
+	versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	if err != nil {
+		return nil
+	}
+
+	result := make([]crdVersion, 0, len(versions))
+	for i := range versions {
+		version, ok := versions[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _, _ := unstructured.NestedString(version, "name")
+		served, _, _ := unstructured.NestedBool(version, "served")
+		result = append(result, crdVersion{name: name, served: served})
+	}
+
+	return result
+}
+
+// findRemovedCRDVersions describes the versions of the existing CRD that the proposed CRD drops
+// or stops serving.
+func findRemovedCRDVersions(existing, proposed *unstructured.Unstructured) []string {
+	proposedVersions := make(map[string]crdVersion)
+	for _, version := range getCRDVersions(proposed) {
+		proposedVersions[version.name] = version
+	}
+
+	var removals []string
+	for _, version := range getCRDVersions(existing) {
+		newVersion, found := proposedVersions[version.name]
+		if !found {
+			removals = append(removals, fmt.Sprintf("version %s would be removed", version.name))
+			continue
+		}
+		if version.served && !newVersion.served {
+			removals = append(removals, fmt.Sprintf("version %s would no longer be served", version.name))
+		}
+	}
+
+	return removals
 }
 
 // isCRDEstablished returns true when the CRD has both Established and NamesAccepted conditions set to True.
@@ -2621,14 +2721,18 @@ func upgradeCRDs(ctx context.Context, requestedChart *configv1beta1.HelmChart, k
 		return err
 	}
 
-	var appliedCRDs []string
+	chartCRDs, err := getCRDsToUpgrade(crds, logger)
+	if err != nil {
+		return err
+	}
 
-	for _, obj := range crds {
-		names, err := upgradeCRDsInFile(ctx, dr, obj.File, logger)
-		if err != nil {
-			return err
-		}
-		appliedCRDs = append(appliedCRDs, names...)
+	if err := preflightCRDs(ctx, dr, chartCRDs, logger); err != nil {
+		return err
+	}
+
+	appliedCRDs, err := applyCRDs(ctx, dr, chartCRDs)
+	if err != nil {
+		return err
 	}
 
 	if len(appliedCRDs) > 0 {
@@ -2795,19 +2899,7 @@ func hasManifestExtension(fileName string) bool {
 func wouldChangeCRD(ctx context.Context, dr dynamic.ResourceInterface,
 	existing, chartCRD *unstructured.Unstructured) (bool, error) {
 
-	data, err := runtime.Encode(unstructured.UnstructuredJSONScheme, chartCRD)
-	if err != nil {
-		return false, err
-	}
-
-	forceConflict := true
-	options := metav1.PatchOptions{
-		FieldManager: applyPatchFieldManager,
-		Force:        &forceConflict,
-		DryRun:       []string{metav1.DryRunAll},
-	}
-
-	result, err := dr.Patch(ctx, chartCRD.GetName(), types.ApplyPatchType, data, options)
+	result, err := applyCRD(ctx, dr, chartCRD, true)
 	if err != nil {
 		// The API server refuses the change (for instance a change to an immutable field)
 		if apierrors.IsInvalid(err) {

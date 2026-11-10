@@ -243,6 +243,21 @@ func clusterSummaryMetricLabels(clusterSummary *configv1beta1.ClusterSummary,
 	return labels
 }
 
+// clusterMetrics are the projectsveltos metrics labeled by cluster and feature but not by profile.
+var clusterMetrics = []string{
+	"projectsveltos_reconcile_duration_seconds",
+	"projectsveltos_reconcile_operations_total",
+}
+
+// clusterMetricLabels returns the labels identifying a CAPI cluster in the projectsveltos metrics.
+func clusterMetricLabels(clusterNamespace, clusterName string) map[string]string {
+	return map[string]string{
+		"cluster_type":      string(libsveltosv1beta1.ClusterTypeCapi),
+		"cluster_namespace": clusterNamespace,
+		"cluster_name":      clusterName,
+	}
+}
+
 // hasMetricSeries returns true if the metric called name has a series, in the controller-runtime
 // registry, whose labels include all of labels.
 func hasMetricSeries(name string, labels map[string]string) bool {

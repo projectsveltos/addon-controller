@@ -1348,6 +1348,177 @@ var _ = Describe("ClustersummaryController", func() {
 		}
 	})
 
+	It("reconcileDelete removes the metrics of a deleted cluster", func() {
+		// No cluster.
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		otherClusterName := randomString()
+		for _, name := range []string{cluster.Name, otherClusterName} {
+			for _, featureID := range []libsveltosv1beta1.FeatureID{
+				libsveltosv1beta1.FeatureHelm,
+				libsveltosv1beta1.FeatureResources,
+				libsveltosv1beta1.FeatureKustomize,
+			} {
+				controllers.ProgramDeployMetrics(time.Second, cluster.Namespace, name, string(featureID),
+					libsveltosv1beta1.ClusterTypeCapi, logger)
+			}
+		}
+
+		clusterLabels := clusterMetricLabels(cluster.Namespace, cluster.Name)
+		otherClusterLabels := clusterMetricLabels(cluster.Namespace, otherClusterName)
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeTrue(), name)
+			Expect(hasMetricSeries(name, otherClusterLabels)).To(BeTrue(), name)
+		}
+
+		result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, logger)
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeFalse(), name)
+			Expect(hasMetricSeries(name, otherClusterLabels)).To(BeTrue(), name)
+		}
+	})
+
+	It("reconcileDelete waits for running deployer requests before removing the metrics of a deleted cluster", func() {
+		// No cluster.
+		initObjects := []client.Object{
+			clusterProfile,
+			clusterSummary,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		dep.StoreInProgress(cluster.Namespace, cluster.Name, clusterSummary.Name, string(libsveltosv1beta1.FeatureHelm),
+			libsveltosv1beta1.ClusterTypeCapi, false)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+		clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+			Client:         c,
+			Logger:         logger,
+			ClusterSummary: clusterSummary,
+			ControllerName: testControllerNameSummary,
+		})
+		Expect(err).To(BeNil())
+
+		controllers.ProgramDeployMetrics(time.Second, cluster.Namespace, cluster.Name,
+			string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi, logger)
+
+		result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, logger)
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).ToNot(BeZero())
+
+		// The deploy finishes and records its metrics.
+		controllers.ProgramDeployMetrics(time.Second, cluster.Namespace, cluster.Name,
+			string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi, logger)
+		clusterSummaryReconciler.Deployer = fakedeployer.GetClient(context.TODO(), logger, c)
+
+		result, err = controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, logger)
+		Expect(err).To(BeNil())
+		Expect(result.RequeueAfter).To(BeZero())
+
+		clusterLabels := clusterMetricLabels(cluster.Namespace, cluster.Name)
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeFalse(), name)
+		}
+	})
+
+	It("reconcileDelete removes the metrics of a cluster once its last ClusterSummary is gone", func() {
+		// The cluster stays: both profiles stop matching it.
+		otherClusterProfile := &configv1beta1.ClusterProfile{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterProfileNamePrefix + randomString()},
+		}
+		otherClusterSummary := getClusterSummaryWithFinalizer(configv1beta1.ClusterProfileKind, otherClusterProfile,
+			cluster)
+
+		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
+		now := metav1.NewTime(time.Now())
+		clusterSummary.DeletionTimestamp = &now
+
+		initObjects := []client.Object{
+			clusterProfile,
+			otherClusterProfile,
+			clusterSummary,
+			otherClusterSummary,
+			cluster,
+		}
+
+		c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(initObjects...).WithObjects(initObjects...).Build()
+
+		dep := fakedeployer.GetClient(context.TODO(), textlogger.NewLogger(textlogger.NewConfig()), c)
+		clusterSummaryReconciler := getClusterSummaryReconciler(c, dep)
+
+		logger := textlogger.NewLogger(textlogger.NewConfig())
+
+		// reconcileDelete undeploys nothing: every feature is already removed.
+		reconcileDelete := func(cs *configv1beta1.ClusterSummary) {
+			noResourceSummary := false
+			for _, featureID := range []libsveltosv1beta1.FeatureID{
+				libsveltosv1beta1.FeatureHelm,
+				libsveltosv1beta1.FeatureResources,
+				libsveltosv1beta1.FeatureKustomize,
+			} {
+				cs.Status.FeatureSummaries = append(cs.Status.FeatureSummaries, configv1beta1.FeatureSummary{
+					FeatureID:               featureID,
+					Status:                  libsveltosv1beta1.FeatureStatusRemoved,
+					ResourceSummaryDeployed: &noResourceSummary,
+				})
+			}
+
+			clusterSummaryScope, err := scope.NewClusterSummaryScope(&scope.ClusterSummaryScopeParams{
+				Client:         c,
+				Logger:         logger,
+				ClusterSummary: cs,
+				ControllerName: testControllerNameSummary,
+			})
+			Expect(err).To(BeNil())
+
+			result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope,
+				logger)
+			Expect(err).To(BeNil())
+			Expect(result.RequeueAfter).To(BeZero())
+		}
+
+		controllers.ProgramDeployMetrics(time.Second, cluster.Namespace, cluster.Name,
+			string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi, logger)
+		clusterLabels := clusterMetricLabels(cluster.Namespace, cluster.Name)
+
+		// otherClusterSummary still updates them.
+		reconcileDelete(clusterSummary)
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeTrue(), name)
+		}
+
+		Expect(c.Delete(context.TODO(), otherClusterSummary)).To(Succeed())
+		Expect(c.Get(context.TODO(), types.NamespacedName{Namespace: otherClusterSummary.Namespace,
+			Name: otherClusterSummary.Name}, otherClusterSummary)).To(Succeed())
+
+		reconcileDelete(otherClusterSummary)
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeFalse(), name)
+		}
+	})
+
 	It("reconcileDelete requeues and does not remove finalizer when cluster is present but not ready", func() {
 		controllerutil.AddFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer)
 		now := metav1.NewTime(time.Now())
@@ -1423,16 +1594,26 @@ var _ = Describe("ClustersummaryController", func() {
 		controllers.UpdateFeatureStatus(clusterSummaryReconciler, clusterSummaryScope, libsveltosv1beta1.FeatureHelm,
 			&failed, nil, fmt.Errorf("failed to install chart"), logger)
 
+		controllers.ProgramDeployMetrics(time.Second, cluster.Namespace, cluster.Name,
+			string(libsveltosv1beta1.FeatureHelm), libsveltosv1beta1.ClusterTypeCapi, logger)
+
 		clusterSummaryLabels := clusterSummaryMetricLabels(clusterSummary, configv1beta1.ClusterProfileKind, "",
 			clusterProfile.Name)
+		clusterLabels := clusterMetricLabels(cluster.Namespace, cluster.Name)
 		Expect(hasMetricSeries("projectsveltos_reconcile_consecutive_failures", clusterSummaryLabels)).To(BeTrue())
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeTrue(), name)
+		}
 
 		result, err := controllers.ReconcileDelete(clusterSummaryReconciler, context.TODO(), clusterSummaryScope, logger)
 		Expect(err).To(BeNil())
 		Expect(result.RequeueAfter).ToNot(BeZero())
 
-		// The ClusterSummary still exists, so its metrics keep reporting the failure.
+		// The ClusterSummary and its cluster still exist, so their metrics keep reporting.
 		Expect(hasMetricSeries("projectsveltos_reconcile_consecutive_failures", clusterSummaryLabels)).To(BeTrue())
+		for _, name := range clusterMetrics {
+			Expect(hasMetricSeries(name, clusterLabels)).To(BeTrue(), name)
+		}
 	})
 
 	It("areDependenciesDeployed returns true when all dependencies are deployed", func() {

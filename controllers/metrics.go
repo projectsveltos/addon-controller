@@ -422,7 +422,7 @@ func trackLastSuccess(clusterNamespace, clusterName, featureID string, clusterTy
 // reconcileConsecutiveFailuresGauge and reconcileLastSuccessTimestampGauge recorded for clusterSummary. Call it
 // once the ClusterSummary is gone: nothing updates those series anymore, so the gauges would keep reporting their
 // last value. reconcileDurationHistogram and reconciliationCounter are not labeled by profile: their series are
-// shared by every ClusterSummary of the cluster, so they are left alone.
+// shared by every ClusterSummary of the cluster, so clearClusterMetrics removes them once the last one is gone.
 func clearClusterSummaryMetrics(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
 	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
 
@@ -450,4 +450,26 @@ func clearClusterSummaryMetrics(clusterSummary *configv1beta1.ClusterSummary, lo
 
 	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared metric series for %s %s/%s",
 		clusterSummary.Spec.ClusterType, clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName))
+}
+
+// clearClusterMetrics removes the series of reconcileDurationHistogram and reconciliationCounter recorded for a
+// cluster. Call it once no ClusterSummary of the cluster is left: nothing updates those series anymore, and
+// keeping them for every deleted cluster grows memory and scraped series without bound as clusters come and go.
+func clearClusterMetrics(clusterNamespace, clusterName string, clusterType libsveltosv1beta1.ClusterType,
+	logger logr.Logger) {
+
+	for _, featureID := range featureIDs {
+		labels := prometheus.Labels{
+			metricClusterTypeLabel:      string(clusterType),
+			metricClusterNamespaceLabel: clusterNamespace,
+			metricClusterNameLabel:      clusterName,
+			metricFeatureLabel:          string(featureID),
+		}
+
+		reconcileDurationHistogram.Delete(labels)
+		reconciliationCounter.Delete(labels)
+	}
+
+	logger.V(logs.LogVerbose).Info(fmt.Sprintf("Cleared cluster metric series for %s %s/%s",
+		clusterType, clusterNamespace, clusterName))
 }

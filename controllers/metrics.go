@@ -426,11 +426,7 @@ func trackLastSuccess(clusterNamespace, clusterName, featureID string, clusterTy
 func clearClusterSummaryMetrics(clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
 	profileKind, profileNamespace, profileName := getProfileLabels(clusterSummary, logger)
 
-	for _, featureID := range []libsveltosv1beta1.FeatureID{
-		libsveltosv1beta1.FeatureHelm,
-		libsveltosv1beta1.FeatureResources,
-		libsveltosv1beta1.FeatureKustomize,
-	} {
+	for _, featureID := range featureIDs {
 		labels := prometheus.Labels{
 			metricClusterTypeLabel:      string(clusterSummary.Spec.ClusterType),
 			metricClusterNamespaceLabel: clusterSummary.Spec.ClusterNamespace,

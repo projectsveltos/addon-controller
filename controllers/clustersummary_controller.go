@@ -1953,14 +1953,10 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 
 // Removes any cleanup job
 func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *configv1beta1.ClusterSummary) {
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureHelm), clusterSummary.Spec.ClusterType, true)
-
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureKustomize), clusterSummary.Spec.ClusterType, true)
-
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
+	for _, featureID := range featureIDs {
+		r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
+			string(featureID), clusterSummary.Spec.ClusterType, true)
+	}
 }
 
 // resetFeatureStatusToProvisioning reset status from Provisioned to Provisioning

@@ -28,24 +28,21 @@ import (
 
 var (
 	featuresHandlers map[libsveltosv1beta1.FeatureID]feature
+
+	// featureIDs are the features this controller registers with the deployer.
+	featureIDs = []libsveltosv1beta1.FeatureID{
+		libsveltosv1beta1.FeatureResources,
+		libsveltosv1beta1.FeatureHelm,
+		libsveltosv1beta1.FeatureKustomize,
+	}
 )
 
 func RegisterFeatures(d deployer.DeployerInterface, setupLog logr.Logger) {
-	err := d.RegisterFeatureID(string(libsveltosv1beta1.FeatureResources))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureResources")
-		os.Exit(1)
-	}
-	err = d.RegisterFeatureID(string(libsveltosv1beta1.FeatureHelm))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureHelm")
-		os.Exit(1)
-	}
-
-	err = d.RegisterFeatureID(string(libsveltosv1beta1.FeatureKustomize))
-	if err != nil {
-		setupLog.Error(err, "failed to register feature FeatureKustomize")
-		os.Exit(1)
+	for _, id := range featureIDs {
+		if err := d.RegisterFeatureID(string(id)); err != nil {
+			setupLog.Error(err, "failed to register feature", "feature", id)
+			os.Exit(1)
+		}
 	}
 
 	creatFeatureHandlerMaps()

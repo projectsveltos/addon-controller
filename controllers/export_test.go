@@ -319,6 +319,7 @@ var (
 var (
 	TrackDrifts           = trackDrifts
 	TrackMatchingClusters = trackMatchingClusters
+	ProgramDeployMetrics  = programDeployMetrics
 )
 
 var (

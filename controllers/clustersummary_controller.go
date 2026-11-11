@@ -371,6 +371,11 @@ func (r *ClusterSummaryReconciler) reconcileDelete(
 		}
 	}
 
+	if err := r.clearClusterMetricsIfLast(ctx, clusterSummaryScope.ClusterSummary, logger); err != nil {
+		logger.V(logs.LogInfo).Error(err, "failed to clear cluster metrics")
+		return reconcile.Result{RequeueAfter: deleteRequeueAfter}, nil
+	}
+
 	// Cluster is not present anymore or cleanup succeeded
 	err = r.removeFinalizer(clusterSummaryScope, logger)
 	if err != nil {
@@ -1951,16 +1956,48 @@ func (r *ClusterSummaryReconciler) startWatcherForTemplateResourceRefs(ctx conte
 	return nil
 }
 
-// Removes any cleanup job
-func (r *ClusterSummaryReconciler) cleanupQueuedCleanOperations(clusterSummary *configv1beta1.ClusterSummary) {
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureHelm), clusterSummary.Spec.ClusterType, true)
+// cancelQueuedOperations removes the queued deploy and cleanup requests of cs and returns true if one is still
+// running. A running request cannot be canceled, and records metrics for the cluster when it finishes.
+func (r *ClusterSummaryReconciler) cancelQueuedOperations(cs *configv1beta1.ClusterSummary) bool {
+	inProgress := false
+	for _, featureID := range featureIDs {
+		for _, cleanup := range []bool{false, true} {
+			r.Deployer.CleanupEntries(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Name, string(featureID),
+				cs.Spec.ClusterType, cleanup)
+			inProgress = inProgress || r.Deployer.IsInProgress(cs.Spec.ClusterNamespace, cs.Spec.ClusterName, cs.Name,
+				string(featureID), cs.Spec.ClusterType, cleanup)
+		}
+	}
+	return inProgress
+}
 
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureKustomize), clusterSummary.Spec.ClusterType, true)
+// clearClusterMetricsIfLast clears the cluster metrics once no other ClusterSummary of the cluster is left to update
+// them. ClusterSummaries being deleted do not count: each one gets here once its own requests are done, so the last
+// one to finish leaves nothing behind.
+func (r *ClusterSummaryReconciler) clearClusterMetricsIfLast(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) error {
 
-	r.Deployer.CleanupEntries(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Name,
-		string(libsveltosv1beta1.FeatureResources), clusterSummary.Spec.ClusterType, true)
+	clusterSummaries := &configv1beta1.ClusterSummaryList{}
+	if err := r.List(ctx, clusterSummaries,
+		client.InNamespace(clusterSummary.Spec.ClusterNamespace),
+		client.MatchingLabels{
+			configv1beta1.ClusterNameLabel: clusterSummary.Spec.ClusterName,
+			configv1beta1.ClusterTypeLabel: string(clusterSummary.Spec.ClusterType),
+		},
+	); err != nil {
+		return err
+	}
+
+	for i := range clusterSummaries.Items {
+		other := &clusterSummaries.Items[i]
+		if other.Name != clusterSummary.Name && other.DeletionTimestamp.IsZero() {
+			return nil
+		}
+	}
+
+	clearClusterMetrics(clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName,
+		clusterSummary.Spec.ClusterType, logger)
+	return nil
 }
 
 // resetFeatureStatusToProvisioning reset status from Provisioned to Provisioning
@@ -2021,9 +2058,11 @@ func (r *ClusterSummaryReconciler) skipReconciliation(clusterSummaryScope *scope
 func (r *ClusterSummaryReconciler) handleDeletedCluster(ctx context.Context,
 	clusterSummaryScope *scope.ClusterSummaryScope, logger logr.Logger) error {
 
-	// in case cleanup operations were already queued, before removing ClusterSummary
-	// remove those
-	r.cleanupQueuedCleanOperations(clusterSummaryScope.ClusterSummary)
+	// Requests still running would record metrics for the cluster after they are cleared.
+	if r.cancelQueuedOperations(clusterSummaryScope.ClusterSummary) {
+		logger.V(logs.LogDebug).Info("deployer requests still in progress")
+		return errors.New("deployer requests still in progress")
+	}
 
 	logger.V(logs.LogDebug).Info("remove drift-detection-manager resources from management cluster")
 	cs := clusterSummaryScope.ClusterSummary

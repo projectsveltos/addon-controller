@@ -2797,6 +2797,12 @@ func installChartCRDs(ctx context.Context, requestedChart *configv1beta1.HelmCha
 
 	policy := getExistingCRDsPolicy(requestedChart.Options)
 	if policy == configv1beta1.ExistingCRDsPolicyOverwrite {
+		// Retuning false here only works because the helm install client is
+		// configured with ServerSideApply and ForceConflicts, so Helm applies each CRD with
+		// a forced server-side apply patch instead of a create: missing CRDs are created and
+		// existing ones are overwritten with the chart definition, taking ownership of any
+		// conflicting fields. If ServerSideApply is ever disabled, Helm falls back to a plain
+		// create that silently skips existing CRDs, and Overwrite would behave like Skip.
 		return false, nil
 	}
 

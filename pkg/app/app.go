@@ -117,6 +117,12 @@ const (
 	gibibytes_per_bytes = 1 << 30
 )
 
+// The init container never uses a lower rate towards the management cluster API server than this.
+const (
+	initContainerMinQPS   float32 = 100
+	initContainerMinBurst int     = 200
+)
+
 // Add RBAC for the authorized diagnostics endpoint.
 // +kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
@@ -836,22 +842,36 @@ func isInitContainer() bool {
 	return os.Getenv("IS_INITIALIZATION") == "true"
 }
 
+// getInitContainerRestConfig returns the rest config used by the init container. The init container
+// runs to completion before the manager starts and it only reads (and updates the status of)
+// ClusterSummary instances, so unlike the manager it can afford a higher rate towards the management
+// cluster API server: kube-api-qps and kube-api-burst are the rate limit it would otherwise be bound by.
+// A value configured above the init container minimums is never lowered.
+func getInitContainerRestConfig(config *rest.Config) *rest.Config {
+	initConfig := rest.CopyConfig(config)
+	initConfig.QPS = max(config.QPS, initContainerMinQPS)
+	initConfig.Burst = max(config.Burst, initContainerMinBurst)
+	return initConfig
+}
+
 func runInitContainerWork(ctx context.Context, config *rest.Config,
 	scheme *apimachineryruntime.Scheme) {
 
-	directClient, err := client.New(config, client.Options{Scheme: scheme})
+	initConfig := getInitContainerRestConfig(config)
+
+	directClient, err := client.New(initConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		return
 	}
 
-	dc, err := discovery.NewDiscoveryClientForConfig(config)
+	dc, err := discovery.NewDiscoveryClientForConfig(initConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to get discovery client")
 		os.Exit(1)
 	}
 
-	controllers.SetManagementClusterAccess(directClient, config, dc)
-	controllers.Initialization(ctx, config, scheme, shardKey,
+	controllers.SetManagementClusterAccess(controllers.NewInitCachingClient(directClient), initConfig, dc)
+	controllers.Initialization(ctx, initConfig, scheme, shardKey,
 		ctrl.Log.WithName("initialization"))
 }
 

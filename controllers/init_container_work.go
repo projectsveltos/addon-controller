@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -33,17 +34,25 @@ import (
 	logs "github.com/projectsveltos/libsveltos/lib/logsettings"
 )
 
+// maxInitWorkers is the upper bound on the number of ClusterSummary instances processed
+// concurrently by the init container. Every worker issues several calls to the management
+// cluster API server and the client is rate limited (kube-api-qps), so more workers than this
+// would mostly end up waiting on the rate limiter.
+const (
+	maxInitWorkers = 10
+)
+
 func Initialization(ctx context.Context, config *rest.Config,
 	scheme *runtime.Scheme, shardKey string, logger logr.Logger) {
 
 	logger.V(logs.LogInfo).Info("perform init work")
-	directClient, err := client.New(config, client.Options{Scheme: scheme})
+	c, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to get client")
 		return
 	}
 
-	updateHelmHashes(ctx, directClient, shardKey, logger)
+	updateHelmHashes(ctx, NewInitCachingClient(c), shardKey, logger)
 }
 
 func updateHelmHashes(ctx context.Context, directClient client.Client,
@@ -67,7 +76,7 @@ func updateHelmHashes(ctx context.Context, directClient client.Client,
 		}
 	}
 
-	for i := range clusterSummaries.Items {
+	runConcurrently(ctx, len(clusterSummaries.Items), func(i int) {
 		cs := &clusterSummaries.Items[i]
 		l := logger.WithValues("clusterSummary", fmt.Sprintf("%s/%s", cs.Namespace, cs.Name))
 		err := updateClusterSummaryHelmHashes(ctx, directClient, shardKey, cs, l)
@@ -75,6 +84,48 @@ func updateHelmHashes(ctx context.Context, directClient client.Client,
 			l.V(logs.LogInfo).Error(err, "failed to update helm and helm value hashes")
 		} else {
 			l.V(logs.LogInfo).Info("updated helm and helm value hashes")
+		}
+	})
+}
+
+// getInitWorkerCount returns the number of workers to use to process numItems instances:
+// one worker per instance, up to maxInitWorkers.
+func getInitWorkerCount(numItems int) int {
+	if numItems < maxInitWorkers {
+		return numItems
+	}
+	return maxInitWorkers
+}
+
+// runConcurrently calls process once for each index in [0, count), using up to
+// getInitWorkerCount(count) goroutines. It returns when all calls in progress are done.
+// If ctx is canceled, indexes not yet handed to a worker are skipped.
+func runConcurrently(ctx context.Context, count int, process func(index int)) {
+	indexes := make(chan int)
+
+	var wg sync.WaitGroup
+	for w := 0; w < getInitWorkerCount(count); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range indexes {
+				process(i)
+			}
+		}()
+	}
+
+	sendIndexes(ctx, count, indexes)
+	close(indexes)
+	wg.Wait()
+}
+
+// sendIndexes sends [0, count) to indexes, stopping early if ctx is canceled.
+func sendIndexes(ctx context.Context, count int, indexes chan<- int) {
+	for i := 0; i < count; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		case indexes <- i:
 		}
 	}
 }
@@ -86,7 +137,13 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 		return nil
 	}
 
-	isMatch, err := isClusterAShardMatch(ctx, directClient, shardKey, clusterSummary, logger)
+	// The management cluster objects read to compute the hashes (the Cluster, the ConfigMaps and
+	// Secrets referenced by the charts, the templateResourceRefs resources) are fetched once per
+	// ClusterSummary: they are memoized in hashCtx. ctx is used instead for the ClusterSummary itself,
+	// which must always be read fresh, as the update below can conflict and be retried.
+	hashCtx := withInitPassCache(ctx)
+
+	isMatch, err := isClusterAShardMatch(hashCtx, directClient, shardKey, clusterSummary, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to verify is shard is a match")
 		isMatch = true
@@ -95,13 +152,13 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 		return nil
 	}
 
-	mgmtResources, err := collectTemplateResourceRefs(ctx, clusterSummary)
+	mgmtResources, err := collectTemplateResourceRefs(hashCtx, clusterSummary)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to collect templateResourceRefs")
 		return err
 	}
 
-	clusterObjects, err := fetchClusterObjects(ctx, getManagementClusterConfig(), getManagementClusterClient(),
+	clusterObjects, err := fetchClusterObjects(hashCtx, getManagementClusterConfig(), getManagementClusterClient(),
 		clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, clusterSummary.Spec.ClusterType, logger)
 	if err != nil {
 		logger.V(logs.LogInfo).Error(err, "failed to fetch resources")
@@ -117,7 +174,7 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 			return err
 		}
 
-		helmHash, err := helmHash(ctx, directClient, currentClusterSummary, logger)
+		helmHash, err := helmHash(hashCtx, directClient, currentClusterSummary, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to get helm configuration hash")
 			return err
@@ -127,7 +184,7 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 		// PatchesHash is one value for the whole ClusterProfileSpec.Patches list, shared across
 		// every chart (same as buildReferencedHelmReleaseSummaries), so it's computed once here,
 		// not per chart.
-		patchesHash, err := getHelmChartPatchesHash(ctx, currentClusterSummary, logger)
+		patchesHash, err := getHelmChartPatchesHash(hashCtx, currentClusterSummary, logger)
 		if err != nil {
 			logger.V(logs.LogInfo).Error(err, "failed to get helm patches hash")
 			return err
@@ -141,12 +198,12 @@ func updateClusterSummaryHelmHashes(ctx context.Context, directClient client.Cli
 				clusterObjects: clusterObjects,
 				mgmtResources:  mgmtResources,
 			}
-			instantiatedChart, err := getInstantiatedChartIdentity(ctx, innerDCtx, helmChart, logger)
+			instantiatedChart, err := getInstantiatedChartIdentity(hashCtx, innerDCtx, helmChart, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to get instantiated chart")
 				return err
 			}
-			helmChartValueHash, err := getHelmChartValuesHash(ctx, directClient, instantiatedChart,
+			helmChartValueHash, err := getHelmChartValuesHash(hashCtx, directClient, instantiatedChart,
 				currentClusterSummary, mgmtResources, logger)
 			if err != nil {
 				logger.V(logs.LogInfo).Error(err, "failed to get helm chart value hash")

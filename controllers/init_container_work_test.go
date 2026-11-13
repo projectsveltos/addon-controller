@@ -19,6 +19,9 @@ package controllers_test
 import (
 	"bytes"
 	"context"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -151,5 +154,64 @@ var _ = Describe("Init container work", func() {
 					Equal(libsveltosv1beta1.FeatureStatusProvisioned))
 			}
 		}
+	})
+
+	It("getInitWorkerCount uses one worker per instance, up to MaxInitWorkers", func() {
+		Expect(controllers.GetInitWorkerCount(0)).To(Equal(0))
+		Expect(controllers.GetInitWorkerCount(1)).To(Equal(1))
+		Expect(controllers.GetInitWorkerCount(controllers.MaxInitWorkers - 1)).To(Equal(controllers.MaxInitWorkers - 1))
+		Expect(controllers.GetInitWorkerCount(controllers.MaxInitWorkers)).To(Equal(controllers.MaxInitWorkers))
+		Expect(controllers.GetInitWorkerCount(controllers.MaxInitWorkers * 20)).To(Equal(controllers.MaxInitWorkers))
+	})
+
+	It("runConcurrently processes every index exactly once", func() {
+		const count = 100
+		var mu sync.Mutex
+		processed := make(map[int]int)
+
+		controllers.RunConcurrently(context.TODO(), count, func(index int) {
+			mu.Lock()
+			defer mu.Unlock()
+			processed[index]++
+		})
+
+		Expect(processed).To(HaveLen(count))
+		for i := 0; i < count; i++ {
+			Expect(processed[i]).To(Equal(1))
+		}
+	})
+
+	It("runConcurrently never runs more than MaxInitWorkers calls at the same time", func() {
+		const count = 100
+		var current, peak int32
+
+		controllers.RunConcurrently(context.TODO(), count, func(index int) {
+			running := atomic.AddInt32(&current, 1)
+			for {
+				p := atomic.LoadInt32(&peak)
+				if running <= p || atomic.CompareAndSwapInt32(&peak, p, running) {
+					break
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+			atomic.AddInt32(&current, -1)
+		})
+
+		Expect(int(atomic.LoadInt32(&peak))).To(BeNumerically("<=", controllers.MaxInitWorkers))
+		Expect(int(atomic.LoadInt32(&peak))).To(BeNumerically(">", 1))
+	})
+
+	It("runConcurrently stops handing out work once the context is canceled", func() {
+		const count = 1000
+		ctx, cancel := context.WithCancel(context.TODO())
+		var processed int32
+
+		controllers.RunConcurrently(ctx, count, func(index int) {
+			if atomic.AddInt32(&processed, 1) == 1 {
+				cancel()
+			}
+		})
+
+		Expect(int(atomic.LoadInt32(&processed))).To(BeNumerically("<", count))
 	})
 })

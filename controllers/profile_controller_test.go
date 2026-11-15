@@ -18,6 +18,9 @@ package controllers_test
 
 import (
 	"context"
+	"fmt"
+	"reflect"
+	"regexp"
 	"sync"
 
 	sourcev1 "github.com/fluxcd/source-controller/api/v1"
@@ -39,6 +42,129 @@ import (
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
 	libsveltosset "github.com/projectsveltos/libsveltos/lib/set"
 )
+
+const namespaceFieldName = "Namespace"
+
+var indexRegexp = regexp.MustCompile(`\[\d+\]`)
+
+// withoutIndexes turns Spec.ValidateHealths[0].Namespace into Spec.ValidateHealths.Namespace
+func withoutIndexes(path string) string {
+	return indexRegexp.ReplaceAllString(path, "")
+}
+
+// namespaceFieldsInManagedCluster returns the Namespace fields (paths without indexes) that
+// legitimately are not limited to the Profile namespace: they identify resources living in the
+// managed cluster, not in the management cluster, so a Profile tenant cannot use them to reach
+// resources of other tenants in the management cluster.
+func namespaceFieldsInManagedCluster() map[string]bool {
+	exceptions := map[string]bool{
+		// Kustomize style selectors matching resources in the managed cluster
+		"Spec.Patches.Target.Namespace":         true,
+		"Spec.DriftExclusions.Target.Namespace": true,
+	}
+
+	checkLists := []string{validateHealthsField, preDeployChecksField, preDeleteChecksField, postDeleteChecksField}
+	for _, list := range checkLists {
+		// Namespace of the resources evaluated in the managed cluster
+		exceptions["Spec."+list+".Namespace"] = true
+		// Secret read from the managed cluster
+		exceptions["Spec."+list+".MetricSource.SecretRef.Namespace"] = true
+	}
+
+	return exceptions
+}
+
+// populateNamespaceFields walks value allocating nil pointers and empty slices (one element)
+// and sets every string field named Namespace to namespace. visited holds the struct types
+// on the current path, so recursive types do not loop forever.
+func populateNamespaceFields(value reflect.Value, namespace string, visited map[reflect.Type]bool) {
+	if value.Kind() == reflect.Pointer {
+		if value.IsNil() {
+			value.Set(reflect.New(value.Type().Elem()))
+		}
+		populateNamespaceFields(value.Elem(), namespace, visited)
+		return
+	}
+
+	if value.Kind() == reflect.Slice {
+		if value.Len() == 0 {
+			value.Set(reflect.MakeSlice(value.Type(), 1, 1))
+		}
+		for i := 0; i < value.Len(); i++ {
+			populateNamespaceFields(value.Index(i), namespace, visited)
+		}
+		return
+	}
+
+	if value.Kind() != reflect.Struct || visited[value.Type()] {
+		return
+	}
+
+	visited[value.Type()] = true
+	defer delete(visited, value.Type())
+
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Type().Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		if isNamespaceField(&field) {
+			value.Field(i).SetString(namespace)
+			continue
+		}
+		populateNamespaceFields(value.Field(i), namespace, visited)
+	}
+}
+
+// isNamespaceField returns true for a string field named Namespace
+func isNamespaceField(field *reflect.StructField) bool {
+	return field.Name == namespaceFieldName && field.Type.Kind() == reflect.String
+}
+
+// findNamespaceFields returns the value of every string field named Namespace reachable
+// from value, keyed by the path of the field (e.g. Spec.PolicyRefs[0].RemoteURL.SecretRef.Namespace).
+func findNamespaceFields(value reflect.Value, path string) map[string]string {
+	result := map[string]string{}
+
+	if value.Kind() == reflect.Pointer {
+		if !value.IsNil() {
+			result = findNamespaceFields(value.Elem(), path)
+		}
+		return result
+	}
+
+	if value.Kind() == reflect.Slice {
+		for i := 0; i < value.Len(); i++ {
+			mergeMaps(result, findNamespaceFields(value.Index(i), fmt.Sprintf("%s[%d]", path, i)))
+		}
+		return result
+	}
+
+	if value.Kind() != reflect.Struct {
+		return result
+	}
+
+	for i := 0; i < value.NumField(); i++ {
+		field := value.Type().Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		fieldPath := path + "." + field.Name
+		if isNamespaceField(&field) {
+			result[fieldPath] = value.Field(i).String()
+			continue
+		}
+		mergeMaps(result, findNamespaceFields(value.Field(i), fieldPath))
+	}
+
+	return result
+}
+
+func mergeMaps(destination, source map[string]string) {
+	for k, v := range source {
+		destination[k] = v
+	}
+}
 
 var _ = Describe("Profile Controller", func() {
 	var profile *configv1beta1.Profile
@@ -233,6 +359,37 @@ var _ = Describe("Profile Controller", func() {
 		for i := range profile.Spec.TemplateResourceRefs {
 			Expect(profile.Spec.TemplateResourceRefs[i].Resource.Namespace).To(Equal(profile.Namespace))
 		}
+	})
+
+	It("limitReferencesToNamespace resets every Namespace field reachable from Profile.Spec", func() {
+		// The Spec is populated through reflection: every pointer and slice is allocated and every
+		// field named Namespace is set to a foreign namespace. A reference field added to the Spec
+		// in the future is therefore covered by this test without having to update it. If a field
+		// named Namespace is legitimately not a reference to a management cluster resource, it needs
+		// an explicit exception in namespaceFieldsInManagedCluster.
+		foreignNamespace := randomString()
+		populateNamespaceFields(reflect.ValueOf(&profile.Spec).Elem(), foreignNamespace, map[reflect.Type]bool{})
+
+		before := findNamespaceFields(reflect.ValueOf(profile.Spec), "Spec")
+		Expect(before).ToNot(BeEmpty())
+		for path, namespace := range before {
+			Expect(namespace).To(Equal(foreignNamespace), "test setup did not populate "+path)
+		}
+
+		reconciler := &controllers.ProfileReconciler{}
+		controllers.LimitReferencesToNamespace(reconciler, profile)
+
+		after := findNamespaceFields(reflect.ValueOf(profile.Spec), "Spec")
+		Expect(after).To(HaveLen(len(before)))
+		exceptions := namespaceFieldsInManagedCluster()
+		notLimited := []string{}
+		for path, namespace := range after {
+			if namespace == profile.Namespace || exceptions[withoutIndexes(path)] {
+				continue
+			}
+			notLimited = append(notLimited, path)
+		}
+		Expect(notLimited).To(BeEmpty(), "Namespace fields not limited to the Profile namespace")
 	})
 
 	It("getClustersFromClusterSets gets cluster selected by referenced sets", func() {

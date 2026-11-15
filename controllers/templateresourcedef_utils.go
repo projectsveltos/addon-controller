@@ -54,6 +54,45 @@ func getTemplateResourceName(ctx context.Context, clusterSummary *configv1beta1.
 func collectTemplateResourceRefs(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
 ) (map[string]*unstructured.Unstructured, error) {
 
+	cache := getInitPassCache(ctx)
+	if cache == nil {
+		return fetchTemplateResourceRefs(ctx, clusterSummary)
+	}
+
+	// Callers are free to modify the resources they get (instantiating a template does, for instance:
+	// it clears managedFields, resourceVersion and uid in place), so the cache keeps its own copy
+	// and always hands out copies.
+	cacheKey := templateResourcesCacheKey(clusterSummary)
+	if cached, ok := cache.templateResources[cacheKey]; ok {
+		return deepCopyTemplateResources(cached), nil
+	}
+
+	result, err := fetchTemplateResourceRefs(ctx, clusterSummary)
+	if err != nil {
+		return nil, err
+	}
+
+	cache.templateResources[cacheKey] = deepCopyTemplateResources(result)
+	return result, nil
+}
+
+func deepCopyTemplateResources(resources map[string]*unstructured.Unstructured,
+) map[string]*unstructured.Unstructured {
+
+	if resources == nil {
+		return nil
+	}
+
+	result := make(map[string]*unstructured.Unstructured, len(resources))
+	for identifier, resource := range resources {
+		result[identifier] = resource.DeepCopy()
+	}
+	return result
+}
+
+func fetchTemplateResourceRefs(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,
+) (map[string]*unstructured.Unstructured, error) {
+
 	if clusterSummary.Spec.ClusterProfileSpec.TemplateResourceRefs == nil {
 		return nil, nil
 	}

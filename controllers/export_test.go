@@ -354,7 +354,12 @@ func NewRestConfigGetter(cfg *rest.Config, namespace string) *RestConfigGetter {
 var (
 	UpdateClusterSummaryHelmHashes = updateClusterSummaryHelmHashes
 	SetHelmChartsPatchesHash       = setHelmChartsPatchesHash
+	GetInitWorkerCount             = getInitWorkerCount
+	RunConcurrently                = runConcurrently
+	WithInitPassCache              = withInitPassCache
 )
+
+const MaxInitWorkers = maxInitWorkers
 
 // SetManagementClusterConfigForTest overrides the cached management cluster rest.Config,
 // leaving managementClusterClient untouched, and returns the previous value so a test can

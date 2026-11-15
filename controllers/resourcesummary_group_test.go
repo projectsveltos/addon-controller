@@ -331,8 +331,12 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 		}
 
 		removeStaleMembers := func(groupName string) {
-			deployment, err := getGroupDeployment(groupName)
-			Expect(err).To(BeNil())
+			var deployment *appsv1.Deployment
+			Eventually(func() error {
+				var err error
+				deployment, err = getGroupDeployment(groupName)
+				return err
+			}, timeout, pollingInterval).Should(BeNil())
 			controllers.RemoveStaleGroupMembers(context.TODO(), testEnv.Client, testEnv.Config, deployment, logger)
 		}
 
@@ -346,6 +350,35 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 			return names
 		}
 
+		// testEnv.Client is served from a cache, so what has just been written may not be visible yet:
+		// the helpers below wait for the cache instead of reading it once.
+
+		// waitForMembers waits until the clusters in the groups of the namespace are exactly expected.
+		waitForMembers := func(clusterNamespace string, expected ...string) {
+			Eventually(func() []string { return memberNames(clusterNamespace) },
+				timeout, pollingInterval).Should(ConsistOf(expected))
+		}
+
+		// waitForNoGroups waits until the namespace has no group left.
+		waitForNoGroups := func(clusterNamespace string) {
+			Eventually(func() int { return len(groupsOf(clusterNamespace)) },
+				timeout, pollingInterval).Should(BeZero())
+		}
+
+		// firstGroupName waits for the namespace to have a group and returns the name of the first one.
+		firstGroupName := func(clusterNamespace string) string {
+			var groupName string
+			Eventually(func() bool {
+				groups := groupsOf(clusterNamespace)
+				if len(groups) == 0 {
+					return false
+				}
+				groupName = groups[0].Name
+				return true
+			}, timeout, pollingInterval).Should(BeTrue())
+			return groupName
+		}
+
 		It("a cluster that does not exist anymore leaves its group, the others stay", func() {
 			controllers.SetAgentClustersPerInstance(3)
 
@@ -355,13 +388,20 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 
 			deployInGroup(clusterNamespace, existing)
 			deployInGroup(clusterNamespace, deleted)
-			groupName := groupsOf(clusterNamespace)[0].Name
+			// removeStaleMembers lists the groups too: both clusters must be visible before it runs
+			waitForMembers(clusterNamespace, existing, deleted)
+			groupName := firstGroupName(clusterNamespace)
 
-			removeStaleMembers(groupName)
-
-			Expect(memberNames(clusterNamespace)).To(ConsistOf(existing))
-			_, err := getGroupDeployment(groupName)
-			Expect(err).To(BeNil())
+			// Removing stale members can be repeated: if the groups it lists are not up to date it
+			// does nothing, and the next attempt sees them.
+			Eventually(func() []string {
+				removeStaleMembers(groupName)
+				return memberNames(clusterNamespace)
+			}, timeout, pollingInterval).Should(ConsistOf(existing))
+			Eventually(func() error {
+				_, err := getGroupDeployment(groupName)
+				return err
+			}, timeout, pollingInterval).Should(BeNil())
 		})
 
 		It("the Deployment is removed with the last cluster of the group", func() {
@@ -372,11 +412,12 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 
 			deployInGroup(clusterNamespace, deleted1)
 			deployInGroup(clusterNamespace, deleted2)
-			groupName := groupsOf(clusterNamespace)[0].Name
+			waitForMembers(clusterNamespace, deleted1, deleted2)
+			groupName := firstGroupName(clusterNamespace)
 
 			removeStaleMembers(groupName)
 
-			Expect(groupsOf(clusterNamespace)).To(BeEmpty())
+			waitForNoGroups(clusterNamespace)
 			Eventually(func() bool {
 				_, err := getGroupDeployment(groupName)
 				return apierrors.IsNotFound(err)
@@ -390,7 +431,8 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 			deleted := randomString()
 
 			deployInGroup(clusterNamespace, deleted)
-			groupName := groupsOf(clusterNamespace)[0].Name
+			waitForMembers(clusterNamespace, deleted)
+			groupName := firstGroupName(clusterNamespace)
 			resourceSummary := createResourceSummary(clusterNamespace, deleted)
 
 			// The ResourceSummary is deleted, and the cluster is not removed yet: the
@@ -406,7 +448,7 @@ var _ = Describe("drift-detection-manager serving a group of clusters", func() {
 			}, timeout, pollingInterval).Should(BeTrue())
 
 			removeStaleMembers(groupName)
-			Expect(groupsOf(clusterNamespace)).To(BeEmpty())
+			waitForNoGroups(clusterNamespace)
 		})
 	})
 })

@@ -32,6 +32,13 @@ const (
 	// clusterpromotion_controller_test.go.
 	clusterRefsField = "ClusterRefs"
 	setRefsField     = "SetRefs"
+
+	// Names of the Spec fields holding ValidateHealth lists. Also used by
+	// profile_controller_test.go.
+	validateHealthsField  = "ValidateHealths"
+	preDeployChecksField  = "PreDeployChecks"
+	preDeleteChecksField  = "PreDeleteChecks"
+	postDeleteChecksField = "PostDeleteChecks"
 )
 
 var _ = Describe("getProfileSpecHash slice-field coverage", func() {
@@ -55,10 +62,10 @@ var _ = Describe("getProfileSpecHash slice-field coverage", func() {
 			"PolicyRefs":           true,
 			"KustomizationRefs":    true,
 			"TemplateResourceRefs": true,
-			"ValidateHealths":      true,
-			"PreDeployChecks":      true,
-			"PreDeleteChecks":      true,
-			"PostDeleteChecks":     true,
+			validateHealthsField:   true,
+			preDeployChecksField:   true,
+			preDeleteChecksField:   true,
+			postDeleteChecksField:  true,
 			"Patches":              true,
 			"PatchesFrom":          true,
 			"DriftExclusions":      true,

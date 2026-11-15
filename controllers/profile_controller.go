@@ -353,6 +353,25 @@ func (r *ProfileReconciler) limitReferencesToNamespace(profile *configv1beta1.Pr
 	for i := range profile.Spec.TemplateResourceRefs {
 		profile.Spec.TemplateResourceRefs[i].Resource.Namespace = profile.Namespace
 	}
+
+	r.limitJobChecksToNamespace(profile, profile.Spec.PreDeployChecks)
+	r.limitJobChecksToNamespace(profile, profile.Spec.ValidateHealths)
+	r.limitJobChecksToNamespace(profile, profile.Spec.PreDeleteChecks)
+	r.limitJobChecksToNamespace(profile, profile.Spec.PostDeleteChecks)
+}
+
+// limitJobChecksToNamespace resets the namespace of the ConfigMap/Secret referenced
+// by each JobCheck. The Job manifest is read from the management cluster.
+// Other Namespace fields in ValidateHealth refer to resources in the managed cluster
+// and are left untouched.
+func (r *ProfileReconciler) limitJobChecksToNamespace(profile *configv1beta1.Profile,
+	checks []libsveltosv1beta1.ValidateHealth) {
+
+	for i := range checks {
+		if checks[i].JobCheck != nil {
+			checks[i].JobCheck.JobRef.Namespace = profile.Namespace
+		}
+	}
 }
 
 // limitKustomizationRefsToNamespace reset Namespace of all ConfigMap/Secret
@@ -362,6 +381,10 @@ func (r *ProfileReconciler) limitKustomizationRefsToNamespace(profile *configv1b
 
 	for i := range kustomizationRef.ValuesFrom {
 		kustomizationRef.ValuesFrom[i].Namespace = profile.Namespace
+	}
+
+	if kustomizationRef.RemoteURL != nil && kustomizationRef.RemoteURL.SecretRef != nil {
+		kustomizationRef.RemoteURL.SecretRef.Namespace = profile.Namespace
 	}
 }
 

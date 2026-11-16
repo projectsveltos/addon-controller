@@ -1,11 +1,11 @@
 module github.com/projectsveltos/addon-controller/hack/tools
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/a8m/envsubst v1.4.3
-	github.com/onsi/ginkgo/v2 v2.33.1
-	golang.org/x/oauth2 v0.37.0
+	github.com/onsi/ginkgo/v2 v2.34.0
+	golang.org/x/oauth2 v0.38.0
 	golang.org/x/tools v0.52.0
 	k8s.io/client-go v0.37.2
 	sigs.k8s.io/controller-tools v0.23.0

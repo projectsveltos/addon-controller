@@ -237,6 +237,57 @@ var _ = Describe("Set utils", func() {
 		Expect(len(clusterSet.Status.SelectedClusterRefs)).To(Equal(clusterSet.Spec.MaxReplicas))
 	})
 
+	It("selectClusters drops extra clusters down to MaxReplicas", func() {
+		// MaxReplicas is lowered below the number of already selected clusters.
+		// selectClusters must trim SelectedClusterRefs to exactly MaxReplicas.
+		clusterSet := libsveltosv1beta1.ClusterSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: randomString(),
+			},
+			Spec: libsveltosv1beta1.Spec{
+				MaxReplicas: 2,
+				ClusterSelector: libsveltosv1beta1.Selector{
+					LabelSelector: metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							randomString(): randomString(),
+						},
+					},
+				},
+			},
+			Status: libsveltosv1beta1.Status{},
+		}
+
+		clusterSet.Status.MatchingClusterRefs = make([]corev1.ObjectReference, 0)
+		for i := 0; i < 4; i++ {
+			clusterSet.Status.MatchingClusterRefs = append(clusterSet.Status.MatchingClusterRefs,
+				corev1.ObjectReference{
+					Kind:       clusterKind,
+					APIVersion: clusterv1.GroupVersion.String(),
+					Namespace:  randomString(),
+					Name:       randomString(),
+				})
+		}
+
+		// All matching clusters were previously selected (4 > MaxReplicas of 2)
+		clusterSet.Status.SelectedClusterRefs = make([]corev1.ObjectReference, len(clusterSet.Status.MatchingClusterRefs))
+		copy(clusterSet.Status.SelectedClusterRefs, clusterSet.Status.MatchingClusterRefs)
+
+		Expect(addTypeInformationToObject(scheme, &clusterSet)).To(Succeed())
+
+		setScope := &scope.SetScope{
+			Set: &clusterSet,
+		}
+
+		// Only ClusterAPI clusters are used, so a nil client is fine
+		Expect(controllers.SelectClusters(context.TODO(), nil, setScope, logger)).To(Succeed())
+		Expect(len(clusterSet.Status.SelectedClusterRefs)).To(Equal(clusterSet.Spec.MaxReplicas))
+		// Every remaining selected cluster must still be one of the matching clusters
+		for i := range clusterSet.Status.SelectedClusterRefs {
+			Expect(clusterSet.Status.MatchingClusterRefs).To(
+				ContainElement(clusterSet.Status.SelectedClusterRefs[i]))
+		}
+	})
+
 	It("pruneConnectionDownClusters remove SveltosCluster with connectionStatus set to Down", func() {
 		clusterSet := libsveltosv1beta1.ClusterSet{
 			ObjectMeta: metav1.ObjectMeta{

@@ -74,8 +74,8 @@ func selectClusters(ctx context.Context, c client.Client, setScope *scope.SetSco
 	if spec.MaxReplicas == 0 {
 		status.SelectedClusterRefs = nil
 	} else if len(currentSelectedClusters) > spec.MaxReplicas {
-		// drop clusters
-		status.SelectedClusterRefs = currentSelectedClusters[:spec.MaxReplicas-1]
+		// drop clusters down to MaxReplicas
+		status.SelectedClusterRefs = currentSelectedClusters[:spec.MaxReplicas]
 	} else if len(currentSelectedClusters) < spec.MaxReplicas {
 		// select more clusters
 		selectMoreClusters(setScope, healthyMatchingClusters)

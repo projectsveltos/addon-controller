@@ -240,6 +240,25 @@ func (m *instance) GetClusterDeployments(profile *corev1.ObjectReference) []core
 	return results
 }
 
+// GetDependents returns the profiles that list prerequisite in their DependsOn and are deployed to cluster.
+func (m *instance) GetDependents(prerequisite, cluster *corev1.ObjectReference) []corev1.ObjectReference {
+	if !m.enabled {
+		return nil
+	}
+
+	m.chartMux.RLock()
+	defer m.chartMux.RUnlock()
+
+	clusters := m.profileClusterRequests.getClusterDeployments(prerequisite)
+	requestingProfiles := clusters.getRequestingProfiles(cluster)
+	results := make([]corev1.ObjectReference, 0, len(requestingProfiles.Dependents))
+	for d := range requestingProfiles.Dependents {
+		results = append(results, d)
+	}
+
+	return results
+}
+
 // UpdatePrerequisites registers the prerequisites of a dependent (i.e a profile) as needed on the
 // dependent's matching clusters.
 //

@@ -52,6 +52,7 @@ import (
 
 	configv1beta1 "github.com/projectsveltos/addon-controller/api/v1beta1"
 	"github.com/projectsveltos/addon-controller/controllers/chartmanager"
+	"github.com/projectsveltos/addon-controller/controllers/dependencymanager"
 	"github.com/projectsveltos/addon-controller/lib/clusterops"
 	"github.com/projectsveltos/addon-controller/pkg/scope"
 	libsveltosv1beta1 "github.com/projectsveltos/libsveltos/api/v1beta1"
@@ -233,6 +234,7 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// bypassing the intended NextReconcileTime backoff). We cannot rely solely on a watch event
 	// to re-enqueue because the conflict may be caused by the controller's own logic (e.g. a
 	// tier change), in which case no further watch event will arrive.
+	wasProvisioned := isCluterSummaryProvisioned(clusterSummary)
 	defer func() {
 		if err = clusterSummaryScope.Close(ctx); err != nil {
 			if apierrors.IsConflict(err) {
@@ -242,6 +244,8 @@ func (r *ClusterSummaryReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return
 			}
 			reterr = err
+		} else {
+			r.requeueWaitingClusterSummaries(ctx, clusterSummary, wasProvisioned, logger)
 		}
 	}()
 
@@ -1904,6 +1908,187 @@ func (r *ClusterSummaryReconciler) areDependentsRemoved(ctx context.Context, clu
 	}
 
 	return true, "", nil
+}
+
+// requeueWaitingClusterSummaries requeues the ClusterSummaries that were waiting for clusterSummary to
+// change. It is called once the change has been persisted: those ClusterSummaries read this one from the
+// cache, and might otherwise still see it as it was.
+func (r *ClusterSummaryReconciler) requeueWaitingClusterSummaries(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, wasProvisioned bool, logger logr.Logger) {
+
+	if !clusterSummary.DeletionTimestamp.IsZero() {
+		// Finalizer removed: this ClusterSummary is gone. Its prerequisites, if being deleted, were waiting for it
+		if !controllerutil.ContainsFinalizer(clusterSummary, configv1beta1.ClusterSummaryFinalizer) {
+			r.requeuePrerequisites(ctx, clusterSummary, logger)
+		}
+		return
+	}
+
+	if !wasProvisioned && isCluterSummaryProvisioned(clusterSummary) {
+		// Dependents were waiting for this ClusterSummary to be provisioned
+		r.requeueDependents(ctx, clusterSummary, logger)
+	}
+}
+
+// requeueDependents is called once a ClusterSummary has become Provisioned. The ClusterSummaries of
+// the same cluster that list this profile in DependsOn are waiting for it: without this call they
+// only notice at their next poll (normalRequeueAfter). The dependency manager knows which profiles
+// depend on this one for this cluster. When auto-deploy-dependencies is disabled the manager does
+// not track dependents, and they fall back to polling.
+func (r *ClusterSummaryReconciler) requeueDependents(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
+
+	depManager, err := dependencymanager.GetManagerInstance()
+	if err != nil {
+		return
+	}
+
+	profileOwner, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return
+	}
+
+	prerequisite := &corev1.ObjectReference{
+		Name:       profileOwner.Name,
+		Kind:       profileOwner.Kind,
+		APIVersion: configv1beta1.GroupVersion.String(),
+	}
+	if profileOwner.Kind == configv1beta1.ProfileKind {
+		prerequisite.Namespace = clusterSummary.Namespace
+	}
+
+	dependents := depManager.GetDependents(prerequisite, getClusterObjectReferenceFromClusterSummary(clusterSummary))
+	r.retriggerClusterSummaries(ctx, getDependentClusterSummaryKeys(clusterSummary, dependents), logger)
+}
+
+// getDependentClusterSummaryKeys returns the keys of the ClusterSummaries, for the same cluster as
+// clusterSummary, owned by the dependents profiles.
+func getDependentClusterSummaryKeys(clusterSummary *configv1beta1.ClusterSummary,
+	dependents []corev1.ObjectReference) []types.NamespacedName {
+
+	keys := make([]types.NamespacedName, len(dependents))
+	for i := range dependents {
+		keys[i] = getClusterSummaryKey(clusterSummary, dependents[i].Kind, dependents[i].Name)
+	}
+
+	return keys
+}
+
+// getPrerequisiteClusterSummaryKeys returns the keys of the ClusterSummaries, for the same cluster as
+// clusterSummary, owned by the profiles clusterSummary depends on.
+func getPrerequisiteClusterSummaryKeys(clusterSummary *configv1beta1.ClusterSummary) []types.NamespacedName {
+	profileOwner, err := configv1beta1.GetProfileOwnerReference(clusterSummary)
+	if err != nil {
+		return nil
+	}
+
+	dependsOn := clusterSummary.Spec.ClusterProfileSpec.DependsOn
+	keys := make([]types.NamespacedName, len(dependsOn))
+	for i := range dependsOn {
+		keys[i] = getClusterSummaryKey(clusterSummary, profileOwner.Kind, dependsOn[i])
+	}
+
+	return keys
+}
+
+// getClusterSummaryKey returns the key of the ClusterSummary for the profile, of the given kind and
+// name, and the same cluster as clusterSummary
+func getClusterSummaryKey(clusterSummary *configv1beta1.ClusterSummary, profileKind, profileName string,
+) types.NamespacedName {
+
+	isSveltosCluster := clusterSummary.Spec.ClusterType == libsveltosv1beta1.ClusterTypeSveltos
+
+	return types.NamespacedName{
+		Namespace: clusterSummary.Namespace,
+		Name:      clusterops.GetClusterSummaryName(profileKind, profileName, clusterSummary.Spec.ClusterName, isSveltosCluster),
+	}
+}
+
+// retriggerClusterSummaries causes the given ClusterSummaries to be reconciled right away: a blocked
+// ClusterSummary has a cooldown set, which is expired here, and the retrigger annotation is updated.
+func (r *ClusterSummaryReconciler) retriggerClusterSummaries(ctx context.Context,
+	keys []types.NamespacedName, logger logr.Logger) {
+
+	for i := range keys {
+		// A ClusterSummary waiting for its prerequisites has a cooldown: expire it, otherwise
+		// the reconciliation triggered below would be skipped
+		r.expireCooldown(keys[i])
+
+		clusterSummary := &configv1beta1.ClusterSummary{}
+		if err := r.Get(ctx, keys[i], clusterSummary); err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterSummary %s: %v", keys[i], err))
+			}
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("prerequisite provisioned. Requeuing ClusterSummary %s", keys[i]))
+		r.setRetriggerAnnotation(ctx, clusterSummary, logger)
+	}
+}
+
+// requeuePrerequisites is called once a ClusterSummary has been removed. The ClusterSummaries of the
+// same cluster for the profiles it depends on cannot be removed until their dependents are gone: if they
+// are being deleted they are waiting for this one, and are reconciled right away instead of at their next poll.
+func (r *ClusterSummaryReconciler) requeuePrerequisites(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
+
+	keys := getPrerequisiteClusterSummaryKeys(clusterSummary)
+	for i := range keys {
+		prerequisite := &configv1beta1.ClusterSummary{}
+		if err := r.Get(ctx, keys[i], prerequisite); err != nil {
+			if !apierrors.IsNotFound(err) {
+				logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to get ClusterSummary %s: %v", keys[i], err))
+			}
+			continue
+		}
+
+		// Nothing is waiting for a ClusterSummary that is not being deleted
+		if prerequisite.DeletionTimestamp.IsZero() {
+			continue
+		}
+
+		logger.V(logs.LogDebug).Info(fmt.Sprintf("dependent removed. Requeuing ClusterSummary %s", keys[i]))
+		r.expireDeletedInstance(keys[i])
+		r.setRetriggerAnnotation(ctx, prerequisite, logger)
+	}
+}
+
+// setRetriggerAnnotation updates the retrigger annotation, which causes a new reconciliation
+func (r *ClusterSummaryReconciler) setRetriggerAnnotation(ctx context.Context,
+	clusterSummary *configv1beta1.ClusterSummary, logger logr.Logger) {
+
+	patch := client.MergeFrom(clusterSummary.DeepCopy())
+	if clusterSummary.Annotations == nil {
+		clusterSummary.Annotations = map[string]string{}
+	}
+	clusterSummary.Annotations[retriggerAnnotation] = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := r.Patch(ctx, clusterSummary, patch); err != nil {
+		// The ClusterSummary will still be reconciled at its next poll
+		logger.V(logs.LogInfo).Info(fmt.Sprintf("failed to requeue ClusterSummary %s/%s: %v",
+			clusterSummary.Namespace, clusterSummary.Name, err))
+	}
+}
+
+// expireDeletedInstance allows a ClusterSummary being deleted to be reconciled right away:
+// skipReconciliation otherwise ignores it for deleteRequeueAfter after its last reconciliation.
+func (r *ClusterSummaryReconciler) expireDeletedInstance(key types.NamespacedName) {
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	delete(r.DeletedInstances, key)
+}
+
+// expireCooldown makes the in-memory cooldown of a ClusterSummary, if any, expire now. The entry is
+// kept (not deleted): skipReconciliation would otherwise rebuild it from the persisted status.
+func (r *ClusterSummaryReconciler) expireCooldown(key types.NamespacedName) {
+	r.PolicyMux.Lock()
+	defer r.PolicyMux.Unlock()
+
+	if cooldown, ok := r.NextReconcileTimes[key]; ok {
+		cooldown.Until = time.Now()
+		r.NextReconcileTimes[key] = cooldown
+	}
 }
 
 func (r *ClusterSummaryReconciler) setFailureMessage(clusterSummaryScope *scope.ClusterSummaryScope, failureMessage string) {

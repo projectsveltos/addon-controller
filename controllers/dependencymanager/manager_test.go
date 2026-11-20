@@ -89,6 +89,33 @@ var _ = Describe("Dependency manager", func() {
 		}
 	})
 
+	It("GetDependents returns the profiles depending on a prerequisite for a given cluster", func() {
+		manager, err := dependencymanager.GetManagerInstance()
+		Expect(err).To(BeNil())
+
+		dependencies := getDependencies(profile)
+		manager.UpdateDependencies(objRef, profile.Status.MatchingClusterRefs, dependencies, logger)
+
+		for i := range dependencies {
+			for j := range profile.Status.MatchingClusterRefs {
+				dependents := manager.GetDependents(&dependencies[i], &profile.Status.MatchingClusterRefs[j])
+				Expect(dependents).To(Equal([]corev1.ObjectReference{*objRef}))
+			}
+		}
+
+		By("A cluster the dependent is not deployed to has no dependents")
+		otherCluster := &corev1.ObjectReference{
+			Namespace:  randomString(),
+			Name:       randomString(),
+			Kind:       libsveltosv1beta1.SveltosClusterKind,
+			APIVersion: libsveltosv1beta1.GroupVersion.String(),
+		}
+		Expect(manager.GetDependents(&dependencies[0], otherCluster)).To(BeEmpty())
+
+		By("A profile that is not a prerequisite has no dependents")
+		Expect(manager.GetDependents(objRef, &profile.Status.MatchingClusterRefs[0])).To(BeEmpty())
+	})
+
 	It("updateConfigMap same prerequisite for multiple dependents", func() {
 		manager, err := dependencymanager.GetManagerInstance()
 		Expect(err).To(BeNil())

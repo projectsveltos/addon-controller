@@ -62,17 +62,23 @@ data:
 // https://github.com/projectsveltos/addon-controller/issues/1999. Matches the CRD from that
 // issue's repro steps.
 func getWidgetCRD() *apiextensionsv1.CustomResourceDefinition {
+	return newClusterScopedCRD(widgetGroup, widgetKind, "widgets", "widget")
+}
+
+// newClusterScopedCRD returns the CustomResourceDefinition, with a single version v1 accepting
+// any field, of a cluster scoped kind. The CRD is named <plural>.<group>.
+func newClusterScopedCRD(group, kind, plural, singular string) *apiextensionsv1.CustomResourceDefinition {
 	return &apiextensionsv1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "widgets." + widgetGroup,
+			Name: plural + "." + group,
 		},
 		Spec: apiextensionsv1.CustomResourceDefinitionSpec{
-			Group: widgetGroup,
+			Group: group,
 			Scope: apiextensionsv1.ClusterScoped,
 			Names: apiextensionsv1.CustomResourceDefinitionNames{
-				Kind:     widgetKind,
-				Plural:   "widgets",
-				Singular: "widget",
+				Kind:     kind,
+				Plural:   plural,
+				Singular: singular,
 			},
 			Versions: []apiextensionsv1.CustomResourceDefinitionVersion{
 				{

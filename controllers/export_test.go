@@ -104,6 +104,10 @@ var (
 	SetFailureMessage                    = (*ClusterSummaryReconciler).setFailureMessage
 	ResetFeatureStatus                   = (*ClusterSummaryReconciler).resetFeatureStatus
 	PrepareForDeployment                 = (*ClusterSummaryReconciler).prepareForDeployment
+	GetDependentClusterSummaryKeys       = getDependentClusterSummaryKeys
+	RetriggerClusterSummaries            = (*ClusterSummaryReconciler).retriggerClusterSummaries
+	GetPrerequisiteClusterSummaryKeys    = getPrerequisiteClusterSummaryKeys
+	RequeuePrerequisites                 = (*ClusterSummaryReconciler).requeuePrerequisites
 
 	ConvertResultStatus                 = (*ClusterSummaryReconciler).convertResultStatus
 	RequeueClusterSummaryForReference   = (*ClusterSummaryReconciler).requeueClusterSummaryForReference

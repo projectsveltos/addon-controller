@@ -1636,7 +1636,7 @@ func getClusterProfileSpecHash(ctx context.Context, clusterSummary *configv1beta
 
 	// If Reloader changes, Reloader needs to be deployed or undeployed
 	// So consider it in the hash
-	config += fmt.Sprintf("%v", clusterProfileSpec.Reloader)
+	config += fmt.Sprintf("%v", isReloaderEnabled(clusterSummary))
 
 	// If Tier changes, conflicts might be resolved differently
 	// So consider it in the hash
@@ -1777,7 +1777,7 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 		setters = append(setters, pullmode.WithDriftDetection(),
 			pullmode.WithDriftDetectionPatches(clusterSummary.Spec.ClusterProfileSpec.DriftExclusions))
 	}
-	if clusterSummary.Spec.ClusterProfileSpec.Reloader {
+	if isReloaderEnabled(clusterSummary) {
 		setters = append(setters, pullmode.WithReloader())
 	}
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeDryRun {
@@ -1865,6 +1865,12 @@ func prepareSetters(ctx context.Context, clusterSummary *configv1beta1.ClusterSu
 	setters = append(setters, pullmode.WithSourceRef(&sourceRef))
 
 	return setters, nil
+}
+
+// isReloaderEnabled returns true if the reloader knob is set and can be honored.
+// Reloader relies on sveltos-agent: when sveltos-agent is not deployed, it is never enabled.
+func isReloaderEnabled(clusterSummary *configv1beta1.ClusterSummary) bool {
+	return clusterSummary.Spec.ClusterProfileSpec.Reloader && !getSveltosAgentDisabled()
 }
 
 func updateReloaderWithDeployedResources(ctx context.Context, clusterSummary *configv1beta1.ClusterSummary,

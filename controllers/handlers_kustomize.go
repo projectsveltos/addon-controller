@@ -175,7 +175,7 @@ func processKustomizeDeployment(ctx context.Context, remoteRestConfig *rest.Conf
 	if !isPullMode {
 		remoteResources := clusterops.ConvertResourceReportsToObjectReference(remoteResourceReports)
 		err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureKustomize,
-			remoteResources, !clusterSummary.Spec.ClusterProfileSpec.Reloader, logger)
+			remoteResources, !isReloaderEnabled(clusterSummary), logger)
 		if err != nil {
 			return err
 		}

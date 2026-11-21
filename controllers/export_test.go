@@ -421,6 +421,7 @@ var (
 	BuildMonitoringClusterHealthCheck  = buildMonitoringClusterHealthCheck
 	QuoteLuaString                     = quoteLuaString
 	ReconcileHealthMonitoring          = (*ClusterSummaryReconciler).reconcileHealthMonitoring
+	IsReloaderEnabled                  = isReloaderEnabled
 	RemoveHealthMonitoring             = (*ClusterSummaryReconciler).removeHealthMonitoring
 	DefaultHealthCheckLivenessName     = defaultHealthCheckLivenessName
 	HealthMonitoringFlappingEvaluation = healthMonitoringFlappingEvaluations

@@ -44,6 +44,7 @@ var (
 	capiOnboardAnnotation    string
 	driftDetectionRegistry   string
 	agentInMgmtCluster       bool
+	sveltosAgentDisabled     bool
 	agentClustersPerInstance int
 	luaCallStackSize         int
 	luaRegistrySize          int
@@ -91,6 +92,12 @@ func SetDriftDetectionRegistry(reg string) {
 
 func SetAgentInMgmtCluster(isInMgmtCluster bool) {
 	agentInMgmtCluster = isInMgmtCluster
+}
+
+// SetSveltosAgentDisabled sets whether sveltos-agent is not deployed in the clusters (classifier is
+// started with --disable-sveltos-agent). Features relying on it (health monitoring, reloader) are disabled.
+func SetSveltosAgentDisabled(disabled bool) {
+	sveltosAgentDisabled = disabled
 }
 
 // SetAgentClustersPerInstance sets how many clusters one agent instance serves in agentless mode.
@@ -141,6 +148,10 @@ func getDriftDetectionRegistry() string {
 
 func getAgentClustersPerInstance() int {
 	return agentClustersPerInstance
+}
+
+func getSveltosAgentDisabled() bool {
+	return sveltosAgentDisabled
 }
 
 func getAgentInMgmtCluster() bool {

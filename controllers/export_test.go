@@ -420,6 +420,7 @@ var (
 	BuildMonitoringHealthCheck         = buildMonitoringHealthCheck
 	BuildMonitoringClusterHealthCheck  = buildMonitoringClusterHealthCheck
 	QuoteLuaString                     = quoteLuaString
+	InstantiateWithLuaScript           = instantiateWithLuaScript
 	ReconcileHealthMonitoring          = (*ClusterSummaryReconciler).reconcileHealthMonitoring
 	IsReloaderEnabled                  = isReloaderEnabled
 	RemoveHealthMonitoring             = (*ClusterSummaryReconciler).removeHealthMonitoring

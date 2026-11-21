@@ -285,6 +285,38 @@ var _ = Describe("Metric health checks", func() {
 		})
 	})
 
+	Context("isHealthyBasedOnLua sandbox", func() {
+		It("rejects a script reaching the host file system through io", func() {
+			script := `
+function evaluate()
+  local f = io.open("/etc/hosts", "r")
+  return {healthy=(f ~= nil), message=""}
+end`
+			healthy, _, err := clusterops.IsHealthy(nil, script, nil, logger)
+			Expect(err).To(HaveOccurred())
+			Expect(healthy).To(BeFalse())
+		})
+
+		It("rejects a script reading the environment through os.getenv", func() {
+			script := `
+function evaluate()
+  return {healthy=(os.getenv("HOME") ~= nil), message=""}
+end`
+			_, _, err := clusterops.IsHealthy(nil, script, nil, logger)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("still allows time related os functions", func() {
+			script := `
+function evaluate()
+  return {healthy=(os.time() > 0), message=""}
+end`
+			healthy, _, err := clusterops.IsHealthy(nil, script, nil, logger)
+			Expect(err).To(BeNil())
+			Expect(healthy).To(BeTrue())
+		})
+	})
+
 	Context("isHealthyBasedOnLua with metrics", func() {
 		const errorRateScript = `
 function evaluate()

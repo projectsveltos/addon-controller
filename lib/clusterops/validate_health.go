@@ -672,7 +672,7 @@ func isHealthyBasedOnLua(resource *unstructured.Unstructured, script string,
 		return true, "", nil
 	}
 
-	l := lua.NewState()
+	l := sveltoslua.NewSandboxedState()
 	defer l.Close()
 
 	sveltoslua.LoadModulesAndRegisterMethods(l)

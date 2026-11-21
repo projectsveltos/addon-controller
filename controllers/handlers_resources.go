@@ -130,7 +130,7 @@ func postProcessDeployedResources(ctx context.Context, remoteRestConfig *rest.Co
 	if !isPullMode {
 		remoteResources := clusterops.ConvertResourceReportsToObjectReference(remoteResourceReports)
 		err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureResources,
-			remoteResources, !clusterSummary.Spec.ClusterProfileSpec.Reloader, logger)
+			remoteResources, !isReloaderEnabled(clusterSummary), logger)
 		if err != nil {
 			return err
 		}

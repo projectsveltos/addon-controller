@@ -1145,3 +1145,97 @@ var _ = Describe("Health monitoring: ClusterSummary predicate", func() {
 		Expect(predicate.Update(event.UpdateEvent{ObjectOld: oldClusterSummary, ObjectNew: newClusterSummary})).To(BeFalse())
 	})
 })
+
+var _ = Describe("Sveltos agent disabled: health monitoring and reloader", func() {
+	var (
+		logger   logr.Logger
+		c        client.Client
+		r        *controllers.ClusterSummaryReconciler
+		recorder *events.FakeRecorder
+	)
+
+	BeforeEach(func() {
+		logger = textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1)))
+		c = fake.NewClientBuilder().WithScheme(scheme).Build()
+		r = getClusterSummaryReconciler(c, fakedeployer.GetClient(context.TODO(), logger, c))
+		recorder = events.NewFakeRecorder(10)
+		controllers.SetEventRecorder(r, recorder)
+	})
+
+	AfterEach(func() {
+		controllers.SetSveltosAgentDisabled(false)
+	})
+
+	monitoredClusterSummary := func() *configv1beta1.ClusterSummary {
+		clusterSummary := newHealthMonitoringClusterSummary(libsveltosv1beta1.ClusterTypeSveltos)
+		clusterSummary.Spec.ClusterProfileSpec.HealthMonitoring = &configv1beta1.HealthMonitoring{Enabled: true}
+		addHelmReleases(clusterSummary, hmCertManagerRelease)
+		provisionAllFeatures(clusterSummary)
+		return clusterSummary
+	}
+
+	getClusterHealthCheck := func(clusterSummary *configv1beta1.ClusterSummary) error {
+		return c.Get(context.TODO(), types.NamespacedName{Name: controllers.GetHealthMonitoringName(clusterSummary)},
+			&libsveltosv1beta1.ClusterHealthCheck{})
+	}
+
+	It("creates no health monitoring resources, and emits a warning, when sveltos-agent is disabled", func() {
+		controllers.SetSveltosAgentDisabled(true)
+		clusterSummary := monitoredClusterSummary()
+
+		Expect(controllers.ReconcileHealthMonitoring(r, context.TODO(), clusterSummary, logger)).To(Succeed())
+
+		Expect(apierrors.IsNotFound(getClusterHealthCheck(clusterSummary))).To(BeTrue())
+		Expect(recorder.Events).To(Receive(And(
+			ContainSubstring("Warning SveltosAgentDisabled"), ContainSubstring("sveltos-agent is not deployed"))))
+	})
+
+	It("removes the health monitoring resources already created when sveltos-agent becomes disabled", func() {
+		clusterSummary := monitoredClusterSummary()
+		Expect(controllers.ReconcileHealthMonitoring(r, context.TODO(), clusterSummary, logger)).To(Succeed())
+		Expect(getClusterHealthCheck(clusterSummary)).To(Succeed())
+
+		controllers.SetSveltosAgentDisabled(true)
+		Expect(controllers.ReconcileHealthMonitoring(r, context.TODO(), clusterSummary, logger)).To(Succeed())
+
+		Expect(apierrors.IsNotFound(getClusterHealthCheck(clusterSummary))).To(BeTrue())
+	})
+
+	It("emits no warning when health monitoring is not requested and sveltos-agent is disabled", func() {
+		controllers.SetSveltosAgentDisabled(true)
+		clusterSummary := newHealthMonitoringClusterSummary(libsveltosv1beta1.ClusterTypeSveltos)
+
+		Expect(controllers.ReconcileHealthMonitoring(r, context.TODO(), clusterSummary, logger)).To(Succeed())
+
+		Expect(recorder.Events).ToNot(Receive())
+	})
+
+	It("the predicate ignores features becoming provisioned when sveltos-agent is disabled", func() {
+		controllers.SetSveltosAgentDisabled(true)
+		predicate := controllers.ClusterSummaryPredicate{
+			Logger: textlogger.NewLogger(textlogger.NewConfig(textlogger.Verbosity(1))),
+		}
+
+		oldClusterSummary := newHealthMonitoringClusterSummary(libsveltosv1beta1.ClusterTypeSveltos)
+		oldClusterSummary.Spec.ClusterProfileSpec.HealthMonitoring = &configv1beta1.HealthMonitoring{Enabled: true}
+		oldClusterSummary.Status.FeatureSummaries = []configv1beta1.FeatureSummary{
+			{FeatureID: libsveltosv1beta1.FeatureHelm, Status: libsveltosv1beta1.FeatureStatusProvisioning},
+		}
+		newClusterSummary := oldClusterSummary.DeepCopy()
+		newClusterSummary.Status.FeatureSummaries[0].Status = libsveltosv1beta1.FeatureStatusProvisioned
+
+		Expect(predicate.Update(event.UpdateEvent{ObjectOld: oldClusterSummary, ObjectNew: newClusterSummary})).To(BeFalse())
+	})
+
+	It("isReloaderEnabled is false when sveltos-agent is disabled, even if the reloader knob is set", func() {
+		clusterSummary := newHealthMonitoringClusterSummary(libsveltosv1beta1.ClusterTypeSveltos)
+
+		Expect(controllers.IsReloaderEnabled(clusterSummary)).To(BeFalse())
+
+		clusterSummary.Spec.ClusterProfileSpec.Reloader = true
+		Expect(controllers.IsReloaderEnabled(clusterSummary)).To(BeTrue())
+
+		controllers.SetSveltosAgentDisabled(true)
+		Expect(controllers.IsReloaderEnabled(clusterSummary)).To(BeFalse())
+	})
+})

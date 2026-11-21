@@ -83,6 +83,7 @@ var (
 	workers                      int
 	concurrentReconciles         int
 	agentInMgmtCluster           bool
+	disableSveltosAgent          bool
 	agentClustersPerInstance     int
 	reportMode                   controllers.ReportMode
 	tmpReportMode                int
@@ -246,6 +247,7 @@ func setControllersConfiguration(sveltosNamespace string) {
 	controllers.SetCAPIOnboardAnnotation(capiOnboardAnnotation)
 	controllers.SetDriftDetectionRegistry(registry)
 	controllers.SetAgentInMgmtCluster(agentInMgmtCluster)
+	controllers.SetSveltosAgentDisabled(disableSveltosAgent)
 	controllers.SetAgentClustersPerInstance(agentClustersPerInstance)
 	controllers.SetSveltosNamespace(sveltosNamespace)
 }
@@ -254,6 +256,11 @@ func setControllersConfiguration(sveltosNamespace string) {
 func initAgentFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&agentInMgmtCluster, "agent-in-mgmt-cluster", false,
 		"When set, indicates drift-detection-manager needs to be started in the management cluster")
+
+	fs.BoolVar(&disableSveltosAgent, "disable-sveltos-agent", false,
+		"Set when sveltos-agent is not deployed (classifier is started with --disable-sveltos-agent). "+
+			"Features relying on sveltos-agent are disabled: ClusterProfile/Profile healthMonitoring and reloader "+
+			"are ignored.")
 
 	fs.IntVar(&agentClustersPerInstance, "agent-clusters-per-instance", 1,
 		"Agentless mode only (requires --agent-in-mgmt-cluster). How many clusters one drift-detection-manager "+

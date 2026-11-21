@@ -93,6 +93,19 @@ jobs:
       run: make create-cluster fv-agentless
       env:
         FV: true
+  FV_SVELTOS_AGENT_DISABLED:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Set up Go
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+      with:
+        go-version: 1.27.4
+    - name: fv-sveltos-agent-disabled
+      run: make create-cluster fv-sveltos-agent-disabled
+      env:
+        FV: true
   FV_OIDC:
     runs-on: ubuntu-24.04
     steps:

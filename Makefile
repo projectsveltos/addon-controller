@@ -295,6 +295,21 @@ fv-sharding: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing
 	rm -f test/addon-controller-deployment-shard.yaml
 	cd test/fv; $(GINKGO) -nodes $(NUM_NODES) --label-filter='FV' --v --trace --randomize-all
 
+# Sanity for addon-controller started with --disable-sveltos-agent=true, the way it runs when classifier does not
+# deploy sveltos-agent. The managed cluster is left with the CRDs classifier deploys in that case: DebuggingConfiguration
+# and ResourceSummary. The Reloader CRD, applied by create-cluster, is removed. Run after create-cluster.
+# This leaves addon-controller running with the flag.
+.PHONY: fv-sveltos-agent-disabled
+fv-sveltos-agent-disabled: $(KUBECTL) $(GINKGO) ## Run the sveltos-agent disabled sanity test. Run after create-cluster.
+	if ! $(KUBECTL) get deployment addon-controller -n projectsveltos -o jsonpath='{.spec.template.spec.containers[0].args}' | grep -q -e '--disable-sveltos-agent=true'; then \
+		$(KUBECTL) patch deployment addon-controller -n projectsveltos --type json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--disable-sveltos-agent=true"}]'; \
+	fi
+	$(KUBECTL) rollout status deployment/addon-controller -n projectsveltos --timeout=$(TIMEOUT)
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig delete crd reloaders.lib.projectsveltos.io --ignore-not-found
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_debuggingconfigurations.lib.projectsveltos.io.yaml
+	$(KUBECTL) --kubeconfig=./test/fv/workload_kubeconfig apply -f https://raw.githubusercontent.com/projectsveltos/libsveltos/$(TAG)/manifests/apiextensions.k8s.io_v1_customresourcedefinition_resourcesummaries.lib.projectsveltos.io.yaml
+	cd test/fv; $(GINKGO) -nodes 1 --label-filter='SVELTOS-AGENT-DISABLED' --v --trace
+
 .PHONY: fv-agentless
 fv-agentless: $(KUBECTL) $(GINKGO) ## Run Sveltos Controller tests using existing cluster
 	$(KUBECTL) apply -f test/drift-detection-mgmt_cluster_common_manifest.yaml

@@ -238,7 +238,7 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 
 	var helmResources []libsveltosv1beta1.HelmResources
 	if clusterSummary.Spec.ClusterProfileSpec.SyncMode == configv1beta1.SyncModeContinuousWithDriftDetection ||
-		clusterSummary.Spec.ClusterProfileSpec.Reloader {
+		isReloaderEnabled(clusterSummary) {
 
 		var err error
 		helmResources, err = collectResourcesFromManagedHelmChartsForDriftDetection(ctx, c, clusterSummary, kubeconfig,
@@ -281,7 +281,7 @@ func postProcessDeployedHelmCharts(ctx context.Context, clusterSummary *configv1
 	// Update corresponding Reloader instance (instance will be deleted if Reloader is set to false)
 	resources := clusterops.ConvertHelmResourcesToObjectReference(helmResources)
 	err = updateReloaderWithDeployedResources(ctx, clusterSummary, profileRef, libsveltosv1beta1.FeatureHelm,
-		resources, !clusterSummary.Spec.ClusterProfileSpec.Reloader, logger)
+		resources, !isReloaderEnabled(clusterSummary), logger)
 	if err != nil {
 		return err
 	}

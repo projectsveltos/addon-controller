@@ -201,6 +201,7 @@ var (
 	DesiredValuesAreSubset                   = desiredValuesAreSubset
 	GetCredentialsAndCAFiles                 = getCredentialsAndCAFiles
 	GetInstantiatedChartIdentity             = getInstantiatedChartIdentity
+	ChartNameForResourceSummary              = chartNameForResourceSummary
 	GetHelmChartValuesFrom                   = getHelmChartValuesFrom
 	GetHelmChartInstantiatedValues           = getHelmChartInstantiatedValues
 	LocateChartWithTimeout                   = locateChartWithTimeout

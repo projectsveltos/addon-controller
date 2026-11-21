@@ -3908,6 +3908,29 @@ func getHelmChartValuesFrom(ctx context.Context, c client.Client, clusterSummary
 	return getValuesFrom(ctx, c, clusterSummary, helmChart.ValuesFrom, logger)
 }
 
+// chartNameForResourceSummary returns the chart name to report in the ResourceSummary, where it
+// must not be empty. ChartName is optional when the chart comes from a Flux source, so in that
+// case fall back to the last segment of the path within the source, and then to the release name.
+// The value is informational only: drift is matched to a chart by release name and namespace.
+func chartNameForResourceSummary(requestedChart *configv1beta1.HelmChart) string {
+	if requestedChart.ChartName != "" {
+		return requestedChart.ChartName
+	}
+
+	if isReferencingFluxSource(requestedChart) {
+		_, sourcePath, err := getReferencedFluxSourceFromURL(requestedChart)
+		if err == nil {
+			// path.Base returns "." for an empty path and "/" for a root path: neither is a name
+			name := path.Base(sourcePath)
+			if name != "." && name != "/" {
+				return name
+			}
+		}
+	}
+
+	return requestedChart.ReleaseName
+}
+
 // collectResourcesFromManagedHelmChartsForDriftDetection collects resources considering all
 // helm charts contained in a ClusterSummary that are currently managed by the
 // ClusterProfile instance.
@@ -3989,7 +4012,7 @@ func collectResourcesFromManagedHelmChartsForDriftDetection(ctx context.Context,
 			l.V(logs.LogDebug).Info(fmt.Sprintf("found %d resources", len(resources)))
 
 			helmInfo := libsveltosv1beta1.HelmResources{
-				ChartName:        instantiatedChart.ChartName,
+				ChartName:        chartNameForResourceSummary(instantiatedChart),
 				ReleaseName:      instantiatedChart.ReleaseName,
 				ReleaseNamespace: instantiatedChart.ReleaseNamespace,
 				Resources:        unstructuredToSveltosResources(resources),

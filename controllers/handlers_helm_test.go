@@ -4056,3 +4056,48 @@ var _ = Describe("findRemovedCRDVersions", func() {
 		Expect(controllers.FindRemovedCRDVersions(newCRD("v1", "v2:unserved"), newCRD("v1", "v2"))).To(BeEmpty())
 	})
 })
+
+var _ = Describe("chartNameForResourceSummary", func() {
+	const releaseName = "my-release"
+
+	It("returns the chart name when set", func() {
+		chart := &configv1beta1.HelmChart{
+			ChartName:     "podinfo",
+			ReleaseName:   releaseName,
+			RepositoryURL: "GitRepository://flux-system/repo/charts/other",
+		}
+		Expect(controllers.ChartNameForResourceSummary(chart)).To(Equal("podinfo"))
+	})
+
+	It("returns the last path segment for a Flux source when chart name is empty", func() {
+		chart := &configv1beta1.HelmChart{
+			ReleaseName:   releaseName,
+			RepositoryURL: "GitRepository://flux-system/repo/charts/podinfo",
+		}
+		Expect(controllers.ChartNameForResourceSummary(chart)).To(Equal("podinfo"))
+	})
+
+	It("ignores a trailing slash in the Flux source path", func() {
+		chart := &configv1beta1.HelmChart{
+			ReleaseName:   releaseName,
+			RepositoryURL: "OCIRepository://flux-system/repo/charts/podinfo/",
+		}
+		Expect(controllers.ChartNameForResourceSummary(chart)).To(Equal("podinfo"))
+	})
+
+	It("returns the release name when the Flux source path is the root", func() {
+		chart := &configv1beta1.HelmChart{
+			ReleaseName:   releaseName,
+			RepositoryURL: "GitRepository://flux-system/repo/./",
+		}
+		Expect(controllers.ChartNameForResourceSummary(chart)).To(Equal(releaseName))
+	})
+
+	It("returns the release name when the Flux URL is malformed", func() {
+		chart := &configv1beta1.HelmChart{
+			ReleaseName:   releaseName,
+			RepositoryURL: "GitRepository://flux-system",
+		}
+		Expect(controllers.ChartNameForResourceSummary(chart)).To(Equal(releaseName))
+	})
+})

@@ -1,0 +1,7 @@
+# Not needed to build the image. Anything untracked that reaches the builder makes
+# the Go toolchain stamp the binary +dirty, so keep local files out of the context.
+# .git must stay in the context: the Go toolchain reads it to stamp the module
+# version and vcs info in the binary.
+bin
+cover.out
+CLAUDE.md

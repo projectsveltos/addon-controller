@@ -34,7 +34,9 @@ OS ?= $(shell uname -s)
 OS := $(shell echo $(OS) | tr '[:upper:]' '[:lower:]')
 K8S_LATEST_VER ?= $(shell curl -s https://dl.k8s.io/release/stable.txt)
 export CONTROLLER_IMG ?= $(REGISTRY)/$(IMAGE_NAME)
-TAG ?= main
+TAG ?= v1.18.0
+# Commit the image is built from, stored in the revision label of the image
+GIT_COMMIT ?= $(shell git rev-parse HEAD)
 PULL_POLICY ?= IfNotPresent
 
 .PHONY: all
@@ -678,10 +680,19 @@ build: generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+.PHONY: check-clean-tree
+check-clean-tree: ## Fail if the working tree is not clean: the Go build info of the image would say +dirty
+	@# CLAUDE.md is untracked on purpose and is excluded from the image by .dockerignore
+	@if [ -n "$$(git status --porcelain -- . ':(exclude)CLAUDE.md')" ]; then \
+		echo "The working tree is not clean, the image would be stamped +dirty. Commit, stash or remove:"; \
+		git status --porcelain -- . ':(exclude)CLAUDE.md'; \
+		exit 1; \
+	fi
+
 .PHONY: docker-build
 docker-build: ## Build docker image with the manager.
 	go generate
-	docker build --load --build-arg BUILDOS=linux --build-arg TARGETARCH=amd64 --build-arg GIT_VERSION=$(TAG) -t $(CONTROLLER_IMG):$(TAG) .
+	docker build --load --build-arg BUILDOS=linux --build-arg TARGETARCH=amd64 --build-arg GIT_VERSION=$(TAG) --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(CONTROLLER_IMG):$(TAG) .
 	MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
 	$(MAKE) set-manifest-pull-policy
 

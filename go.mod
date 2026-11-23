@@ -23,7 +23,7 @@ require (
 	github.com/projectsveltos/libsveltos v1.18.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/sigstore/cosign/v3 v3.1.4
-	github.com/sigstore/sigstore v1.11.3
+	github.com/sigstore/sigstore v1.11.4
 	github.com/spf13/pflag v1.1.0
 	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/text v0.44.0
@@ -49,6 +49,7 @@ require (
 	cel.dev/cel-go v0.33.4 // indirect
 	cel.dev/expr v0.25.2 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 // indirect
 	github.com/AliyunContainerService/ack-ram-tool/pkg/credentials/provider v0.18.1 // indirect
 	github.com/AliyunContainerService/ack-ram-tool/pkg/ecsmetadata v0.0.9 // indirect
@@ -136,7 +137,7 @@ require (
 	github.com/go-chi/chi/v5 v5.4.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.9 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/analysis v1.0.0 // indirect
 	github.com/go-openapi/errors v0.22.9 // indirect

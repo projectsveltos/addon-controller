@@ -108,6 +108,7 @@ spec:
 					ReleaseName:      externalDNSRepoName,
 					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values:           externalDNSValues,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
 						InstallOptions: configv1beta1.HelmInstallOptions{

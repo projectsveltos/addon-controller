@@ -94,7 +94,7 @@ var _ = Describe("Agentless drift detection serving several clusters", Serial, f
 				RepositoryURL:    nginxIngressRepoURL,
 				RepositoryName:   nginxIngressRepoName,
 				ChartName:        nginxIngressChartName,
-				ChartVersion:     nginxVersion272,
+				ChartVersion:     nginxVersion291,
 				ReleaseName:      nginxLatestRelease,
 				ReleaseNamespace: nginxNamespace,
 				HelmChartAction:  configv1beta1.HelmChartActionInstall,

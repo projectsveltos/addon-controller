@@ -86,7 +86,7 @@ var _ = Describe("Helm", Serial, func() {
 					RepositoryURL:    prometheusCommunityURL,
 					RepositoryName:   prometheusCommunityName,
 					ChartName:        prometheusChartName,
-					ChartVersion:     prometheusVersion2930,
+					ChartVersion:     prometheusVersion300,
 					ReleaseName:      prometheusRelease,
 					ReleaseNamespace: prometheusRelease,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -133,7 +133,7 @@ var _ = Describe("Helm", Serial, func() {
 		charts := []configv1beta1.Chart{
 			{ReleaseName: kroReleaseName, ChartVersion: kroVersion094Reported, Namespace: kroNamespace},
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion300, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -227,7 +227,7 @@ var _ = Describe("Helm", Serial, func() {
 
 		charts = []configv1beta1.Chart{
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion300, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
@@ -271,7 +271,7 @@ var _ = Describe("Helm", Serial, func() {
 		charts = []configv1beta1.Chart{
 			{ReleaseName: kroReleaseName, ChartVersion: kroVersion094Reported, Namespace: kroNamespace},
 			{ReleaseName: grafanaRepoName, ChartVersion: grafanaVersion10515, Namespace: grafanaRepoName},
-			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion2930, Namespace: prometheusRelease},
+			{ReleaseName: prometheusRelease, ChartVersion: prometheusVersion300, Namespace: prometheusRelease},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

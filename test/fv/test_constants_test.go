@@ -32,13 +32,13 @@ const (
 	prometheusCommunityURL  = "https://prometheus-community.github.io/helm-charts"
 	prometheusCommunityName = "prometheus-community"
 	prometheusChartName     = "prometheus-community/prometheus"
-	prometheusVersion2930   = "29.30.0"
+	prometheusVersion300    = "30.0.0"
 	prometheusRelease       = "prometheus"
 
 	// Grafana chart details
 	grafanaRepoName     = "grafana"
 	grafanaChartName    = "grafana/grafana"
-	grafanaVersion1325  = "13.2.5"
+	grafanaVersion1450  = "14.5.0"
 	grafanaVersion10515 = "10.5.15"
 
 	// Jetstack/cert-manager chart details
@@ -56,8 +56,10 @@ const (
 	externalDNSURL       = "https://kubernetes-sigs.github.io/external-dns/"
 	externalDNSRepoName  = "external-dns"
 	externalDNSChartName = "external-dns/external-dns"
-	externalDNSVersion   = "1.20.0"
-	externaldnsGroup     = "externaldns.k8s.io"
+	externalDNSVersion   = "1.24.0"
+	// Chart 1.22.0 and later require the policy value and it has no default
+	externalDNSValues = "policy: sync"
+	externaldnsGroup  = "externaldns.k8s.io"
 
 	// Bitnami chart details
 	bitnamiURL  = "https://charts.bitnami.com/bitnami"
@@ -66,7 +68,7 @@ const (
 	// NGINX chart details
 	nginxLatestRelease = "nginx-latest"
 	nginxNamespace     = "nginx"
-	nginxVersion272    = "2.7.2"
+	nginxVersion291    = "2.9.1"
 
 	// Release names
 	airflowRelease = "airflow"
@@ -113,7 +115,7 @@ const (
 	envoyGatewayRelease         = "eg"
 	envoyGatewayNamespace       = "envoy-gateway-system"
 	envoyGatewayVersion174      = "v1.7.4"
-	envoyGatewayVersion192      = "v1.9.2"
+	envoyGatewayVersion1100     = "v1.10.0"
 	gatewayAPIBundleVersionKey  = "gateway.networking.k8s.io/bundle-version"
 	gatewayAPIBundleVersion141  = "v1.4.1"
 	gatewayAPIBundleVersion161  = "v1.6.1"

@@ -145,7 +145,7 @@ var _ = Describe("Feature", Serial, func() {
 					RepositoryURL:    "https://helm.nginx.com/stable/",
 					RepositoryName:   "nginx-stable",
 					ChartName:        "nginx-stable/nginx-ingress",
-					ChartVersion:     nginxVersion272,
+					ChartVersion:     nginxVersion291,
 					ReleaseName:      nginxLatestRelease,
 					ReleaseNamespace: nginxNamespace,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
@@ -176,7 +176,7 @@ var _ = Describe("Feature", Serial, func() {
 
 		charts := []configv1beta1.Chart{
 			{ReleaseName: kongRepoName, ChartVersion: kongVersion341, Namespace: kongRepoName},
-			{ReleaseName: nginxLatestRelease, ChartVersion: nginxVersion272, Namespace: nginxNamespace},
+			{ReleaseName: nginxLatestRelease, ChartVersion: nginxVersion291, Namespace: nginxNamespace},
 		}
 
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,

@@ -66,6 +66,7 @@ var _ = Describe("HelmOptions", func() {
 					ReleaseName:      externalDNSRepoName,
 					ReleaseNamespace: externalDNSRepoName,
 					HelmChartAction:  configv1beta1.HelmChartActionInstall,
+					Values:           externalDNSValues,
 					Options: &configv1beta1.HelmOptions{
 						DependencyUpdate: true,
 						InstallOptions: configv1beta1.HelmInstallOptions{
@@ -103,7 +104,7 @@ var _ = Describe("HelmOptions", func() {
 		Expect(workloadClient.Get(context.TODO(),
 			types.NamespacedName{Namespace: externalDNSRepoName, Name: externalDNSRepoName}, depl)).To(Succeed())
 		Expect(len(depl.Spec.Template.Spec.Containers)).To(Equal(1))
-		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.20.0"))
+		Expect(depl.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("v0.24.0"))
 
 		charts := []configv1beta1.Chart{
 			{ReleaseName: externalDNSRepoName, ChartVersion: externalDNSVersion, Namespace: externalDNSRepoName},

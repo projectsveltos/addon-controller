@@ -40,8 +40,9 @@ var _ = Describe("Helm CRDs", func() {
 	)
 
 	// Envoy Gateway v1.7.x ships its CRDs (Gateway API included) in the chart's crds/ directory.
-	// Starting with v1.9.x all of them are in the crds subchart. Upgrading from v1.7.4 to v1.9.2
-	// with upgradeCRDs set must therefore update CRDs that only exist in a subchart.
+	// Starting with v1.9.x (still true in v1.10.x) all of them are in the crds subchart.
+	// Upgrading from v1.7.4 to v1.10.0 with upgradeCRDs set must therefore update CRDs
+	// that only exist in a subchart.
 	It("Upgrades the CRDs shipped in a subchart", Label("FV", "EXTENDED"), func() {
 		Byf("Getting client to access the workload cluster")
 		workloadClient, err := getKindWorkloadClusterKubeconfig()
@@ -76,13 +77,13 @@ var _ = Describe("Helm CRDs", func() {
 		Byf("Verifying the CRD only present in newer Gateway API bundles does not exist yet")
 		Expect(crdExists(workloadClient, gatewayListenerSetsCRDName)).To(BeFalse())
 
-		Byf("Changing ClusterProfile %s to require Envoy Gateway %s", clusterProfile.Name, envoyGatewayVersion192)
+		Byf("Changing ClusterProfile %s to require Envoy Gateway %s", clusterProfile.Name, envoyGatewayVersion1100)
 		currentClusterProfile := &configv1beta1.ClusterProfile{}
 		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			Expect(k8sClient.Get(context.TODO(),
 				types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)).To(Succeed())
 			currentClusterProfile.Spec.HelmCharts = []configv1beta1.HelmChart{
-				newEnvoyGatewayChart(envoyGatewayVersion192),
+				newEnvoyGatewayChart(envoyGatewayVersion1100),
 			}
 			return k8sClient.Update(context.TODO(), currentClusterProfile)
 		})
@@ -99,7 +100,7 @@ var _ = Describe("Helm CRDs", func() {
 		verifyFeatureStatusIsProvisioned(kindWorkloadCluster.GetNamespace(), clusterSummary.Name, libsveltosv1beta1.FeatureHelm)
 
 		charts := []configv1beta1.Chart{
-			{ReleaseName: envoyGatewayRelease, ChartVersion: envoyGatewayVersion192, Namespace: envoyGatewayNamespace},
+			{ReleaseName: envoyGatewayRelease, ChartVersion: envoyGatewayVersion1100, Namespace: envoyGatewayNamespace},
 		}
 		verifyClusterConfiguration(configv1beta1.ClusterProfileKind, clusterProfile.Name,
 			clusterSummary.Spec.ClusterNamespace, clusterSummary.Spec.ClusterName, libsveltosv1beta1.FeatureHelm,

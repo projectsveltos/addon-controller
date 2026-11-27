@@ -17,6 +17,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -30,6 +31,10 @@ const (
 	ClusterPromotionFinalizer = "config.projectsveltos.io/clusterpromotion"
 
 	ClusterPromotionKind = "ClusterPromotion"
+
+	// MaxStageClusterListSize is the maximum number of clusters listed in each of the
+	// StageStatus cluster lists (PendingClusters, ProvisioningClusters, FailedClusters).
+	MaxStageClusterListSize = 100
 )
 
 type ProfileSpec struct {
@@ -326,6 +331,31 @@ type Stage struct {
 	// This field is only applicable to stages that are not the last stage.
 	// +optional
 	Trigger *Trigger `json:"trigger,omitempty"`
+
+	// MaxFailedClusters is the number of clusters selected by this stage for which the
+	// deployment can fail (or be reported unhealthy by the post-deployment health checks)
+	// while the stage is still considered complete. Value can be an absolute number (ex: 5)
+	// or a percentage of the clusters selected by the stage (ex: 10%).
+	// When the number of failed clusters is above this value the pipeline stops at this stage.
+	// Tolerated failures are not hidden: failed clusters are listed in the stage status.
+	// Defaults to 0: every cluster selected by the stage must succeed.
+	// Only clusters where the deployment failed are tolerated. Clusters which are not ready,
+	// or which are paused while WaitForPausedClusters is true, are always waited for.
+	// If ProfileSpec's MaxUpdate is set, a failed cluster keeps counting as being updated:
+	// when as many clusters as MaxUpdate fail, no other cluster is updated.
+	// +kubebuilder:validation:XIntOrString
+	// +kubebuilder:validation:Pattern="^((100|[0-9]{1,2})%|[0-9]+)$"
+	// +optional
+	MaxFailedClusters *intstr.IntOrString `json:"maxFailedClusters,omitempty"`
+
+	// WaitForPausedClusters, when true, makes the stage wait for the clusters it selects which
+	// are ready but paused: the stage is not complete until Sveltos has deployed to them.
+	// When false, paused clusters are not waited for and are not counted.
+	// Clusters which are not ready are always waited for.
+	// Defaults to true.
+	// +kubebuilder:default:=true
+	// +optional
+	WaitForPausedClusters *bool `json:"waitForPausedClusters,omitempty"`
 }
 
 // ClusterPromotionSpec defines the desired state of ClusterPromotion
@@ -382,6 +412,57 @@ type StageStatus struct {
 	// This helps users understand the current blocking state.
 	// +optional
 	CurrentStatusDescription *string `json:"currentStatusDescription,omitempty"`
+
+	// ClusterCounts summarizes the state of the clusters selected by this stage.
+	// +optional
+	ClusterCounts *StageClusterCounts `json:"clusterCounts,omitempty"`
+
+	// PendingClusters lists the clusters selected by this stage which are not provisioned yet
+	// and where deployment has not started, for instance because ClusterProfile's maxUpdate
+	// does not allow more clusters to be updated at the same time.
+	// At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+	// +optional
+	PendingClusters []corev1.ObjectReference `json:"pendingClusters,omitempty"`
+
+	// ProvisioningClusters lists the clusters selected by this stage where deployment has
+	// started and has not reached the Provisioned status yet.
+	// At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+	// +optional
+	ProvisioningClusters []corev1.ObjectReference `json:"provisioningClusters,omitempty"`
+
+	// FailedClusters lists the clusters selected by this stage where deployment failed,
+	// with the reason.
+	// At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+	// +optional
+	FailedClusters []FailedCluster `json:"failedClusters,omitempty"`
+
+	// ClusterListsTruncated is true when PendingClusters, ProvisioningClusters or
+	// FailedClusters contain only part of the clusters. ClusterCounts always contains
+	// the totals.
+	// +optional
+	ClusterListsTruncated bool `json:"clusterListsTruncated,omitempty"`
+}
+
+// StageClusterCounts is the number of clusters selected by a stage, by state.
+// Provisioned clusters are only counted, not listed, to keep the status small
+// when a stage selects many clusters.
+type StageClusterCounts struct {
+	// Matching is the number of clusters currently selected by the stage.
+	Matching int32 `json:"matching"`
+
+	// Provisioned is the number of clusters where the stage's ClusterProfile
+	// is fully deployed.
+	Provisioned int32 `json:"provisioned"`
+
+	// Provisioning is the number of clusters where deployment has started
+	// and is not complete.
+	Provisioning int32 `json:"provisioning"`
+
+	// Pending is the number of clusters where deployment has not started yet.
+	Pending int32 `json:"pending"`
+
+	// Failed is the number of clusters where deployment failed.
+	Failed int32 `json:"failed"`
 }
 
 // ClusterPromotionStatus defines the observed state of ClusterPromotion.

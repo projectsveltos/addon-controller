@@ -57,6 +57,10 @@ type ClusterPromotionEnterpriseDeps struct {
 	Scheme           *runtime.Scheme
 	EventRecorder    events.EventRecorder
 	SveltosNamespace string
+
+	// CAPIOnboardAnnotation is the annotation a CAPI cluster needs to be matched by a selector
+	// (empty when not required). The same value ClusterProfile uses to find its matching clusters.
+	CAPIOnboardAnnotation string
 }
 
 // reconcileClusterPromotionNormal implements ClusterPromotion's stage-advancement business
@@ -208,6 +212,8 @@ func (r *ClusterPromotionReconciler) reconcileNormal(
 		Scheme:           r.Scheme,
 		EventRecorder:    r.eventRecorder,
 		SveltosNamespace: getSveltosNamespace(),
+
+		CAPIOnboardAnnotation: getCAPIOnboardAnnotation(),
 	}
 
 	return reconcileClusterPromotionNormal(ctx, deps, promotionScope, isInFreeTopX, logger)

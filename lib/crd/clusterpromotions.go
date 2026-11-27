@@ -2363,6 +2363,24 @@ spec:
                           type: object
                       type: object
                       x-kubernetes-map-type: atomic
+                    maxFailedClusters:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: |-
+                        MaxFailedClusters is the number of clusters selected by this stage for which the
+                        deployment can fail (or be reported unhealthy by the post-deployment health checks)
+                        while the stage is still considered complete. Value can be an absolute number (ex: 5)
+                        or a percentage of the clusters selected by the stage (ex: 10%).
+                        When the number of failed clusters is above this value the pipeline stops at this stage.
+                        Tolerated failures are not hidden: failed clusters are listed in the stage status.
+                        Defaults to 0: every cluster selected by the stage must succeed.
+                        Only clusters where the deployment failed are tolerated. Clusters which are not ready,
+                        or which are paused while WaitForPausedClusters is true, are always waited for.
+                        If ProfileSpec's MaxUpdate is set, a failed cluster keeps counting as being updated:
+                        when as many clusters as MaxUpdate fail, no other cluster is updated.
+                      pattern: ^((100|[0-9]{1,2})%|[0-9]+)$
+                      x-kubernetes-int-or-string: true
                     name:
                       description: Name of the stage, e.g., "qa", "staging", "production".
                       type: string
@@ -3214,6 +3232,15 @@ spec:
                       - message: A trigger must have either a 'manual' or 'auto' field,
                           but not both.
                         rule: has(self.manual) != has(self.auto)
+                    waitForPausedClusters:
+                      default: true
+                      description: |-
+                        WaitForPausedClusters, when true, makes the stage wait for the clusters it selects which
+                        are ready but paused: the stage is not complete until Sveltos has deployed to them.
+                        When false, paused clusters are not waited for and are not counted.
+                        Clusters which are not ready are always waited for.
+                        Defaults to true.
+                      type: boolean
                   required:
                   - name
                   type: object
@@ -3253,6 +3280,50 @@ spec:
                   description: StageStatus defines the status for a given stage in
                     a progressive deployment.
                   properties:
+                    clusterCounts:
+                      description: ClusterCounts summarizes the state of the clusters
+                        selected by this stage.
+                      properties:
+                        failed:
+                          description: Failed is the number of clusters where deployment
+                            failed.
+                          format: int32
+                          type: integer
+                        matching:
+                          description: Matching is the number of clusters currently
+                            selected by the stage.
+                          format: int32
+                          type: integer
+                        pending:
+                          description: Pending is the number of clusters where deployment
+                            has not started yet.
+                          format: int32
+                          type: integer
+                        provisioned:
+                          description: |-
+                            Provisioned is the number of clusters where the stage's ClusterProfile
+                            is fully deployed.
+                          format: int32
+                          type: integer
+                        provisioning:
+                          description: |-
+                            Provisioning is the number of clusters where deployment has started
+                            and is not complete.
+                          format: int32
+                          type: integer
+                      required:
+                      - failed
+                      - matching
+                      - pending
+                      - provisioned
+                      - provisioning
+                      type: object
+                    clusterListsTruncated:
+                      description: |-
+                        ClusterListsTruncated is true when PendingClusters, ProvisioningClusters or
+                        FailedClusters contain only part of the clusters. ClusterCounts always contains
+                        the totals.
+                      type: boolean
                     currentStatusDescription:
                       description: |-
                         CurrentStatusDescription provides a high-level description of where the stage is
@@ -3260,6 +3331,74 @@ spec:
                         "Waiting for all clusters to be Provisioned", "Running post-deployment health checks").
                         This helps users understand the current blocking state.
                       type: string
+                    failedClusters:
+                      description: |-
+                        FailedClusters lists the clusters selected by this stage where deployment failed,
+                        with the reason.
+                        At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+                      items:
+                        description: |-
+                          FailedCluster describes an error encountered while trying to
+                          manage resources for a specific matching cluster.
+                        properties:
+                          clusterRef:
+                            description: ClusterRef is a reference to the cluster
+                              where the failure occurred.
+                            properties:
+                              apiVersion:
+                                description: API version of the referent.
+                                type: string
+                              fieldPath:
+                                description: |-
+                                  If referring to a piece of an object instead of an entire object, this string
+                                  should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                  For example, if the object reference is to a container within a pod, this would take on a value like:
+                                  "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                  the event) or if no container name is specified "spec.containers[2]" (container with
+                                  index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                  referencing a part of an object.
+                                type: string
+                              kind:
+                                description: |-
+                                  Kind of the referent.
+                                  More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                type: string
+                              name:
+                                description: |-
+                                  Name of the referent.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                              namespace:
+                                description: |-
+                                  Namespace of the referent.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                type: string
+                              resourceVersion:
+                                description: |-
+                                  Specific resourceVersion to which this reference is made, if any.
+                                  More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                type: string
+                              uid:
+                                description: |-
+                                  UID of the referent.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          failureMessage:
+                            description: |-
+                              FailureMessage is a human-readable explanation of why the
+                              ClusterSummary creation/update failed.
+                            type: string
+                          lastFailureTime:
+                            description: LastFailureTime is the time the error occurred.
+                            format: date-time
+                            type: string
+                        required:
+                        - clusterRef
+                        - failureMessage
+                        type: object
+                      type: array
                     failureMessage:
                       description: FailureMessage reports a detailed error message
                         if a failure occurred.
@@ -3287,6 +3426,107 @@ spec:
                     name:
                       description: Name of the stage, e.g., "qa", "staging", "production".
                       type: string
+                    pendingClusters:
+                      description: |-
+                        PendingClusters lists the clusters selected by this stage which are not provisioned yet
+                        and where deployment has not started, for instance because ClusterProfile's maxUpdate
+                        does not allow more clusters to be updated at the same time.
+                        At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+                      items:
+                        description: ObjectReference contains enough information to
+                          let you inspect or modify the referred object.
+                        properties:
+                          apiVersion:
+                            description: API version of the referent.
+                            type: string
+                          fieldPath:
+                            description: |-
+                              If referring to a piece of an object instead of an entire object, this string
+                              should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                              For example, if the object reference is to a container within a pod, this would take on a value like:
+                              "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                              the event) or if no container name is specified "spec.containers[2]" (container with
+                              index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                              referencing a part of an object.
+                            type: string
+                          kind:
+                            description: |-
+                              Kind of the referent.
+                              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                            type: string
+                          name:
+                            description: |-
+                              Name of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                            type: string
+                          resourceVersion:
+                            description: |-
+                              Specific resourceVersion to which this reference is made, if any.
+                              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                            type: string
+                          uid:
+                            description: |-
+                              UID of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      type: array
+                    provisioningClusters:
+                      description: |-
+                        ProvisioningClusters lists the clusters selected by this stage where deployment has
+                        started and has not reached the Provisioned status yet.
+                        At most MaxStageClusterListSize clusters are listed: see ClusterListsTruncated.
+                      items:
+                        description: ObjectReference contains enough information to
+                          let you inspect or modify the referred object.
+                        properties:
+                          apiVersion:
+                            description: API version of the referent.
+                            type: string
+                          fieldPath:
+                            description: |-
+                              If referring to a piece of an object instead of an entire object, this string
+                              should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                              For example, if the object reference is to a container within a pod, this would take on a value like:
+                              "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                              the event) or if no container name is specified "spec.containers[2]" (container with
+                              index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                              referencing a part of an object.
+                            type: string
+                          kind:
+                            description: |-
+                              Kind of the referent.
+                              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                            type: string
+                          name:
+                            description: |-
+                              Name of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                          namespace:
+                            description: |-
+                              Namespace of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                            type: string
+                          resourceVersion:
+                            description: |-
+                              Specific resourceVersion to which this reference is made, if any.
+                              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                            type: string
+                          uid:
+                            description: |-
+                              UID of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      type: array
                   required:
                   - name
                   type: object

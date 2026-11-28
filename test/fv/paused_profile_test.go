@@ -66,4 +66,80 @@ var _ = Describe("Paused Profile", func() {
 
 		deleteClusterProfile(clusterProfile)
 	})
+
+	It("Paused Profile and ClusterProfile report they are paused and can still be deleted",
+		Label("FV", "PULLMODE", "EXTENDED"), func() {
+			Byf("Create a Profile and a ClusterProfile matching Cluster %s/%s",
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName())
+			profile := getProfile(defaultNamespace, namePrefix, map[string]string{key: value})
+			profile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+			Expect(k8sClient.Create(context.TODO(), profile)).To(Succeed())
+
+			clusterProfile := getClusterProfile(namePrefix, map[string]string{key: value})
+			clusterProfile.Spec.SyncMode = configv1beta1.SyncModeContinuous
+			Expect(k8sClient.Create(context.TODO(), clusterProfile)).To(Succeed())
+
+			verifyProfileMatches(profile)
+			verifyClusterSummary(clusterops.ProfileLabelName, profile.Name, &profile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+			verifyClusterProfileMatches(clusterProfile)
+			verifyClusterSummary(clusterops.ClusterProfileLabelName, clusterProfile.Name, &clusterProfile.Spec,
+				kindWorkloadCluster.GetNamespace(), kindWorkloadCluster.GetName(), getClusterType())
+
+			Byf("Add the paused annotation to Profile %s/%s and ClusterProfile %s",
+				profile.Namespace, profile.Name, clusterProfile.Name)
+			// The controllers update the status concurrently: retry on conflict
+			Eventually(func() error {
+				currentProfile := &configv1beta1.Profile{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: profile.Namespace, Name: profile.Name}, currentProfile)
+				if err != nil {
+					return err
+				}
+				currentProfile.Annotations = map[string]string{
+					configv1beta1.ProfilePausedAnnotation: annotationTrueValue,
+				}
+				return k8sClient.Update(context.TODO(), currentProfile)
+			}, timeout, pollingInterval).Should(Succeed())
+
+			Eventually(func() error {
+				currentClusterProfile := &configv1beta1.ClusterProfile{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
+				if err != nil {
+					return err
+				}
+				currentClusterProfile.Annotations = map[string]string{
+					configv1beta1.ProfilePausedAnnotation: annotationTrueValue,
+				}
+				return k8sClient.Update(context.TODO(), currentClusterProfile)
+			}, timeout, pollingInterval).Should(Succeed())
+
+			// A paused Profile must report it, as a paused ClusterProfile does
+			Byf("Verify Profile %s/%s and ClusterProfile %s report they are paused",
+				profile.Namespace, profile.Name, clusterProfile.Name)
+			Eventually(func() bool {
+				currentProfile := &configv1beta1.Profile{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Namespace: profile.Namespace, Name: profile.Name}, currentProfile)
+				return err == nil && currentProfile.Status.ReconciliationSuspended &&
+					currentProfile.Status.SuspensionReason != nil &&
+					*currentProfile.Status.SuspensionReason == "Profile is paused"
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			Eventually(func() bool {
+				currentClusterProfile := &configv1beta1.ClusterProfile{}
+				err := k8sClient.Get(context.TODO(),
+					types.NamespacedName{Name: clusterProfile.Name}, currentClusterProfile)
+				return err == nil && currentClusterProfile.Status.ReconciliationSuspended &&
+					currentClusterProfile.Status.SuspensionReason != nil &&
+					*currentClusterProfile.Status.SuspensionReason == "ClusterProfile is paused"
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			// Pause must not block deletion. The annotation is still set: both helpers delete the
+			// instance and verify its ClusterSummaries and the instance itself are gone.
+			deleteProfile(profile)
+			deleteClusterProfile(clusterProfile)
+		})
 })

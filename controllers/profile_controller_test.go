@@ -28,11 +28,13 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2/textlogger"
 
@@ -602,5 +604,67 @@ var _ = Describe("Profile Controller", func() {
 		Expect(hasMetricSeries("projectsveltos_matching_clusters", profileLabels)).To(BeFalse())
 		Expect(hasMetricSeries("projectsveltos_matching_clusters", clusterProfileLabels)).To(BeTrue())
 		Expect(hasMetricSeries("projectsveltos_matching_clusters", otherProfileLabels)).To(BeTrue())
+	})
+
+	// Reconcile is run against the test environment: the Profile must be read with its type information
+	Context("when the Profile has the paused annotation", func() {
+		newReconciler := func() *controllers.ProfileReconciler {
+			return &controllers.ProfileReconciler{
+				Client:        testEnv,
+				Scheme:        scheme,
+				ClusterMap:    make(map[corev1.ObjectReference]*libsveltosset.Set),
+				Profiles:      make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+				ClusterLabels: make(map[corev1.ObjectReference]map[string]string),
+				Mux:           sync.Mutex{},
+			}
+		}
+
+		BeforeEach(func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: profile.Namespace}}
+			Expect(testEnv.Create(context.TODO(), ns)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, ns)).To(Succeed())
+
+			profile.Annotations = map[string]string{configv1beta1.ProfilePausedAnnotation: testTrueValue}
+		})
+
+		It("Reconcile persists ReconciliationSuspended and SuspensionReason in the status", func() {
+			Expect(testEnv.Create(context.TODO(), profile)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, profile)).To(Succeed())
+
+			_, err := newReconciler().Reconcile(context.TODO(),
+				ctrl.Request{NamespacedName: client.ObjectKeyFromObject(profile)})
+			Expect(err).To(BeNil())
+
+			Eventually(func() bool {
+				current := &configv1beta1.Profile{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(profile), current)
+				return err == nil && current.Status.ReconciliationSuspended &&
+					current.Status.SuspensionReason != nil &&
+					*current.Status.SuspensionReason == "Profile is paused"
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
+
+		It("Reconcile still deletes a Profile that is being deleted", func() {
+			profile.Finalizers = []string{configv1beta1.ProfileFinalizer}
+			Expect(testEnv.Create(context.TODO(), profile)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, profile)).To(Succeed())
+
+			Expect(testEnv.Delete(context.TODO(), profile)).To(Succeed())
+			Eventually(func() bool {
+				current := &configv1beta1.Profile{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(profile), current)
+				return err == nil && !current.DeletionTimestamp.IsZero()
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			_, err := newReconciler().Reconcile(context.TODO(),
+				ctrl.Request{NamespacedName: client.ObjectKeyFromObject(profile)})
+			Expect(err).To(BeNil())
+
+			// No ClusterSummary left: the finalizer is removed and the Profile is gone
+			Eventually(func() bool {
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(profile), &configv1beta1.Profile{})
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
 	})
 })

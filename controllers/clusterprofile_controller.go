@@ -122,7 +122,9 @@ func (r *ClusterProfileReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}()
 
-	if isProfilePaused(profileScope) {
+	// Pause stops changes from being propagated to clusters. It never blocks the deletion of
+	// the ClusterProfile, otherwise the finalizer would never be removed.
+	if isProfilePaused(profileScope) && clusterProfile.DeletionTimestamp.IsZero() {
 		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
 		profileScope.GetStatus().ReconciliationSuspended = true
 		suspensionReason := "ClusterProfile is paused"

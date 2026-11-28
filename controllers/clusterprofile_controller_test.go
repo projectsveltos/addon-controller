@@ -412,6 +412,65 @@ var _ = Describe("Profile: Reconciler", func() {
 		Expect(hasMetricSeries("projectsveltos_matching_clusters", clusterProfileLabels)).To(BeFalse())
 		Expect(hasMetricSeries("projectsveltos_matching_clusters", profileLabels)).To(BeTrue())
 	})
+
+	// Reconcile is run against the test environment: the ClusterProfile must be read with its type information
+	Context("when the ClusterProfile has the paused annotation", func() {
+		newReconciler := func() *controllers.ClusterProfileReconciler {
+			return &controllers.ClusterProfileReconciler{
+				Client:          testEnv,
+				Scheme:          scheme,
+				ClusterMap:      make(map[corev1.ObjectReference]*libsveltosset.Set),
+				ClusterProfiles: make(map[corev1.ObjectReference]libsveltosv1beta1.Selector),
+				ClusterLabels:   make(map[corev1.ObjectReference]map[string]string),
+				Mux:             sync.Mutex{},
+			}
+		}
+
+		BeforeEach(func() {
+			clusterProfile.Annotations = map[string]string{configv1beta1.ProfilePausedAnnotation: testTrueValue}
+		})
+
+		It("Reconcile persists ReconciliationSuspended and SuspensionReason in the status", func() {
+			Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
+
+			_, err := newReconciler().Reconcile(context.TODO(),
+				ctrl.Request{NamespacedName: client.ObjectKeyFromObject(clusterProfile)})
+			Expect(err).To(BeNil())
+
+			Eventually(func() bool {
+				current := &configv1beta1.ClusterProfile{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(clusterProfile), current)
+				return err == nil && current.Status.ReconciliationSuspended &&
+					current.Status.SuspensionReason != nil &&
+					*current.Status.SuspensionReason == "ClusterProfile is paused"
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
+
+		It("Reconcile still deletes a ClusterProfile that is being deleted", func() {
+			clusterProfile.Finalizers = []string{configv1beta1.ClusterProfileFinalizer}
+			Expect(testEnv.Create(context.TODO(), clusterProfile)).To(Succeed())
+			Expect(waitForObject(context.TODO(), testEnv.Client, clusterProfile)).To(Succeed())
+
+			Expect(testEnv.Delete(context.TODO(), clusterProfile)).To(Succeed())
+			Eventually(func() bool {
+				current := &configv1beta1.ClusterProfile{}
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(clusterProfile), current)
+				return err == nil && !current.DeletionTimestamp.IsZero()
+			}, timeout, pollingInterval).Should(BeTrue())
+
+			_, err := newReconciler().Reconcile(context.TODO(),
+				ctrl.Request{NamespacedName: client.ObjectKeyFromObject(clusterProfile)})
+			Expect(err).To(BeNil())
+
+			// No ClusterSummary left: the finalizer is removed and the ClusterProfile is gone
+			Eventually(func() bool {
+				err := testEnv.Get(context.TODO(), client.ObjectKeyFromObject(clusterProfile),
+					&configv1beta1.ClusterProfile{})
+				return apierrors.IsNotFound(err)
+			}, timeout, pollingInterval).Should(BeTrue())
+		})
+	})
 })
 
 var _ = Describe("ClusterProfileReconciler: requeue methods", func() {

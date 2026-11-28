@@ -144,7 +144,17 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		return reconcile.Result{}, fmt.Errorf("unable to create profile scope for %s: %w", req.NamespacedName, err)
 	}
 
-	if isProfilePaused(profileScope) {
+	// Always close the scope when exiting this function so we can persist any Profile
+	// changes.
+	defer func() {
+		if err := profileScope.Close(ctx); err != nil {
+			reterr = err
+		}
+	}()
+
+	// Pause stops changes from being propagated to clusters. It never blocks the deletion of
+	// the Profile, otherwise the finalizer would never be removed.
+	if isProfilePaused(profileScope) && profile.DeletionTimestamp.IsZero() {
 		logger.V(logs.LogInfo).Info("profile is paused. Skip reconciliation")
 		profileScope.GetStatus().ReconciliationSuspended = true
 		suspensionReason := "Profile is paused"
@@ -154,13 +164,6 @@ func (r *ProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 
 	profileScope.GetStatus().ReconciliationSuspended = false
 	profileScope.GetStatus().SuspensionReason = nil
-	// Always close the scope when exiting this function so we can persist any Profile
-	// changes.
-	defer func() {
-		if err := profileScope.Close(ctx); err != nil {
-			reterr = err
-		}
-	}()
 
 	// Handle deleted profile
 	if !profile.DeletionTimestamp.IsZero() {

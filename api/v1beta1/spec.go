@@ -39,6 +39,8 @@ const (
 
 	// ProfilePausedAnnotation is the annotation that, when set on a Profile or ClusterProfile,
 	// will pause reconciliation, preventing any changes from being propagated to clusters.
+	// Pausing does not prevent the deletion of the Profile or ClusterProfile: when it is
+	// deleted, whatever it deployed is removed as usual.
 	ProfilePausedAnnotation = "profile.projectsveltos.io/paused"
 
 	// ProfileRedeployAnnotation is the annotation that, when set on a Profile, ClusterProfile or
